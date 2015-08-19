@@ -174,3 +174,17 @@ func (f *Frame) read(msg message) error {
 	rbuf.Wrap(f.SizedPayload())
 	return msg.read(&rbuf)
 }
+
+// MessageType returns the message type in this frame.
+func (f *Frame) MessageType() messageType {
+	return f.Header.messageType
+}
+
+// Service returns the service that the call req is intended for.
+func (f *Frame) Service() []byte {
+	// callReq has:
+	// 30 bytes we can ignore: flags:1 ttl:4 tracing:25
+	// service~1
+	opLength := f.Payload[30]
+	return f.Payload[31 : 31+opLength]
+}

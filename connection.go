@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"runtime"
 	"strings"
@@ -144,6 +145,8 @@ type Connection struct {
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
 	closeNetworkCalled int32
+
+	relay *Relay
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -257,7 +260,13 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 	c.inbound.onAdded = c.onExchangeAdded
 	c.outbound.onAdded = c.onExchangeAdded
 
-	go c.readFrames(connID)
+	if ch.useRelay {
+		c.relay = NewRelay(ch, c)
+		go c.readFramesRelay(connID)
+	} else {
+		go c.readFrames(connID)
+	}
+
 	go c.writeFrames(connID)
 	return c
 }
@@ -634,6 +643,52 @@ func (c *Connection) readState() connectionState {
 	state := c.state
 	c.stateMut.RUnlock()
 	return state
+}
+
+// Relayer is the interface registered by a Relay that will receive
+// all relayable frames.
+type Relayer interface {
+	// Relay should relay the given frame to a destination.
+	// If there are any response frames, they can be sent back to source.
+	Relay(frame *Frame) error
+}
+
+func (c *Connection) readFramesRelay(_ uint32) {
+	for {
+		frame := c.framePool.Get()
+		if err := frame.ReadIn(c.conn); err != nil {
+			log.Println("read frames relay err", err)
+			c.framePool.Release(frame)
+			c.connectionError(err)
+			return
+		}
+
+		// call req and call res messages may not want the frame released immediately.
+		releaseFrame := true
+		switch frame.Header.messageType {
+		case messageTypeCallReq, messageTypeCallReqContinue,
+			messageTypeCallRes, messageTypeCallResContinue:
+			c.relay.RelayFrame(frame)
+			releaseFrame = false
+		case messageTypeInitReq:
+			c.handleInitReq(frame)
+		case messageTypeInitRes:
+			releaseFrame = c.handleInitRes(frame)
+		case messageTypePingReq:
+			c.handlePingReq(frame)
+		case messageTypePingRes:
+			releaseFrame = c.handlePingRes(frame)
+		case messageTypeError:
+			c.handleError(frame)
+		default:
+			// TODO(mmihic): Log and close connection with protocol error
+			c.log.Errorf("Received unexpected frame %s from %s", frame.Header, c.remotePeerInfo)
+		}
+
+		if releaseFrame {
+			c.framePool.Release(frame)
+		}
+	}
 }
 
 // readFrames is the loop that reads frames from the network connection and

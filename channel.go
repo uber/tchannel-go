@@ -71,6 +71,9 @@ type ChannelOptions struct {
 
 	// Trace reporter factory to generate trace reporter instance.
 	TraceReporterFactory TraceReporterFactory
+
+	// CreateRelay is for a relay.
+	CreateRelay bool
 }
 
 // ChannelState is the state of a channel.
@@ -109,6 +112,10 @@ type Channel struct {
 	connectionOptions ConnectionOptions
 	handlers          *handlerMap
 	peers             *PeerList
+
+	// relay specific options
+	serviceHosts *ServiceHosts
+	useRelay     bool
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -172,6 +179,9 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 		connectionOptions: opts.DefaultConnectionOptions,
 		handlers:          &handlerMap{},
+
+		serviceHosts: NewServiceHosts(),
+		useRelay:     opts.CreateRelay,
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
@@ -203,6 +213,11 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 // ConnectionOptions returns the channel's connection options.
 func (ch *Channel) ConnectionOptions() *ConnectionOptions {
 	return &ch.connectionOptions
+}
+
+// ServiceHosts is the hostPorts for each service.
+func (ch *Channel) ServiceHosts() *ServiceHosts {
+	return ch.serviceHosts
 }
 
 // Serve serves incoming requests using the provided listener.
