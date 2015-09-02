@@ -52,8 +52,9 @@ func (h *ServiceHosts) GetHostPort(service string) string {
 // Relay contains all relay specific information.
 type Relay struct {
 	sync.RWMutex
-	connections  map[uint32]relayItem
-	serviceHosts *ServiceHosts
+	connections   map[uint32]relayItem
+	serviceHosts  *ServiceHosts
+	statsReporter StatsReporter
 
 	// Immutable
 	ch   *Channel
@@ -63,10 +64,11 @@ type Relay struct {
 // NewRelay creates a relay.
 func NewRelay(ch *Channel, conn *Connection) *Relay {
 	return &Relay{
-		ch:           ch,
-		serviceHosts: ch.serviceHosts,
-		conn:         conn,
-		connections:  make(map[uint32]relayItem),
+		ch:            ch,
+		serviceHosts:  ch.serviceHosts,
+		statsReporter: conn.statsReporter,
+		conn:          conn,
+		connections:   make(map[uint32]relayItem),
 	}
 }
 
@@ -128,6 +130,7 @@ func (r *Relay) RelayFrame(frame *Frame) {
 
 	destinationID := c.NextMessageID()
 	c.relay.AddRelay(destinationID, frame.Header.ID, r)
+	r.statsReporter.IncCounter("relay", nil, 1)
 	relayToDest := r.AddRelay(frame.Header.ID, destinationID, c.relay)
 
 	frame.Header.ID = destinationID
