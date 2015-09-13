@@ -3,7 +3,7 @@ package tchannel
 import (
 	"io"
 
-	"github.com/uber/tchannel/golang/typed"
+	"github.com/uber/tchannel-go/typed"
 )
 
 type circularBuffer struct {

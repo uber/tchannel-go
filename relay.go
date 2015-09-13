@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
-	"time"
 )
 
 type relayItem struct {
@@ -114,18 +113,13 @@ func (r *Relay) RelayFrame(frame *Frame) {
 
 	// Get the destination
 	svc := string(frame.Service())
-
-	// Get a host port for it
 	hostPort := r.serviceHosts.GetHostPort(svc)
-
-	// Get a connection to that host port
 	peer := r.ch.Peers().GetOrAdd(hostPort)
 
-	// What context do we want?
-	ctx, _ := NewContext(5 * time.Second)
-	c, err := peer.GetConnection(ctx)
+	c, err := peer.GetConnectionForRelay()
 	if err != nil {
-		panic(err)
+		r.ch.Logger().Warnf("failed to connect to %v: %v", hostPort, err)
+		// TODO : return an error frame.
 	}
 
 	destinationID := c.NextMessageID()

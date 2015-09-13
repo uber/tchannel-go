@@ -330,6 +330,28 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	return nil
 }
 
+func (p *Peer) GetConnectionForRelay() (*Connection, error) {
+	p.mut.RLock()
+	if len(p.inboundConnections)+len(p.outboundConnections) == 0 {
+		p.mut.RUnlock()
+		ctx, cancel := NewContext(5 * time.Second)
+		defer cancel()
+
+		return p.GetConnection(ctx)
+	}
+
+	var conn *Connection
+	if len(p.outboundConnections) > 0 {
+		conn = randConn(p.outboundConnections)
+	} else {
+		conn = randConn(p.inboundConnections)
+	}
+
+	p.mut.RUnlock()
+
+	return conn, nil
+}
+
 // checkInboundConnection will check whether the changed connection is an inbound
 // connection, and will remove any closed connections.
 func (p *Peer) checkInboundConnection(changed *Connection) (updated bool, isInbound bool) {
