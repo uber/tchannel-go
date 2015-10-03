@@ -1,9 +1,9 @@
 package mocks
 
-import "github.com/uber/tchannel/golang/thrift/gen-go/meta"
+import "github.com/uber/tchannel-go/thrift/gen-go/meta"
 import "github.com/stretchr/testify/mock"
 
-import "github.com/uber/tchannel/golang/thrift"
+import "github.com/uber/tchannel-go/thrift"
 
 type TChanMeta struct {
 	mock.Mock

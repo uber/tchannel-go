@@ -25,11 +25,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	. "github.com/uber/tchannel/golang"
+	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uber/tchannel/golang/raw"
-	"github.com/uber/tchannel/golang/testutils"
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 var cn = "hello"

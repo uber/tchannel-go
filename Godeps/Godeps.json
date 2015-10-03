@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/uber/tchannel/golang",
+	"ImportPath": "github.com/uber/tchannel-go",
 	"GoVersion": "go1.5",
 	"Packages": [
 		"./..."

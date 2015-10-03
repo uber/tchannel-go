@@ -24,10 +24,10 @@ import (
 	"runtime"
 	"testing"
 
-	. "github.com/uber/tchannel/golang"
+	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel/golang/testutils"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 // WithVerifiedServer runs the given test function with a server channel that is verified

@@ -23,7 +23,7 @@ package raw
 import (
 	"errors"
 
-	"github.com/uber/tchannel/golang"
+	"github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
 )
 

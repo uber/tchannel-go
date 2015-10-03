@@ -23,7 +23,7 @@ package json
 import (
 	"fmt"
 
-	"github.com/uber/tchannel/golang"
+	"github.com/uber/tchannel-go"
 )
 
 // ErrApplication is an application error which contains the object returned from the other side.

@@ -27,7 +27,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/uber/tchannel/golang"
+	"github.com/uber/tchannel-go"
 )
 
 // Client manages Hyperbahn connections and registrations.

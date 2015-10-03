@@ -25,7 +25,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/uber/tchannel/golang/typed"
+	"github.com/uber/tchannel-go/typed"
 )
 
 const (

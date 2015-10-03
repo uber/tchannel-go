@@ -28,10 +28,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/examples/keyvalue/gen-go/keyvalue"
-	"github.com/uber/tchannel/golang/hyperbahn"
-	"github.com/uber/tchannel/golang/thrift"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/examples/keyvalue/gen-go/keyvalue"
+	"github.com/uber/tchannel-go/hyperbahn"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 func main() {

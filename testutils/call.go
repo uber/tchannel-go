@@ -20,7 +20,7 @@
 
 package testutils
 
-import "github.com/uber/tchannel/golang"
+import "github.com/uber/tchannel-go"
 
 // This file contains test setup logic, and is named with a _test.go suffix to
 // ensure it's only compiled with tests.

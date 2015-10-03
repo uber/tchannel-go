@@ -20,7 +20,7 @@
 
 package thrift
 
-import "github.com/uber/tchannel/golang/thrift/gen-go/meta"
+import "github.com/uber/tchannel-go/thrift/gen-go/meta"
 
 // HealthFunc is the interface for custom health endpoints.
 // ok is whether the service health is OK, and message is optional additional information for the health result.

@@ -26,7 +26,7 @@ import (
 	"sync"
 
 	"github.com/apache/thrift/lib/go/thrift"
-	tchannel "github.com/uber/tchannel/golang"
+	tchannel "github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
 )
 

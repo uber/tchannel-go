@@ -24,7 +24,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/uber/tchannel/golang/typed"
+	"github.com/uber/tchannel-go/typed"
 	"golang.org/x/net/context"
 )
 

@@ -39,7 +39,7 @@ import (
 	"github.com/samuel/go-thrift/parser"
 )
 
-const tchannelThriftImport = "github.com/uber/tchannel/golang/thrift"
+const tchannelThriftImport = "github.com/uber/tchannel-go/thrift"
 
 var (
 	generateThrift     = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")

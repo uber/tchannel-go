@@ -28,8 +28,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/testutils"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 func getPeers(ch *tchannel.Channel) []string {

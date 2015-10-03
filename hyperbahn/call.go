@@ -23,8 +23,8 @@ package hyperbahn
 import (
 	"errors"
 
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/json"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/json"
 )
 
 var errEphemeralPeer = errors.New("cannot advertise on channel that has not called ListenAndServe")

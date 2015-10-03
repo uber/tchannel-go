@@ -20,10 +20,10 @@
 
 package mocks
 
-import "github.com/uber/tchannel/golang/trace/thrift/gen-go/tcollector"
+import "github.com/uber/tchannel-go/trace/thrift/gen-go/tcollector"
 import "github.com/stretchr/testify/mock"
 
-import "github.com/uber/tchannel/golang/thrift"
+import "github.com/uber/tchannel-go/thrift"
 
 type TChanTCollector struct {
 	mock.Mock

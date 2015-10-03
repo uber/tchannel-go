@@ -26,7 +26,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	. "github.com/uber/tchannel/golang"
+	. "github.com/uber/tchannel-go"
 )
 
 func benchmarkUsing(b *testing.B, pool FramePool) {

@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/uber/tchannel/golang/typed"
+	"github.com/uber/tchannel-go/typed"
 )
 
 var (

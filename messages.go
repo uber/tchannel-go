@@ -23,7 +23,7 @@ package tchannel
 import (
 	"time"
 
-	"github.com/uber/tchannel/golang/typed"
+	"github.com/uber/tchannel-go/typed"
 )
 
 // messageType defines a type of message

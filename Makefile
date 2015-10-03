@@ -3,8 +3,8 @@ OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
 PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
-TEST_PKGS_NOPREFIX := $(shell go list ./... | sed -e 's/^.*uber\/tchannel\/golang//' | grep -v thrift-gen)
-TEST_PKGS := $(addprefix github.com/uber/tchannel/golang,$(TEST_PKGS_NOPREFIX))
+TEST_PKGS_NOPREFIX := $(shell go list ./... | sed -e 's/^.*uber\/tchannel-go//' | grep -v thrift-gen)
+TEST_PKGS := $(addprefix github.com/uber/tchannel-go,$(TEST_PKGS_NOPREFIX))
 BUILD := ./build
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 export GOPATH = $(GODEPS):$(OLDGOPATH)
@@ -23,7 +23,7 @@ install:
 	# Totally insane, but necessary to setup a proper GOPATH given that we are not
 	# running under a standard go travis environment
 	mkdir -p $(GODEPS)/src/github.com/uber/tchannel
-	ln -s $(shell pwd) $(GODEPS)/src/github.com/uber/tchannel/golang
+	ln -s $(shell pwd) $(GODEPS)/src/github.com/uber/tchannel-go
 	GOPATH=$(GODEPS) go get github.com/tools/godep
 	GOPATH=$(GODEPS) godep restore
 

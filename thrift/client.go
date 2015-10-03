@@ -22,7 +22,7 @@ package thrift
 
 import (
 	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/uber/tchannel/golang"
+	"github.com/uber/tchannel-go"
 )
 
 // client implements TChanClient and makes outgoing Thrift calls.

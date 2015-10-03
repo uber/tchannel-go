@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/cactus/go-statsd-client/statsd"
-	"github.com/uber/tchannel/golang"
+	"github.com/uber/tchannel-go"
 )
 
 const samplingRate = 1.0

@@ -27,11 +27,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/testutils"
-	"github.com/uber/tchannel/golang/thrift"
-	gen "github.com/uber/tchannel/golang/trace/thrift/gen-go/tcollector"
-	"github.com/uber/tchannel/golang/trace/thrift/mocks"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/thrift"
+	gen "github.com/uber/tchannel-go/trace/thrift/gen-go/tcollector"
+	"github.com/uber/tchannel-go/trace/thrift/mocks"
 )
 
 func TestZipkinTraceReporterFactory(t *testing.T) {

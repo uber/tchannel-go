@@ -31,9 +31,9 @@ import (
 	"strings"
 	"time"
 
-	tchannel "github.com/uber/tchannel/golang"
-	gen "github.com/uber/tchannel/golang/examples/thrift/gen-go/test"
-	"github.com/uber/tchannel/golang/thrift"
+	tchannel "github.com/uber/tchannel-go"
+	gen "github.com/uber/tchannel-go/examples/thrift/gen-go/test"
+	"github.com/uber/tchannel-go/thrift"
 )
 
 func main() {

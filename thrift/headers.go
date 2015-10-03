@@ -25,7 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/uber/tchannel/golang/typed"
+	"github.com/uber/tchannel-go/typed"
 )
 
 // TODO(prashant): Use a small buffer and then flush it when it's full.

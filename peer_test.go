@@ -25,7 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel/golang/testutils"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 func TestGetPeerNoPeer(t *testing.T) {

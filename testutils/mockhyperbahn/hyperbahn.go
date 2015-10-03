@@ -24,9 +24,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/hyperbahn"
-	"github.com/uber/tchannel/golang/json"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/hyperbahn"
+	"github.com/uber/tchannel-go/json"
 )
 
 // Mock is up a mock Hyperbahn server for tests.

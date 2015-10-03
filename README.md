@@ -1,6 +1,6 @@
 # TChannel
 
-[![GoDoc](https://godoc.org/github.com/uber/tchannel/golang?status.svg)](https://godoc.org/github.com/uber/tchannel/golang)
+[![GoDoc](https://godoc.org/github.com/uber/tchannel-go?status.svg)](https://godoc.org/github.com/uber/tchannel-go)
 
 network multiplexing and framing protocol for RPC
 
@@ -33,9 +33,9 @@ export PATH="${PATH}":"${GOPATH}/bin"
 TChannel uses [godep](https://github.com/tools/godep) to manage dependencies.  To get started:
 
 ```bash
-go get github.com/uber/tchannel/golang
+go get github.com/uber/tchannel-go
 go get github.com/tools/godep
-cd $GOPATH/src/github.com/uber/tchannel/golang
+cd $GOPATH/src/github.com/uber/tchannel-go
 godep restore
 make
 ```

@@ -29,9 +29,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/json"
-	"github.com/uber/tchannel/golang/testutils"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/json"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 func TestAdvertiseFailed(t *testing.T) {

@@ -25,9 +25,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/hyperbahn"
-	"github.com/uber/tchannel/golang/testutils/mockhyperbahn"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/hyperbahn"
+	"github.com/uber/tchannel-go/testutils/mockhyperbahn"
 )
 
 var config = struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	athrift "github.com/apache/thrift/lib/go/thrift"
-	"github.com/uber/tchannel/golang/thrift/gen-go/meta"
+	"github.com/uber/tchannel-go/thrift/gen-go/meta"
 )
 
 // tchanMeta is interface for the service and client for the services defined in the IDL.

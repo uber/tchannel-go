@@ -24,7 +24,7 @@ import (
 	"bytes"
 	"testing"
 
-	. "github.com/uber/tchannel/golang"
+	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/uber/tchannel/golang"
-	"github.com/uber/tchannel/golang/raw"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/raw"
 )
 
 var (
