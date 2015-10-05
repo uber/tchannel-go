@@ -3,11 +3,12 @@ OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
 PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
-TEST_PKGS_NOPREFIX := $(shell go list ./... | sed -e 's/^.*uber\/tchannel-go//' | grep -v thrift-gen)
+TEST_PKGS_NOPREFIX := $(shell go list ./... | sed -e 's/^.*uber\/tchannel-go//')
 TEST_PKGS := $(addprefix github.com/uber/tchannel-go,$(TEST_PKGS_NOPREFIX))
 BUILD := ./build
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 export GOPATH = $(GODEPS):$(OLDGOPATH)
+export PATH := $(realpath ./scripts/travis/thrift-release/linux-x86_64):$(PATH)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -19,13 +20,14 @@ setup:
 	mkdir -p $(BUILD)
 	mkdir -p $(BUILD)/examples
 
+get_thrift:
+	scripts/travis/get-thrift.sh
+
 install:
-	# Totally insane, but necessary to setup a proper GOPATH given that we are not
-	# running under a standard go travis environment
-	mkdir -p $(GODEPS)/src/github.com/uber
-	ln -s $(shell pwd) $(GODEPS)/src/github.com/uber/tchannel-go
 	GOPATH=$(GODEPS) go get github.com/tools/godep
 	GOPATH=$(GODEPS) godep restore
+
+install_ci: get_thrift install
 
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
@@ -89,5 +91,5 @@ thrift_gen:
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/test.thrift
 	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift && cd trace && mv gen-go/* thrift/gen-go/
 
-.PHONY: all help clean fmt format test vet
+.PHONY: all help clean fmt format get_thrift install install_ci test test_ci vet
 .SILENT: all help clean fmt format test vet
