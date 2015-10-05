@@ -8,6 +8,7 @@ TEST_PKGS := $(addprefix github.com/uber/tchannel-go,$(TEST_PKGS_NOPREFIX))
 BUILD := ./build
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 export GOPATH = $(GODEPS):$(OLDGOPATH)
+export PATH := ./scripts/travis/thrift-release/linux-x86_64:$(PATH)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -18,6 +19,11 @@ all: test examples
 setup:
 	mkdir -p $(BUILD)
 	mkdir -p $(BUILD)/examples
+
+get-thrift:
+	scripts/travis/get-thrift.sh
+
+install_ci: get-thrift
 
 install:
 	# Totally insane, but necessary to setup a proper GOPATH given that we are not
