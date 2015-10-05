@@ -22,7 +22,7 @@ setup:
 install:
 	# Totally insane, but necessary to setup a proper GOPATH given that we are not
 	# running under a standard go travis environment
-	mkdir -p $(GODEPS)/src/github.com/uber/tchannel
+	mkdir -p $(GODEPS)/src/github.com/uber
 	ln -s $(shell pwd) $(GODEPS)/src/github.com/uber/tchannel-go
 	GOPATH=$(GODEPS) go get github.com/tools/godep
 	GOPATH=$(GODEPS) godep restore
@@ -83,10 +83,11 @@ examples: clean setup thrift_example
 	go build -o $(BUILD)/examples/test_server ./examples/test_server
 
 thrift_gen:
-	cd thrift && thrift-gen --generateThrift --inputFile test.thrift
-	cd examples/keyvalue && thrift-gen --generateThrift --inputFile keyvalue.thrift
-	cd examples/thrift && thrift-gen --generateThrift --inputFile test.thrift
-	cd trace && rm -rf thrift/gen-go/tcollector && thrift-gen --generateThrift --inputFile tcollector.thrift && mv gen-go/* thrift/gen-go/
+	go build -o $(BUILD)/thrift-gen ./thrift/thrift-gen
+	$(BUILD)/thrift-gen --generateThrift --inputFile thrift/test.thrift
+	$(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift
+	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/test.thrift
+	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift && cd trace && mv gen-go/* thrift/gen-go/
 
 .PHONY: all help clean fmt format test vet
 .SILENT: all help clean fmt format test vet
