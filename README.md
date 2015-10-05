@@ -2,7 +2,10 @@
 
 [![GoDoc](https://godoc.org/github.com/uber/tchannel-go?status.svg)](https://godoc.org/github.com/uber/tchannel-go)
 
-network multiplexing and framing protocol for RPC
+
+[TChannel](https://github.com/uber/tchannel/blob/master/docs/protocol.md) is a multiplexing and framing protocol for RPC calls.
+
+tchannel-go is a Go implementation of the TChannel protocol, and includes client libraries for [Hyperbahn](https://github.com/uber/hyperbahn).
 
 ## Stability: experimental
 
@@ -20,13 +23,13 @@ Get Go from your package manager of choice or follow the [official installation 
 brew install go
 
 # This will be your GOPATH where all Go code will live.
-mkdir -p ~/golang/src
+mkdir -p ~/gocode/src
 ```
 
 Set up your environment for your shell of choice.
 
 ```bash
-export GOPATH="${HOME}/golang"
+export GOPATH="${HOME}/gocode"
 export PATH="${PATH}":"${GOPATH}/bin"
 ```
 
@@ -101,7 +104,7 @@ There is no notion of client and server in this system. Every TChannel instance 
 making or receiving requests, and thus requires a unique port on which to listen. This requirement may
 change in the future.
 
- - See [protocol.md](../docs/protocol.md) for more details
+ - See [protocol.md](https://github.com/uber/tchannel/blob/master/docs/protocol.md) for more details
 
 ## Further examples
 
