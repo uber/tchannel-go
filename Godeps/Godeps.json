@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/apache/thrift/lib/go/thrift",
-			"Rev": "b2e90c143e266c9af9ed437a3ab0dbb229a0b722"
+			"Rev": "61b8a29b0704ccd81b520f2300f5d1bb261fea3e"
 		},
 		{
 			"ImportPath": "github.com/cactus/go-statsd-client/statsd",
@@ -21,7 +21,7 @@
 		},
 		{
 			"ImportPath": "github.com/samuel/go-thrift/parser",
-			"Rev": "67448a76c265e5e6e88d5e46ae628107b122b822"
+			"Rev": "713394955d265d43898cc08f6240fe0f488e8eb6"
 		},
 		{
 			"ImportPath": "github.com/stretchr/objx",
