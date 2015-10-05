@@ -108,11 +108,9 @@ change in the future.
 
 ## Further examples
 
- - [server](examples/hello/server/main.go)
- - [client](examples/hello/client/main.go)
- - [ping](examples/ping/main.go)
- - [keyvalue](examples/keyvalue)
- - [thrift](examples/thrift)
+ - [ping](examples/ping/main.go): A simple ping/pong example using raw TChannel.
+ - [thrift](examples/thrift): A Thrift server/client example.
+ - [keyvalue](examples/keyvalue): A keyvalue Thrift service with separate server and client binaries.
 
 ## Tests
 
