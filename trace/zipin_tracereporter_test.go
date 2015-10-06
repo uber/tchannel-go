@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/trace/thrift/gen-go/tcollector"
@@ -35,12 +36,49 @@ import (
 )
 
 func TestZipkinTraceReporterFactory(t *testing.T) {
-	_, err := tchannel.NewChannel("client", &tchannel.ChannelOptions{
-		Logger:               tchannel.SimpleLogger,
+	ch, err := tchannel.NewChannel("svc", &tchannel.ChannelOptions{
 		TraceReporterFactory: ZipkinTraceReporterFactory,
 	})
-
 	assert.NoError(t, err)
+
+	// Create a TCollector channel, and add it as a peer to ch so Report works.
+	mockServer := new(mocks.TChanTCollector)
+	tcollectorCh, err := setupServer(mockServer)
+	require.NoError(t, err, "setupServer failed")
+	ch.Peers().Add(tcollectorCh.PeerInfo().HostPort)
+
+	called := make(chan int)
+	ret := &gen.Response{Ok: true}
+	mockServer.On("Submit", mock.Anything, mock.Anything).Return(ret, nil).Run(func(args mock.Arguments) {
+		called <- 1
+	})
+
+	// Make some calls, and validate that the trace reporter is not called recursively.
+	require.NoError(t, json.Register(tcollectorCh, json.Handlers{"op": func(ctx json.Context, arg map[string]interface{}) (map[string]interface{}, error) {
+		return arg, nil
+	}}, nil), "Register failed")
+	ctx, cancel := json.NewContext(time.Second)
+	defer cancel()
+	for i := 0; i < 5; i++ {
+		var res map[string]string
+		assert.NoError(t, json.CallSC(ctx, ch.GetSubChannel(tcollectorServiceName), "op", nil, &res), "call failed")
+	}
+
+	// Verify the spans being reported.
+	for i := 0; i < 5; i++ {
+		select {
+		case <-called:
+		case <-time.After(time.Second):
+			t.Errorf("Expected submit for call %v", i)
+		}
+	}
+
+	// Verify that no other spans are reported.
+	select {
+	case <-called:
+		t.Errorf("Too many spans reported")
+	case <-time.After(time.Millisecond):
+	}
 }
 
 func TestBuildZipkinSpan(t *testing.T) {
@@ -195,9 +233,9 @@ func TestSubmit(t *testing.T) {
 		thriftSpan, err := buildZipkinSpan(span, annotations, nil, endpoint)
 		assert.NoError(t, err)
 		thriftSpan.BinaryAnnotations = []*gen.BinaryAnnotation{}
-		ret := &gen.Response{Ok: true}
 
 		called := make(chan struct{})
+		ret := &gen.Response{Ok: true}
 		args.s.On("Submit", ctxArg(), thriftSpan).Return(ret, nil).Run(func(_ mock.Arguments) {
 			close(called)
 		})
