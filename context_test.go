@@ -42,6 +42,13 @@ func TestWrapContextForTest(t *testing.T) {
 	assert.Equal(t, call, CurrentCall(actual), "Incorrect call object returned.")
 }
 
+func TestNewContextBuilderHasSpan(t *testing.T) {
+	ctx, cancel := NewContextBuilder(time.Second).Build()
+	defer cancel()
+
+	assert.NotNil(t, CurrentSpan(ctx), "NewContext should contain span")
+}
+
 func TestShardKeyPropagates(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		peerInfo := ch.PeerInfo()

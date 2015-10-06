@@ -47,6 +47,7 @@ type ContextBuilder struct {
 func NewContextBuilder(timeout time.Duration) *ContextBuilder {
 	return &ContextBuilder{
 		Timeout: timeout,
+		span:    NewRootSpan(),
 	}
 }
 
