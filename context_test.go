@@ -47,6 +47,15 @@ func TestNewContextBuilderHasSpan(t *testing.T) {
 	defer cancel()
 
 	assert.NotNil(t, CurrentSpan(ctx), "NewContext should contain span")
+	assert.True(t, CurrentSpan(ctx).TracingEnabled(), "Tracing should be enabled")
+}
+
+func TestNewContextBuilderDisableTracing(t *testing.T) {
+	ctx, cancel := NewContextBuilder(time.Second).
+		DisableTracing().Build()
+	defer cancel()
+
+	assert.False(t, CurrentSpan(ctx).TracingEnabled(), "Tracing should be disabled")
 }
 
 func TestShardKeyPropagates(t *testing.T) {
