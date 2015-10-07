@@ -175,6 +175,6 @@ func (h *secondHandler) Test(ctx thrift.Context) error {
 func optsFor(processName string) *tchannel.ChannelOptions {
 	return &tchannel.ChannelOptions{
 		ProcessName: processName,
-		Logger:      tchannel.SimpleLogger,
+		Logger:      tchannel.NewLevelLogger(tchannel.SimpleLogger, tchannel.LogLevelWarn),
 	}
 }
