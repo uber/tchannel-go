@@ -94,7 +94,8 @@ func runClient1(hyperbahnService string, addr net.Addr) error {
 			ctx, cancel := thrift.NewContext(time.Second)
 			res, err := client.Echo(ctx, "Hi")
 			log.Println("Echo(Hi) = ", res, ", err: ", err)
-			log.Println("AppError = ", client.AppError(ctx))
+			log.Println("AppError() = ", client.AppError(ctx))
+			log.Println("BaseCall() = ", client.BaseCall(ctx))
 			cancel()
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -148,6 +149,11 @@ func (h *firstHandler) Healthcheck(ctx thrift.Context) (*gen.HealthCheckRes, err
 	return &gen.HealthCheckRes{
 		Healthy: true,
 		Msg:     "OK"}, nil
+}
+
+func (h *firstHandler) BaseCall(ctx thrift.Context) error {
+	log.Printf("first: BaseCall()\n")
+	return nil
 }
 
 func (h *firstHandler) Echo(ctx thrift.Context, msg string) (r string, err error) {
