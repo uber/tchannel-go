@@ -21,6 +21,7 @@
 package thrift
 
 import (
+	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -30,14 +31,21 @@ import (
 	"golang.org/x/net/context"
 )
 
+var (
+	errInvalidCallback = errors.New("Specified callback method does not exist in the service")
+)
+
 // Server handles incoming TChannel calls and forwards them to the matching TChanServer.
 type Server struct {
 	ch            tchannel.Registrar
 	log           tchannel.Logger
 	mut           sync.RWMutex
 	handlers      map[string]TChanServer
+	callbacks     map[string]callback
 	healthHandler *healthHandler
 }
+
+type callback func(thrift.TStruct)
 
 // NewServer returns a server that can serve thrift services over TChannel.
 func NewServer(registrar tchannel.Registrar) *Server {
@@ -46,6 +54,7 @@ func NewServer(registrar tchannel.Registrar) *Server {
 		ch:            registrar,
 		log:           registrar.Logger(),
 		handlers:      make(map[string]TChanServer),
+		callbacks:     make(map[string]callback),
 		healthHandler: healthHandler,
 	}
 
@@ -70,6 +79,29 @@ func (s *Server) Register(svr TChanServer) {
 // RegisterHealthHandler uses the user-specified function f for the Health endpoint.
 func (s *Server) RegisterHealthHandler(f HealthFunc) {
 	s.healthHandler.setHandler(f)
+}
+
+// RegisterCallback registers the given method from the given TChanServer and a call-back function to be
+// executed on the response of the method after the response is written. This gives the server a chance
+// to clean up resources from the response object
+func (s *Server) RegisterCallback(svr TChanServer, method string, c callback) error {
+	methodExists := false
+	for _, m := range svr.Methods() {
+		if m == method {
+			methodExists = true
+			break
+		}
+	}
+
+	if !methodExists {
+		return errInvalidCallback
+	}
+
+	s.mut.Lock()
+	s.callbacks[svr.Service()+"::"+method] = c
+	s.mut.Unlock()
+
+	return nil
 }
 
 func (s *Server) onError(err error) {
@@ -126,11 +158,13 @@ func (s *Server) handle(origCtx context.Context, handler TChanServer, method str
 	writer, err = call.Response().Arg3Writer()
 	protocol = thrift.NewTBinaryProtocolTransport(&readWriterTransport{Writer: writer})
 	resp.Write(protocol)
-	if err := writer.Close(); err != nil {
-		return err
+	err = writer.Close()
+
+	if s.callbacks[handler.Service()+"::"+method] != nil {
+		s.callbacks[handler.Service()+"::"+method](resp)
 	}
 
-	return nil
+	return err
 }
 
 // Handle handles an incoming TChannel call and forwards it to the correct handler.
