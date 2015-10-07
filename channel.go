@@ -361,6 +361,11 @@ func (ch *Channel) StatsReporter() StatsReporter {
 	return ch.statsReporter
 }
 
+// TraceReporter returns the trace reporter for this channel.
+func (ch *Channel) TraceReporter() TraceReporter {
+	return ch.traceReporter
+}
+
 // StatsTags returns the common tags that should be used when reporting stats.
 // It returns a new map for each call.
 func (ch *Channel) StatsTags() map[string]string {
