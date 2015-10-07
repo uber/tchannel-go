@@ -65,6 +65,7 @@ func TestStats(t *testing.T) {
 	peerInfo := ch.PeerInfo()
 	tags := ch.StatsTags()
 	assert.NotNil(t, ch.StatsReporter(), "StatsReporter missing")
+	assert.NotNil(t, ch.TraceReporter(), "TraceReporter missing")
 	assert.Equal(t, peerInfo.ProcessName, tags["app"], "app tag")
 	assert.Equal(t, peerInfo.ServiceName, tags["service"], "service tag")
 	assert.Equal(t, hostname, tags["host"], "hostname tag")
