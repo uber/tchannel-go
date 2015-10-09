@@ -57,7 +57,9 @@ func (h *testHandler) forward(ctx Context, args *ForwardArgs) (*Res, error) {
 	h.calls = append(h.calls, "forward-"+headerVal)
 	h.callers = append(h.callers, tchannel.CurrentCall(ctx).CallerName())
 
-	ctx = WithHeaders(ctx, map[string]string{"hdr": args.HeaderVal})
+	if args.HeaderVal != "" {
+		ctx = WithHeaders(ctx, map[string]string{"hdr": args.HeaderVal})
+	}
 	res := &Res{}
 
 	if args.Method == "forward" {
@@ -172,6 +174,36 @@ func TestForwardChain(t *testing.T) {
 			assert.Equal(t, expected.calls, servers[s].handler.calls, "wrong calls for %v", s)
 			assert.Equal(t, expected.callers, servers[s].handler.callers, "wrong callers for %v", s)
 		}
+	}
+}
+
+func TestHeadersForwarded(t *testing.T) {
+	ch, err := tchannel.NewChannel("svc", nil)
+	require.NoError(t, err)
+
+	handler := &testHandler{t: t}
+	require.NoError(t, Register(ch, Handlers{
+		"forward": handler.forward,
+		"leaf":    handler.leaf,
+	}, handler.onError))
+	assert.NoError(t, ch.ListenAndServe(":0"))
+
+	rootArg := &ForwardArgs{
+		Service:   "svc",
+		Method:    "leaf",
+		HeaderVal: "",
+	}
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+	ctx = WithHeaders(ctx, map[string]string{"hdr": "copy"})
+
+	assert.Nil(t, tchannel.CurrentCall(ctx))
+	resp := &Res{}
+	handler.peer = ch.Peers().Add(ch.PeerInfo().HostPort)
+	if assert.NoError(t, CallPeer(ctx, handler.peer, "svc", "forward", rootArg, resp)) {
+		// Verify that the header is copied when ctx is not changed.
+		assert.Equal(t, handler.calls, []string{"forward-copy", "leaf-copy"})
 	}
 }
 
