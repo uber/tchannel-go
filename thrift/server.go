@@ -79,12 +79,10 @@ func (s *Server) RegisterHealthHandler(f HealthFunc) {
 // RegisterPostResponseCallback registers a call-back function for a given TChanServer that is to be
 // executed on the response of the method after the response is written. This gives the server a chance
 // to clean up resources from the response object
-func (s *Server) RegisterPostResponseCallback(svr TChanServer, c callback) error {
+func (s *Server) RegisterPostResponseCallback(svr TChanServer, c callback) {
 	s.mut.Lock()
 	s.callbacks[svr.Service()] = c
 	s.mut.Unlock()
-
-	return nil
 }
 
 func (s *Server) onError(err error) {
