@@ -21,7 +21,6 @@
 package thrift
 
 import (
-	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -29,10 +28,6 @@ import (
 	"github.com/apache/thrift/lib/go/thrift"
 	tchannel "github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
-)
-
-var (
-	errInvalidCallback = errors.New("Specified callback method does not exist in the service")
 )
 
 // Server handles incoming TChannel calls and forwards them to the matching TChanServer.
@@ -45,7 +40,7 @@ type Server struct {
 	healthHandler *healthHandler
 }
 
-type callback func(thrift.TStruct)
+type callback func(string, thrift.TStruct)
 
 // NewServer returns a server that can serve thrift services over TChannel.
 func NewServer(registrar tchannel.Registrar) *Server {
@@ -81,24 +76,12 @@ func (s *Server) RegisterHealthHandler(f HealthFunc) {
 	s.healthHandler.setHandler(f)
 }
 
-// RegisterCallback registers the given method from the given TChanServer and a call-back function to be
+// RegisterPostResponseCallback registers a call-back function for a given TChanServer that is to be
 // executed on the response of the method after the response is written. This gives the server a chance
 // to clean up resources from the response object
-func (s *Server) RegisterCallback(svr TChanServer, method string, c callback) error {
-	methodExists := false
-	for _, m := range svr.Methods() {
-		if m == method {
-			methodExists = true
-			break
-		}
-	}
-
-	if !methodExists {
-		return errInvalidCallback
-	}
-
+func (s *Server) RegisterPostResponseCallback(svr TChanServer, c callback) error {
 	s.mut.Lock()
-	s.callbacks[svr.Service()+"::"+method] = c
+	s.callbacks[svr.Service()] = c
 	s.mut.Unlock()
 
 	return nil
@@ -160,9 +143,11 @@ func (s *Server) handle(origCtx context.Context, handler TChanServer, method str
 	resp.Write(protocol)
 	err = writer.Close()
 
-	if s.callbacks[handler.Service()+"::"+method] != nil {
-		s.callbacks[handler.Service()+"::"+method](resp)
+	s.mut.RLock()
+	if s.callbacks[handler.Service()] != nil {
+		s.callbacks[handler.Service()](method, resp)
 	}
+	s.mut.RUnlock()
 
 	return err
 }
