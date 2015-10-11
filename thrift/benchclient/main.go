@@ -23,6 +23,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -35,13 +36,22 @@ import (
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 )
 
+var (
+	requestSize = flag.Int("requestSize", 10000, "The number of bytes of each request")
+	timeout     = flag.Duration("timeout", time.Second, "Timeout for each request")
+)
+
 func main() {
+	flag.Parse()
+
 	ch, err := testutils.NewClient(nil)
 	if err != nil {
 		log.Fatalf("err")
 	}
 
-	ch.Peers().Add(os.Args[1])
+	for _, host := range flag.Args() {
+		ch.Peers().Add(host)
+	}
 	thriftClient := thrift.NewClient(ch, "bench-server", nil)
 	client := gen.NewTChanSecondServiceClient(thriftClient)
 
@@ -78,7 +88,7 @@ func makeArg() string {
 
 	bs := []byte{}
 	// TODO(prashant) when this is 100000, get more arguments in message error.
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < *requestSize; i++ {
 		bs = append(bs, byte(i%26+'A'))
 	}
 	arg = string(bs)
@@ -86,7 +96,7 @@ func makeArg() string {
 }
 
 func makeCall(client gen.TChanSecondService) {
-	ctx, cancel := thrift.NewContext(time.Second)
+	ctx, cancel := thrift.NewContext(*timeout)
 	defer cancel()
 
 	arg := makeArg()
