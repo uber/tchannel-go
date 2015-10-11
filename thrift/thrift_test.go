@@ -22,6 +22,8 @@ package thrift_test
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,6 +113,21 @@ func TestRequestSubChannel(t *testing.T) {
 		assert.NoError(t, err, "Echo failed")
 		assert.Equal(t, echoRes, res)
 	}
+}
+
+func TestLargeRequest(t *testing.T) {
+	arg := testutils.RandString(100000)
+	res := strings.ToLower(arg)
+
+	fmt.Println(len(arg))
+	withSetup(t, func(ctx Context, args testArgs) {
+		args.s2.On("Echo", ctxArg(), arg).Return(res, nil)
+
+		got, err := args.c2.Echo(ctx, arg)
+		if assert.NoError(t, err, "Echo got error") {
+			assert.Equal(t, res, got, "Echo got unexpected response")
+		}
+	})
 }
 
 func TestThriftError(t *testing.T) {
