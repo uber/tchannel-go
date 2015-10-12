@@ -132,3 +132,43 @@ func TestFramesReleased(t *testing.T) {
 		t.Errorf("Found uncleared message exchanges:\n%v", exchangesLeft)
 	}
 }
+
+type dirtyFramePool struct{}
+
+func (p dirtyFramePool) Get() *Frame {
+	f := NewFrame(MaxFramePayloadSize)
+	for i := range f.Payload {
+		f.Payload[i] = ^byte(0)
+	}
+	return f
+}
+
+func (p dirtyFramePool) Release(f *Frame) {}
+
+func TestDirtyFrameRequests(t *testing.T) {
+
+	argSizes := []int{50000, 100000, 150000}
+	WithVerifiedServer(t, &testutils.ChannelOpts{
+		ServiceName: "swap-server",
+		DefaultConnectionOptions: ConnectionOptions{
+			FramePool: dirtyFramePool{},
+		},
+	}, func(serverCh *Channel, hostPort string) {
+		peerInfo := serverCh.PeerInfo()
+		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
+
+		for _, arg2Size := range argSizes {
+			for _, arg3Size := range argSizes {
+				ctx, cancel := NewContext(time.Second)
+				defer cancel()
+
+				arg2, arg3 := testutils.RandBytes(arg2Size), testutils.RandBytes(arg3Size)
+				res2, res3, _, err := raw.Call(ctx, serverCh, hostPort, peerInfo.ServiceName, "swap", arg2, arg3)
+				if assert.NoError(t, err, "Call failed") {
+					assert.Equal(t, arg2, res3, "Result arg3 wrong")
+					assert.Equal(t, arg3, res2, "Result arg3 wrong")
+				}
+			}
+		}
+	})
+}
