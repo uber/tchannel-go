@@ -87,7 +87,6 @@ func makeArg() string {
 	}
 
 	bs := []byte{}
-	// TODO(prashant) when this is 100000, get more arguments in message error.
 	for i := 0; i < *requestSize; i++ {
 		bs = append(bs, byte(i%26+'A'))
 	}
