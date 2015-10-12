@@ -22,6 +22,7 @@ package thrift_test
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -35,12 +36,20 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 )
 
-func setupBenchServer() (string, error) {
+var (
+	useHyperbahn   = flag.Bool("useHyperbahn", false, "Whether to advertise and route requests through Hyperbahn")
+	hyperbahnNodes = flag.String("hyperbahnNodes", "127.0.0.1:21300,127.0.0.1:21301", "Comma-separated list of Hyperbahn nodes")
+	requestSize    = flag.Int("requestSize", 10000, "Call payload size")
+	timeout        = flag.Duration("timeout", time.Second, "Timeout for each call")
+)
+
+func setupBenchServer() ([]string, error) {
 	ch, err := testutils.NewServer(&testutils.ChannelOpts{
 		ServiceName: "bench-server",
 		DefaultConnectionOptions: tchannel.ConnectionOptions{
@@ -48,16 +57,28 @@ func setupBenchServer() (string, error) {
 		},
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	server := thrift.NewServer(ch)
 	server.Register(gen.NewTChanSecondServiceServer(benchSecondHandler{}))
-	return ch.PeerInfo().HostPort, nil
+
+	if !*useHyperbahn {
+		return []string{ch.PeerInfo().HostPort}, nil
+	}
+
+	// Set up a Hyperbahn client and advertise it.
+	nodes := strings.Split(*hyperbahnNodes, ",")
+	config := hyperbahn.Configuration{InitialNodes: nodes}
+	hc, err := hyperbahn.NewClient(ch, config, nil)
+	if err := hc.Advertise(); err != nil {
+		return nil, err
+	}
+
+	return nodes, nil
 }
 
 func BenchmarkCallsSerial(b *testing.B) {
-	b.SetParallelism(1)
 	serverAddr, err := setupBenchServer()
 	require.NoError(b, err, "setupBenchServer failed")
 
@@ -89,6 +110,9 @@ func BenchmarkCallsParallel(b *testing.B) {
 			atomic.AddInt32(&reqCount, int32(1))
 		}
 		fmt.Println("Successful requests", client.numTimes, "Mean", client.mean)
+		for err, count := range client.errors {
+			fmt.Printf("%v: %v\n", count, err)
+		}
 	})
 
 	duration := time.Since(started)
@@ -108,6 +132,7 @@ type benchClient struct {
 
 	numTimes int
 	mean     time.Duration
+	errors   map[string]int
 }
 
 var (
@@ -137,13 +162,18 @@ func getBenchClientPath() (path string, err error) {
 	return benchClientPath, err
 }
 
-func startClient(serverAddr string) (*benchClient, error) {
+func startClient(servers []string) (*benchClient, error) {
 	path, err := getBenchClientPath()
 	if err != nil {
 		return nil, err
 	}
 
-	cmd := exec.Command(path, serverAddr)
+	flags := []string{
+		"--requestSize", fmt.Sprint(*requestSize),
+		"--timeout", fmt.Sprint(*timeout),
+	}
+	flags = append(flags, servers...)
+	cmd := exec.Command(path, flags...)
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -159,7 +189,7 @@ func startClient(serverAddr string) (*benchClient, error) {
 		return nil, err
 	}
 
-	bc := &benchClient{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}
+	bc := &benchClient{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout), errors: make(map[string]int)}
 	return bc, bc.waitForStart()
 }
 
@@ -185,7 +215,7 @@ func (c *benchClient) CallAndWait() error {
 	}
 
 	if strings.HasPrefix(line, "failed") {
-		fmt.Println("client error:", line)
+		c.errors[strings.TrimSuffix(line, "\n")]++
 	} else if t, err := time.ParseDuration(strings.TrimSuffix(line, "\n")); err == nil {
 		if c.numTimes > 0 {
 			c.mean = time.Duration(float64(c.mean)*float64(c.numTimes)/float64(c.numTimes+1) + float64(t)/float64(c.numTimes+1))
