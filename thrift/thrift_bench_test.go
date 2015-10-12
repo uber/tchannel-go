@@ -110,6 +110,9 @@ func BenchmarkCallsParallel(b *testing.B) {
 			atomic.AddInt32(&reqCount, int32(1))
 		}
 		fmt.Println("Successful requests", client.numTimes, "Mean", client.mean)
+		for err, count := range client.errors {
+			fmt.Printf("%v: %v\n", count, err)
+		}
 	})
 
 	duration := time.Since(started)
@@ -129,6 +132,7 @@ type benchClient struct {
 
 	numTimes int
 	mean     time.Duration
+	errors   map[string]int
 }
 
 var (
@@ -185,7 +189,7 @@ func startClient(servers []string) (*benchClient, error) {
 		return nil, err
 	}
 
-	bc := &benchClient{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}
+	bc := &benchClient{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout), errors: make(map[string]int)}
 	return bc, bc.waitForStart()
 }
 
@@ -211,7 +215,7 @@ func (c *benchClient) CallAndWait() error {
 	}
 
 	if strings.HasPrefix(line, "failed") {
-		fmt.Println("client error:", line)
+		c.errors[strings.TrimSuffix(line, "\n")]++
 	} else if t, err := time.ParseDuration(strings.TrimSuffix(line, "\n")); err == nil {
 		if c.numTimes > 0 {
 			c.mean = time.Duration(float64(c.mean)*float64(c.numTimes)/float64(c.numTimes+1) + float64(t)/float64(c.numTimes+1))
