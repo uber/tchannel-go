@@ -148,3 +148,65 @@ func TestDeferredWrites(t *testing.T) {
 	assert.Equal(t, byte(0x44), u8)
 	assert.NoError(t, r.Err())
 }
+
+func TestDirtyUnderlyingBuffer(t *testing.T) {
+	buf := make([]byte, 128)
+	for i := range buf {
+		buf[i] = ^byte(0)
+	}
+	w := NewWriteBuffer(buf)
+
+	// Defer 1 + 2 + 4 + 8 + 5 = 20 bytes
+	w.DeferByte()
+	w.DeferUint16()
+	w.DeferUint32()
+	w.DeferUint64()
+	w.DeferBytes(5)
+
+	defer1 := w.DeferByte()
+	defer2 := w.DeferUint16()
+	defer3 := w.DeferUint32()
+	defer4 := w.DeferUint64()
+	defer5 := w.DeferBytes(5)
+
+	w.WriteUint16(16)
+	w.WriteUint32(32)
+	w.WriteUint64(64)
+	w.WriteLen16String("len16 string")
+	w.WriteLen8String("len8 string")
+	w.WriteString("string")
+	w.WriteSingleByte(1)
+	w.WriteBytes([]byte{1, 2, 3, 4, 5})
+
+	defer1.Update(11)
+	defer2.Update(116)
+	defer3.Update(132)
+	defer4.Update(164)
+	defer5.Update([]byte{11, 12, 13, 14, 15})
+
+	r := NewReadBuffer(buf)
+
+	// Deferred unwritten bytes should be 0.
+	assert.EqualValues(t, 0, r.ReadSingleByte(), "unwritten deferred should be 0")
+	assert.EqualValues(t, 0, r.ReadUint16(), "unwritten deferred should be 0")
+	assert.EqualValues(t, 0, r.ReadUint32(), "unwritten deferred should be 0")
+	assert.EqualValues(t, 0, r.ReadUint64(), "unwritten deferred should be 0")
+	assert.Equal(t, []byte{0, 0, 0, 0, 0}, r.ReadBytes(5), "unwritten deferred should be 0")
+
+	// Deferred written bytes.
+	assert.EqualValues(t, 11, r.ReadSingleByte(), "defer byte")
+	assert.EqualValues(t, 116, r.ReadUint16(), "defer uint16")
+	assert.EqualValues(t, 132, r.ReadUint32(), "defer uint32")
+	assert.EqualValues(t, 164, r.ReadUint64(), "defer uint64")
+	assert.Equal(t, []byte{11, 12, 13, 14, 15}, r.ReadBytes(5), "defer bytes")
+
+	// Normally written bytes.
+	assert.EqualValues(t, 16, r.ReadUint16(), "uint16")
+	assert.EqualValues(t, 32, r.ReadUint32(), "uint32")
+	assert.EqualValues(t, 64, r.ReadUint64(), "uint64")
+	assert.Equal(t, "len16 string", r.ReadLen16String(), "len16 string")
+	assert.Equal(t, "len8 string", r.ReadLen8String(), "len 8 string")
+	assert.Equal(t, "string", r.ReadString(6), "string")
+	assert.EqualValues(t, 1, r.ReadSingleByte(), "byte")
+	assert.Equal(t, []byte{1, 2, 3, 4, 5}, r.ReadBytes(5), "bytes")
+}

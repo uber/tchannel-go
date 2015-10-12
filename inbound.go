@@ -92,10 +92,10 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response.AddAnnotation(AnnotationKeyServerReceive)
 	response.mex = mex
 	response.conn = c
-	response.contents = newFragmentingWriter(response, initialFragment.checksumType.New())
 	response.cancel = cancel
 	response.span = callReq.Tracing
 	response.log = c.log.WithFields(LogField{"In-Response", callReq.ID()})
+	response.contents = newFragmentingWriter(response.log, response, initialFragment.checksumType.New())
 	response.headers = transportHeaders{}
 	response.messageForFragment = func(initial bool) message {
 		if initial {
@@ -119,7 +119,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.response = response
 	call.log = c.log.WithFields(LogField{"In-Call", callReq.ID()})
 	call.messageForFragment = func(initial bool) message { return new(callReqContinue) }
-	call.contents = newFragmentingReader(call)
+	call.contents = newFragmentingReader(call.log, call)
 	call.statsReporter = c.statsReporter
 	call.createStatsTags(c.commonStatsTags)
 

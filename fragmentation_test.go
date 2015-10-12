@@ -250,8 +250,8 @@ func TestFragmentationReaderErrors(t *testing.T) {
 func TestFragmentationChecksumTypeErrors(t *testing.T) {
 	sendCh := make(fragmentChannel, 10)
 	recvCh := make(fragmentChannel, 10)
-	w := newFragmentingWriter(sendCh, ChecksumTypeCrc32.New())
-	r := newFragmentingReader(recvCh)
+	w := newFragmentingWriter(NullLogger, sendCh, ChecksumTypeCrc32.New())
+	r := newFragmentingReader(NullLogger, recvCh)
 
 	// Write two fragments out
 	writer, err := w.ArgWriter(true /* last */)
@@ -277,8 +277,8 @@ func TestFragmentationChecksumTypeErrors(t *testing.T) {
 func TestFragmentationChecksumMismatch(t *testing.T) {
 	sendCh := make(fragmentChannel, 10)
 	recvCh := make(fragmentChannel, 10)
-	w := newFragmentingWriter(sendCh, ChecksumTypeCrc32.New())
-	r := newFragmentingReader(recvCh)
+	w := newFragmentingWriter(NullLogger, sendCh, ChecksumTypeCrc32.New())
+	r := newFragmentingReader(NullLogger, recvCh)
 
 	// Write two fragments out
 	writer, err := w.ArgWriter(true /* last */)
@@ -303,8 +303,8 @@ func TestFragmentationChecksumMismatch(t *testing.T) {
 
 func runFragmentationErrorTest(f func(w *fragmentingWriter, r *fragmentingReader)) {
 	ch := make(fragmentChannel, 10)
-	w := newFragmentingWriter(ch, ChecksumTypeCrc32.New())
-	r := newFragmentingReader(ch)
+	w := newFragmentingWriter(NullLogger, ch, ChecksumTypeCrc32.New())
+	r := newFragmentingReader(NullLogger, ch)
 	f(w, r)
 }
 
@@ -312,8 +312,8 @@ func runFragmentationTest(t *testing.T, args []string, expectedFragments [][]byt
 	sendCh := make(fragmentChannel, 10)
 	recvCh := make(fragmentChannel, 10)
 
-	w := newFragmentingWriter(sendCh, ChecksumTypeCrc32.New())
-	r := newFragmentingReader(recvCh)
+	w := newFragmentingWriter(NullLogger, sendCh, ChecksumTypeCrc32.New())
+	r := newFragmentingReader(NullLogger, recvCh)
 
 	var fragments [][]byte
 	var actualArgs []string
