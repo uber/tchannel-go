@@ -36,8 +36,11 @@ type Server struct {
 	log           tchannel.Logger
 	mut           sync.RWMutex
 	handlers      map[string]TChanServer
+	callbacks     map[string]callback
 	healthHandler *healthHandler
 }
+
+type callback func(string, thrift.TStruct)
 
 // NewServer returns a server that can serve thrift services over TChannel.
 func NewServer(registrar tchannel.Registrar) *Server {
@@ -46,6 +49,7 @@ func NewServer(registrar tchannel.Registrar) *Server {
 		ch:            registrar,
 		log:           registrar.Logger(),
 		handlers:      make(map[string]TChanServer),
+		callbacks:     make(map[string]callback),
 		healthHandler: healthHandler,
 	}
 
@@ -70,6 +74,15 @@ func (s *Server) Register(svr TChanServer) {
 // RegisterHealthHandler uses the user-specified function f for the Health endpoint.
 func (s *Server) RegisterHealthHandler(f HealthFunc) {
 	s.healthHandler.setHandler(f)
+}
+
+// RegisterPostResponseCallback registers a call-back function for a given TChanServer that is to be
+// executed on the response of the method after the response is written. This gives the server a chance
+// to clean up resources from the response object
+func (s *Server) RegisterPostResponseCallback(svr TChanServer, c callback) {
+	s.mut.Lock()
+	s.callbacks[svr.Service()] = c
+	s.mut.Unlock()
 }
 
 func (s *Server) onError(err error) {
@@ -126,11 +139,15 @@ func (s *Server) handle(origCtx context.Context, handler TChanServer, method str
 	writer, err = call.Response().Arg3Writer()
 	protocol = thrift.NewTBinaryProtocolTransport(&readWriterTransport{Writer: writer})
 	resp.Write(protocol)
-	if err := writer.Close(); err != nil {
-		return err
-	}
+	err = writer.Close()
 
-	return nil
+	s.mut.RLock()
+	if s.callbacks[handler.Service()] != nil {
+		s.callbacks[handler.Service()](method, resp)
+	}
+	s.mut.RUnlock()
+
+	return err
 }
 
 // Handle handles an incoming TChannel call and forwards it to the correct handler.
