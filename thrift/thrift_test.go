@@ -22,12 +22,10 @@ package thrift_test
 
 import (
 	"errors"
-	"net"
 	"testing"
 	"time"
 
 	// Test is in a separate package to avoid circular dependencies.
-
 	. "github.com/uber/tchannel-go/thrift"
 
 	"github.com/stretchr/testify/assert"
@@ -44,10 +42,11 @@ import (
 //go:generate mockery -name TChanSecondService
 
 type testArgs struct {
-	s1 *mocks.TChanSimpleService
-	s2 *mocks.TChanSecondService
-	c1 gen.TChanSimpleService
-	c2 gen.TChanSecondService
+	server *Server
+	s1     *mocks.TChanSimpleService
+	s2     *mocks.TChanSecondService
+	c1     gen.TChanSimpleService
+	c2     gen.TChanSecondService
 }
 
 func ctxArg() mock.AnythingOfTypeArgument {
@@ -208,12 +207,13 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	defer cancel()
 
 	// Start server
-	tchan, listener, err := setupServer(args.s1, args.s2)
+	ch, server, err := setupServer(args.s1, args.s2)
 	require.NoError(t, err)
-	defer tchan.Close()
+	defer ch.Close()
+	args.server = server
 
 	// Get client1
-	args.c1, args.c2, err = getClients(listener.Addr().String())
+	args.c1, args.c2, err = getClients(ch)
 	require.NoError(t, err)
 
 	f(ctx, args)
@@ -222,35 +222,27 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	args.s2.AssertExpectations(t)
 }
 
-func setupServer(h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tchannel.Channel, net.Listener, error) {
-	tchan, err := tchannel.NewChannel("service", nil)
+func setupServer(h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tchannel.Channel, *Server, error) {
+	ch, err := testutils.NewServer(nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	server := NewServer(tchan)
+	server := NewServer(ch)
 	server.Register(gen.NewTChanSimpleServiceServer(h))
 	server.Register(gen.NewTChanSecondServiceServer(sh))
-
-	tchan.Serve(listener)
-	return tchan, listener, nil
+	return ch, server, nil
 }
 
-func getClients(dst string) (gen.TChanSimpleService, gen.TChanSecondService, error) {
-	tchan, err := tchannel.NewChannel("client", &tchannel.ChannelOptions{
-		Logger: tchannel.SimpleLogger,
-	})
+func getClients(serverCh *tchannel.Channel) (gen.TChanSimpleService, gen.TChanSecondService, error) {
+	serverInfo := serverCh.PeerInfo()
+	ch, err := testutils.NewClient(nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tchan.Peers().Add(dst)
-	client := NewClient(tchan, "service", nil)
+	ch.Peers().Add(serverInfo.HostPort)
+	client := NewClient(ch, serverInfo.ServiceName, nil)
 
 	simpleClient := gen.NewTChanSimpleServiceClient(client)
 	secondClient := gen.NewTChanSecondServiceClient(client)
