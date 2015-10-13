@@ -28,6 +28,7 @@ import (
 	// Test is in a separate package to avoid circular dependencies.
 	. "github.com/uber/tchannel-go/thrift"
 
+	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -195,6 +196,38 @@ func TestClientHostPort(t *testing.T) {
 	res, err = c2.Echo(ctx, "call2")
 	assert.NoError(t, err, "call2 failed")
 	assert.Equal(t, "call2", res)
+}
+
+func TestRegisterPostResponseCB(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		arg := &gen.Data{
+			B1: true,
+			S2: "str",
+			I3: 102,
+		}
+		ret := &gen.Data{
+			B1: false,
+			S2: "return-str",
+			I3: 105,
+		}
+
+		var called bool
+		cb := func(method string, response thrift.TStruct) {
+			assert.Equal(t, "Call", method)
+			res, ok := response.(*gen.SimpleServiceCallResult)
+			if assert.True(t, ok, "response type should be Result struct") {
+				assert.Equal(t, ret, res.GetSuccess(), "result should be returned value")
+			}
+			called = true
+		}
+		args.server.Register(gen.NewTChanSimpleServiceServer(args.s1), OptPostResponse(cb))
+
+		args.s1.On("Call", ctxArg(), arg).Return(ret, nil)
+		res, err := args.c1.Call(ctx, arg)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, res, ret, "Call return value wrong")
+		assert.True(t, called, "post response callback not called")
+	})
 }
 
 func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
