@@ -31,6 +31,9 @@ import (
 type IntrospectionOptions struct {
 	// IncludeExchanges will include all the IDs in the message exchanges.
 	IncludeExchanges bool `json:"includeExchanges"`
+
+	// IncludeEmptyPeers will include peers, even if they have no connections.
+	IncludeEmptyPeers bool `json:"includeEmptyPeers"`
 }
 
 // RuntimeState is a snapshot of the runtime state for a channel.
@@ -102,7 +105,10 @@ func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRu
 	m := make(map[string]PeerRuntimeState)
 	l.mut.RLock()
 	for _, peer := range l.peers {
-		m[peer.HostPort()] = peer.IntrospectState(opts)
+		peerState := peer.IntrospectState(opts)
+		if len(peerState.Connections) > 0 || opts.IncludeEmptyPeers {
+			m[peer.HostPort()] = peerState
+		}
 	}
 
 	l.mut.RUnlock()
