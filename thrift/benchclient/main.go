@@ -38,6 +38,7 @@ import (
 
 var (
 	requestSize = flag.Int("requestSize", 10000, "The number of bytes of each request")
+	serviceName = flag.String("serviceName", "bench-server", "The benchmark server's service name")
 	timeout     = flag.Duration("timeout", time.Second, "Timeout for each request")
 )
 
@@ -52,7 +53,7 @@ func main() {
 	for _, host := range flag.Args() {
 		ch.Peers().Add(host)
 	}
-	thriftClient := thrift.NewClient(ch, "bench-server", nil)
+	thriftClient := thrift.NewClient(ch, *serviceName, nil)
 	client := gen.NewTChanSecondServiceClient(thriftClient)
 
 	fmt.Println("bench-client started")

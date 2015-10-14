@@ -46,12 +46,14 @@ var (
 	useHyperbahn   = flag.Bool("useHyperbahn", false, "Whether to advertise and route requests through Hyperbahn")
 	hyperbahnNodes = flag.String("hyperbahnNodes", "127.0.0.1:21300,127.0.0.1:21301", "Comma-separated list of Hyperbahn nodes")
 	requestSize    = flag.Int("requestSize", 10000, "Call payload size")
-	timeout        = flag.Duration("timeout", time.Second, "Timeout for each call")
+	timeout        = flag.Duration("callTimeout", time.Second, "Timeout for each call")
 )
+
+const benchServerName = "bench-server"
 
 func setupBenchServer() ([]string, error) {
 	ch, err := testutils.NewServer(&testutils.ChannelOpts{
-		ServiceName: "bench-server",
+		ServiceName: benchServerName,
 		DefaultConnectionOptions: tchannel.ConnectionOptions{
 			FramePool: tchannel.NewSyncFramePool(),
 		},
@@ -59,6 +61,7 @@ func setupBenchServer() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(benchServerName, "started on", ch.PeerInfo().HostPort)
 
 	server := thrift.NewServer(ch)
 	server.Register(gen.NewTChanSecondServiceServer(benchSecondHandler{}))
@@ -169,6 +172,7 @@ func startClient(servers []string) (*benchClient, error) {
 	}
 
 	flags := []string{
+		"--serviceName", benchServerName,
 		"--requestSize", fmt.Sprint(*requestSize),
 		"--timeout", fmt.Sprint(*timeout),
 	}
