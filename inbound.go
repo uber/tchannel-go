@@ -283,7 +283,6 @@ type InboundCallResponse struct {
 // complete after this method is called, and no further data can be written.
 func (response *InboundCallResponse) SendSystemError(err error) error {
 	// Fail all future attempts to read fragments
-	response.cancel()
 	response.state = reqResWriterComplete
 	response.systemError = true
 	response.doneSending()
@@ -336,6 +335,9 @@ func (response *InboundCallResponse) doneSending() {
 	} else {
 		response.statsReporter.IncCounter("inbound.calls.success", response.commonStatsTags, 1)
 	}
+
+	// Cancel the context since the response is complete.
+	response.cancel()
 
 	// The message exchange is still open if there are no errors, call shutdown.
 	if response.err == nil {
