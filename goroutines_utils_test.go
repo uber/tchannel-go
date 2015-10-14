@@ -42,9 +42,10 @@ func getStacks() []byte {
 }
 
 // parseGoStackHeader parses a stack header that looks like:
-// goroutine 643 [runnable]:
+// goroutine 643 [runnable]:\n
 // And returns the goroutine ID, and the state.
 func parseGoStackHeader(line string) (goroutineID int, state string) {
+	line = strings.TrimSuffix(line, ":\n")
 	parts := strings.SplitN(line, " ", 3)
 	if len(parts) != 3 {
 		panic(fmt.Sprintf("unexpected stack header format: %v", line))
@@ -106,12 +107,13 @@ func (s goroutineStack) isLeak() bool {
 	isLeakLine := func(line string) bool {
 		return strings.Contains(line, "(*Channel).Serve") ||
 			strings.Contains(line, "(*Connection).readFrames") ||
-			strings.Contains(line, "(*Connection).writeFrames")
+			strings.Contains(line, "(*Connection).writeFrames") ||
+			strings.Contains(line, "(*Connection).dispatchInbound.func")
 	}
 
+	lineReader := bufio.NewReader(bytes.NewReader(s.fullStack.Bytes()))
 	for {
-		s.fullStack.Reset()
-		line, err := s.fullStack.ReadString('\n')
+		line, err := lineReader.ReadString('\n')
 		if err == io.EOF {
 			return false
 		}
@@ -166,6 +168,12 @@ retry:
 		for _, v := range leakStacks {
 			t.Errorf("Found leaked goroutine in state %q Full stack:\n%s\n",
 				v.goState, v.fullStack.String())
+		}
+
+		// Note: we cannot use NumGoroutine here as it includes system goroutines
+		// while runtime.Stack does not: https://github.com/golang/go/issues/11706
+		if len(stacks) > 2 {
+			t.Errorf("Expect at most 2 goroutines, found more:\n%s", getStacks())
 		}
 		return
 	}

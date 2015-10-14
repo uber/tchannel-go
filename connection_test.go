@@ -279,6 +279,19 @@ func TestLargeOperation(t *testing.T) {
 	})
 }
 
+func TestLargeTimeout(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ch.Register(raw.Wrap(newTestHandler(t)), "echo")
+
+		ctx, cancel := NewContext(1000 * time.Second)
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", testArg2, testArg3)
+		assert.NoError(t, err, "Call failed")
+	})
+	VerifyNoBlockedGoroutines(t)
+}
+
 func TestFragmentation(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		ch.Register(raw.Wrap(newTestHandler(t)), "echo")
