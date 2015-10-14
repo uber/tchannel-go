@@ -42,9 +42,10 @@ func getStacks() []byte {
 }
 
 // parseGoStackHeader parses a stack header that looks like:
-// goroutine 643 [runnable]:
+// goroutine 643 [runnable]:\n
 // And returns the goroutine ID, and the state.
 func parseGoStackHeader(line string) (goroutineID int, state string) {
+	line = strings.TrimSuffix(line, ":\n")
 	parts := strings.SplitN(line, " ", 3)
 	if len(parts) != 3 {
 		panic(fmt.Sprintf("unexpected stack header format: %v", line))
@@ -109,9 +110,9 @@ func (s goroutineStack) isLeak() bool {
 			strings.Contains(line, "(*Connection).writeFrames")
 	}
 
+	lineReader := bufio.NewReader(bytes.NewReader(s.fullStack.Bytes()))
 	for {
-		s.fullStack.Reset()
-		line, err := s.fullStack.ReadString('\n')
+		line, err := lineReader.ReadString('\n')
 		if err == io.EOF {
 			return false
 		}
