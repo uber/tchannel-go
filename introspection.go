@@ -43,9 +43,21 @@ type RuntimeState struct {
 
 	// Peers contains information about all the peers on this channel.
 	Peers map[string]PeerRuntimeState
+}
 
-	// MemStats is the Go runtime memory stats.
-	MemState runtime.MemStats
+// GoRuntimeStateOptions are the options used when getting Go runtime state.
+type GoRuntimeStateOptions struct {
+	// IncludeGoStacks will include all goroutine stacks.
+	IncludeGoStacks bool `json:"includeGoStacks"`
+}
+
+// GoRuntimeState is a snapshot of runtime stats from the runtime.
+type GoRuntimeState struct {
+	MemState      runtime.MemStats
+	NumGoroutines int
+	NumCPU        int
+	NumCGo        int64
+	GoStacks      []byte
 }
 
 // SubChannelRuntimeState is the runtime state for a subchannel.
@@ -158,25 +170,70 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 	return state
 }
 
-// registerIntrospection registers a handler to respond with the runtime state in JSON.
-// The endpoint name is _gometa_introspect.
-func (ch *Channel) registerIntrospection() {
-	handler := func(ctx context.Context, call *InboundCall) {
-		var arg2, arg3 []byte
-		if err := NewArgReader(call.Arg2Reader()).Read(&arg2); err != nil {
-			return
+func getStacks() []byte {
+	var buf []byte
+	for n := 4096; n < 10*1024*1024; n *= 2 {
+		buf = make([]byte, n)
+		stackLen := runtime.Stack(buf, true /* all */)
+		if stackLen < n {
+			return buf
 		}
-		if err := NewArgReader(call.Arg3Reader()).Read(&arg3); err != nil {
-			return
-		}
-		if err := NewArgWriter(call.Response().Arg2Writer()).Write(nil); err != nil {
-			return
-		}
-
-		var opts IntrospectionOptions
-		json.Unmarshal(arg3, &opts)
-		state := ch.IntrospectState(&opts)
-		NewArgWriter(call.Response().Arg3Writer()).WriteJSON(state)
 	}
-	ch.Register(HandlerFunc(handler), "_gometa_introspect")
+
+	// return the first 10MB of stacks if we have more than 10MB.
+	return buf
+}
+func (ch *Channel) handleIntrospection(arg3 []byte) interface{} {
+	var opts IntrospectionOptions
+	json.Unmarshal(arg3, &opts)
+	return ch.IntrospectState(&opts)
+}
+
+func handleInternalRuntime(arg3 []byte) interface{} {
+	var opts GoRuntimeStateOptions
+	json.Unmarshal(arg3, &opts)
+
+	state := GoRuntimeState{
+		NumGoroutines: runtime.NumGoroutine(),
+		NumCPU:        runtime.NumCPU(),
+		NumCGo:        runtime.NumCgoCall(),
+	}
+	runtime.ReadMemStats(&state.MemState)
+	if opts.IncludeGoStacks {
+		state.GoStacks = getStacks()
+	}
+
+	return state
+}
+
+// registerInternal registers the following internal handlers which return runtime state:
+//  _gometa_introspect: TChannel internal state.
+//  _gometa_runtime: Golang runtime stats.
+func (ch *Channel) registerInternal() {
+	endpoints := []struct {
+		name    string
+		handler func([]byte) interface{}
+	}{
+		{"_gometa_introspect", ch.handleIntrospection},
+		{"_gometa_runtime", handleInternalRuntime},
+	}
+
+	for _, ep := range endpoints {
+		// We need ep in our closure.
+		ep := ep
+		handler := func(ctx context.Context, call *InboundCall) {
+			var arg2, arg3 []byte
+			if err := NewArgReader(call.Arg2Reader()).Read(&arg2); err != nil {
+				return
+			}
+			if err := NewArgReader(call.Arg3Reader()).Read(&arg3); err != nil {
+				return
+			}
+			if err := NewArgWriter(call.Response().Arg2Writer()).Write(nil); err != nil {
+				return
+			}
+			NewArgWriter(call.Response().Arg3Writer()).WriteJSON(ep.handler(arg3))
+		}
+		ch.Register(HandlerFunc(handler), ep.name)
+	}
 }
