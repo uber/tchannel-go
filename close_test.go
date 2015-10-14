@@ -182,6 +182,8 @@ func TestCloseStress(t *testing.T) {
 }
 
 func TestCloseSemantics(t *testing.T) {
+	// We defer the check as we want it to run after the SetTimeout clears the timeout.
+	defer VerifyNoBlockedGoroutines(t)
 	defer testutils.SetTimeout(t, 2*time.Second)()
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -278,7 +280,6 @@ func TestCloseSemantics(t *testing.T) {
 
 	// Close s2 so we don't leave any goroutines running.
 	s2.Close()
-	VerifyNoBlockedGoroutines(t)
 }
 
 func TestCloseSingleChannel(t *testing.T) {

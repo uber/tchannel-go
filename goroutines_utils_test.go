@@ -169,6 +169,12 @@ retry:
 			t.Errorf("Found leaked goroutine in state %q Full stack:\n%s\n",
 				v.goState, v.fullStack.String())
 		}
+
+		// Note: we cannot use NumGoroutine here as it includes system goroutines
+		// while runtime.Stack does not: https://github.com/golang/go/issues/11706
+		if len(stacks) > 2 {
+			t.Errorf("Expect at most 2 goroutines, found more:\n%s", getStacks())
+		}
 		return
 	}
 
