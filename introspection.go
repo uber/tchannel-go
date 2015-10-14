@@ -39,13 +39,13 @@ type IntrospectionOptions struct {
 // RuntimeState is a snapshot of the runtime state for a channel.
 type RuntimeState struct {
 	// LocalPeer is the local peer information (service name, host-port, etc).
-	LocalPeer LocalPeerInfo
+	LocalPeer LocalPeerInfo `json:"localPeer"`
 
 	// SubChannels contains information about any subchannels.
-	SubChannels map[string]SubChannelRuntimeState
+	SubChannels map[string]SubChannelRuntimeState `json:"subChannels"`
 
 	// Peers contains information about all the peers on this channel.
-	Peers map[string]PeerRuntimeState
+	Peers map[string]PeerRuntimeState `json:"peers"`
 }
 
 // GoRuntimeStateOptions are the options used when getting Go runtime state.
@@ -56,38 +56,38 @@ type GoRuntimeStateOptions struct {
 
 // GoRuntimeState is a snapshot of runtime stats from the runtime.
 type GoRuntimeState struct {
-	MemState      runtime.MemStats
-	NumGoroutines int
-	NumCPU        int
-	NumCGo        int64
-	GoStacks      []byte
+	MemStats      runtime.MemStats `json:"memStats"`
+	NumGoroutines int              `json:"numGoRoutines"`
+	NumCPU        int              `json:"numCPU"`
+	NumCGo        int64            `json:"numCGo"`
+	GoStacks      []byte           `json:"goStacks,omitempty"`
 }
 
 // SubChannelRuntimeState is the runtime state for a subchannel.
 type SubChannelRuntimeState struct {
-	Service string
+	Service string `json:"service"`
 }
 
 // ConnectionRuntimeState is the runtime state for a single connection.
 type ConnectionRuntimeState struct {
-	ConnectionState  string
-	LocalHostPort    string
-	RemoteHostPort   string
-	InboundExchange  ExchangeRuntimeState
-	OutboundExchange ExchangeRuntimeState
+	ConnectionState  string               `json:"connectionState"`
+	LocalHostPort    string               `json:"localHostPort"`
+	RemoteHostPort   string               `json:"remoteHostPort"`
+	InboundExchange  ExchangeRuntimeState `json:"inboundExchange"`
+	OutboundExchange ExchangeRuntimeState `json:"outboundExchange"`
 }
 
 // ExchangeRuntimeState is the runtime state for a message exchange set.
 type ExchangeRuntimeState struct {
-	Name      string
-	Count     int
-	Exchanges []uint32
+	Name      string   `json:"name"`
+	Count     int      `json:"count"`
+	Exchanges []uint32 `json:"exchanges,omitempty"`
 }
 
 // PeerRuntimeState is the runtime state for a single peer.
 type PeerRuntimeState struct {
-	HostPort    string
-	Connections []ConnectionRuntimeState
+	HostPort    string                   `json:"hostPort"`
+	Connections []ConnectionRuntimeState `json:"connections"`
 }
 
 // IntrospectState returns the RuntimeState for this channel.
@@ -204,7 +204,7 @@ func handleInternalRuntime(arg3 []byte) interface{} {
 		NumCPU:        runtime.NumCPU(),
 		NumCGo:        runtime.NumCgoCall(),
 	}
-	runtime.ReadMemStats(&state.MemState)
+	runtime.ReadMemStats(&state.MemStats)
 	if opts.IncludeGoStacks {
 		state.GoStacks = getStacks()
 	}
