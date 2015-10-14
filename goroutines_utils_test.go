@@ -107,7 +107,8 @@ func (s goroutineStack) isLeak() bool {
 	isLeakLine := func(line string) bool {
 		return strings.Contains(line, "(*Channel).Serve") ||
 			strings.Contains(line, "(*Connection).readFrames") ||
-			strings.Contains(line, "(*Connection).writeFrames")
+			strings.Contains(line, "(*Connection).writeFrames") ||
+			strings.Contains(line, "(*Connection).dispatchInbound.func")
 	}
 
 	lineReader := bufio.NewReader(bytes.NewReader(s.fullStack.Bytes()))
