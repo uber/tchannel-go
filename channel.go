@@ -175,7 +175,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 	ch.traceReporter = traceReporter
 
-	ch.registerIntrospection()
+	ch.registerInternal()
 	return ch, nil
 }
 
