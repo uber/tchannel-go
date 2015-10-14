@@ -55,7 +55,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	}
 
 	requestID := c.NextMessageID()
-	mex, err := c.outbound.newExchange(ctx, c.framePool, messageTypeCallReq, requestID, 512)
+	mex, err := c.outbound.newExchange(ctx, c.framePool, messageTypeCallReq, requestID, 2)
 	if err != nil {
 		return nil, err
 	}
