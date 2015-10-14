@@ -46,10 +46,10 @@ var (
 	useHyperbahn   = flag.Bool("useHyperbahn", false, "Whether to advertise and route requests through Hyperbahn")
 	hyperbahnNodes = flag.String("hyperbahnNodes", "127.0.0.1:21300,127.0.0.1:21301", "Comma-separated list of Hyperbahn nodes")
 	requestSize    = flag.Int("requestSize", 10000, "Call payload size")
-	timeout        = flag.Duration("timeout", time.Second, "Timeout for each call")
+	timeout        = flag.Duration("callTimeout", time.Second, "Timeout for each call")
 )
 
-const benchServerName = "bench-server123"
+const benchServerName = "bench-server"
 
 func setupBenchServer() ([]string, error) {
 	ch, err := testutils.NewServer(&testutils.ChannelOpts{
