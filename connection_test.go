@@ -328,8 +328,8 @@ func TestFragmentationSlowReader(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		ch.Register(HandlerFunc(handler), "echo")
 
-		// TODO(prashant): Make the mex channel frame buffer a constant and use that here.
-		arg2, arg3 := testutils.RandBytes(MaxFramePayloadSize*2), testutils.RandBytes(MaxFramePayloadSize*3)
+		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
+		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
 
 		ctx, cancel := NewContext(10 * time.Millisecond)
 		defer cancel()

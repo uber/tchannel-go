@@ -60,7 +60,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call := new(InboundCall)
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
 
-	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, 2)
+	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
 	if err != nil {
 		if err == errDuplicateMex {
 			err = errInboundRequestAlreadyActive
