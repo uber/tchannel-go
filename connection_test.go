@@ -315,3 +315,30 @@ func TestFragmentation(t *testing.T) {
 		assert.Equal(t, arg3, respArg3)
 	})
 }
+
+func TestFragmentationSlowReader(t *testing.T) {
+	startReading, handlerComplete := make(chan struct{}), make(chan struct{})
+	handler := func(ctx context.Context, call *InboundCall) {
+		<-startReading
+		_, err := raw.ReadArgs(call)
+		assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
+		close(handlerComplete)
+	}
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ch.Register(HandlerFunc(handler), "echo")
+
+		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
+		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
+
+		ctx, cancel := NewContext(10 * time.Millisecond)
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
+		assert.Error(t, err, "Call should timeout due to slow reader")
+
+		close(startReading)
+		<-handlerComplete
+	})
+	VerifyNoBlockedGoroutines(t)
+}

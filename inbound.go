@@ -60,7 +60,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call := new(InboundCall)
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
 
-	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, 2)
+	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
 	if err != nil {
 		if err == errDuplicateMex {
 			err = errInboundRequestAlreadyActive
@@ -136,7 +136,8 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 // defragmentation
 func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 	if err := c.inbound.forwardPeerFrame(frame); err != nil {
-		c.inbound.removeExchange(frame.Header.ID)
+		// If forward fails, it's due to a timeout.
+		c.inbound.timeoutExchange(frame.Header.ID)
 		return true
 	}
 	return false

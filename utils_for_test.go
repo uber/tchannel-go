@@ -28,6 +28,9 @@ import (
 	"time"
 )
 
+// MexChannelBufferSize is the size of the message exchange channel buffer.
+const MexChannelBufferSize = mexChannelBufferSize
+
 // OutboundConnection returns the underlying connection for an outbound call.
 func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	conn := call.conn
