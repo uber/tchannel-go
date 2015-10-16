@@ -181,87 +181,108 @@ func TestCloseStress(t *testing.T) {
 	}
 }
 
-func TestCloseSemantics(t *testing.T) {
-	// We defer the check as we want it to run after the SetTimeout clears the timeout.
-	defer VerifyNoBlockedGoroutines(t)
-	defer testutils.SetTimeout(t, 2*time.Second)()
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
+type closeSemanticsTest struct {
+	*testing.T
 
-	makeServer := func(name string) (*Channel, chan struct{}) {
-		ch, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: name})
-		require.NoError(t, err)
-		c := make(chan struct{})
-		testutils.RegisterFunc(t, ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			<-c
-			return &raw.Res{}, nil
-		})
-		testutils.RegisterFunc(t, ch, "call", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			return &raw.Res{}, nil
-		})
-		return ch, c
+	ctx      context.Context
+	isolated bool
+}
+
+func (t *closeSemanticsTest) makeServer(name string) (*Channel, chan struct{}) {
+	ch, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: name})
+	require.NoError(t, err, "NewServer failed")
+
+	c := make(chan struct{})
+	testutils.RegisterFunc(t.T, ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		<-c
+		return &raw.Res{}, nil
+	})
+	testutils.RegisterFunc(t.T, ch, "call", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		return &raw.Res{}, nil
+	})
+	return ch, c
+}
+
+func (t *closeSemanticsTest) withNewClient(f func(ch *Channel)) {
+	ch, err := testutils.NewClient(&testutils.ChannelOpts{ServiceName: "client"})
+	require.NoError(t, err, "NewClient failed")
+	f(ch)
+	ch.Close()
+}
+
+func (t *closeSemanticsTest) startCall(from *Channel, to *Channel, operation string) (*OutboundCall, error) {
+	var call *OutboundCall
+	var err error
+	toPeer := to.PeerInfo()
+	if t.isolated {
+		sc := from.GetSubChannel(toPeer.ServiceName, Isolated)
+		sc.Peers().Add(toPeer.HostPort)
+		call, err = sc.BeginCall(t.ctx, operation, nil)
+	} else {
+		call, err = from.BeginCall(t.ctx, toPeer.HostPort, toPeer.ServiceName, operation, nil)
 	}
+	return call, err
+}
 
-	withNewClient := func(f func(ch *Channel)) {
-		ch, err := testutils.NewClient(&testutils.ChannelOpts{ServiceName: "client"})
-		require.NoError(t, err)
-		f(ch)
-		ch.Close()
+func (t *closeSemanticsTest) call(from *Channel, to *Channel) error {
+	call, err := t.startCall(from, to, "call")
+	if err == nil {
+		_, _, _, err = raw.WriteArgs(call, nil, nil)
 	}
+	return err
+}
 
-	call := func(from *Channel, to *Channel) error {
-		toPeer := to.PeerInfo()
-		_, _, _, err := raw.Call(ctx, from, toPeer.HostPort, toPeer.ServiceName, "call", nil, nil)
-		return err
-	}
+func (t *closeSemanticsTest) callStream(from *Channel, to *Channel) <-chan struct{} {
+	c := make(chan struct{})
 
-	callStream := func(from *Channel, to *Channel) <-chan struct{} {
-		c := make(chan struct{})
+	call, err := t.startCall(from, to, "stream")
+	require.NoError(t, err, "stream call failed to start")
+	require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "write arg2")
+	require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(nil), "write arg3")
 
-		toPeer := to.PeerInfo()
-		call, err := from.BeginCall(ctx, toPeer.HostPort, toPeer.ServiceName, "stream", nil)
-		require.NoError(t, err)
-		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "write arg2")
-		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(nil), "write arg3")
+	go func() {
+		var d []byte
+		require.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&d), "read arg2 from %v to %v", from.PeerInfo(), to.PeerInfo())
+		require.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&d), "read arg3")
+		c <- struct{}{}
+	}()
 
-		go func() {
-			var d []byte
-			require.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&d), "read arg2 from %v to %v", from.PeerInfo(), to.PeerInfo())
-			require.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&d), "read arg3")
-			c <- struct{}{}
-		}()
+	return c
+}
 
-		return c
-	}
-
-	s1, s1C := makeServer("s1")
-	s2, s2C := makeServer("s2")
+func (t *closeSemanticsTest) runTest(ctx context.Context) {
+	s1, s1C := t.makeServer("s1")
+	s2, s2C := t.makeServer("s2")
 
 	// Make a call from s1 -> s2, and s2 -> s1
-	call1 := callStream(s1, s2)
-	call2 := callStream(s2, s1)
+	call1 := t.callStream(s1, s2)
+	call2 := t.callStream(s2, s1)
 
 	// s1 and s2 are both open, so calls to it should be successful.
-	withNewClient(func(ch *Channel) {
-		require.NoError(t, call(ch, s1))
-		require.NoError(t, call(ch, s2))
+	t.withNewClient(func(ch *Channel) {
+		require.NoError(t, t.call(ch, s1), "failed to call s1")
+		require.NoError(t, t.call(ch, s2), "failed to call s2")
 	})
-	require.NoError(t, call(s1, s2))
-	require.NoError(t, call(s2, s1))
+	require.NoError(t, t.call(s1, s2), "call s1 -> s2 failed")
+	require.NoError(t, t.call(s2, s1), "call s2 -> s1 failed")
 
 	// Close s1, should no longer be able to call it.
 	s1.Close()
 	assert.Equal(t, ChannelStartClose, s1.State())
-	withNewClient(func(ch *Channel) {
-		assert.Error(t, call(ch, s1), "closed channel should not accept incoming calls")
-		require.NoError(t, call(ch, s2),
+	t.withNewClient(func(ch *Channel) {
+		assert.Error(t, t.call(ch, s1), "closed channel should not accept incoming calls")
+		require.NoError(t, t.call(ch, s2),
 			"closed channel with pending incoming calls should allow outgoing calls")
 	})
 
 	// Even an existing connection (e.g. from s2) should fail.
-	assert.Equal(t, ErrChannelClosed, call(s2, s1), "closed channel should not accept incoming calls")
+	// TODO: this will fail until the peer is shared.
+	if !assert.Equal(t, ErrChannelClosed, t.call(s2, s1),
+		"closed channel should not accept incoming calls") {
+		t.Errorf("err %v", t.call(s2, s1))
+	}
 
-	require.NoError(t, call(s1, s2),
+	require.NoError(t, t.call(s1, s2),
 		"closed channel with pending incoming calls should allow outgoing calls")
 
 	// Once the incoming connection is drained, outgoing calls should fail.
@@ -269,7 +290,7 @@ func TestCloseSemantics(t *testing.T) {
 	<-call2
 	runtime.Gosched()
 	assert.Equal(t, ChannelInboundClosed, s1.State())
-	require.Error(t, call(s1, s2),
+	require.Error(t, t.call(s1, s2),
 		"closed channel with no pending incoming calls should not allow outgoing calls")
 
 	// Now the channel should be completely closed as there are no pending connections.
@@ -280,6 +301,30 @@ func TestCloseSemantics(t *testing.T) {
 
 	// Close s2 so we don't leave any goroutines running.
 	s2.Close()
+}
+
+func TestCloseSemantics(t *testing.T) {
+	// We defer the check as we want it to run after the SetTimeout clears the timeout.
+	defer VerifyNoBlockedGoroutines(t)
+	defer testutils.SetTimeout(t, 2*time.Second)()
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	ct := &closeSemanticsTest{t, ctx, false /* isolated */}
+	ct.runTest(ctx)
+}
+
+func TestCloseSemanticsIsolated(t *testing.T) {
+	// We defer the check as we want it to run after the SetTimeout clears the timeout.
+	defer VerifyNoBlockedGoroutines(t)
+	defer testutils.SetTimeout(t, 2*time.Second)()
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	ct := &closeSemanticsTest{t, ctx, true /* isolated */}
+	ct.runTest(ctx)
 }
 
 func TestCloseSingleChannel(t *testing.T) {
