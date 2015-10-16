@@ -25,10 +25,10 @@ import (
 	"os"
 	"testing"
 
-	"golang.org/x/net/context"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"golang.org/x/net/context"
 )
 
 func toMap(fields LogFields) map[string]interface{} {
