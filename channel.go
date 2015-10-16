@@ -441,7 +441,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 // incomingConnectionActive adds a new active connection to our peer list.
 func (ch *Channel) incomingConnectionActive(c *Connection) {
 	c.log.Debugf("Add connection as an active peer for %v", c.remotePeerInfo.HostPort)
-	p := ch.peers.GetOrAdd(c.remotePeerInfo.HostPort)
+	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
 	p.AddConnection(c)
 
 	ch.mutable.mut.Lock()
