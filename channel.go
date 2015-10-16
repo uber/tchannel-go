@@ -296,7 +296,10 @@ func (ch *Channel) Peers() *PeerList {
 	return ch.peers
 }
 
-// rootPeers returns the root PeerList for the channel.
+// rootPeers returns the root PeerList for the channel, which is the sole place
+// new Peers are created. All children of the root list (including ch.Peers())
+// automatically re-use peers from the root list and create new peers in the
+// root list.
 func (ch *Channel) rootPeers() *PeerList {
 	return ch.peers.parent
 }
@@ -441,6 +444,10 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 // incomingConnectionActive adds a new active connection to our peer list.
 func (ch *Channel) incomingConnectionActive(c *Connection) {
 	c.log.Debugf("Add connection as an active peer for %v", c.remotePeerInfo.HostPort)
+	// TODO: Alter TChannel spec to allow optionally include the service name
+	// when initializing a connection. As-is, we have to keep these peers in
+	// rootPeers (which isn't used for outbound calls) because we don't know
+	// what services they implement.
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
 	p.AddConnection(c)
 
