@@ -35,16 +35,14 @@ type chanSet struct {
 	isolated tchannel.Registrar
 }
 
-func newSet() (chanSet, error) {
+func withNewSet(t *testing.T, f func(*testing.T, chanSet)) {
 	ch, err := testutils.NewClient(nil)
-	if err != nil {
-		return chanSet{}, err
-	}
-	return chanSet{
+	require.NoError(t, err)
+	f(t, chanSet{
 		main:     ch,
 		sub:      ch.GetSubChannel("hyperbahn"),
 		isolated: ch.GetSubChannel("ringpop", tchannel.Isolated),
-	}, nil
+	})
 }
 
 // Assert that two Registrars have references to the same Peer.
@@ -64,59 +62,47 @@ func assertNoPeer(t *testing.T, r tchannel.Registrar) {
 }
 
 func TestMainAddVisibility(t *testing.T) {
-	// Adding a peer to the main channel should be reflected in the subchannel,
-	// but not the isolated subchannel.
-	set, err := newSet()
-	if err != nil {
-		require.NoError(t, err, "newSet failed")
-	}
-
-	set.main.Peers().Add("127.0.0.1:3000")
-	assertHaveSameRef(t, set.main, set.sub)
-	assertNoPeer(t, set.isolated)
+	withNewSet(t, func(t *testing.T, set chanSet) {
+		// Adding a peer to the main channel should be reflected in the
+		// subchannel, but not the isolated subchannel.
+		set.main.Peers().Add("127.0.0.1:3000")
+		assertHaveSameRef(t, set.main, set.sub)
+		assertNoPeer(t, set.isolated)
+	})
 }
 
 func TestSubchannelAddVisibility(t *testing.T) {
-	// Adding a peer to a non-isolated subchannel should be reflected in the
-	// main channel but not in isolated siblings.
-	set, err := newSet()
-	if err != nil {
-		require.NoError(t, err, "newSet failed")
-	}
-
-	set.sub.Peers().Add("127.0.0.1:3000")
-	assertHaveSameRef(t, set.main, set.sub)
-	assertNoPeer(t, set.isolated)
+	withNewSet(t, func(t *testing.T, set chanSet) {
+		// Adding a peer to a non-isolated subchannel should be reflected in
+		// the main channel but not in isolated siblings.
+		set.sub.Peers().Add("127.0.0.1:3000")
+		assertHaveSameRef(t, set.main, set.sub)
+		assertNoPeer(t, set.isolated)
+	})
 }
 
 func TestIsolatedAddVisibility(t *testing.T) {
-	// Adding a peer to an isolated subchannel shouldn't change the main
-	// channel or sibling channels.
-	set, err := newSet()
-	if err != nil {
-		require.NoError(t, err, "newSet failed")
-	}
+	withNewSet(t, func(t *testing.T, set chanSet) {
+		// Adding a peer to an isolated subchannel shouldn't change the main
+		// channel or sibling channels.
+		set.isolated.Peers().Add("127.0.0.1:3000")
 
-	set.isolated.Peers().Add("127.0.0.1:3000")
+		_, err := set.isolated.Peers().Get()
+		assert.NoError(t, err)
 
-	_, err = set.isolated.Peers().Get()
-	assert.NoError(t, err)
-
-	assertNoPeer(t, set.main)
-	assertNoPeer(t, set.sub)
+		assertNoPeer(t, set.main)
+		assertNoPeer(t, set.sub)
+	})
 }
 
 func TestAddReusesPeers(t *testing.T) {
-	// Adding to both a channel and an isolated subchannel shouldn't create two
-	// separate peers.
-	set, err := newSet()
-	if err != nil {
-		require.NoError(t, err, "newSet failed")
-	}
+	withNewSet(t, func(t *testing.T, set chanSet) {
+		// Adding to both a channel and an isolated subchannel shouldn't create
+		// two separate peers.
+		set.main.Peers().Add("127.0.0.1:3000")
+		set.isolated.Peers().Add("127.0.0.1:3000")
 
-	set.main.Peers().Add("127.0.0.1:3000")
-	set.isolated.Peers().Add("127.0.0.1:3000")
-
-	assertHaveSameRef(t, set.main, set.sub)
-	assertHaveSameRef(t, set.main, set.isolated)
+		assertHaveSameRef(t, set.main, set.sub)
+		assertHaveSameRef(t, set.main, set.isolated)
+	})
 }
