@@ -140,7 +140,7 @@ func (l *PeerList) GetOrAdd(hostPort string) *Peer {
 	return l.Add(hostPort)
 }
 
-// Copy returns a copy of the peer list. This method should only be used for testing.
+// Copy returns a map of the peer list. This method should only be used for testing.
 func (l *PeerList) Copy() map[string]*Peer {
 	l.mut.RLock()
 	defer l.mut.RUnlock()
