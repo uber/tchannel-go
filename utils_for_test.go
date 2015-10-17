@@ -31,6 +31,11 @@ import (
 // MexChannelBufferSize is the size of the message exchange channel buffer.
 const MexChannelBufferSize = mexChannelBufferSize
 
+// RootPeers returns the root peer list from the Channel.
+func (ch *Channel) RootPeers() *PeerList {
+	return ch.rootPeers()
+}
+
 // OutboundConnection returns the underlying connection for an outbound call.
 func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	conn := call.conn

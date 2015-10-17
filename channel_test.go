@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"golang.org/x/net/context"
 )
 
 func toMap(fields LogFields) map[string]interface{} {
@@ -77,4 +79,35 @@ func TestStats(t *testing.T) {
 		assert.Equal(t, v, subTags[k], "subchannel missing tag %v", k)
 	}
 	assert.Equal(t, "subch", subTags["subchannel"], "subchannel tag missing")
+}
+
+func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
+	ch, err := NewChannel("svc", &ChannelOptions{
+		Logger: NewLogger(ioutil.Discard),
+	})
+	require.NoError(t, err, "NewChannel failed")
+
+	sub := ch.GetSubChannel("svc-ringpop")
+	if ch.peers != sub.peers {
+		t.Log("Channel and subchannel don't share the same peer list.")
+		t.Fail()
+	}
+
+	isolatedSub := ch.GetSubChannel("svc-shy-ringpop", Isolated)
+	if ch.peers == isolatedSub.peers {
+		t.Log("Channel and isolated subchannel share the same peer list.")
+		t.Fail()
+	}
+
+	// Nobody knows about the peer.
+	assert.Nil(t, ch.peers.peersByHostPort["127.0.0.1:3000"])
+	assert.Nil(t, sub.peers.peersByHostPort["127.0.0.1:3000"])
+	assert.Nil(t, isolatedSub.peers.peersByHostPort["127.0.0.1:3000"])
+
+	// Uses of the parent channel should be reflected in the subchannel, but
+	// not the isolated subchannel.
+	ch.BeginCall(context.Background(), "127.0.0.1:3000", "foo", "Bar::baz", nil)
+	assert.NotNil(t, ch.peers.peersByHostPort["127.0.0.1:3000"])
+	assert.NotNil(t, sub.peers.peersByHostPort["127.0.0.1:3000"])
+	assert.Nil(t, isolatedSub.peers.peersByHostPort["127.0.0.1:3000"])
 }
