@@ -26,8 +26,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+// SubChannelOption are used to set options for subchannels.
 type SubChannelOption func(*SubChannel)
 
+// Isolated is a SubChannelOption that creates an isolated subchannel.
 func Isolated(s *SubChannel) {
 	s.peers = s.topChannel.peers.newSibling()
 }
@@ -86,6 +88,11 @@ func (c *SubChannel) BeginCall(ctx context.Context, operationName string, callOp
 // Peers returns the PeerList for this subchannel.
 func (c *SubChannel) Peers() *PeerList {
 	return c.peers
+}
+
+// Isolated returns whether this subchannel is an isolated subchannel.
+func (c *SubChannel) Isolated() bool {
+	return c.topChannel.Peers() != c.peers
 }
 
 // Register registers a handler on the subchannel for a service+operation pair
