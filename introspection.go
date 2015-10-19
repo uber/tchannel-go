@@ -44,8 +44,11 @@ type RuntimeState struct {
 	// SubChannels contains information about any subchannels.
 	SubChannels map[string]SubChannelRuntimeState `json:"subChannels"`
 
-	// Peers contains information about all the peers on this channel.
-	Peers map[string]PeerRuntimeState `json:"peers"`
+	// RootPeers contains information about all the peers on this channel and their connections.
+	RootPeers map[string]PeerRuntimeState `json:"rootPeers"`
+
+	// Peers is the list of shared peers for this channel.
+	Peers []string `json:"peers"`
 }
 
 // GoRuntimeStateOptions are the options used when getting Go runtime state.
@@ -65,7 +68,10 @@ type GoRuntimeState struct {
 
 // SubChannelRuntimeState is the runtime state for a subchannel.
 type SubChannelRuntimeState struct {
-	Service string `json:"service"`
+	Service  string `json:"service"`
+	Isolated bool   `json:"isolated"`
+	// IsolatedPeers is the list of all isolated peers for this channel.
+	IsolatedPeers []string `json:"isolatedPeers,omitempty"`
 }
 
 // ConnectionRuntimeState is the runtime state for a single connection.
@@ -96,7 +102,8 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 	return &RuntimeState{
 		LocalPeer:   ch.PeerInfo(),
 		SubChannels: ch.subChannels.IntrospectState(opts),
-		Peers:       ch.peers.IntrospectState(opts),
+		RootPeers:   ch.rootPeers().IntrospectState(opts),
+		Peers:       ch.Peers().IntrospectList(opts),
 	}
 }
 
@@ -119,10 +126,15 @@ func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRu
 func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[string]SubChannelRuntimeState {
 	m := make(map[string]SubChannelRuntimeState)
 	subChMap.mut.RLock()
-	for k := range subChMap.subchannels {
-		m[k] = SubChannelRuntimeState{
-			Service: k,
+	for k, sc := range subChMap.subchannels {
+		state := SubChannelRuntimeState{
+			Service:  k,
+			Isolated: sc.Isolated(),
 		}
+		if state.Isolated {
+			state.IsolatedPeers = sc.Peers().IntrospectList(opts)
+		}
+		m[k] = state
 	}
 	subChMap.mut.RUnlock()
 	return m
@@ -193,6 +205,18 @@ func (ch *Channel) handleIntrospection(arg3 []byte) interface{} {
 	var opts IntrospectionOptions
 	json.Unmarshal(arg3, &opts)
 	return ch.IntrospectState(&opts)
+}
+
+// IntrospectList returns the list of peers (host:port) in this peer list.
+func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []string {
+	var peers []string
+	l.mut.RLock()
+	for peer := range l.peersByHostPort {
+		peers = append(peers, peer)
+	}
+	l.mut.RUnlock()
+
+	return peers
 }
 
 func handleInternalRuntime(arg3 []byte) interface{} {
