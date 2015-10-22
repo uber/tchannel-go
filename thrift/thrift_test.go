@@ -228,22 +228,26 @@ func TestRegisterPostResponseCB(t *testing.T) {
 			I3: 105,
 		}
 
-		var called bool
+		called := make(chan struct{})
 		cb := func(method string, response thrift.TStruct) {
 			assert.Equal(t, "Call", method)
 			res, ok := response.(*gen.SimpleServiceCallResult)
 			if assert.True(t, ok, "response type should be Result struct") {
 				assert.Equal(t, ret, res.GetSuccess(), "result should be returned value")
 			}
-			called = true
+			close(called)
 		}
 		args.server.Register(gen.NewTChanSimpleServiceServer(args.s1), OptPostResponse(cb))
 
 		args.s1.On("Call", ctxArg(), arg).Return(ret, nil)
 		res, err := args.c1.Call(ctx, arg)
-		assert.NoError(t, err, "Call failed")
+		require.NoError(t, err, "Call failed")
 		assert.Equal(t, res, ret, "Call return value wrong")
-		assert.True(t, called, "post response callback not called")
+		select {
+		case <-time.After(time.Second):
+			t.Errorf("post-response callback not called")
+		case <-called:
+		}
 	})
 }
 
