@@ -40,9 +40,8 @@ func TestPeersIncomingConnection(t *testing.T) {
 	}()
 
 	newService := func(svcName string) (*Channel, string) {
-		ch, err := testutils.NewClient(&testutils.ChannelOpts{ServiceName: svcName})
-		require.NoError(t, err, "NewClient failed")
-		require.NoError(t, ch.ListenAndServe("127.0.0.1:0"), "ListenAndServe failed")
+		ch, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: svcName})
+		require.NoError(t, err, "NewServer failed")
 		channels = append(channels, ch)
 		return ch, ch.PeerInfo().HostPort
 	}
