@@ -167,8 +167,9 @@ type Peer struct {
 	channel  Connectable
 	hostPort string
 
-	mut         sync.RWMutex // mut protects connections.
-	connections []*Connection
+	mut                 sync.RWMutex // mut protects connections.
+	inboundConnections  []*Connection
+	outboundConnections []*Connection
 }
 
 func newPeer(channel Connectable, hostPort string) *Peer {
@@ -189,11 +190,11 @@ func (p *Peer) getActive() []*Connection {
 	p.mut.RLock()
 
 	var active []*Connection
-	for _, c := range p.connections {
+	p.runWithConnections(func(c *Connection) {
 		if c.IsActive() {
 			active = append(active, c)
 		}
-	}
+	})
 
 	p.mut.RUnlock()
 	return active
@@ -219,9 +220,27 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 	return c, nil
 }
 
-// AddConnection adds an active connection to the peer's connection list.
+// AddInboundConnection adds an active inbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) AddConnection(c *Connection) error {
+func (p *Peer) AddInboundConnection(c *Connection) error {
+	switch c.readState() {
+	case connectionActive, connectionStartClose:
+		// TODO(prashantv): Block inbound connections when the connection is not active.
+		break
+	default:
+		return ErrInvalidConnectionState
+	}
+
+	p.mut.Lock()
+	defer p.mut.Unlock()
+
+	p.inboundConnections = append(p.inboundConnections, c)
+	return nil
+}
+
+// AddOutboundConnection adds an active outbound connection to the peer's connection list.
+// If a connection is not active, ErrInvalidConnectionState will be returned.
+func (p *Peer) AddOutboundConnection(c *Connection) error {
 	switch c.readState() {
 	case connectionActive, connectionStartClose:
 		break
@@ -232,7 +251,7 @@ func (p *Peer) AddConnection(c *Connection) error {
 	p.mut.Lock()
 	defer p.mut.Unlock()
 
-	p.connections = append(p.connections, c)
+	p.outboundConnections = append(p.outboundConnections, c)
 	return nil
 }
 
@@ -243,7 +262,7 @@ func (p *Peer) Connect(ctx context.Context) (*Connection, error) {
 		return nil, err
 	}
 
-	if err := p.AddConnection(c); err != nil {
+	if err := p.AddOutboundConnection(c); err != nil {
 		return nil, err
 	}
 
@@ -269,12 +288,22 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName string, operationName 
 	return call, err
 }
 
+func (p *Peer) runWithConnections(f func(*Connection)) {
+	for _, c := range p.inboundConnections {
+		f(c)
+	}
+
+	for _, c := range p.outboundConnections {
+		f(c)
+	}
+}
+
 // Close closes all connections to this peer.
 func (p *Peer) Close() {
 	p.mut.RLock()
 	defer p.mut.RUnlock()
 
-	for _, c := range p.connections {
+	p.runWithConnections(func(c *Connection) {
 		c.Close()
-	}
+	})
 }

@@ -449,7 +449,7 @@ func (ch *Channel) incomingConnectionActive(c *Connection) {
 	// rootPeers (which isn't used for outbound calls) because we don't know
 	// what services they implement.
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
-	p.AddConnection(c)
+	p.AddInboundConnection(c)
 
 	ch.mutable.mut.Lock()
 	ch.mutable.conns = append(ch.mutable.conns, c)

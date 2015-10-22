@@ -42,7 +42,7 @@ func TestPeersIncomingConnection(t *testing.T) {
 	newService := func(svcName string) (*Channel, string) {
 		ch, err := testutils.NewClient(&testutils.ChannelOpts{ServiceName: svcName})
 		require.NoError(t, err, "NewClient failed")
-		require.NoError(t, ch.ListenAndServe(":0"), "ListenAndServe failed")
+		require.NoError(t, ch.ListenAndServe("127.0.0.1:0"), "ListenAndServe failed")
 		channels = append(channels, ch)
 		return ch, ch.PeerInfo().HostPort
 	}
@@ -72,6 +72,23 @@ func TestPeersIncomingConnection(t *testing.T) {
 			_, err := sc.Peers().Get()
 			assert.Equal(t, ErrNoPeers, err,
 				"incoming connections should not be added to non-root peer list")
+		}
+
+		// verify number of peers/connections on the client side
+		opts := &IntrospectionOptions{}
+		serverState := ch.IntrospectState(opts).RootPeers
+		serverHostPort := ch.PeerInfo().HostPort
+
+		assert.Equal(t, len(serverState), 2, "Incorrect peer count")
+		for _, client := range []*Channel{ringpop, hyperbahn} {
+			clientPeerState := client.IntrospectState(opts).RootPeers
+			clientHostPort := client.PeerInfo().HostPort
+			assert.Equal(t, len(clientPeerState), 1, "Incorrect peer count")
+			assert.Equal(t, len(clientPeerState[serverHostPort].OutboundConnections), 1, "Incorrect outbound connection count")
+			assert.Equal(t, len(clientPeerState[serverHostPort].InboundConnections), 0, "Incorrect inbound connection count")
+
+			assert.Equal(t, len(serverState[clientHostPort].InboundConnections), 1, "Incorrect inbound connection count")
+			assert.Equal(t, len(serverState[clientHostPort].OutboundConnections), 0, "Incorrect outbound connection count")
 		}
 
 		// In future when connections send a service name, we should be able to
