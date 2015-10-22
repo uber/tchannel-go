@@ -332,7 +332,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		return
 	}
 
-	if req.Version != CurrentProtocolVersion {
+	if req.Version < CurrentProtocolVersion {
 		c.protocolError(id, fmt.Errorf("Unsupported protocol version %d from peer", req.Version))
 		return
 	}
