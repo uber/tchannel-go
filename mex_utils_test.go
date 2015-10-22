@@ -25,36 +25,46 @@ import (
 	"strings"
 )
 
-// CheckEmptyExchanges checks whether all exchanges for the given connection are empty.
+// CheckEmptyExchangesConn checks whether all exchanges for the given connection are empty.
 // If there are exchanges, a string with information about leftover exchanges is returned.
-func CheckEmptyExchanges(c *Connection) string {
-	c.inbound.mut.RLock()
-	c.outbound.mut.RLock()
-	defer c.inbound.mut.RUnlock()
-	defer c.outbound.mut.RUnlock()
-
+func CheckEmptyExchangesConn(c *ConnectionRuntimeState) string {
 	var errors []string
-	for _, v := range c.inbound.exchanges {
-		errors = append(errors, fmt.Sprintf("inbound exchange: %v:%v", v.msgID, v.msgType))
+	checkExchange := func(e ExchangeRuntimeState) {
+		if e.Count > 0 {
+			errors = append(errors, fmt.Sprintf(" %v leftover %v exchanges", e.Name, e.Count))
+			for _, v := range e.Exchanges {
+				errors = append(errors, fmt.Sprintf("  exchanges: %v", v))
+			}
+		}
 	}
-	for _, v := range c.outbound.exchanges {
-		errors = append(errors, fmt.Sprintf("outbound exchange: %v:%v", v.msgID, v.msgType))
-	}
-
+	checkExchange(c.InboundExchange)
+	checkExchange(c.OutboundExchange)
 	if len(errors) == 0 {
 		return ""
 	}
 
-	return fmt.Sprintf("Connection %d has leftover exchanges:\n\t%v", c.connID, strings.Join(errors, "\n\t"))
+	return fmt.Sprintf("Connection %d has leftover exchanges:\n\t%v", c.ID, strings.Join(errors, "\n\t"))
 }
 
 // CheckEmptyExchangesConns checks that all exchanges for the given connections are empty.
-func CheckEmptyExchangesConns(connections []*Connection) string {
+func CheckEmptyExchangesConns(connections []*ConnectionRuntimeState) string {
 	var errors []string
 	for _, c := range connections {
-		if v := CheckEmptyExchanges(c); v != "" {
+		if v := CheckEmptyExchangesConn(c); v != "" {
 			errors = append(errors, v)
 		}
 	}
 	return strings.Join(errors, "\n")
+}
+
+// CheckEmptyExchanges checks that all exchanges for the given channel are empty.
+func CheckEmptyExchanges(ch *Channel) string {
+	state := ch.IntrospectState(&IntrospectionOptions{IncludeExchanges: true})
+	var connections []*ConnectionRuntimeState
+	for _, peer := range state.RootPeers {
+		for i := range peer.Connections {
+			connections = append(connections, &peer.Connections[i])
+		}
+	}
+	return CheckEmptyExchangesConns(connections)
 }
