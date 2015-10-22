@@ -20,38 +20,23 @@
 
 package tchannel
 
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+)
 
 type scoreCalculator interface {
 	GetScore(p *Peer) float32
 }
 
-type randCalculator struct{}
-
-func (r randCalculator) GetScore(p *Peer) float32 {
-	newRand := rand.New(rand.NewSource(99))
-	return newRand.Float32()
+type randCalculator struct {
+	peerRng *rand.Rand
 }
 
-type peerSelector struct {
-	Calculator scoreCalculator
+func (r *randCalculator) GetScore(p *Peer) float32 {
+	return peerRng.Float32()
 }
 
-func newPeerSelector() *peerSelector {
-	return &peerSelector{Calculator: randCalculator{}}
-}
-
-func (p *peerSelector) choosePeer(peers []*Peer) *Peer {
-	var maxScore float32
-	var choosenPeer *Peer
-
-	// pick peer with highest score
-	for _, peer := range peers {
-		score := p.Calculator.GetScore(peer)
-		if score > maxScore {
-			maxScore = score
-			choosenPeer = peer
-		}
-	}
-	return choosenPeer
+func newRandCalculator() *randCalculator {
+	return &randCalculator{peerRng: NewRand(time.Now().UnixNano())}
 }
