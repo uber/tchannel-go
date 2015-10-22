@@ -142,21 +142,23 @@ func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[s
 	return m
 }
 
+func getConnectionRuntimeState(conns []*Connection, opts *IntrospectionOptions) []ConnectionRuntimeState {
+	connStates := make([]ConnectionRuntimeState, len(conns))
+
+	for i, conn := range conns {
+		connStates[i] = conn.IntrospectState(opts)
+	}
+
+	return connStates
+}
+
 // IntrospectState returns the runtime state for this peer.
 func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 	p.mut.RLock()
 
 	hostPort := p.hostPort
-	inboundConns := make([]ConnectionRuntimeState, len(p.inboundConnections))
-	outboundConns := make([]ConnectionRuntimeState, len(p.outboundConnections))
-
-	for i, conn := range p.outboundConnections {
-		outboundConns[i] = conn.IntrospectState(opts)
-	}
-
-	for i, conn := range p.inboundConnections {
-		inboundConns[i] = conn.IntrospectState(opts)
-	}
+	inboundConns := getConnectionRuntimeState(p.inboundConnections, opts)
+	outboundConns := getConnectionRuntimeState(p.outboundConnections, opts)
 
 	p.mut.RUnlock()
 
