@@ -51,12 +51,14 @@ type PeerList struct {
 	mut             sync.RWMutex // mut protects peers.
 	peersByHostPort map[string]*Peer
 	peers           []*Peer
+	peerSelector    *peerSelector
 }
 
 func newPeerList(channel Connectable) *PeerList {
 	return &PeerList{
 		channel:         channel,
 		peersByHostPort: make(map[string]*Peer),
+		peerSelector:    newPeerSelector(),
 	}
 }
 
@@ -109,10 +111,6 @@ func (l *PeerList) Add(hostPort string) *Peer {
 	return p
 }
 
-func randPeer(peers []*Peer) *Peer {
-	return peers[peerRng.Intn(len(peers))]
-}
-
 // Get returns a peer from the peer list, or nil if none can be found.
 func (l *PeerList) Get() (*Peer, error) {
 	l.mut.RLock()
@@ -122,7 +120,7 @@ func (l *PeerList) Get() (*Peer, error) {
 		return nil, ErrNoPeers
 	}
 
-	peer := randPeer(l.peers)
+	peer := l.peerSelector.choosePeer(l.peers)
 	l.mut.RUnlock()
 
 	return peer, nil
