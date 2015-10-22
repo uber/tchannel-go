@@ -77,15 +77,18 @@ func TestPeersIncomingConnection(t *testing.T) {
 		// verify number of peers/connections on the client side
 		opts := &IntrospectionOptions{}
 		serverState := ch.IntrospectState(opts).RootPeers
+		serverHostPort := ch.PeerInfo().HostPort
+
+		assert.Equal(t, len(serverState), 2, "Incorrect peer number")
 		for _, client := range []*Channel{ringpop, hyperbahn} {
 			clientPeerState := client.IntrospectState(opts).RootPeers
-			assert.Equal(t, len(clientPeerState), 1)
-			assert.Equal(t, len(clientPeerState[ch.PeerInfo().HostPort].OutboundConnections), 1)
-			assert.Equal(t, len(clientPeerState[ch.PeerInfo().HostPort].InboundConnections), 0)
+			clientHostPort := client.PeerInfo().HostPort
+			assert.Equal(t, len(clientPeerState), 1, "Incorrect peer number")
+			assert.Equal(t, len(clientPeerState[serverHostPort].OutboundConnections), 1, "Incorrect outbound connection number")
+			assert.Equal(t, len(clientPeerState[serverHostPort].InboundConnections), 0, "Incorrect inbound connection number")
 
-			assert.Equal(t, len(serverState), 2)
-			assert.Equal(t, len(serverState[client.PeerInfo().HostPort].InboundConnections), 1)
-			assert.Equal(t, len(serverState[client.PeerInfo().HostPort].OutboundConnections), 0)
+			assert.Equal(t, len(serverState[clientHostPort].InboundConnections), 1, "Incorrect inbound connection number")
+			assert.Equal(t, len(serverState[clientHostPort].OutboundConnections), 0, "Incorrect outbound connection number")
 		}
 
 		// In future when connections send a service name, we should be able to

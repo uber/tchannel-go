@@ -94,8 +94,8 @@ type ExchangeRuntimeState struct {
 // PeerRuntimeState is the runtime state for a single peer.
 type PeerRuntimeState struct {
 	HostPort            string                   `json:"hostPort"`
-	OutboundConnections []ConnectionRuntimeState `json:"outbound connections"`
-	InboundConnections  []ConnectionRuntimeState `json:"inbound connections"`
+	OutboundConnections []ConnectionRuntimeState `json:"outboundConnections"`
+	InboundConnections  []ConnectionRuntimeState `json:"inboundConnections"`
 }
 
 // IntrospectState returns the RuntimeState for this channel.
@@ -115,7 +115,7 @@ func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRu
 	l.mut.RLock()
 	for _, peer := range l.peers {
 		peerState := peer.IntrospectState(opts)
-		if len(peerState.InboundConnections) > 0 || len(peerState.OutboundConnections) > 0 || opts.IncludeEmptyPeers {
+		if len(peerState.InboundConnections)+len(peerState.OutboundConnections) > 0 || opts.IncludeEmptyPeers {
 			m[peer.HostPort()] = peerState
 		}
 	}
