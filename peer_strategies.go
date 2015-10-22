@@ -30,13 +30,24 @@ type scoreCalculator interface {
 }
 
 type randCalculator struct {
-	peerRng *rand.Rand
+	rng *rand.Rand
 }
 
 func (r *randCalculator) GetScore(p *Peer) float32 {
-	return peerRng.Float32()
+	return r.rng.Float32()
 }
 
 func newRandCalculator() *randCalculator {
-	return &randCalculator{peerRng: NewRand(time.Now().UnixNano())}
+	return &randCalculator{rng: NewRand(time.Now().UnixNano())}
+}
+
+type preferIncomingCalculator struct {
+}
+
+func newPreferIncomingCalculator() *preferIncomingCalculator {
+	return &preferIncomingCalculator{}
+}
+
+func (r *preferIncomingCalculator) GetScore(p *Peer) float32 {
+	return 0
 }
