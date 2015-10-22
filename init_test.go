@@ -112,6 +112,43 @@ func TestUnexpectedInitReq(t *testing.T) {
 	}
 }
 
+func TestHandleInitReqNewVersion(t *testing.T) {
+	ch, err := NewChannel("test", nil)
+	require.NoError(t, err)
+	defer ch.Close()
+	require.NoError(t, ch.ListenAndServe(":0"))
+	hostPort := ch.PeerInfo().HostPort
+
+	conn, err := net.Dial("tcp", hostPort)
+	require.NoError(t, err)
+	defer conn.Close()
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+
+	initMsg := &initReq{initMessage{id: 1, Version: CurrentProtocolVersion + 3, initParams: initParams{
+		InitParamHostPort:    "0.0.0.0:0",
+		InitParamProcessName: "test",
+	}}}
+	require.NoError(t, writeMessage(conn, initMsg), "write to conn failed")
+
+	// Verify we get an initRes back with the current protocol version.
+	f, err := readFrame(conn)
+	require.NoError(t, err, "expected frame with init res")
+
+	var msg initRes
+	require.NoError(t, f.read(&msg), "could not read init res from frame")
+	if assert.Equal(t, messageTypeInitRes, f.Header.messageType, "expected initRes, got %v", f.Header.messageType) {
+		assert.Equal(t, initRes{
+			initMessage: initMessage{
+				Version: CurrentProtocolVersion,
+				initParams: initParams{
+					InitParamHostPort:    ch.PeerInfo().HostPort,
+					InitParamProcessName: ch.PeerInfo().ProcessName,
+				},
+			},
+		}, msg, "unexpected init res")
+	}
+}
+
 // TestHandleInitRes ensures that a Connection is ready to handle messages immediately
 // after receiving an InitRes.
 func TestHandleInitRes(t *testing.T) {
