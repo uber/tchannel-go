@@ -181,7 +181,7 @@ func TestHeaders(t *testing.T) {
 }
 
 func TestClientHostPort(t *testing.T) {
-	ctx, cancel := NewContext(time.Second * 10)
+	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
 	s1ch, err := testutils.NewServer(nil)
@@ -253,7 +253,7 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 		s2: new(mocks.TChanSecondService),
 	}
 
-	ctx, cancel := NewContext(time.Second * 10)
+	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
 	// Start server
