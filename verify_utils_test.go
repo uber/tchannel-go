@@ -48,7 +48,7 @@ func WithVerifiedServer(t *testing.T, opts *testutils.ChannelOpts, f func(server
 	}
 
 	// Check the message exchanges and make sure they are all empty.
-	if exchangesLeft := CheckEmptyExchangesConns(GetConnections(ch)); exchangesLeft != "" {
+	if exchangesLeft := CheckEmptyExchanges(ch); exchangesLeft != "" {
 		t.Errorf("Found uncleared message exchanges:\n%v", exchangesLeft)
 	}
 }

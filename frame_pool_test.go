@@ -64,7 +64,7 @@ func TestFramesReleased(t *testing.T) {
 		maxRandArg           = 512 * 1024
 	)
 
-	var connections []*Connection
+	var serverExchanges, clientExchanges string
 	pool := NewRecordingFramePool()
 	WithVerifiedServer(t, &testutils.ChannelOpts{
 		ServiceName: "swap-server",
@@ -116,8 +116,8 @@ func TestFramesReleased(t *testing.T) {
 
 		wg.Wait()
 
-		connections = append(connections, GetConnections(serverCh)...)
-		connections = append(connections, GetConnections(clientCh)...)
+		serverExchanges = CheckEmptyExchanges(serverCh)
+		clientExchanges = CheckEmptyExchanges(clientCh)
 	})
 
 	// Wait a few milliseconds for the closing of channels to take effect.
@@ -128,8 +128,11 @@ func TestFramesReleased(t *testing.T) {
 	}
 
 	// Check the message exchanges and make sure they are all empty.
-	if exchangesLeft := CheckEmptyExchangesConns(connections); exchangesLeft != "" {
-		t.Errorf("Found uncleared message exchanges:\n%v", exchangesLeft)
+	if serverExchanges != "" {
+		t.Errorf("Found uncleared message exchanges on server:\n%s", serverExchanges)
+	}
+	if clientExchanges != "" {
+		t.Errorf("Found uncleared message exchanges on client:\n%s", clientExchanges)
 	}
 }
 

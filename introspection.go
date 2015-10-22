@@ -76,6 +76,7 @@ type SubChannelRuntimeState struct {
 
 // ConnectionRuntimeState is the runtime state for a single connection.
 type ConnectionRuntimeState struct {
+	ID               uint32               `json:"id"`
 	ConnectionState  string               `json:"connectionState"`
 	LocalHostPort    string               `json:"localHostPort"`
 	RemoteHostPort   string               `json:"remoteHostPort"`
@@ -160,6 +161,7 @@ func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 // IntrospectState returns the runtime state for this connection.
 func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRuntimeState {
 	return ConnectionRuntimeState{
+		ID:               c.connID,
 		ConnectionState:  c.state.String(),
 		LocalHostPort:    c.conn.LocalAddr().String(),
 		RemoteHostPort:   c.conn.RemoteAddr().String(),
