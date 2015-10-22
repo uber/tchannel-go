@@ -62,8 +62,11 @@ func CheckEmptyExchanges(ch *Channel) string {
 	state := ch.IntrospectState(&IntrospectionOptions{IncludeExchanges: true})
 	var connections []*ConnectionRuntimeState
 	for _, peer := range state.RootPeers {
-		for i := range peer.Connections {
-			connections = append(connections, &peer.Connections[i])
+		for _, conn := range peer.InboundConnections {
+			connections = append(connections, &conn)
+		}
+		for _, conn := range peer.OutboundConnections {
+			connections = append(connections, &conn)
 		}
 	}
 	return CheckEmptyExchangesConns(connections)

@@ -93,8 +93,9 @@ type ExchangeRuntimeState struct {
 
 // PeerRuntimeState is the runtime state for a single peer.
 type PeerRuntimeState struct {
-	HostPort    string                   `json:"hostPort"`
-	Connections []ConnectionRuntimeState `json:"connections"`
+	HostPort            string                   `json:"hostPort"`
+	OutboundConnections []ConnectionRuntimeState `json:"outbound connections"`
+	InboundConnections  []ConnectionRuntimeState `json:"inbound connections"`
 }
 
 // IntrospectState returns the RuntimeState for this channel.
@@ -114,7 +115,7 @@ func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRu
 	l.mut.RLock()
 	for _, peer := range l.peers {
 		peerState := peer.IntrospectState(opts)
-		if len(peerState.Connections) > 0 || opts.IncludeEmptyPeers {
+		if len(peerState.InboundConnections) > 0 || len(peerState.OutboundConnections) > 0 || opts.IncludeEmptyPeers {
 			m[peer.HostPort()] = peerState
 		}
 	}
@@ -146,15 +147,23 @@ func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 	p.mut.RLock()
 
 	hostPort := p.hostPort
-	conns := make([]ConnectionRuntimeState, len(p.connections))
-	for i, conn := range p.connections {
-		conns[i] = conn.IntrospectState(opts)
+	inboundConns := make([]ConnectionRuntimeState, len(p.inboundConnections))
+	outboundConns := make([]ConnectionRuntimeState, len(p.outboundConnections))
+
+	for i, conn := range p.outboundConnections {
+		outboundConns[i] = conn.IntrospectState(opts)
 	}
+
+	for i, conn := range p.inboundConnections {
+		inboundConns[i] = conn.IntrospectState(opts)
+	}
+
 	p.mut.RUnlock()
 
 	return PeerRuntimeState{
-		HostPort:    hostPort,
-		Connections: conns,
+		HostPort:            hostPort,
+		InboundConnections:  inboundConns,
+		OutboundConnections: outboundConns,
 	}
 }
 

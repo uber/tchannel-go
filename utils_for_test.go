@@ -42,6 +42,17 @@ func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	return conn, conn.conn
 }
 
+// GetConnections returns all connections for a channel.
+func GetConnections(ch *Channel) []*Connection {
+	var connections []*Connection
+	for _, p := range ch.peers.peers {
+		p.runWithConnections(func(c *Connection) {
+			connections = append(connections, c)
+		})
+	}
+	return connections
+}
+
 // NewSpan returns a Span for testing.
 func NewSpan(traceID uint64, parentID uint64, spanID uint64) Span {
 	return Span{traceID: traceID, parentID: parentID, spanID: spanID, flags: defaultTracingFlags}
