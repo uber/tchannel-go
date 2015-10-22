@@ -26,15 +26,15 @@ import (
 )
 
 type scoreCalculator interface {
-	GetScore(p *Peer) float32
+	GetScore(p *Peer) uint64
 }
 
 type randCalculator struct {
 	rng *rand.Rand
 }
 
-func (r *randCalculator) GetScore(p *Peer) float32 {
-	return r.rng.Float32()
+func (r *randCalculator) GetScore(p *Peer) uint64 {
+	return uint64(r.rng.Int63())
 }
 
 func newRandCalculator() *randCalculator {
@@ -48,6 +48,6 @@ func newPreferIncomingCalculator() *preferIncomingCalculator {
 	return &preferIncomingCalculator{}
 }
 
-func (r *preferIncomingCalculator) GetScore(p *Peer) float32 {
+func (r *preferIncomingCalculator) GetScore(p *Peer) uint64 {
 	return 0
 }

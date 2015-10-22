@@ -127,7 +127,7 @@ func (l *PeerList) Get() (*Peer, error) {
 }
 
 func (l *PeerList) choosePeer(peers []*Peer) *Peer {
-	var maxScore float32
+	var maxScore uint64
 	var choosenPeer *Peer
 
 	// pick peer with highest score
