@@ -20,43 +20,54 @@
 
 package tchannel
 
-import (
-	"math/rand"
-	"time"
-)
+import "container/heap"
 
-// ScoreCalculator defines the interface to calculate the score.
-type ScoreCalculator interface {
-	GetScore(p *Peer) uint64
+// PeerHeap maintains a MAX heap of peers based on the peers' score.
+type PeerHeap []*peerScore
+
+func (ph PeerHeap) Len() int { return len(ph) }
+
+func (ph PeerHeap) Less(i, j int) bool {
+	// We want Pop to give us the highest, not lowest, score so we use greater than here.
+	return ph[i].score > ph[j].score
 }
 
-// ScoreCalculatorFunc is an adapter that allows functions to be used as ScoreCalculator
-type ScoreCalculatorFunc func(p *Peer) uint64
-
-// GetScore calls the underlying function.
-func (f ScoreCalculatorFunc) GetScore(p *Peer) uint64 {
-	return f(p)
+func (ph PeerHeap) Swap(i, j int) {
+	ph[i], ph[j] = ph[j], ph[i]
+	ph[i].index = i
+	ph[j].index = j
 }
 
-type randCalculator struct {
-	rng *rand.Rand
+// Push implements heap Push interface
+func (ph *PeerHeap) Push(x interface{}) {
+	n := len(*ph)
+	item := x.(*peerScore)
+	item.index = n
+	*ph = append(*ph, item)
 }
 
-func (r *randCalculator) GetScore(p *Peer) uint64 {
-	return uint64(r.rng.Int63())
+// Pop implements heap Pop interface
+func (ph *PeerHeap) Pop() interface{} {
+	old := *ph
+	n := len(old)
+	item := old[n-1]
+	item.index = -1 // for safety
+	*ph = old[0 : n-1]
+	return item
 }
 
-func newRandCalculator() *randCalculator {
-	return &randCalculator{rng: NewRand(time.Now().UnixNano())}
+func (ph *PeerHeap) update(peer *peerScore) {
+	heap.Fix(ph, peer.index)
 }
 
-type preferIncomingCalculator struct {
+func (ph *PeerHeap) pop() *peerScore {
+	return heap.Pop(ph).(*peerScore)
 }
 
-func newPreferIncomingCalculator() *preferIncomingCalculator {
-	return &preferIncomingCalculator{}
+func (ph *PeerHeap) push(peer *peerScore) {
+	heap.Push(ph, peer)
 }
 
-func (r *preferIncomingCalculator) GetScore(p *Peer) uint64 {
-	return 0
+func (ph *PeerHeap) peek() *peerScore {
+	return (*ph)[0]
 }

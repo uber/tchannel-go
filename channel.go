@@ -348,6 +348,7 @@ func (ch *Channel) serve() {
 		events := connectionEvents{
 			OnActive:           ch.incomingConnectionActive,
 			OnCloseStateChange: ch.connectionCloseStateChange,
+			OnExchangeUpdated:  ch.exchangenUpdated,
 		}
 		if _, err := ch.newInboundConnection(netConn, events, &ch.connectionOptions); err != nil {
 			// Server is getting overloaded - begin rejecting new connections
@@ -412,7 +413,10 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 		return nil, errInvalidStateForOp
 	}
 
-	events := connectionEvents{OnCloseStateChange: ch.connectionCloseStateChange}
+	events := connectionEvents{
+		OnCloseStateChange: ch.connectionCloseStateChange,
+		OnExchangeUpdated:  ch.exchangenUpdated,
+	}
 	c, err := ch.newOutboundConnection(hostPort, events, connectionOptions)
 	if err != nil {
 		return nil, err
@@ -439,6 +443,17 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 	}
 
 	return c, err
+}
+
+// exchangenUpdated updates the peer heap.
+func (ch *Channel) exchangenUpdated(c *Connection) {
+	if c.remotePeerInfo.HostPort == "" {
+		// Hostport is unknown until we get init resp.
+		return
+	}
+
+	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	ch.subChannels.updatePeerHeap(p)
 }
 
 // incomingConnectionActive adds a new active connection to our peer list.
