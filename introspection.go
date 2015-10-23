@@ -109,19 +109,29 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 	}
 }
 
-// IntrospectState returns the runtime state of the peer list.
-func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRuntimeState {
+type containsPeerList interface {
+	Copy() map[string]*Peer
+}
+
+func fromPeerList(peers containsPeerList, opts *IntrospectionOptions) map[string]PeerRuntimeState {
 	m := make(map[string]PeerRuntimeState)
-	l.mut.RLock()
-	for _, peer := range l.peers {
+	for _, peer := range peers.Copy() {
 		peerState := peer.IntrospectState(opts)
 		if len(peerState.InboundConnections)+len(peerState.OutboundConnections) > 0 || opts.IncludeEmptyPeers {
 			m[peer.HostPort()] = peerState
 		}
 	}
-
-	l.mut.RUnlock()
 	return m
+}
+
+// IntrospectState returns the runtime state of the peer list.
+func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRuntimeState {
+	return fromPeerList(l, opts)
+}
+
+// IntrospectState returns the runtime state of the
+func (l *RootPeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRuntimeState {
+	return fromPeerList(l, opts)
 }
 
 // IntrospectState returns the runtime state of the subchannels.
@@ -223,11 +233,11 @@ func (ch *Channel) handleIntrospection(arg3 []byte) interface{} {
 // IntrospectList returns the list of peers (host:port) in this peer list.
 func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []string {
 	var peers []string
-	l.mut.RLock()
+	l.RLock()
 	for peer := range l.peersByHostPort {
 		peers = append(peers, peer)
 	}
-	l.mut.RUnlock()
+	l.RUnlock()
 
 	return peers
 }
