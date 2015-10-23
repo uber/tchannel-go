@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -48,17 +49,23 @@ type PeerList struct {
 	sync.RWMutex
 
 	parent          *RootPeerList
-	peersByHostPort map[string]*Peer
-	peers           []*Peer
-	scoreCalculator scoreCalculator
+	peersByHostPort map[string]*peerScore
+	peerHeap        PeerHeap
+	scoreCalculator ScoreCalculator
 }
 
 func newPeerList(root *RootPeerList) *PeerList {
 	return &PeerList{
 		parent:          root,
-		peersByHostPort: make(map[string]*Peer),
+		peersByHostPort: make(map[string]*peerScore),
 		scoreCalculator: newRandCalculator(),
+		peerHeap:        nil,
 	}
+}
+
+// SetStrategy sets customized peer selection stratedgy.
+func (l *PeerList) SetStrategy(sc ScoreCalculator) {
+	l.scoreCalculator = sc
 }
 
 // Siblings don't share peer lists (though they take care not to double-connect
@@ -70,24 +77,22 @@ func (l *PeerList) newSibling() *PeerList {
 
 // Add adds a peer to the list if it does not exist, or returns any existing peer.
 func (l *PeerList) Add(hostPort string) *Peer {
-	l.RLock()
-
-	if p, ok := l.peersByHostPort[hostPort]; ok {
-		l.RUnlock()
-		return p
+	if ps, ok := l.exists(hostPort); ok {
+		return ps.Peer
 	}
-
-	l.RUnlock()
 	l.Lock()
 	defer l.Unlock()
 
 	if p, ok := l.peersByHostPort[hostPort]; ok {
-		return p
+		return p.Peer
 	}
 
 	p := l.parent.Add(hostPort)
-	l.peersByHostPort[hostPort] = p
-	l.peers = append(l.peers, p)
+	ps := newPeerScore(p)
+
+	l.peersByHostPort[hostPort] = ps
+	l.peerHeap.push(ps)
+
 	return p
 }
 
@@ -95,41 +100,26 @@ func (l *PeerList) Add(hostPort string) *Peer {
 func (l *PeerList) Get() (*Peer, error) {
 	l.RLock()
 
-	if len(l.peers) == 0 {
+	if l.peerHeap.Len() == 0 {
 		l.RUnlock()
 		return nil, ErrNoPeers
 	}
 
-	peer := l.choosePeer(l.peers)
+	peer := l.choosePeer()
 	l.RUnlock()
 
 	return peer, nil
 }
 
-func (l *PeerList) choosePeer(peers []*Peer) *Peer {
-	var maxScore uint64
-	var choosenPeer *Peer
-
-	// pick peer with highest score
-	for _, peer := range peers {
-		score := l.scoreCalculator.GetScore(peer)
-		if score > maxScore {
-			maxScore = score
-			choosenPeer = peer
-		}
-	}
-	return choosenPeer
+func (l *PeerList) choosePeer() *Peer {
+	return l.peerHeap.peek().Peer
 }
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
 func (l *PeerList) GetOrAdd(hostPort string) *Peer {
-	l.RLock()
-	if p, ok := l.peersByHostPort[hostPort]; ok {
-		l.RUnlock()
-		return p
+	if ps, ok := l.exists(hostPort); ok {
+		return ps.Peer
 	}
-
-	l.RUnlock()
 	return l.Add(hostPort)
 }
 
@@ -140,9 +130,38 @@ func (l *PeerList) Copy() map[string]*Peer {
 
 	listCopy := make(map[string]*Peer)
 	for k, v := range l.peersByHostPort {
-		listCopy[k] = v
+		listCopy[k] = v.Peer
 	}
 	return listCopy
+}
+
+// exists checks if a hostport exists in the peer list.
+func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
+	l.RLock()
+	ps, ok := l.peersByHostPort[hostPort]
+	l.RUnlock()
+
+	return ps, ok
+}
+
+func (l *PeerList) updatePeerHeap(p *Peer) {
+	if ps, ok := l.exists(p.hostPort); ok {
+		ps.score = l.scoreCalculator.GetScore(p)
+		l.peerHeap.update(ps)
+	} else {
+		fmt.Printf("peerlist update %+v, %+v \n", l, p)
+	}
+}
+
+type peerScore struct {
+	*Peer
+
+	score uint64
+	index int
+}
+
+func newPeerScore(p *Peer) *peerScore {
+	return &peerScore{Peer: p}
 }
 
 // Peer represents a single autobahn service or client with a unique host:port.
@@ -156,6 +175,9 @@ type Peer struct {
 }
 
 func newPeer(channel Connectable, hostPort string) *Peer {
+	if hostPort == "" {
+		panic("Cannot create peer with blank hostPort")
+	}
 	return &Peer{
 		channel:  channel,
 		hostPort: hostPort,
