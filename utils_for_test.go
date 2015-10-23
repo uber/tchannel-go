@@ -32,7 +32,7 @@ import (
 const MexChannelBufferSize = mexChannelBufferSize
 
 // RootPeers returns the root peer list from the Channel.
-func (ch *Channel) RootPeers() *PeerList {
+func (ch *Channel) RootPeers() *RootPeerList {
 	return ch.rootPeers()
 }
 

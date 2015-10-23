@@ -153,7 +153,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		handlers:          &handlerMap{},
 		subChannels:       &subChannelMap{},
 	}
-	ch.peers = newPeerList(ch).newChild()
+	ch.peers = newRootPeerList(ch).newChild()
 
 	ch.mutable.peerInfo = LocalPeerInfo{
 		PeerInfo: PeerInfo{
@@ -300,7 +300,7 @@ func (ch *Channel) Peers() *PeerList {
 // new Peers are created. All children of the root list (including ch.Peers())
 // automatically re-use peers from the root list and create new peers in the
 // root list.
-func (ch *Channel) rootPeers() *PeerList {
+func (ch *Channel) rootPeers() *RootPeerList {
 	return ch.peers.parent
 }
 
