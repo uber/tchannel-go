@@ -40,6 +40,8 @@ func (ph PeerHeap) Len() int { return len(ph.PeerScores) }
 
 func (ph PeerHeap) Less(i, j int) bool {
 	// We want Pop to give us the lowest, not highest, score so we use less than here.
+	// The following random logic is intend to prevent the case that some peers
+	// never get selected due to the defect of potential roundrobin.
 	if ph.PeerScores[i].score == ph.PeerScores[j].score {
 		// return random true or false when scores are the same.
 		return ph.rng.Intn(2) < 1
@@ -55,7 +57,7 @@ func (ph PeerHeap) Swap(i, j int) {
 
 // Push implements heap Push interface
 func (ph *PeerHeap) Push(x interface{}) {
-	n := len((*ph).PeerScores)
+	n := len(ph.PeerScores)
 	item := x.(*peerScore)
 	item.index = n
 	(*ph).PeerScores = append((*ph).PeerScores, item)
@@ -67,7 +69,7 @@ func (ph *PeerHeap) Pop() interface{} {
 	n := len(old.PeerScores)
 	item := old.PeerScores[n-1]
 	item.index = -1 // for safety
-	(*ph).PeerScores = old.PeerScores[0 : n-1]
+	(*ph).PeerScores = old.PeerScores[:n-1]
 	return item
 }
 
@@ -84,5 +86,5 @@ func (ph *PeerHeap) push(peerScore *peerScore) {
 }
 
 func (ph *PeerHeap) peek() *peerScore {
-	return (*ph).PeerScores[0]
+	return ph.PeerScores[0]
 }

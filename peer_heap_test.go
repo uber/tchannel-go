@@ -32,18 +32,19 @@ func TestPeerHeap(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	peerHeap := newPeerHeap()
-	peerScores := make([]*peerScore, 10)
-	minScore := uint64(10)
-	for i := 0; i < 10; i++ {
+	size := 10
+	peerScores := make([]*peerScore, size)
+	minScore := uint64(size)
+	for i := 0; i < size; i++ {
 		peerScore := newPeerScore(&Peer{})
-		peerScore.score = uint64(r.Intn(10))
+		peerScore.score = uint64(r.Intn(size * 5))
 		peerScores[i] = peerScore
 		if peerScore.score < minScore {
 			minScore = peerScore.score
 		}
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < size; i++ {
 		peerHeap.push(peerScores[i])
 	}
 
@@ -51,7 +52,8 @@ func TestPeerHeap(t *testing.T) {
 	assert.Equal(t, minScore, peerHeap.peek().score, "PeerHeap's peek value is not minium.")
 
 	lastScore := peerHeap.pop().score
-	for i := 0; i < 9; i++ {
+	for i := 1; i < size; i++ {
+		assert.Equal(t, size-i, peerHeap.Len(), "Incorrect peer heap size.")
 		score := peerHeap.pop().score
 		assert.True(t, score >= lastScore, "The order of the heap is invalid.")
 		lastScore = score
