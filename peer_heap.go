@@ -20,39 +20,54 @@
 
 package tchannel
 
-import "container/heap"
+import (
+	"container/heap"
+	"math/rand"
+	"time"
+)
 
-// PeerHeap maintains a MAX heap of peers based on the peers' score.
-type PeerHeap []*peerScore
+// PeerHeap maintains a MIN heap of peers based on the peers' score.
+type PeerHeap struct {
+	PeerScores []*peerScore
+	rng        *rand.Rand
+}
 
-func (ph PeerHeap) Len() int { return len(ph) }
+func newPeerHeap() *PeerHeap {
+	return &PeerHeap{PeerScores: nil, rng: NewRand(time.Now().UnixNano())}
+}
+
+func (ph PeerHeap) Len() int { return len(ph.PeerScores) }
 
 func (ph PeerHeap) Less(i, j int) bool {
-	// We want Pop to give us the highest, not lowest, score so we use greater than here.
-	return ph[i].score > ph[j].score
+	// We want Pop to give us the lowest, not highest, score so we use less than here.
+	if ph.PeerScores[i].score == ph.PeerScores[j].score {
+		// return random true or false when scores are the same.
+		return ph.rng.Intn(2) < 1
+	}
+	return ph.PeerScores[i].score < ph.PeerScores[j].score
 }
 
 func (ph PeerHeap) Swap(i, j int) {
-	ph[i], ph[j] = ph[j], ph[i]
-	ph[i].index = i
-	ph[j].index = j
+	ph.PeerScores[i], ph.PeerScores[j] = ph.PeerScores[j], ph.PeerScores[i]
+	ph.PeerScores[i].index = i
+	ph.PeerScores[j].index = j
 }
 
 // Push implements heap Push interface
 func (ph *PeerHeap) Push(x interface{}) {
-	n := len(*ph)
+	n := len((*ph).PeerScores)
 	item := x.(*peerScore)
 	item.index = n
-	*ph = append(*ph, item)
+	(*ph).PeerScores = append((*ph).PeerScores, item)
 }
 
 // Pop implements heap Pop interface
 func (ph *PeerHeap) Pop() interface{} {
 	old := *ph
-	n := len(old)
-	item := old[n-1]
+	n := len(old.PeerScores)
+	item := old.PeerScores[n-1]
 	item.index = -1 // for safety
-	*ph = old[0 : n-1]
+	(*ph).PeerScores = old.PeerScores[0 : n-1]
 	return item
 }
 
@@ -64,10 +79,10 @@ func (ph *PeerHeap) pop() *peerScore {
 	return heap.Pop(ph).(*peerScore)
 }
 
-func (ph *PeerHeap) push(peer *peerScore) {
-	heap.Push(ph, peer)
+func (ph *PeerHeap) push(peerScore *peerScore) {
+	heap.Push(ph, peerScore)
 }
 
 func (ph *PeerHeap) peek() *peerScore {
-	return (*ph)[0]
+	return (*ph).PeerScores[0]
 }
