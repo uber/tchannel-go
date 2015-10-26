@@ -679,7 +679,6 @@ func (c *Connection) writeFrames(_ uint32) {
 
 // checkExchanges is called whenever an exchange is removed, and when Close is called.
 func (c *Connection) checkExchanges() {
-	c.log.Warnf("connection.checkExchanges %v", c.remotePeerInfo.HostPort)
 	c.callOnExchangeChange()
 	moveState := func(fromState, toState connectionState) bool {
 		err := c.withStateLock(func() error {

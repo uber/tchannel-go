@@ -22,7 +22,6 @@ package tchannel
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -50,7 +49,7 @@ type PeerList struct {
 
 	parent          *RootPeerList
 	peersByHostPort map[string]*peerScore
-	peerHeap        PeerHeap
+	peerHeap        *PeerHeap
 	scoreCalculator ScoreCalculator
 }
 
@@ -59,7 +58,7 @@ func newPeerList(root *RootPeerList) *PeerList {
 		parent:          root,
 		peersByHostPort: make(map[string]*peerScore),
 		scoreCalculator: newRandCalculator(),
-		peerHeap:        nil,
+		peerHeap:        newPeerHeap(),
 	}
 }
 
@@ -148,8 +147,6 @@ func (l *PeerList) updatePeerHeap(p *Peer) {
 	if ps, ok := l.exists(p.hostPort); ok {
 		ps.score = l.scoreCalculator.GetScore(p)
 		l.peerHeap.update(ps)
-	} else {
-		fmt.Printf("peerlist update %+v, %+v \n", l, p)
 	}
 }
 
