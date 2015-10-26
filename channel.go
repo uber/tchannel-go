@@ -348,7 +348,7 @@ func (ch *Channel) serve() {
 		events := connectionEvents{
 			OnActive:           ch.incomingConnectionActive,
 			OnCloseStateChange: ch.connectionCloseStateChange,
-			OnExchangeUpdated:  ch.exchangenUpdated,
+			OnExchangeUpdated:  ch.exchangeUpdated,
 		}
 		if _, err := ch.newInboundConnection(netConn, events, &ch.connectionOptions); err != nil {
 			// Server is getting overloaded - begin rejecting new connections
@@ -415,7 +415,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 
 	events := connectionEvents{
 		OnCloseStateChange: ch.connectionCloseStateChange,
-		OnExchangeUpdated:  ch.exchangenUpdated,
+		OnExchangeUpdated:  ch.exchangeUpdated,
 	}
 	c, err := ch.newOutboundConnection(hostPort, events, connectionOptions)
 	if err != nil {
@@ -445,8 +445,8 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 	return c, err
 }
 
-// exchangenUpdated updates the peer heap.
-func (ch *Channel) exchangenUpdated(c *Connection) {
+// exchangeUpdated updates the peer heap.
+func (ch *Channel) exchangeUpdated(c *Connection) {
 	if c.remotePeerInfo.HostPort == "" {
 		// Hostport is unknown until we get init resp.
 		return
