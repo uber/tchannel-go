@@ -33,7 +33,7 @@ type PeerHeap struct {
 }
 
 func newPeerHeap() *PeerHeap {
-	return &PeerHeap{PeerScores: nil, rng: NewRand(time.Now().UnixNano())}
+	return &PeerHeap{rng: NewRand(time.Now().UnixNano())}
 }
 
 func (ph PeerHeap) Len() int { return len(ph.PeerScores) }
