@@ -28,32 +28,34 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const numPeers = 10
+
 func TestPeerHeap(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	peerHeap := newPeerHeap()
-	size := 10
-	peerScores := make([]*peerScore, size)
-	minScore := uint64(size)
-	for i := 0; i < size; i++ {
+
+	peerScores := make([]*peerScore, numPeers)
+	minScore := uint64(numPeers)
+	for i := 0; i < numPeers; i++ {
 		peerScore := newPeerScore(&Peer{})
-		peerScore.score = uint64(r.Intn(size * 5))
+		peerScore.score = uint64(r.Intn(numPeers * 5))
 		peerScores[i] = peerScore
 		if peerScore.score < minScore {
 			minScore = peerScore.score
 		}
 	}
 
-	for i := 0; i < size; i++ {
+	for i := 0; i < numPeers; i++ {
 		peerHeap.push(peerScores[i])
 	}
 
-	assert.Equal(t, 10, peerHeap.Len(), "Incorrect peer heap size.")
+	assert.Equal(t, 10, peerHeap.Len(), "Incorrect peer heap numPeers.")
 	assert.Equal(t, minScore, peerHeap.peek().score, "PeerHeap's peek value is not minium.")
 
 	lastScore := peerHeap.pop().score
-	for i := 1; i < size; i++ {
-		assert.Equal(t, size-i, peerHeap.Len(), "Incorrect peer heap size.")
+	for i := 1; i < numPeers; i++ {
+		assert.Equal(t, numPeers-i, peerHeap.Len(), "Incorrect peer heap numPeers.")
 		score := peerHeap.pop().score
 		assert.True(t, score >= lastScore, "The order of the heap is invalid.")
 		lastScore = score
