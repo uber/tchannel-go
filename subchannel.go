@@ -160,3 +160,9 @@ func (subChMap *subChannelMap) getOrAdd(serviceName string, ch *Channel) *SubCha
 
 	return subChMap.registerNewSubChannel(serviceName, ch)
 }
+
+func (subChMap *subChannelMap) updatePeerHeap(p *Peer) {
+	for _, subCh := range subChMap.subchannels {
+		subCh.Peers().UpdatePeerHeap(p)
+	}
+}

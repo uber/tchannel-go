@@ -468,6 +468,13 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 
 // exchangeUpdated updates the peer heap.
 func (ch *Channel) exchangeUpdated(c *Connection) {
+	if c.remotePeerInfo.HostPort == "" {
+		// Hostport is unknown until we get init resp.
+		return
+	}
+
+	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	ch.subChannels.updatePeerHeap(p)
 }
 
 // incomingConnectionActive adds a new active connection to our peer list.
