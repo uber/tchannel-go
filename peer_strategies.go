@@ -20,34 +20,25 @@
 
 package tchannel
 
-import (
-	"math/rand"
-	"time"
-)
-
-type scoreCalculator interface {
+// ScoreCalculator defines the interface to calculate the score.
+type ScoreCalculator interface {
 	GetScore(p *Peer) uint64
 }
 
-type randCalculator struct {
-	rng *rand.Rand
+// ScoreCalculatorFunc is an adapter that allows functions to be used as ScoreCalculator
+type ScoreCalculatorFunc func(p *Peer) uint64
+
+// GetScore calls the underlying function.
+func (f ScoreCalculatorFunc) GetScore(p *Peer) uint64 {
+	return f(p)
 }
 
-func (r *randCalculator) GetScore(p *Peer) uint64 {
-	return uint64(r.rng.Int63())
-}
+type zeroCalculator struct{}
 
-func newRandCalculator() *randCalculator {
-	return &randCalculator{rng: NewRand(time.Now().UnixNano())}
-}
-
-type preferIncomingCalculator struct {
-}
-
-func newPreferIncomingCalculator() *preferIncomingCalculator {
-	return &preferIncomingCalculator{}
-}
-
-func (r *preferIncomingCalculator) GetScore(p *Peer) uint64 {
+func (zeroCalculator) GetScore(p *Peer) uint64 {
 	return 0
+}
+
+func newZeroCalculator() zeroCalculator {
+	return zeroCalculator{}
 }
