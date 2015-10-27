@@ -147,6 +147,7 @@ type messageExchangeSet struct {
 	log       Logger
 	name      string
 	onRemoved func()
+	onAdded   func()
 
 	exchanges  map[uint32]*messageExchange
 	sendChRefs sync.WaitGroup
@@ -186,6 +187,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 
 	mexset.exchanges[mex.msgID] = mex
 	mexset.sendChRefs.Add(1)
+	mexset.onAdded()
 
 	// TODO(mmihic): Put into a deadline ordered heap so we can garbage collected expired exchanges
 	return mex, nil
