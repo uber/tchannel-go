@@ -58,6 +58,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 
 	c.log.Debugf("span=%s", callReq.Tracing)
 	call := new(InboundCall)
+	call.conn = c
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
 
 	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
@@ -199,6 +200,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 type InboundCall struct {
 	reqResReader
 
+	conn            *Connection
 	response        *InboundCallResponse
 	serviceName     string
 	operation       []byte

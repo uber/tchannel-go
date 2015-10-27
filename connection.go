@@ -508,6 +508,11 @@ func (c *Connection) recvMessage(ctx context.Context, msg message, resCh <-chan 
 	}
 }
 
+// RemotePeerInfo returns the peer info for the remote peer.
+func (c *Connection) RemotePeerInfo() PeerInfo {
+	return c.remotePeerInfo
+}
+
 // NextMessageID reserves the next available message id for this connection
 func (c *Connection) NextMessageID() uint32 {
 	return atomic.AddUint32(&c.nextMessageID, 1)
