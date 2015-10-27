@@ -42,6 +42,17 @@ func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	return conn, conn.conn
 }
 
+// InboundConnection returns the underlying connection for an incoming call.
+func InboundConnection(call IncomingCall) (*Connection, net.Conn) {
+	inboundCall, ok := call.(*InboundCall)
+	if !ok {
+		return nil, nil
+	}
+
+	conn := inboundCall.conn
+	return conn, conn.conn
+}
+
 // NewSpan returns a Span for testing.
 func NewSpan(traceID uint64, parentID uint64, spanID uint64) Span {
 	return Span{traceID: traceID, parentID: parentID, spanID: spanID, flags: defaultTracingFlags}

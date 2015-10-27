@@ -76,3 +76,19 @@ func TestActiveCallReq(t *testing.T) {
 		close(unblock)
 	}))
 }
+
+func TestInboundConnection(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		testutils.RegisterFunc(t, ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			c, _ := InboundConnection(CurrentCall(ctx))
+			assert.Equal(t, hostPort, c.RemotePeerInfo().HostPort, "Unexpected host port")
+			return &raw.Res{}, nil
+		})
+
+		_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "test", nil, nil)
+		require.NoError(t, err, "Call failed")
+	})
+}
