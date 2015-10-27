@@ -180,6 +180,9 @@ type Peer struct {
 }
 
 func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
+	if hostPort == "" {
+		panic("Cannot create peer with blank hostPort")
+	}
 	return &Peer{
 		channel:      channel,
 		hostPort:     hostPort,
