@@ -228,10 +228,10 @@ func (r *reqResReader) recvNextFragment(initial bool) (*readableFragment, error)
 	message := r.messageForFragment(initial)
 	frame, err := r.mex.recvPeerFrameOfType(message.messageType())
 	if err != nil {
-		if IsSystemError(err) {
-			// Record the error without shutting down the exchange, since this should go through
-			// the standard doneReading path.
-			r.err = err
+		if err, ok := err.(errorMessage); ok {
+			// If we received a serialized error from the other side, then we should go through
+			// the normal doneReading path so stats get updated with this error.
+			r.err = err.AsSystemError()
 			return nil, err
 		}
 

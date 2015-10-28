@@ -127,12 +127,6 @@ func (se SystemError) Code() SystemErrCode {
 	return se.code
 }
 
-// IsSystemError returns whether the error is a system error.
-func IsSystemError(err error) bool {
-	_, ok := err.(SystemError)
-	return ok
-}
-
 // GetContextError converts the context error to a tchannel error.
 func GetContextError(err error) error {
 	if err == context.DeadlineExceeded {

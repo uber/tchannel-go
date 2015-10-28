@@ -292,6 +292,11 @@ func (m errorMessage) AsSystemError() error {
 	return NewSystemError(m.errCode, m.message)
 }
 
+// Error returns the error message from the converted
+func (m errorMessage) Error() string {
+	return m.AsSystemError().Error()
+}
+
 type pingReq struct {
 	noBodyMsg
 	id uint32

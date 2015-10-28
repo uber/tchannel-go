@@ -81,7 +81,8 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 }
 
 // recvPeerFrameOfType waits for a new frame of a given type from the peer, failing
-// if the next frame received is not of that type
+// if the next frame received is not of that type.
+// If an error frame is returned, then the errorMessage is returned as the error.
 func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, error) {
 	frame, err := mex.recvPeerFrame()
 	if err != nil {
@@ -101,7 +102,7 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 		if err := errMsg.read(&rbuf); err != nil {
 			return nil, err
 		}
-		return nil, errMsg.AsSystemError()
+		return nil, errMsg
 
 	default:
 		// TODO(mmihic): Should be treated as a protocol error
