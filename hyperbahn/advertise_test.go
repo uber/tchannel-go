@@ -68,8 +68,8 @@ func TestNotListeningChannel(t *testing.T) {
 type retryTest struct {
 	// channel used to control the response to an 'ad' call.
 	respCh chan int
-	// req is the AdRequest sent to the adHandler.
-	req *AdRequest
+	// reqCh contains the AdRequests sent to the adHandler.
+	reqCh chan *AdRequest
 
 	// sleep stub channels.
 	sleepArgs  <-chan time.Duration
@@ -88,7 +88,7 @@ func (r *retryTest) OnError(err error) {
 }
 
 func (r *retryTest) adHandler(ctx json.Context, req *AdRequest) (*AdResponse, error) {
-	r.req = req
+	r.reqCh <- req
 	v := <-r.respCh
 	if v == 0 {
 		return nil, errors.New("failed")
@@ -99,6 +99,7 @@ func (r *retryTest) adHandler(ctx json.Context, req *AdRequest) (*AdResponse, er
 func (r *retryTest) setup() {
 	r.respCh = make(chan int, 1)
 	r.sleepArgs, r.sleepBlock = testutils.SleepStub(&timeSleep)
+	r.reqCh = make(chan *AdRequest, 1)
 }
 
 func (r *retryTest) setAdvertiseSuccess() {
@@ -144,7 +145,7 @@ func TestAdvertiseSuccess(t *testing.T) {
 
 		// Verify that the arguments passed to 'ad' are correct.
 		expectedRequest := &AdRequest{[]service{{Name: "my-client", Cost: 0}}}
-		require.Equal(t, expectedRequest, r.req)
+		require.Equal(t, expectedRequest, <-r.reqCh)
 
 		// Verify readvertise happen after sleeping for ~advertiseInterval.
 		r.mock.On("On", Readvertised).Return().Times(10)
@@ -154,7 +155,7 @@ func TestAdvertiseSuccess(t *testing.T) {
 			r.sleepBlock <- struct{}{}
 
 			r.setAdvertiseSuccess()
-			require.Equal(t, expectedRequest, r.req)
+			require.Equal(t, expectedRequest, <-r.reqCh)
 		}
 
 		// Block till the last advertise completes.
@@ -178,7 +179,7 @@ func TestMutlipleAdvertise(t *testing.T) {
 			{Name: "svc-2", Cost: 0},
 			{Name: "svc-3", Cost: 0},
 		}}
-		require.Equal(t, expectedRequest, r.req)
+		require.Equal(t, expectedRequest, <-r.reqCh)
 
 		// Verify readvertise happen after sleeping for ~advertiseInterval.
 		r.mock.On("On", Readvertised).Return().Times(10)
@@ -188,7 +189,7 @@ func TestMutlipleAdvertise(t *testing.T) {
 			r.sleepBlock <- struct{}{}
 
 			r.setAdvertiseSuccess()
-			require.Equal(t, expectedRequest, r.req)
+			require.Equal(t, expectedRequest, <-r.reqCh)
 		}
 
 		// Block till the last advertise completes.
@@ -205,6 +206,7 @@ func TestRetryTemporaryFailure(t *testing.T) {
 		r.mock.On("On", Advertised).Return().Once()
 		r.setAdvertiseSuccess()
 		require.NoError(t, r.client.Advertise())
+		<-r.reqCh
 
 		s1 := <-r.sleepArgs
 		checkAdvertiseInterval(t, s1)
@@ -216,6 +218,7 @@ func TestRetryTemporaryFailure(t *testing.T) {
 			r.setAdvertiseFailure()
 
 			s1 := <-r.sleepArgs
+			<-r.reqCh
 			checkRetryInterval(t, s1, i+1 /* retryNum */)
 		}
 
@@ -227,6 +230,7 @@ func TestRetryTemporaryFailure(t *testing.T) {
 			r.setAdvertiseSuccess()
 
 			s1 := <-r.sleepArgs
+			<-r.reqCh
 			checkAdvertiseInterval(t, s1)
 		}
 	})
@@ -240,6 +244,7 @@ func TestRetryFailure(t *testing.T) {
 
 		r.setAdvertiseSuccess()
 		require.NoError(t, r.client.Advertise())
+		<-r.reqCh
 
 		s1 := <-r.sleepArgs
 		checkAdvertiseInterval(t, s1)
@@ -257,6 +262,7 @@ func TestRetryFailure(t *testing.T) {
 		for i := 0; i < maxAdvertiseFailures-1; i++ {
 			r.sleepBlock <- struct{}{}
 			r.setAdvertiseFailure()
+			<-r.reqCh
 
 			s1 := <-r.sleepArgs
 			checkRetryInterval(t, s1, i+1 /* retryNum */)
@@ -264,6 +270,7 @@ func TestRetryFailure(t *testing.T) {
 
 		r.sleepBlock <- struct{}{}
 		r.respCh <- 0
+		<-r.reqCh
 
 		// Wait for the handler to be called and the mock expectation to be recorded.
 		<-noRetryFail
