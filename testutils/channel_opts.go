@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"flag"
+	"time"
 
 	"github.com/uber/tchannel-go"
 )
@@ -63,6 +64,12 @@ func (o *ChannelOpts) SetTraceReporter(traceReporter tchannel.TraceReporter) *Ch
 // SetFramePool sets FramePool in DefaultConnectionOptions.
 func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	o.DefaultConnectionOptions.FramePool = framePool
+	return o
+}
+
+// SetTimeNow sets TimeNow in ChannelOptions.
+func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
+	o.TimeNow = timeNow
 	return o
 }
 
