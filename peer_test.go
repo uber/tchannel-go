@@ -23,14 +23,14 @@ package tchannel_test
 import (
 	"fmt"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	. "github.com/uber/tchannel-go"
-
 	"github.com/stretchr/testify/assert"
+	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -237,6 +237,74 @@ func (pt *peerTest) CleanUp() {
 	}
 }
 
+func TestPeerSelection(t *testing.T) {
+	pt := &peerTest{t: t}
+	defer pt.CleanUp()
+	WithVerifiedServer(t, &testutils.ChannelOpts{ServiceName: "S1"}, func(ch *Channel, hostPort string) {
+		doPing := func(ch *Channel) {
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+			assert.NoError(t, ch.Ping(ctx, hostPort), "Ping failed")
+		}
+
+		strategy, count := createScoreStrategy(0, 1)
+		s2, _ := pt.NewService(t, "S2")
+		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
+		s2.GetSubChannel("S1").Peers().Add(hostPort)
+		doPing(s2)
+		assert.EqualValues(t, 4, *count, "Expect exchange update from init resp, ping, pong")
+	})
+}
+
+func TestIsolatedPeerHeap(t *testing.T) {
+	const numPeers = 10
+	ch := testutils.NewClient(t, nil)
+
+	ps1 := createSubChannelWNewStrategy(ch, "S1", numPeers, 1)
+	ps2 := createSubChannelWNewStrategy(ch, "S1", numPeers, -1, Isolated)
+
+	hostports := make([]string, numPeers)
+	for i := 0; i < numPeers; i++ {
+		hostports[i] = fmt.Sprintf("127.0.0.1:%d", i)
+		ps1.UpdatePeerHeap(ps1.GetOrAdd(hostports[i]))
+		ps2.UpdatePeerHeap(ps2.GetOrAdd(hostports[i]))
+	}
+
+	ph1 := ps1.GetHeap()
+	ph2 := ps2.GetHeap()
+	for i := 0; i < numPeers; i++ {
+		assert.Equal(t, hostports[i], ph1.PopPeer().HostPort())
+		assert.Equal(t, hostports[numPeers-i-1], ph2.PopPeer().HostPort())
+	}
+}
+
+func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, count *int64) {
+	var score uint64
+	count = new(int64)
+
+	return ScoreCalculatorFunc(func(p *Peer) uint64 {
+		atomic.AddInt64(count, 1)
+		atomic.AddUint64(&score, uint64(delta))
+		return atomic.LoadUint64(&score)
+	}), count
+}
+
+func createSubChannelWNewStrategy(ch *Channel, name string, initial, delta int64, opts ...SubChannelOption) *PeerList {
+	strategy, _ := createScoreStrategy(initial, delta)
+	sc := ch.GetSubChannel(name, opts...)
+	ps := sc.Peers()
+	ps.SetStrategy(strategy)
+	return ps
+}
+
+func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
+	for k, v := range counts {
+		if float64(v) < min || float64(v) > max {
+			t.Errorf("Key %v has value %v which is out of range %v-%v", k, v, min, max)
+		}
+	}
+}
+
 type peerSelectionTest struct {
 	peerTest
 
@@ -271,11 +339,11 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 		pt.affinity[i] = pt.servers[i]
 	}
 
-	hostport := pt.client.PeerInfo().HostPort
-	serviceName := pt.client.PeerInfo().ServiceName
 	var wg sync.WaitGroup
 	wg.Add(pt.numAffinity)
 	// Connect from the affinity nodes to the service.
+	hostport := pt.client.PeerInfo().HostPort
+	serviceName := pt.client.PeerInfo().ServiceName
 	for _, affinity := range pt.affinity {
 		go func(affinity *Channel) {
 			affinity.Peers().Add(hostport)
@@ -335,4 +403,136 @@ func BenchmarkSimplePeersHeapPerf(b *testing.B) {
 	pt.setupAffinity(b)
 	b.ResetTimer()
 	pt.runStressSimple(b)
+}
+
+func (pt *peerSelectionTest) runStress() {
+	numClock := pt.numConcurrent + pt.numAffinity
+	clocks := make([]chan struct{}, numClock)
+	for i := 0; i < numClock; i++ {
+		clocks[i] = make(chan struct{})
+	}
+	var wg sync.WaitGroup
+	wg.Add(numClock)
+
+	// helper that will make a request every n ticks.
+	reqEveryNTicks := func(n int, sc *SubChannel, clock <-chan struct{}) {
+		defer wg.Done()
+		for {
+			for i := 0; i < n; i++ {
+				_, ok := <-clock
+				if !ok {
+					return
+				}
+			}
+			pt.makeCall(sc)
+		}
+	}
+	// server outbound request
+	sc := pt.client.GetSubChannel("hyperbahn")
+	for i := 0; i < pt.numConcurrent; i++ {
+		go reqEveryNTicks(1, sc, clocks[i])
+	}
+	// affinity incoming requests
+	if pt.hasInboundCall {
+		serviceName := pt.client.PeerInfo().ServiceName
+		for i := 0; i < pt.numAffinity; i++ {
+			go reqEveryNTicks(1, pt.affinity[i].GetSubChannel(serviceName), clocks[i+pt.numConcurrent])
+		}
+	}
+
+	tickAllClocks := func() {
+		for i := 0; i < numClock; i++ {
+			clocks[i] <- struct{}{}
+		}
+	}
+
+	const tickNum = 10000
+	for i := 0; i < tickNum; i++ {
+		if i%(tickNum/10) == 0 {
+			fmt.Printf("Stress test progress: %v\n", 100*i/tickNum)
+		}
+		tickAllClocks()
+	}
+
+	time.Sleep(time.Millisecond * 100)
+	for i := 0; i < numClock; i++ {
+		close(clocks[i])
+	}
+	wg.Wait()
+}
+
+func TestPeersHeapPerf(t *testing.T) {
+	CheckStress(t)
+
+	tests := []struct {
+		numHyperbahn   int
+		affinityRatio  float64
+		numConcurrent  int
+		hasInboundCall bool
+	}{
+		{
+			numHyperbahn:   1000,
+			affinityRatio:  0.1,
+			numConcurrent:  5,
+			hasInboundCall: true,
+		},
+		{
+			numHyperbahn:   1000,
+			affinityRatio:  0.1,
+			numConcurrent:  1,
+			hasInboundCall: true,
+		},
+		{
+			numHyperbahn:   100,
+			affinityRatio:  0.1,
+			numConcurrent:  1,
+			hasInboundCall: true,
+		},
+	}
+
+	for _, tt := range tests {
+		peersHeapStress(t, tt.numHyperbahn, tt.affinityRatio, tt.numConcurrent, tt.hasInboundCall)
+	}
+
+}
+
+func peersHeapStress(t testing.TB, numHyperbahn int, affinityRatio float64, numConcurrent int, hasInboundCall bool) {
+	pt := &peerSelectionTest{
+		peerTest:       peerTest{t: t},
+		numPeers:       numHyperbahn,
+		numConcurrent:  numConcurrent,
+		hasInboundCall: hasInboundCall,
+		numAffinity:    int(float64(numHyperbahn) * affinityRatio),
+	}
+	defer pt.CleanUp()
+
+	pt.setupServers(t)
+	pt.setupClient(t)
+	pt.setupAffinity(t)
+	pt.runStress()
+	validateStressTest(t, pt.client, pt.numAffinity)
+}
+
+func validateStressTest(t testing.TB, server *Channel, numAffinity int) {
+	state := server.IntrospectState(&IntrospectionOptions{IncludeEmptyPeers: true})
+
+	countsByPeer := make(map[string]int)
+	var counts []int
+	for _, peer := range state.Peers {
+		p, ok := state.RootPeers[peer]
+		assert.True(t, ok, "Missing peer.")
+		if p.ChosenCount != 0 {
+			countsByPeer[p.HostPort] = int(p.ChosenCount)
+			counts = append(counts, int(p.ChosenCount))
+		}
+	}
+
+	// when number of affinity is zero, all peer suppose to be chosen.
+	if numAffinity == 0 {
+		numAffinity = len(state.Peers)
+	}
+	assert.EqualValues(t, len(countsByPeer), numAffinity, "Number of affinities nodes mismatch.")
+	sort.Ints(counts)
+	median := counts[len(counts)/2]
+	testDistribution(t, countsByPeer, float64(median)*0.9, float64(median)*1.1)
 }
