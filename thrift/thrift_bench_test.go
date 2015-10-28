@@ -52,12 +52,9 @@ var (
 const benchServerName = "bench-server"
 
 func setupBenchServer() ([]string, error) {
-	ch, err := testutils.NewServer(&testutils.ChannelOpts{
-		ServiceName: benchServerName,
-		DefaultConnectionOptions: tchannel.ConnectionOptions{
-			FramePool: tchannel.NewSyncFramePool(),
-		},
-	})
+	ch, err := testutils.NewServer(testutils.NewOpts().
+		SetServiceName(benchServerName).
+		SetFramePool(tchannel.NewSyncFramePool()))
 	if err != nil {
 		return nil, err
 	}

@@ -69,15 +69,13 @@ func TestStatsCalls(t *testing.T) {
 
 	clientStats := newRecordingStatsReporter()
 	serverStats := newRecordingStatsReporter()
-	serverOpts := &testutils.ChannelOpts{
-		StatsReporter: serverStats,
-	}
+	serverOpts := testutils.NewOpts().SetStatsReporter(serverStats)
 	WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
 		handler := raw.Wrap(newTestHandler(t))
 		serverCh.Register(handler, "echo")
 		serverCh.Register(handler, "app-error")
 
-		ch, err := testutils.NewClient(&testutils.ChannelOpts{StatsReporter: clientStats})
+		ch, err := testutils.NewClient(testutils.NewOpts().SetStatsReporter(clientStats))
 		require.NoError(t, err)
 
 		ctx, cancel := NewContext(time.Second * 5)
