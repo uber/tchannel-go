@@ -176,7 +176,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 	if h == nil {
 		// CHeck the subchannel map to see if we find one there
 		c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Operation())
-		h = c.subchannels.find(call.ServiceName(), call.Operation())
+		h = c.subChannels.find(call.ServiceName(), call.Operation())
 	}
 	if h == nil {
 		c.log.Errorf("Could not find handler for %s:%s", call.ServiceName(), call.Operation())
