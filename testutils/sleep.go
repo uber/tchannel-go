@@ -22,18 +22,26 @@ package testutils
 
 import "time"
 
-// SleepStub returns a function that can be used to stub time.Sleep, as well
-// as two channels to control the sleep stub:
-// .<-chan time.Duration which will contain arguments that the stub was called with.
+// SleepStub stubs a function variable that points to time.Sleep. It returns
+// two channels to control the sleep stub, and a function to close the channels.
+// Once the stub is closed, any further sleeps will cause panics.
+// The two channels returned are:
+// <-chan time.Duration which will contain arguments that the stub was called with.
 // chan<- struct{} that should be written to when you want the Sleep to return.
-func SleepStub(funcVar *func(time.Duration)) (<-chan time.Duration, chan<- struct{}) {
+func SleepStub(funcVar *func(time.Duration)) (
+	argCh <-chan time.Duration, unblockCh chan<- struct{}, closeFn func()) {
+
 	args := make(chan time.Duration)
 	block := make(chan struct{})
 	*funcVar = func(t time.Duration) {
 		args <- t
 		<-block
 	}
-	return args, block
+	closeSleepChans := func() {
+		close(args)
+		close(block)
+	}
+	return args, block, closeSleepChans
 }
 
 // ResetSleepStub resets a Sleep stub.

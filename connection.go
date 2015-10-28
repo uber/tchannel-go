@@ -115,10 +115,9 @@ type connectionEvents struct {
 
 // Connection represents a connection to a remote peer.
 type Connection struct {
+	channelConnectionCommon
+
 	connID          uint32
-	log             Logger
-	statsReporter   StatsReporter
-	traceReporter   TraceReporter
 	checksumType    ChecksumType
 	framePool       FramePool
 	conn            net.Conn
@@ -130,7 +129,6 @@ type Connection struct {
 	inbound         messageExchangeSet
 	outbound        messageExchangeSet
 	handlers        *handlerMap
-	subchannels     *subChannelMap
 	nextMessageID   uint32
 	events          connectionEvents
 	commonStatsTags map[string]string
@@ -218,10 +216,9 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 	log.Debugf("created for %v (%v) local: %v remote: %v",
 		peerInfo.ServiceName, peerInfo.ProcessName, conn.LocalAddr(), conn.RemoteAddr())
 	c := &Connection{
+		channelConnectionCommon: ch.channelConnectionCommon,
+
 		connID:        connID,
-		log:           log,
-		statsReporter: ch.statsReporter,
-		traceReporter: ch.traceReporter,
 		conn:          conn,
 		framePool:     framePool,
 		state:         initialState,
@@ -241,7 +238,6 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		handlers:        ch.handlers,
 		events:          events,
 		commonStatsTags: ch.commonStatsTags,
-		subchannels:     ch.subChannels,
 	}
 	c.inbound.onRemoved = c.checkExchanges
 	c.outbound.onRemoved = c.checkExchanges

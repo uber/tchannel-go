@@ -62,6 +62,10 @@ type ChannelOptions struct {
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
+	// TimeNow is a variable for overriding time.Now in unit tests.
+	// Note: This is not a stable part of the API and may change.
+	TimeNow func() time.Time
+
 	// Trace reporter to use for this channel.
 	TraceReporter TraceReporter
 
@@ -99,15 +103,12 @@ const (
 // want to receive requests should call one of Serve or ListenAndServe
 // TODO(prashant): Shutdown all subchannels + peers when channel is closed.
 type Channel struct {
-	log                  Logger
-	commonStatsTags      map[string]string
-	statsReporter        StatsReporter
-	traceReporter        TraceReporter
-	traceReporterFactory TraceReporterFactory
-	connectionOptions    ConnectionOptions
-	handlers             *handlerMap
-	peers                *PeerList
-	subChannels          *subChannelMap
+	channelConnectionCommon
+
+	commonStatsTags   map[string]string
+	connectionOptions ConnectionOptions
+	handlers          *handlerMap
+	peers             *PeerList
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -117,6 +118,16 @@ type Channel struct {
 		l        net.Listener  // May be nil if this is a client only channel
 		conns    []*Connection
 	}
+}
+
+// channelConnectionCommon is the list of common objects that both use
+// and can be copied directly from the channel to the connection.
+type channelConnectionCommon struct {
+	log           Logger
+	statsReporter StatsReporter
+	traceReporter TraceReporter
+	subChannels   *subChannelMap
+	timeNow       func() time.Time
 }
 
 // NewChannel creates a new Channel.  The new channel can be used to send outbound requests
@@ -146,12 +157,21 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		statsReporter = NullStatsReporter
 	}
 
+	timeNow := opts.TimeNow
+	if timeNow == nil {
+		timeNow = time.Now
+	}
+
 	ch := &Channel{
+		channelConnectionCommon: channelConnectionCommon{
+			log:           logger.WithFields(LogField{"service", serviceName}),
+			statsReporter: statsReporter,
+			subChannels:   &subChannelMap{},
+			timeNow:       timeNow,
+		},
+
 		connectionOptions: opts.DefaultConnectionOptions,
-		log:               logger.WithFields(LogField{"service", serviceName}),
-		statsReporter:     statsReporter,
 		handlers:          &handlerMap{},
-		subChannels:       &subChannelMap{},
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
