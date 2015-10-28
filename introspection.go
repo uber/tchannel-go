@@ -181,6 +181,9 @@ func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 
 // IntrospectState returns the runtime state for this connection.
 func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRuntimeState {
+	c.stateMut.RLock()
+	defer c.stateMut.RUnlock()
+
 	return ConnectionRuntimeState{
 		ID:               c.connID,
 		ConnectionState:  c.state.String(),
