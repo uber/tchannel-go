@@ -34,12 +34,8 @@ const (
 	defaultTracingFlags = tracingFlagEnabled
 )
 
-var (
-	// timeNow is a variable for stubbing in unit tests.
-	timeNow = time.Now
-	// traceRng is a thread-safe random number generator for generating trace IDs.
-	traceRng = NewRand(time.Now().UnixNano())
-)
+// traceRng is a thread-safe random number generator for generating trace IDs.
+var traceRng = NewRand(time.Now().UnixNano())
 
 // TargetEndpoint represents target server endpoint information.
 type TargetEndpoint struct {

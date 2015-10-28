@@ -114,6 +114,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 			ServiceName: serviceName,
 			Operation:   operation,
 		},
+		timeNow: c.timeNow,
 		binaryAnnotations: []BinaryAnnotation{
 			{Key: "cn", Value: call.callReq.Headers[CallerName]},
 			{Key: "as", Value: call.callReq.Headers[ArgScheme]},
@@ -121,7 +122,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	}
 	response.AddAnnotation(AnnotationKeyClientSend)
 
-	response.startedAt = timeNow()
+	response.startedAt = c.timeNow()
 	response.mex = mex
 	response.log = c.log.WithFields(LogField{"Out-Response", requestID})
 	response.messageForFragment = func(initial bool) message {
@@ -297,7 +298,7 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 	response.AddAnnotation(AnnotationKeyClientReceive)
 	response.Report()
 
-	latency := timeNow().Sub(response.startedAt)
+	latency := response.GetTime().Sub(response.startedAt)
 	response.statsReporter.RecordTimer("outbound.calls.latency", response.commonStatsTags, latency)
 
 	if unexpected != nil {

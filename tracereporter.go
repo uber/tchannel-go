@@ -52,16 +52,6 @@ type Annotation struct {
 	Timestamp time.Time
 }
 
-// NewAnnotation returns a new annotation.
-func NewAnnotation(key AnnotationKey) Annotation {
-	return Annotation{Key: key, Timestamp: timeNow()}
-}
-
-// NewBinaryAnnotation returns a new binary annotation.
-func NewBinaryAnnotation(key string, value interface{}) BinaryAnnotation {
-	return BinaryAnnotation{Key: key, Value: value}
-}
-
 // TraceReporter is the interface used to report Trace spans.
 type TraceReporter interface {
 	// Report method is intended to report Span information.
@@ -98,6 +88,7 @@ func (simpleTraceReporter) Report(
 
 // Annotations is used to track annotations and report them to a TraceReporter.
 type Annotations struct {
+	timeNow           func() time.Time
 	reporter          TraceReporter
 	endpoint          TargetEndpoint
 	span              Span
@@ -110,14 +101,21 @@ func (as *Annotations) SetOperation(operation string) {
 	as.endpoint.Operation = operation
 }
 
+// GetTime returns the time using the timeNow function stored in the annotations.
+func (as *Annotations) GetTime() time.Time {
+	return as.timeNow()
+}
+
 // AddBinaryAnnotation adds a binary annotation.
-func (as *Annotations) AddBinaryAnnotation(binaryAnnotation BinaryAnnotation) {
+func (as *Annotations) AddBinaryAnnotation(key string, value interface{}) {
+	binaryAnnotation := BinaryAnnotation{Key: key, Value: value}
 	as.binaryAnnotations = append(as.binaryAnnotations, binaryAnnotation)
 }
 
 // AddAnnotation adds a standard annotation.
 func (as *Annotations) AddAnnotation(key AnnotationKey) {
-	as.annotations = append(as.annotations, NewAnnotation(key))
+	annotation := Annotation{Key: key, Timestamp: as.timeNow()}
+	as.annotations = append(as.annotations, annotation)
 }
 
 // Report reports the annotations to the given trace reporter, if tracing is enabled in the span.

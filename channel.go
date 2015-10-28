@@ -62,6 +62,10 @@ type ChannelOptions struct {
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
+	// TimeNow is a variable for overriding time.Now in unit tests.
+	// Note: This is not a stable part of the API and may change.
+	TimeNow func() time.Time
+
 	// Trace reporter to use for this channel.
 	TraceReporter TraceReporter
 
@@ -123,6 +127,7 @@ type channelConnectionCommon struct {
 	statsReporter StatsReporter
 	traceReporter TraceReporter
 	subChannels   *subChannelMap
+	timeNow       func() time.Time
 }
 
 // NewChannel creates a new Channel.  The new channel can be used to send outbound requests
@@ -152,11 +157,17 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		statsReporter = NullStatsReporter
 	}
 
+	timeNow := opts.TimeNow
+	if timeNow == nil {
+		timeNow = time.Now
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger.WithFields(LogField{"service", serviceName}),
 			statsReporter: statsReporter,
 			subChannels:   &subChannelMap{},
+			timeNow:       timeNow,
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,

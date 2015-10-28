@@ -85,6 +85,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 			HostPort:    c.localPeerInfo.HostPort,
 			ServiceName: callReq.Service,
 		},
+		timeNow: c.timeNow,
 		binaryAnnotations: []BinaryAnnotation{
 			{Key: "cn", Value: callReq.Headers[CallerName]},
 			{Key: "as", Value: callReq.Headers[ArgScheme]},
@@ -165,7 +166,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 
 	call.commonStatsTags["endpoint"] = string(call.operation)
 	call.statsReporter.IncCounter("inbound.calls.recvd", call.commonStatsTags, 1)
-	call.response.calledAt = timeNow()
+	call.response.calledAt = c.timeNow()
 	call.response.SetOperation(string(call.operation))
 
 	// NB(mmihic): Don't cast operation name to string here - this will
@@ -327,7 +328,7 @@ func (response *InboundCallResponse) doneSending() {
 	response.AddAnnotation(AnnotationKeyServerSend)
 	response.Report()
 
-	latency := timeNow().Sub(response.calledAt)
+	latency := response.GetTime().Sub(response.calledAt)
 	response.statsReporter.RecordTimer("inbound.calls.latency", response.commonStatsTags, latency)
 
 	if response.systemError {
