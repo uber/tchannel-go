@@ -22,6 +22,8 @@ package tchannel
 
 import (
 	"bytes"
+	"io"
+	"io/ioutil"
 	"sync"
 	"testing"
 
@@ -297,8 +299,8 @@ func TestFragmentationChecksumMismatch(t *testing.T) {
 	reader, err := r.ArgReader(true /* last */)
 	assert.NoError(t, err)
 
-	var arg []byte
-	assert.Error(t, NewArgReader(reader, nil).Read(&arg))
+	_, err = io.Copy(ioutil.Discard, reader)
+	assert.Equal(t, errMismatchedChecksums, err)
 }
 
 func runFragmentationErrorTest(f func(w *fragmentingWriter, r *fragmentingReader)) {

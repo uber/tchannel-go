@@ -290,7 +290,8 @@ func (r *fragmentingReader) recvAndParseNextFragment(initial bool) error {
 	// Validate checksums
 	localChecksum := r.checksum.Sum()
 	if bytes.Compare(r.curFragment.checksum, localChecksum) != 0 {
-		return errMismatchedChecksums
+		r.err = errMismatchedChecksums
+		return r.err
 	}
 
 	// Pull out the first chunk to act as the current chunk
