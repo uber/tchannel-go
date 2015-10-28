@@ -64,7 +64,7 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 	case <-mex.ctx.Done():
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
-		return mex.ctx.Err()
+		return GetContextError(mex.ctx.Err())
 	}
 }
 
@@ -76,7 +76,7 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 		return frame, nil
 
 	case <-mex.ctx.Done():
-		return nil, mex.ctx.Err()
+		return nil, GetContextError(mex.ctx.Err())
 	}
 }
 

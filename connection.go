@@ -493,7 +493,7 @@ func (c *Connection) sendMessage(msg message) error {
 func (c *Connection) recvMessage(ctx context.Context, msg message, resCh <-chan *Frame) error {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return GetContextError(ctx.Err())
 
 	case frame := <-resCh:
 		err := frame.read(msg)

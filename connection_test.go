@@ -248,8 +248,8 @@ func TestTimeout(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		// onError may be called when the block call tries to write the call response.
 		onError := func(ctx context.Context, err error) {
-			assert.Equal(t, ctx.Err(), err, "onError err should be context error")
-			assert.Equal(t, context.DeadlineExceeded, err)
+			assert.Equal(t, ErrTimeout, err, "onError err should be ErrTimeout")
+			assert.Equal(t, context.DeadlineExceeded, ctx.Err(), "Context should timeout")
 		}
 		testHandler := onErrorTestHandler{newTestHandler(t), onError}
 		ch.Register(raw.Wrap(testHandler), "block")
@@ -258,11 +258,9 @@ func TestTimeout(t *testing.T) {
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "block", []byte("Arg2"), []byte("Arg3"))
+		assert.Equal(t, ErrTimeout, err)
 
-		// TODO(mmihic): Maybe translate this into ErrTimeout (or vice versa)?
-		assert.Equal(t, context.DeadlineExceeded, err)
-
-		// Verify the server-side receives a timeout error.
+		// Verify the server-side receives an error from the context.
 		assert.Equal(t, context.DeadlineExceeded, <-testHandler.blockErr)
 	})
 	VerifyNoBlockedGoroutines(t)

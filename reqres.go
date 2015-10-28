@@ -142,7 +142,7 @@ func (w *reqResWriter) flushFragment(fragment *writableFragment) error {
 	frame.Header.SetPayloadSize(uint16(fragment.contents.BytesWritten()))
 	select {
 	case <-w.mex.ctx.Done():
-		return w.failed(w.mex.ctx.Err())
+		return w.failed(GetContextError(w.mex.ctx.Err()))
 	case w.conn.sendCh <- frame:
 		return nil
 	}
