@@ -342,3 +342,42 @@ func TestFragmentationSlowReader(t *testing.T) {
 	})
 	VerifyNoBlockedGoroutines(t)
 }
+
+func TestWriteAfterTimeout(t *testing.T) {
+	ctx, cancel := NewContext(20 * time.Millisecond)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		timedOut := make(chan struct{})
+
+		handler := func(ctx context.Context, call *InboundCall) {
+			_, err := raw.ReadArgs(call)
+			assert.NoError(t, err, "Read args failed")
+			response := call.Response()
+			assert.NoError(t, NewArgWriter(response.Arg2Writer()).Write(nil), "Write Arg2 failed")
+			writer, err := response.Arg3Writer()
+			assert.NoError(t, err, "Arg3Writer failed")
+
+			for {
+				if _, err := writer.Write(testutils.RandBytes(4096)); err != nil {
+					assert.Equal(t, err, ErrTimeout, "Handler should timeout")
+					close(timedOut)
+					return
+				}
+				runtime.Gosched()
+			}
+		}
+		ch.Register(HandlerFunc(handler), "call")
+
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, nil)
+		assert.Equal(t, err, ErrTimeout, "Call should timeout")
+
+		// Wait for the write to complete, make sure there's no errors.
+		select {
+		case <-time.After(30 * time.Millisecond):
+			t.Errorf("Handler should have failed due to timeout")
+		case <-timedOut:
+		}
+	})
+	VerifyNoBlockedGoroutines(t)
+}
