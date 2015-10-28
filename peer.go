@@ -38,9 +38,10 @@ var (
 	peerRng = NewRand(time.Now().UnixNano())
 )
 
+// Connectable is the interface used by peers to create connections.
 type Connectable interface {
-	Connect(context.Context, string, *ConnectionOptions) (*Connection, error)
-	ConnectionOptions() *ConnectionOptions
+	// Connect tries to connect to the given hostPort.
+	Connect(ctx context.Context, hostPort string) (*Connection, error)
 }
 
 // PeerList maintains a list of Peers.
@@ -240,7 +241,7 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 
 // Connect adds a new outbound connection to the peer.
 func (p *Peer) Connect(ctx context.Context) (*Connection, error) {
-	c, err := p.channel.Connect(ctx, p.hostPort, p.channel.ConnectionOptions())
+	c, err := p.channel.Connect(ctx, p.hostPort)
 	if err != nil {
 		return nil, err
 	}

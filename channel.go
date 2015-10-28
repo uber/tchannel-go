@@ -349,7 +349,7 @@ func (ch *Channel) serve() {
 			OnActive:           ch.incomingConnectionActive,
 			OnCloseStateChange: ch.connectionCloseStateChange,
 		}
-		if _, err := ch.newInboundConnection(netConn, events, &ch.connectionOptions); err != nil {
+		if _, err := ch.newInboundConnection(netConn, events); err != nil {
 			// Server is getting overloaded - begin rejecting new connections
 			ch.log.Errorf("could not create new TChannelConnection for incoming conn: %v", err)
 			netConn.Close()
@@ -400,7 +400,7 @@ func (ch *Channel) ServiceName() string {
 }
 
 // Connect connects the channel.
-func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptions *ConnectionOptions) (*Connection, error) {
+func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, error) {
 	switch state := ch.State(); state {
 	case ChannelClient, ChannelListening:
 		break
@@ -413,7 +413,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string, connectionOptio
 	}
 
 	events := connectionEvents{OnCloseStateChange: ch.connectionCloseStateChange}
-	c, err := ch.newOutboundConnection(hostPort, events, connectionOptions)
+	c, err := ch.newOutboundConnection(hostPort, events)
 	if err != nil {
 		return nil, err
 	}

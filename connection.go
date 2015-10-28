@@ -170,22 +170,23 @@ const (
 //go:generate stringer -type=connectionState
 
 // Creates a new Connection around an outbound connection initiated to a peer
-func (ch *Channel) newOutboundConnection(hostPort string, events connectionEvents, opts *ConnectionOptions) (*Connection, error) {
+func (ch *Channel) newOutboundConnection(hostPort string, events connectionEvents) (*Connection, error) {
 	conn, err := net.Dial("tcp", hostPort)
 	if err != nil {
 		return nil, err
 	}
 
-	return ch.newConnection(conn, connectionWaitingToSendInitReq, events, opts), nil
+	return ch.newConnection(conn, connectionWaitingToSendInitReq, events), nil
 }
 
 // Creates a new Connection based on an incoming connection from a peer
-func (ch *Channel) newInboundConnection(conn net.Conn, events connectionEvents, opts *ConnectionOptions) (*Connection, error) {
-	return ch.newConnection(conn, connectionWaitingToRecvInitReq, events, opts), nil
+func (ch *Channel) newInboundConnection(conn net.Conn, events connectionEvents) (*Connection, error) {
+	return ch.newConnection(conn, connectionWaitingToRecvInitReq, events), nil
 }
 
 // Creates a new connection in a given initial state
-func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, events connectionEvents, opts *ConnectionOptions) *Connection {
+func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, events connectionEvents) *Connection {
+	opts := ch.ConnectionOptions()
 	if opts == nil {
 		opts = &ConnectionOptions{}
 	}
