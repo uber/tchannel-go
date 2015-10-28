@@ -186,10 +186,7 @@ func (ch *Channel) newInboundConnection(conn net.Conn, events connectionEvents) 
 
 // Creates a new connection in a given initial state
 func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, events connectionEvents) *Connection {
-	opts := ch.ConnectionOptions()
-	if opts == nil {
-		opts = &ConnectionOptions{}
-	}
+	opts := &ch.connectionOptions
 
 	checksumType := opts.ChecksumType
 	if checksumType == ChecksumTypeNone {
