@@ -269,12 +269,18 @@ func TestRetryFailure(t *testing.T) {
 			checkRetryInterval(t, s1, i+1 /* retryNum */)
 		}
 
-		r.sleepBlock <- struct{}{}
+		r.sleepClose()
 		r.respCh <- 0
 		<-r.reqCh
 
 		// Wait for the handler to be called and the mock expectation to be recorded.
 		<-noRetryFail
+
+		select {
+		case req := <-r.reqCh:
+			t.Errorf("No Advertise calls should be made after failure, got %+v", req)
+		default:
+		}
 	})
 }
 
