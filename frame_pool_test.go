@@ -149,8 +149,11 @@ func (p dirtyFramePool) Get() *Frame {
 func (p dirtyFramePool) Release(f *Frame) {}
 
 func TestDirtyFrameRequests(t *testing.T) {
+	argSizes := []int{25000, 50000, 75000}
 
-	argSizes := []int{50000, 100000, 150000}
+	// Create the largest required random cache.
+	testutils.RandBytes(argSizes[len(argSizes)-1])
+
 	WithVerifiedServer(t, &testutils.ChannelOpts{
 		ServiceName: "swap-server",
 		DefaultConnectionOptions: ConnectionOptions{
@@ -160,17 +163,15 @@ func TestDirtyFrameRequests(t *testing.T) {
 		peerInfo := serverCh.PeerInfo()
 		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
 
-		for _, arg2Size := range argSizes {
-			for _, arg3Size := range argSizes {
-				ctx, cancel := NewContext(time.Second)
-				defer cancel()
+		for _, argSize := range argSizes {
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
 
-				arg2, arg3 := testutils.RandBytes(arg2Size), testutils.RandBytes(arg3Size)
-				res2, res3, _, err := raw.Call(ctx, serverCh, hostPort, peerInfo.ServiceName, "swap", arg2, arg3)
-				if assert.NoError(t, err, "Call failed") {
-					assert.Equal(t, arg2, res3, "Result arg3 wrong")
-					assert.Equal(t, arg3, res2, "Result arg3 wrong")
-				}
+			arg2, arg3 := testutils.RandBytes(argSize), testutils.RandBytes(argSize)
+			res2, res3, _, err := raw.Call(ctx, serverCh, hostPort, peerInfo.ServiceName, "swap", arg2, arg3)
+			if assert.NoError(t, err, "Call failed") {
+				assert.Equal(t, arg2, res3, "Result arg3 wrong")
+				assert.Equal(t, arg3, res2, "Result arg3 wrong")
 			}
 		}
 	})

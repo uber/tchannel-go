@@ -422,7 +422,7 @@ func TestCloseOneSide(t *testing.T) {
 // frame being added to the channel just as it is closed.
 // TODO(prashant): This test is waiting for timeout, but socket close shouldn't wait for timeout.
 func TestCloseSendError(t *testing.T) {
-	ctx, cancel := NewContext(time.Second)
+	ctx, cancel := NewContext(50 * time.Millisecond)
 	defer cancel()
 
 	serverCh, err := testutils.NewServer(nil)
