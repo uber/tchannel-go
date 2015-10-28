@@ -66,12 +66,10 @@ func TestFramesReleased(t *testing.T) {
 
 	var serverExchanges, clientExchanges string
 	pool := NewRecordingFramePool()
-	WithVerifiedServer(t, &testutils.ChannelOpts{
-		ServiceName: "swap-server",
-		DefaultConnectionOptions: ConnectionOptions{
-			FramePool: pool,
-		},
-	}, func(serverCh *Channel, hostPort string) {
+	opts := testutils.NewOpts().
+		SetServiceName("swap-server").
+		SetFramePool(pool)
+	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
 
 		clientCh, err := NewChannel("swap-client", nil)
@@ -154,12 +152,10 @@ func TestDirtyFrameRequests(t *testing.T) {
 	// Create the largest required random cache.
 	testutils.RandBytes(argSizes[len(argSizes)-1])
 
-	WithVerifiedServer(t, &testutils.ChannelOpts{
-		ServiceName: "swap-server",
-		DefaultConnectionOptions: ConnectionOptions{
-			FramePool: dirtyFramePool{},
-		},
-	}, func(serverCh *Channel, hostPort string) {
+	opts := testutils.NewOpts().
+		SetServiceName("swap-server").
+		SetFramePool(dirtyFramePool{})
+	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		peerInfo := serverCh.PeerInfo()
 		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
 

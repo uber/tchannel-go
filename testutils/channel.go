@@ -20,74 +20,16 @@
 
 package testutils
 
-// This file contains test setup logic, and is named with a _test.go suffix to
-// ensure it's only compiled with tests.
-
 import (
-	"flag"
 	"fmt"
 	"net"
 	"sync/atomic"
 	"testing"
 
-	"golang.org/x/net/context"
-
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
+	"golang.org/x/net/context"
 )
-
-var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")
-
-// Default service names for the test channels.
-const (
-	DefaultServerName = "testService"
-	DefaultClientName = "testService-client"
-)
-
-// ChannelOpts contains options to create a test channel using WithServer
-type ChannelOpts struct {
-	// ServiceName defaults to "testServer"
-	ServiceName string
-
-	// ProcessName defaults to ServiceName + "-[port]"
-	ProcessName string
-
-	// Logger sets the logger.
-	Logger tchannel.Logger
-
-	// StatsReporter specifies the StatsReporter to use.
-	StatsReporter tchannel.StatsReporter
-
-	// TraceReporter specified the TraceReporter to use.
-	TraceReporter tchannel.TraceReporter
-
-	// DefaultConnectionOptions specifies the channel's default connection options.
-	DefaultConnectionOptions tchannel.ConnectionOptions
-}
-
-func defaultString(v string, defaultValue string) string {
-	if v == "" {
-		return defaultValue
-	}
-	return v
-}
-
-func getChannelOptions(opts *ChannelOpts, processName string) *tchannel.ChannelOptions {
-	var logger tchannel.Logger
-	if opts.Logger != nil {
-		logger = opts.Logger
-	} else if *connectionLog {
-		logger = tchannel.SimpleLogger
-	}
-
-	return &tchannel.ChannelOptions{
-		ProcessName: processName,
-		Logger:      logger,
-		DefaultConnectionOptions: opts.DefaultConnectionOptions,
-		StatsReporter:            opts.StatsReporter,
-		TraceReporter:            opts.TraceReporter,
-	}
-}
 
 // WithServer sets up a TChannel that is listening and runs the given function with the channel.
 func WithServer(opts *ChannelOpts, f func(ch *tchannel.Channel, hostPort string)) error {
@@ -116,8 +58,8 @@ func NewServer(opts *ChannelOpts) (*tchannel.Channel, error) {
 	}
 
 	serviceName := defaultString(opts.ServiceName, DefaultServerName)
-	processName := defaultString(opts.ProcessName, serviceName+"-"+port)
-	ch, err := tchannel.NewChannel(serviceName, getChannelOptions(opts, processName))
+	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+port)
+	ch, err := tchannel.NewChannel(serviceName, getChannelOptions(opts))
 	if err != nil {
 		return nil, fmt.Errorf("NewChannel failed: %v", err)
 	}
@@ -139,8 +81,8 @@ func NewClient(opts *ChannelOpts) (*tchannel.Channel, error) {
 
 	clientNum := atomic.AddUint32(&totalClients, 1)
 	serviceName := defaultString(opts.ServiceName, DefaultClientName)
-	processName := defaultString(opts.ProcessName, serviceName+"-"+fmt.Sprint(clientNum))
-	return tchannel.NewChannel(serviceName, getChannelOptions(opts, processName))
+	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+fmt.Sprint(clientNum))
+	return tchannel.NewChannel(serviceName, getChannelOptions(opts))
 }
 
 type rawFuncHandler struct {

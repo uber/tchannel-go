@@ -129,7 +129,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 		gotSpans = append(gotSpans, span)
 	})
 
-	traceReporterOpts := &testutils.ChannelOpts{TraceReporter: testTraceReporter}
+	traceReporterOpts := testutils.NewOpts().SetTraceReporter(testTraceReporter)
 	tests := []struct {
 		name       string
 		serverOpts *testutils.ChannelOpts
@@ -195,7 +195,7 @@ func TestTraceReportingDisabled(t *testing.T) {
 		gotCalls++
 	})
 
-	traceReporterOpts := &testutils.ChannelOpts{TraceReporter: testTraceReporter}
+	traceReporterOpts := testutils.NewOpts().SetTraceReporter(testTraceReporter)
 	WithVerifiedServer(t, traceReporterOpts, func(ch *Channel, hostPort string) {
 		ch.Register(raw.Wrap(newTestHandler(t)), "echo")
 
