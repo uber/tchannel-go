@@ -20,25 +20,44 @@
 
 package tchannel
 
-// ScoreCalculator defines the interface to calculate the score.
-type ScoreCalculator interface {
-	GetScore(p *Peer) uint64
-}
+import (
+	"math"
+	"math/rand"
+	"testing"
+	"time"
 
-// ScoreCalculatorFunc is an adapter that allows functions to be used as ScoreCalculator
-type ScoreCalculatorFunc func(p *Peer) uint64
+	"github.com/stretchr/testify/assert"
+)
 
-// GetScore calls the underlying function.
-func (f ScoreCalculatorFunc) GetScore(p *Peer) uint64 {
-	return f(p)
-}
+func TestPeerHeap(t *testing.T) {
+	const numPeers = 10
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-type zeroCalculator struct{}
+	peerHeap := newPeerHeap()
 
-func (zeroCalculator) GetScore(p *Peer) uint64 {
-	return 0
-}
+	peerScores := make([]*peerScore, numPeers)
+	minScore := uint64(math.MaxInt64)
+	for i := 0; i < numPeers; i++ {
+		peerScore := newPeerScore(&Peer{})
+		peerScore.score = uint64(r.Intn(numPeers * 5))
+		peerScores[i] = peerScore
+		if peerScore.score < minScore {
+			minScore = peerScore.score
+		}
+	}
 
-func newZeroCalculator() zeroCalculator {
-	return zeroCalculator{}
+	for i := 0; i < numPeers; i++ {
+		peerHeap.PushPeer(peerScores[i])
+	}
+
+	assert.Equal(t, numPeers, peerHeap.Len(), "Incorrect peer heap numPeers")
+	assert.Equal(t, minScore, peerHeap.peek().score, "PeerHeap top peer is not minimum")
+
+	lastScore := peerHeap.PopPeer().score
+	for i := 1; i < numPeers; i++ {
+		assert.Equal(t, numPeers-i, peerHeap.Len(), "Incorrect peer heap numPeers")
+		score := peerHeap.PopPeer().score
+		assert.True(t, score >= lastScore, "The order of the heap is invalid")
+		lastScore = score
+	}
 }
