@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"encoding/base32"
+	"encoding/binary"
 	"math/rand"
 	"sync"
 )
@@ -36,8 +37,8 @@ var (
 
 func checkCacheSize(n int) {
 	// Start with a reasonably large cache.
-	if n < 4 {
-		n = 4
+	if n < 8 {
+		n = 8
 	}
 
 	randMut.RLock()
@@ -61,11 +62,12 @@ func resizeCache(n int) {
 		return
 	}
 
-	newSize := n * 2
+	newSize := (n * 2 / 8) * 8
 	newCache := make([]byte, newSize)
 	copied := copy(newCache, randCache)
-	for i := copied; i < newSize; i++ {
-		newCache[i] = byte(rand.Intn(256))
+	for i := copied; i < newSize; i += 8 {
+		n := rand.Int63()
+		binary.BigEndian.PutUint64(newCache[i:], uint64(n))
 	}
 	randCache = newCache
 }
