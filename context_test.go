@@ -23,13 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
-
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"golang.org/x/net/context"
 )
 
 var cn = "hello"
@@ -56,6 +55,15 @@ func TestNewContextBuilderDisableTracing(t *testing.T) {
 	defer cancel()
 
 	assert.False(t, CurrentSpan(ctx).TracingEnabled(), "Tracing should be disabled")
+}
+
+func TestNewContextTimeoutZero(t *testing.T) {
+	ctx, cancel := NewContextBuilder(0).Build()
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	assert.True(t, ok, "Context missing deadline")
+	assert.True(t, deadline.Sub(time.Now()) <= 0, "Deadline should be Now or earlier")
 }
 
 func TestShardKeyPropagates(t *testing.T) {

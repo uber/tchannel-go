@@ -125,9 +125,6 @@ func (cb *ContextBuilder) setIncomingCall(call IncomingCall) *ContextBuilder {
 // Build returns a ContextWithHeaders that can be used to make calls.
 func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 	timeout := cb.Timeout
-	if timeout == 0 {
-		timeout = defaultTimeout
-	}
 
 	if cb.TracingDisabled {
 		cb.span.EnableTracing(false)
