@@ -88,9 +88,7 @@ type writerLogger struct {
 	fields LogFields
 }
 
-const (
-	writerLoggerStamp = "2006-01-02 15:04:05"
-)
+const writerLoggerStamp = "15:04:05.000000"
 
 // NewLogger returns a Logger that writes to the given writer.
 func NewLogger(writer io.Writer, fields ...LogField) Logger {
