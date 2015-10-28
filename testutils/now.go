@@ -25,25 +25,22 @@ import (
 	"time"
 )
 
-// NowStub replaces a function variable to time.Now with a function that
-// allows the return values to be controller by the caller.
-// The rerturned function is used to control the increment amount between calls.
-func NowStub(funcVar *func() time.Time, initial time.Time) func(time.Duration) {
+// NowStub returns a stub time.Now function that allows the return values to
+// to be controller by the caller. It returns two functions:
+// stub: The stub time.Now function.
+// increment: Used to control the increment amount between calls.
+func NowStub(initial time.Time) (stub func() time.Time, increment func(time.Duration)) {
 	var mut sync.Mutex
 	cur := initial
 	var addAmt time.Duration
-	*funcVar = func() time.Time {
+	stub = func() time.Time {
 		mut.Lock()
 		defer mut.Unlock()
 		cur = cur.Add(addAmt)
 		return cur
 	}
-	return func(d time.Duration) {
+	increment = func(d time.Duration) {
 		addAmt = d
 	}
-}
-
-// ResetNowStub resets a Now stub.
-func ResetNowStub(funcVar *func() time.Time) {
-	*funcVar = time.Now
+	return stub, increment
 }

@@ -156,8 +156,9 @@ func TestTraceReportingEnabled(t *testing.T) {
 
 	for _, tt := range tests {
 		gotCalls, gotSpans = nil, nil
-		addFn := testutils.NowStub(GetTimeNow(), initialTime)
-		defer testutils.ResetNowStub(GetTimeNow())
+		nowStub, addFn := testutils.NowStub(initialTime)
+		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(nowStub)
+		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(nowStub)
 		addFn(time.Second)
 
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {

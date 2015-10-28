@@ -58,8 +58,7 @@ func TestStatsCalls(t *testing.T) {
 	defer testutils.SetTimeout(t, time.Second)()
 
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-	nowFn := testutils.NowStub(GetTimeNow(), initialTime)
-	defer testutils.ResetNowStub(GetTimeNow())
+	nowStub, nowFn := testutils.NowStub(initialTime)
 	// time.Now will be called in this order for each call:
 	// sender records time they started sending
 	// receiver records time the request is sent to application
@@ -69,13 +68,17 @@ func TestStatsCalls(t *testing.T) {
 
 	clientStats := newRecordingStatsReporter()
 	serverStats := newRecordingStatsReporter()
-	serverOpts := testutils.NewOpts().SetStatsReporter(serverStats)
+	serverOpts := testutils.NewOpts().
+		SetStatsReporter(serverStats).
+		SetTimeNow(nowStub)
 	WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
 		handler := raw.Wrap(newTestHandler(t))
 		serverCh.Register(handler, "echo")
 		serverCh.Register(handler, "app-error")
 
-		ch, err := testutils.NewClient(testutils.NewOpts().SetStatsReporter(clientStats))
+		ch, err := testutils.NewClient(testutils.NewOpts().
+			SetStatsReporter(clientStats).
+			SetTimeNow(nowStub))
 		require.NoError(t, err)
 
 		ctx, cancel := NewContext(time.Second * 5)
