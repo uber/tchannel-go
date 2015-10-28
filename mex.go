@@ -58,6 +58,9 @@ type messageExchange struct {
 // forwardPeerFrame forwards a frame from a peer to the message exchange, where
 // it can be pulled by whatever application thread is handling the exchange
 func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
+	if err := mex.ctx.Err(); err != nil {
+		return GetContextError(err)
+	}
 	select {
 	case mex.recvCh <- frame:
 		return nil
@@ -71,10 +74,13 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 // recvPeerFrame waits for a new frame from the peer, or until the context
 // expires or is cancelled
 func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
+	if err := mex.ctx.Err(); err != nil {
+		return nil, GetContextError(err)
+	}
+
 	select {
 	case frame := <-mex.recvCh:
 		return frame, nil
-
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
 	}
