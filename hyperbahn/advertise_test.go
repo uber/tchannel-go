@@ -74,6 +74,7 @@ type retryTest struct {
 	// sleep stub channels.
 	sleepArgs  <-chan time.Duration
 	sleepBlock chan<- struct{}
+	sleepClose func()
 
 	ch     *tchannel.Channel
 	client *Client
@@ -98,8 +99,8 @@ func (r *retryTest) adHandler(ctx json.Context, req *AdRequest) (*AdResponse, er
 
 func (r *retryTest) setup() {
 	r.respCh = make(chan int, 1)
-	r.sleepArgs, r.sleepBlock = testutils.SleepStub(&timeSleep)
 	r.reqCh = make(chan *AdRequest, 1)
+	r.sleepArgs, r.sleepBlock, r.sleepClose = testutils.SleepStub(&timeSleep)
 }
 
 func (r *retryTest) setAdvertiseSuccess() {
