@@ -255,8 +255,9 @@ func (r *fragmentingReader) recvAndParseNextFragment(initial bool) error {
 
 	r.curFragment, r.err = r.receiver.recvNextFragment(initial)
 	if r.err != nil {
-		if IsSystemError(r.err) {
-			// System errors are still reported (e.g. latency, trace reporting).
+		if err, ok := r.err.(errorMessage); ok {
+			// Serialized system errors are still reported (e.g. latency, trace reporting).
+			r.err = err.AsSystemError()
 			r.receiver.doneReading(r.err)
 		}
 		return r.err

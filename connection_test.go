@@ -248,8 +248,8 @@ func TestTimeout(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		// onError may be called when the block call tries to write the call response.
 		onError := func(ctx context.Context, err error) {
-			assert.Equal(t, ctx.Err(), err, "onError err should be context error")
-			assert.Equal(t, context.DeadlineExceeded, err)
+			assert.Equal(t, ErrTimeout, err, "onError err should be ErrTimeout")
+			assert.Equal(t, context.DeadlineExceeded, ctx.Err(), "Context should timeout")
 		}
 		testHandler := onErrorTestHandler{newTestHandler(t), onError}
 		ch.Register(raw.Wrap(testHandler), "block")
@@ -258,11 +258,9 @@ func TestTimeout(t *testing.T) {
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "block", []byte("Arg2"), []byte("Arg3"))
+		assert.Equal(t, ErrTimeout, err)
 
-		// TODO(mmihic): Maybe translate this into ErrTimeout (or vice versa)?
-		assert.Equal(t, context.DeadlineExceeded, err)
-
-		// Verify the server-side receives a timeout error.
+		// Verify the server-side receives an error from the context.
 		assert.Equal(t, context.DeadlineExceeded, <-testHandler.blockErr)
 	})
 	VerifyNoBlockedGoroutines(t)
@@ -339,6 +337,45 @@ func TestFragmentationSlowReader(t *testing.T) {
 
 		close(startReading)
 		<-handlerComplete
+	})
+	VerifyNoBlockedGoroutines(t)
+}
+
+func TestWriteAfterTimeout(t *testing.T) {
+	ctx, cancel := NewContext(20 * time.Millisecond)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		timedOut := make(chan struct{})
+
+		handler := func(ctx context.Context, call *InboundCall) {
+			_, err := raw.ReadArgs(call)
+			assert.NoError(t, err, "Read args failed")
+			response := call.Response()
+			assert.NoError(t, NewArgWriter(response.Arg2Writer()).Write(nil), "Write Arg2 failed")
+			writer, err := response.Arg3Writer()
+			assert.NoError(t, err, "Arg3Writer failed")
+
+			for {
+				if _, err := writer.Write(testutils.RandBytes(4096)); err != nil {
+					assert.Equal(t, err, ErrTimeout, "Handler should timeout")
+					close(timedOut)
+					return
+				}
+				runtime.Gosched()
+			}
+		}
+		ch.Register(HandlerFunc(handler), "call")
+
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, nil)
+		assert.Equal(t, err, ErrTimeout, "Call should timeout")
+
+		// Wait for the write to complete, make sure there's no errors.
+		select {
+		case <-time.After(30 * time.Millisecond):
+			t.Errorf("Handler should have failed due to timeout")
+		case <-timedOut:
+		}
 	})
 	VerifyNoBlockedGoroutines(t)
 }

@@ -58,30 +58,37 @@ type messageExchange struct {
 // forwardPeerFrame forwards a frame from a peer to the message exchange, where
 // it can be pulled by whatever application thread is handling the exchange
 func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
+	if err := mex.ctx.Err(); err != nil {
+		return GetContextError(err)
+	}
 	select {
 	case mex.recvCh <- frame:
 		return nil
 	case <-mex.ctx.Done():
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
-		return mex.ctx.Err()
+		return GetContextError(mex.ctx.Err())
 	}
 }
 
 // recvPeerFrame waits for a new frame from the peer, or until the context
 // expires or is cancelled
 func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
+	if err := mex.ctx.Err(); err != nil {
+		return nil, GetContextError(err)
+	}
+
 	select {
 	case frame := <-mex.recvCh:
 		return frame, nil
-
 	case <-mex.ctx.Done():
-		return nil, mex.ctx.Err()
+		return nil, GetContextError(mex.ctx.Err())
 	}
 }
 
 // recvPeerFrameOfType waits for a new frame of a given type from the peer, failing
-// if the next frame received is not of that type
+// if the next frame received is not of that type.
+// If an error frame is returned, then the errorMessage is returned as the error.
 func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, error) {
 	frame, err := mex.recvPeerFrame()
 	if err != nil {
@@ -101,7 +108,7 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 		if err := errMsg.read(&rbuf); err != nil {
 			return nil, err
 		}
-		return nil, errMsg.AsSystemError()
+		return nil, errMsg
 
 	default:
 		// TODO(mmihic): Should be treated as a protocol error

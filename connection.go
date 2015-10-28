@@ -491,9 +491,13 @@ func (c *Connection) sendMessage(msg message) error {
 // recvMessage blocks waiting for a standalone response message (typically a
 // control message)
 func (c *Connection) recvMessage(ctx context.Context, msg message, resCh <-chan *Frame) error {
+	if err := ctx.Err(); err != nil {
+		return GetContextError(err)
+	}
+
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return GetContextError(ctx.Err())
 
 	case frame := <-resCh:
 		err := frame.read(msg)
