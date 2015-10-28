@@ -148,7 +148,6 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 // frame to the response channel waiting for it
 func (c *Connection) handleCallRes(frame *Frame) bool {
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.outbound.removeExchange(frame.Header.ID)
 		return true
 	}
 	return false
@@ -158,7 +157,6 @@ func (c *Connection) handleCallRes(frame *Frame) bool {
 // forwarding the frame to the response channel waiting for it
 func (c *Connection) handleCallResContinue(frame *Frame) bool {
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.outbound.removeExchange(frame.Header.ID)
 		return true
 	}
 	return false
