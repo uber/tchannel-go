@@ -34,6 +34,8 @@ const (
 // A SystemErrCode indicates how a caller should handle a system error returned from a peer
 type SystemErrCode byte
 
+//go:generate stringer -type=SystemErrCode
+
 const (
 	// ErrCodeInvalid is an invalid error code, and should not be used
 	ErrCodeInvalid SystemErrCode = 0x00
