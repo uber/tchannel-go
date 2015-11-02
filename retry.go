@@ -129,6 +129,9 @@ func getRetryOptions(ctx context.Context) *RetryOptions {
 
 // HasRetries will return true if there are more retries left.
 func (rs *RequestState) HasRetries(err error) bool {
+	if rs == nil {
+		return false
+	}
 	rOpts := rs.retryOpts
 	return rs.Attempt < rOpts.MaxAttempts && rOpts.RetryOn.CanRetry(err)
 }
