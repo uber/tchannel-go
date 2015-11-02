@@ -50,6 +50,18 @@ const (
 	RetryUnexpected
 )
 
+// RequestState is a global request state that persists across retries.
+type RequestState struct {
+	// SelectedPeers is a list of host:ports that have been selected previously.
+	SelectedPeers []string
+	// Attempt is 1 for the first attempt, and so on.
+	Attempt   int
+	retryOpts *RetryOptions
+}
+
+// RetriableFunc is the type of function that can be passed to RunWithRetry.
+type RetriableFunc func(context.Context, *RequestState) error
+
 func isNetError(err error) bool {
 	// TODO(prashantv): Should TChannel internally these to ErrCodeNetwork before returning
 	// them to the user?
@@ -115,14 +127,21 @@ func getRetryOptions(ctx context.Context) *RetryOptions {
 	return opts
 }
 
+// HasRetries will return true if there are more retries left.
+func (rs *RequestState) HasRetries(err error) bool {
+	rOpts := rs.retryOpts
+	return rs.Attempt < rOpts.MaxAttempts && rOpts.RetryOn.CanRetry(err)
+}
+
 // RunWithRetry will take a function that makes the TChannel call, and will
 // rerun it as specifed in the RetryOptions in the Context.
-func (ch *Channel) RunWithRetry(ctx context.Context, f func(context.Context) error) error {
+func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 	var err error
 	opts := getRetryOptions(ctx)
+	rs := &RequestState{retryOpts: opts}
 	for i := 0; i < opts.MaxAttempts; i++ {
-		// TODO: Create a sub-context with request state that is passed to the underlying function.
-		if err = f(ctx); err == nil {
+		rs.Attempt++
+		if err = f(ctx, rs); err == nil {
 			return nil
 		}
 		if !opts.RetryOn.CanRetry(err) {

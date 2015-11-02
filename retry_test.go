@@ -34,13 +34,14 @@ import (
 	"golang.org/x/net/context"
 )
 
-func createFuncToRetry(t *testing.T, errors ...error) (func(ctx context.Context) error, *int) {
+func createFuncToRetry(t *testing.T, errors ...error) (RetriableFunc, *int) {
 	i := 0
-	return func(_ context.Context) error {
+	return func(_ context.Context, rs *RequestState) error {
 		defer func() { i++ }()
 		if i >= len(errors) {
 			t.Fatalf("Retry function has no error to return for this call")
 		}
+		assert.Equal(t, i+1, rs.Attempt, "Attempt count mismatch")
 
 		err := errors[i]
 		return err
@@ -163,6 +164,7 @@ func TestRetryTillMaxAttempts(t *testing.T) {
 }
 
 func TestRetryNetConnect(t *testing.T) {
+	e := getTestErrors()
 	ch, err := testutils.NewClient(nil)
 	require.NoError(t, err, "NewClient failed")
 
@@ -177,12 +179,11 @@ func TestRetryNetConnect(t *testing.T) {
 	closedC.Close()
 
 	counter := 0
-	f := func(ctx context.Context) error {
-		defer func() { counter++ }()
-
-		if counter >= 4 {
+	f := func(ctx context.Context, rs *RequestState) error {
+		counter++
+		if !rs.HasRetries(e.Connection) {
 			c, err := net.Dial("tcp", listenC.Addr().String())
-			if err != nil {
+			if err == nil {
 				c.Close()
 			}
 			return err
