@@ -77,7 +77,7 @@ func (c *SubChannel) BeginCall(ctx context.Context, operationName string, callOp
 		callOptions = defaultCallOptions
 	}
 
-	peer, err := c.peers.Get()
+	peer, err := c.peers.Get(nil)
 	if err != nil {
 		return nil, err
 	}

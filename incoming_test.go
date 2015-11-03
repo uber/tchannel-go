@@ -68,7 +68,7 @@ func TestPeersIncomingConnection(t *testing.T) {
 		assert.NotNil(t, rootPeers[ringpopHostPort], "missing ringpop peer")
 
 		for _, sc := range []Registrar{ch, hyperbahnSC, ringpopSC} {
-			_, err := sc.Peers().Get()
+			_, err := sc.Peers().Get(nil)
 			assert.Equal(t, ErrNoPeers, err,
 				"incoming connections should not be added to non-root peer list")
 		}
