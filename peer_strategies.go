@@ -40,14 +40,3 @@ func (r *randCalculator) GetScore(p *Peer) uint64 {
 func newRandCalculator() *randCalculator {
 	return &randCalculator{rng: NewRand(time.Now().UnixNano())}
 }
-
-type preferIncomingCalculator struct {
-}
-
-func newPreferIncomingCalculator() *preferIncomingCalculator {
-	return &preferIncomingCalculator{}
-}
-
-func (r *preferIncomingCalculator) GetScore(p *Peer) uint64 {
-	return 0
-}
