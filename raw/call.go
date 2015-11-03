@@ -77,3 +77,37 @@ func CallSC(ctx context.Context, sc *tchannel.SubChannel, operation string, arg2
 
 	return WriteArgs(call, arg2, arg3)
 }
+
+// CArgs are the call arguments passed to CallV2.
+type CArgs struct {
+	Operation   string
+	Arg2        []byte
+	Arg3        []byte
+	CallOptions *tchannel.CallOptions
+}
+
+// CRes is the result of making a call.
+type CRes struct {
+	Arg2     []byte
+	Arg3     []byte
+	AppError bool
+}
+
+// CallV2 makes a call and does not attempt any retries.
+func CallV2(ctx context.Context, sc *tchannel.SubChannel, cArgs CArgs) (*CRes, error) {
+	call, err := sc.BeginCall(ctx, cArgs.Operation, cArgs.CallOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	arg2, arg3, res, err := WriteArgs(call, cArgs.Arg2, cArgs.Arg3)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CRes{
+		Arg2:     arg2,
+		Arg3:     arg3,
+		AppError: res.ApplicationError(),
+	}, nil
+}
