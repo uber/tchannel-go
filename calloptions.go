@@ -43,6 +43,9 @@ type CallOptions struct {
 
 	// ShardKey determines where this call request belongs, used with ringpop applications.
 	ShardKey string
+
+	// RequestState stores request state across retry attempts.
+	RequestState *RequestState
 }
 
 var defaultCallOptions = &CallOptions{}

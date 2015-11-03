@@ -33,9 +33,10 @@ type contextKey int
 const contextKeyTChannel = 1
 
 type tchannelCtxParams struct {
-	span    *Span
-	call    IncomingCall
-	options *CallOptions
+	span         *Span
+	call         IncomingCall
+	options      *CallOptions
+	retryOptions *RetryOptions
 }
 
 // IncomingCall exposes properties for incoming calls through the context.

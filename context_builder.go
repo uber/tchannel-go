@@ -41,6 +41,9 @@ type ContextBuilder struct {
 	// TracingDisabled disables trace reporting for calls using this context.
 	TracingDisabled bool
 
+	// RetryOptions are the retry options for this call.
+	RetryOptions *RetryOptions
+
 	// Hidden fields: we do not want users outside of tchannel to set these.
 	incomingCall IncomingCall
 	span         *Span
@@ -112,6 +115,11 @@ func (cb *ContextBuilder) SetSpanForTest(span *Span) *ContextBuilder {
 	return cb.setSpan(span)
 }
 
+func (cb *ContextBuilder) SetRetryOptions(retryOptions *RetryOptions) *ContextBuilder {
+	cb.RetryOptions = retryOptions
+	return cb
+}
+
 func (cb *ContextBuilder) setSpan(span *Span) *ContextBuilder {
 	cb.span = span
 	return cb
@@ -131,9 +139,10 @@ func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 	}
 
 	params := &tchannelCtxParams{
-		options: cb.CallOptions,
-		span:    cb.span,
-		call:    cb.incomingCall,
+		options:      cb.CallOptions,
+		span:         cb.span,
+		call:         cb.incomingCall,
+		retryOptions: cb.RetryOptions,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

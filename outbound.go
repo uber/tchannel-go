@@ -122,6 +122,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	}
 	response.AddAnnotation(AnnotationKeyClientSend)
 
+	response.requestState = callOptions.RequestState
 	response.startedAt = c.timeNow()
 	response.mex = mex
 	response.log = c.log.WithFields(LogField{"Out-Response", requestID})
@@ -226,6 +227,7 @@ type OutboundCallResponse struct {
 	callRes     callRes
 	annotations Annotations
 
+	requestState *RequestState
 	// startedAt is the time at which the outbound call was started.
 	startedAt       time.Time
 	statsReporter   StatsReporter

@@ -77,7 +77,7 @@ func (c *SubChannel) BeginCall(ctx context.Context, operationName string, callOp
 		callOptions = defaultCallOptions
 	}
 
-	peer, err := c.peers.Get(nil)
+	peer, err := c.peers.Get(callOptions.RequestState.PrevSelectedPeers())
 	if err != nil {
 		return nil, err
 	}
