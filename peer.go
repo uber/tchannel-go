@@ -93,7 +93,8 @@ func (l *PeerList) Add(hostPort string) *Peer {
 }
 
 // Get returns a peer from the peer list, or nil if none can be found.
-func (l *PeerList) Get() (*Peer, error) {
+// Get will avoid peers in prevSelected unless there are no other peers left.
+func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 	l.RLock()
 
 	if len(l.peers) == 0 {
@@ -101,18 +102,27 @@ func (l *PeerList) Get() (*Peer, error) {
 		return nil, ErrNoPeers
 	}
 
-	peer := l.choosePeer(l.peers)
+	// Select a peer, avoiding previously selected peers. If all peers have been previously
+	// selected, then it's OK to repick them.
+	peer := l.choosePeer(l.peers, prevSelected)
+	if peer == nil {
+		peer = l.choosePeer(l.peers, nil)
+	}
 	l.RUnlock()
 
 	return peer, nil
 }
 
-func (l *PeerList) choosePeer(peers []*Peer) *Peer {
+func (l *PeerList) choosePeer(peers []*Peer, prevSelected map[string]struct{}) *Peer {
 	var maxScore uint64
 	var choosenPeer *Peer
 
-	// pick peer with highest score
+	// pick peer with highest score that is not in prevSelected.
 	for _, peer := range peers {
+		if _, ok := prevSelected[peer.HostPort()]; ok {
+			continue
+		}
+
 		score := l.scoreCalculator.GetScore(peer)
 		if score > maxScore {
 			maxScore = score
@@ -256,6 +266,8 @@ func (p *Peer) Connect(ctx context.Context) (*Connection, error) {
 // BeginCall starts a new call to this specific peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
 func (p *Peer) BeginCall(ctx context.Context, serviceName string, operationName string, callOptions *CallOptions) (*OutboundCall, error) {
+	// TODO(prashantv): Add the selected peer to some sort of request state.
+
 	conn, err := p.GetConnection(ctx)
 	if err != nil {
 		return nil, err

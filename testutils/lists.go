@@ -18,25 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel
+package testutils
 
-import (
-	"math/rand"
-	"time"
-)
-
-type scoreCalculator interface {
-	GetScore(p *Peer) uint64
+// StrArray will return an array with the given strings.
+func StrArray(ss ...string) []string {
+	return ss
 }
 
-type randCalculator struct {
-	rng *rand.Rand
-}
-
-func (r *randCalculator) GetScore(p *Peer) uint64 {
-	return uint64(r.rng.Int63())
-}
-
-func newRandCalculator() *randCalculator {
-	return &randCalculator{rng: NewRand(time.Now().UnixNano())}
+// StrMap returns a map where the keys are the given strings.
+func StrMap(ss ...string) map[string]struct{} {
+	m := make(map[string]struct{}, len(ss))
+	for _, v := range ss {
+		m[v] = struct{}{}
+	}
+	return m
 }

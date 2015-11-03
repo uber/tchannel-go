@@ -47,17 +47,17 @@ func withNewSet(t *testing.T, f func(*testing.T, chanSet)) {
 
 // Assert that two Registrars have references to the same Peer.
 func assertHaveSameRef(t *testing.T, r1, r2 tchannel.Registrar) {
-	p1, err := r1.Peers().Get()
+	p1, err := r1.Peers().Get(nil)
 	assert.NoError(t, err, "First registrar has no peers.")
 
-	p2, err := r2.Peers().Get()
+	p2, err := r2.Peers().Get(nil)
 	assert.NoError(t, err, "Second registrar has no peers.")
 
 	assert.True(t, p1 == p2, "Registrars have references to different peers.")
 }
 
 func assertNoPeer(t *testing.T, r tchannel.Registrar) {
-	_, err := r.Peers().Get()
+	_, err := r.Peers().Get(nil)
 	assert.Equal(t, err, tchannel.ErrNoPeers)
 }
 
@@ -87,7 +87,7 @@ func TestIsolatedAddVisibility(t *testing.T) {
 		// channel or sibling channels.
 		set.isolated.Peers().Add("127.0.0.1:3000")
 
-		_, err := set.isolated.Peers().Get()
+		_, err := set.isolated.Peers().Get(nil)
 		assert.NoError(t, err)
 
 		assertNoPeer(t, set.main)

@@ -56,7 +56,7 @@ func (c *client) Call(ctx Context, thriftService, methodName string, req, resp t
 		peer = c.sc.Peers().GetOrAdd(c.opts.HostPort)
 	} else {
 		var err error
-		peer, err = c.sc.Peers().Get()
+		peer, err = c.sc.Peers().Get(nil)
 		if err != nil {
 			return false, err
 		}
