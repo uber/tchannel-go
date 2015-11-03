@@ -52,8 +52,8 @@ const (
 
 // RequestState is a global request state that persists across retries.
 type RequestState struct {
-	// SelectedPeers is a list of host:ports that have been selected previously.
-	SelectedPeers []string
+	// SelectedPeers is a set of host:ports that have been selected previously.
+	SelectedPeers map[string]struct{}
 	// Attempt is 1 for the first attempt, and so on.
 	Attempt   int
 	retryOpts *RetryOptions
@@ -134,6 +134,29 @@ func (rs *RequestState) HasRetries(err error) bool {
 	}
 	rOpts := rs.retryOpts
 	return rs.Attempt < rOpts.MaxAttempts && rOpts.RetryOn.CanRetry(err)
+}
+
+// PrevSelectedPeers returns the previously selected peers for this request.
+func (rs *RequestState) PrevSelectedPeers() map[string]struct{} {
+	if rs == nil {
+		return nil
+	}
+	return rs.SelectedPeers
+}
+
+// AddSelectedPeer adds a given peer to the set of selected peers.
+func (rs *RequestState) AddSelectedPeer(hostPort string) {
+	if rs == nil {
+		return
+	}
+
+	if rs.SelectedPeers == nil {
+		rs.SelectedPeers = map[string]struct{}{
+			hostPort: struct{}{},
+		}
+	} else {
+		rs.SelectedPeers[hostPort] = struct{}{}
+	}
 }
 
 // RunWithRetry will take a function that makes the TChannel call, and will
