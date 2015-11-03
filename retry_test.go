@@ -171,12 +171,10 @@ func TestRetryNetConnect(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
+	closedAddr := testutils.GetClosedHostPort(t)
 	listenC, err := net.Listen("tcp", ":0")
 	require.NoError(t, err, "Listen failed")
-
-	closedC, err := net.Listen("tcp", ":0")
-	require.NoError(t, err, "Listen failed")
-	closedC.Close()
+	defer listenC.Close()
 
 	counter := 0
 	f := func(ctx context.Context, rs *RequestState) error {
@@ -189,7 +187,7 @@ func TestRetryNetConnect(t *testing.T) {
 			return err
 		}
 
-		_, err := net.Dial("tcp", closedC.Addr().String())
+		_, err := net.Dial("tcp", closedAddr)
 		return err
 	}
 
