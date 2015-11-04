@@ -92,6 +92,7 @@ func TestStatsCalls(t *testing.T) {
 		outboundTags := tagsForOutboundCall(serverCh, ch, "echo")
 		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
+		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 150*time.Millisecond)
 		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 150*time.Millisecond)
 		inboundTags := tagsForInboundCall(serverCh, ch, "echo")
 		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
@@ -106,7 +107,9 @@ func TestStatsCalls(t *testing.T) {
 
 		outboundTags = tagsForOutboundCall(serverCh, ch, "app-error")
 		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
+		clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.app-errors", outboundTags, 1)
+		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 210*time.Millisecond)
 		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 210*time.Millisecond)
 		inboundTags = tagsForInboundCall(serverCh, ch, "app-error")
 		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)

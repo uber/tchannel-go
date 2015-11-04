@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -240,7 +239,30 @@ func TestRetryNetConnect(t *testing.T) {
 	assert.Equal(t, 5, counter, "RunWithRetry should have run f 5 times")
 }
 
-func TestNetTimeout(t *testing.T) {
-	c, err := net.DialTimeout("tcp", "255.255.255.0:80", time.Second)
-	fmt.Println("net Dial got", c, err)
+func TestRequestStateSince(t *testing.T) {
+	baseTime := time.Date(2015, 1, 2, 3, 4, 5, 6, time.UTC)
+	tests := []struct {
+		requestState *RequestState
+		now          time.Time
+		fallback     time.Duration
+		expected     time.Duration
+	}{
+		{
+			requestState: nil,
+			fallback:     3 * time.Millisecond,
+			expected:     3 * time.Millisecond,
+		},
+		{
+			requestState: &RequestState{Start: baseTime},
+			now:          baseTime.Add(7 * time.Millisecond),
+			fallback:     5 * time.Millisecond,
+			expected:     7 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		got := tt.requestState.SinceStart(tt.now, tt.fallback)
+		assert.Equal(t, tt.expected, got, "%+v.SinceStart(%v, %v) expected %v got %v",
+			tt.requestState, tt.now, tt.fallback, tt.expected, got)
+	}
 }
