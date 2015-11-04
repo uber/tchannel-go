@@ -59,7 +59,7 @@ func newPeerList(root *RootPeerList) *PeerList {
 	return &PeerList{
 		parent:          root,
 		peersByHostPort: make(map[string]*Peer),
-		scoreCalculator: newRandCalculator(),
+		scoreCalculator: newPreferIncoming(),
 	}
 }
 
@@ -291,6 +291,14 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName string, operationName 
 	}
 
 	return call, err
+}
+
+// NumInbound returns the number of inbound connections to this node.
+func (p *Peer) NumInbound() int {
+	p.mut.RLock()
+	count := len(p.inboundConnections)
+	p.mut.RUnlock()
+	return count
 }
 
 func (p *Peer) runWithConnections(f func(*Connection)) {

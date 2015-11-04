@@ -22,7 +22,10 @@ package tchannel_test
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	. "github.com/uber/tchannel-go"
 
@@ -110,5 +113,65 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 			t.Errorf("Got unexpected peer, expected one of %v got %v\n  Peers = %v PrevSelected = %v",
 				tt.expected, got, tt.peers, tt.prevSelected)
 		}
+	}
+}
+
+func TestPeerSelectionPreferIncoming(t *testing.T) {
+	var allChannels []*Channel
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		expected := make(map[string]bool)
+
+		// 5 peers that make incoming connections to ch.
+		for i := 0; i < 5; i++ {
+			incoming, _, incomingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("hyperbahn-%d", i)})
+			allChannels = append(allChannels, incoming)
+			assert.NoError(t, incoming.Ping(ctx, ch.PeerInfo().HostPort), "Ping failed")
+			ch.Peers().Add(incomingHP)
+			expected[incomingHP] = true
+		}
+
+		// 5 random peers that don't have any connections.
+		for i := 0; i < 5; i++ {
+			ch.Peers().Add(fmt.Sprintf("1.1.1.1:1%d", i))
+		}
+
+		// 5 random peers that we have outgoing connections to.
+		for i := 0; i < 5; i++ {
+			outgoing, _, outgoingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("outgoing-%d", i)})
+			allChannels = append(allChannels, outgoing)
+			assert.NoError(t, ch.Ping(ctx, outgoingHP), "Ping failed")
+			ch.Peers().Add(outgoingHP)
+		}
+
+		// Now select peers in parallel
+		selected := make([]string, 1000)
+		var selectedIndex int32
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 100; i++ {
+					peer, err := ch.Peers().Get(nil)
+					if assert.NoError(t, err, "Peers.Get failed") {
+						selected[int(atomic.AddInt32(&selectedIndex, 1))-1] = peer.HostPort()
+					}
+				}
+			}()
+		}
+		wg.Wait()
+
+		for _, v := range selected {
+			assert.True(t, expected[v], "Peers.Get got unexpected peer: %v", v)
+		}
+	})
+
+	// Clean up allChannels
+	for _, c := range allChannels {
+		c.Close()
 	}
 }
