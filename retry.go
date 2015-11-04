@@ -53,6 +53,8 @@ const (
 
 // RequestState is a global request state that persists across retries.
 type RequestState struct {
+	// Start is the time at which the request was initiated by the caller of RunWithRetry.
+	Start time.Time
 	// SelectedPeers is a set of host:ports that have been selected previously.
 	SelectedPeers map[string]struct{}
 	// Attempt is 1 for the first attempt, and so on.
@@ -139,6 +141,15 @@ func (rs *RequestState) HasRetries(err error) bool {
 	return rs.Attempt < rOpts.MaxAttempts && rOpts.RetryOn.CanRetry(err)
 }
 
+// SinceStart returns the time since the start of the request. If there is no request state,
+// then the fallback is returned.
+func (rs *RequestState) SinceStart(now time.Time, fallback time.Duration) time.Duration {
+	if rs == nil {
+		return fallback
+	}
+	return now.Sub(rs.Start)
+}
+
 // PrevSelectedPeers returns the previously selected peers for this request.
 func (rs *RequestState) PrevSelectedPeers() map[string]struct{} {
 	if rs == nil {
@@ -167,7 +178,7 @@ func (rs *RequestState) AddSelectedPeer(hostPort string) {
 func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 	var err error
 	opts := getRetryOptions(ctx)
-	rs := &RequestState{retryOpts: opts}
+	rs := &RequestState{Start: ch.timeNow(), retryOpts: opts}
 	for i := 0; i < opts.MaxAttempts; i++ {
 		rs.Attempt++
 

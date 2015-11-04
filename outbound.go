@@ -298,15 +298,26 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 	response.AddAnnotation(AnnotationKeyClientReceive)
 	response.Report()
 
-	latency := response.GetTime().Sub(response.startedAt)
-	response.statsReporter.RecordTimer("outbound.calls.latency", response.commonStatsTags, latency)
+	isSuccess := unexpected == nil && !response.ApplicationError()
+	lastAttempt := isSuccess || !response.requestState.HasRetries(unexpected)
+
+	now := response.GetTime()
+	latency := now.Sub(response.startedAt)
+	response.statsReporter.RecordTimer("outbound.calls.per-attempt.latency", response.commonStatsTags, latency)
+	if lastAttempt {
+		requestLatency := response.requestState.SinceStart(now, latency)
+		response.statsReporter.RecordTimer("outbound.calls.latency", response.commonStatsTags, requestLatency)
+	}
 
 	if unexpected != nil {
 		// TODO(prashant): Report the error code type as per metrics doc and enable.
 		// response.statsReporter.IncCounter("outbound.calls.system-errors", response.commonStatsTags, 1)
 	} else if response.ApplicationError() {
 		// TODO(prashant): Figure out how to add "type" to tags, which TChannel does not know about.
-		response.statsReporter.IncCounter("outbound.calls.app-errors", response.commonStatsTags, 1)
+		response.statsReporter.IncCounter("outbound.calls.per-attempt.app-errors", response.commonStatsTags, 1)
+		if lastAttempt {
+			response.statsReporter.IncCounter("outbound.calls.app-errors", response.commonStatsTags, 1)
+		}
 	} else {
 		response.statsReporter.IncCounter("outbound.calls.success", response.commonStatsTags, 1)
 	}
