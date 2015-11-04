@@ -18,42 +18,25 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel
+package tchannel_test
 
 import (
-	"math"
-	"math/rand"
-	"time"
+	"testing"
+
+	. "github.com/uber/tchannel-go"
+
+	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/testutils"
 )
 
-type scoreCalculator interface {
-	GetScore(p *Peer) uint64
-}
-
-type randCalculator struct {
-	rng *rand.Rand
-}
-
-func (r *randCalculator) GetScore(p *Peer) uint64 {
-	return uint64(r.rng.Int63())
-}
-
-func newRandCalculator() *randCalculator {
-	return &randCalculator{rng: NewRand(time.Now().UnixNano())}
-}
-
-type preferIncoming struct {
-	rng *rand.Rand
-}
-
-func (r *preferIncoming) GetScore(p *Peer) uint64 {
-	rn := uint64(r.rng.Int31())
-	if p.NumInbound() > 0 {
-		rn += math.MaxUint32
+// NewServer creates a new server and returns the channel, service name, and host port.
+func NewServer(t testing.TB, opts *testutils.ChannelOpts) (*Channel, string, string) {
+	ch, err := testutils.NewServer(opts)
+	require.NoError(t, err, "NewServer failed")
+	if err != nil {
+		return nil, "", ""
 	}
-	return rn
-}
 
-func newPreferIncoming() *preferIncoming {
-	return &preferIncoming{rng: NewRand(time.Now().UnixNano())}
+	peerInfo := ch.PeerInfo()
+	return ch, peerInfo.ServiceName, peerInfo.HostPort
 }
