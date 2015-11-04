@@ -20,6 +20,8 @@
 
 package testutils
 
+import "time"
+
 // StrArray will return an array with the given strings.
 func StrArray(ss ...string) []string {
 	return ss
@@ -32,4 +34,9 @@ func StrMap(ss ...string) map[string]struct{} {
 		m[v] = struct{}{}
 	}
 	return m
+}
+
+// DurationArray returns an array with the given durations.
+func DurationArray(dd ...time.Duration) []time.Duration {
+	return dd
 }

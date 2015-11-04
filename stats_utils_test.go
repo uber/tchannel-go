@@ -113,6 +113,10 @@ func (r *recordingStatsReporter) RecordTimer(name string, tags map[string]string
 	statVal.timers = append(statVal.timers, d)
 }
 
+func (r *recordingStatsReporter) Reset() {
+	*r = *newRecordingStatsReporter()
+}
+
 func (r *recordingStatsReporter) Validate(t *testing.T) {
 	r.Lock()
 	defer r.Unlock()

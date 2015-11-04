@@ -25,8 +25,11 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	. "github.com/uber/tchannel-go"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
@@ -119,4 +122,85 @@ func TestStatsCalls(t *testing.T) {
 
 	clientStats.Validate(t)
 	serverStats.Validate(t)
+}
+
+func TestStatsWithRetries(t *testing.T) {
+	defer testutils.SetTimeout(t, time.Second)()
+	a := testutils.DurationArray
+
+	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
+	nowStub, nowFn := testutils.NowStub(initialTime)
+
+	clientStats := newRecordingStatsReporter()
+	ch, err := testutils.NewClient(testutils.NewOpts().
+		SetStatsReporter(clientStats).
+		SetTimeNow(nowStub))
+	require.NoError(t, err)
+	defer ch.Close()
+
+	nowFn(10 * time.Millisecond)
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(serverCh *Channel, hostPort string) {
+		respErr := make(chan error, 1)
+		testutils.RegisterFunc(t, serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
+		})
+		ch.Peers().Add(serverCh.PeerInfo().HostPort)
+
+		// timeNow is called at:
+		// RunWithRetry start, per-attempt start, per-attempt end.
+		// Each attempt takes 2 * step.
+		tests := []struct {
+			expectErr           error
+			numFailures         int
+			numAttempts         int
+			overallLatency      time.Duration
+			perAttemptLatencies []time.Duration
+		}{
+			{
+				numFailures:         0,
+				numAttempts:         1,
+				perAttemptLatencies: a(20 * time.Millisecond),
+				overallLatency:      40 * time.Millisecond,
+			},
+			{
+				numFailures:         1,
+				numAttempts:         2,
+				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond),
+				overallLatency:      80 * time.Millisecond,
+			},
+		}
+
+		for _, tt := range tests {
+			clientStats.Reset()
+			err := ch.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
+				if rs.Attempt > tt.numFailures {
+					respErr <- nil
+				} else {
+					respErr <- ErrServerBusy
+				}
+
+				sc := ch.GetSubChannel(serverCh.ServiceName())
+				_, err := raw.CallV2(ctx, sc, raw.CArgs{
+					Operation:   "req",
+					CallOptions: &CallOptions{RequestState: rs},
+				})
+				return err
+			})
+			assert.Equal(t, tt.expectErr, err, "RunWithRetry unexpected error")
+
+			outboundTags := tagsForOutboundCall(serverCh, ch, "req")
+			if tt.expectErr == nil {
+				clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
+			}
+			clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, int64(tt.numAttempts))
+			for _, latency := range tt.perAttemptLatencies {
+				clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, latency)
+			}
+			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, tt.overallLatency)
+			clientStats.Validate(t)
+		}
+	})
 }
