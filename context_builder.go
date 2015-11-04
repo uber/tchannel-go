@@ -115,8 +115,18 @@ func (cb *ContextBuilder) SetSpanForTest(span *Span) *ContextBuilder {
 	return cb.setSpan(span)
 }
 
+// SetRetryOptions sets RetryOptions in the context.
 func (cb *ContextBuilder) SetRetryOptions(retryOptions *RetryOptions) *ContextBuilder {
 	cb.RetryOptions = retryOptions
+	return cb
+}
+
+// SetTimeoutPerAttempt sets TimeoutPerAttempt in RetryOptions.
+func (cb *ContextBuilder) SetTimeoutPerAttempt(timeoutPerAttempt time.Duration) *ContextBuilder {
+	if cb.RetryOptions == nil {
+		cb.RetryOptions = &RetryOptions{}
+	}
+	cb.RetryOptions.TimeoutPerAttempt = timeoutPerAttempt
 	return cb
 }
 

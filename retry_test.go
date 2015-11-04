@@ -163,6 +163,51 @@ func TestRetryTillMaxAttempts(t *testing.T) {
 	}
 }
 
+func TestRetrySubContextNoTimeoutPerAttempt(t *testing.T) {
+	e := getTestErrors()
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	ch, err := testutils.NewClient(nil)
+	require.NoError(t, err, "NewClient failed")
+
+	counter := 0
+	ch.RunWithRetry(ctx, func(sctx context.Context, _ *RequestState) error {
+		counter++
+		assert.Equal(t, ctx, sctx, "Sub-context should be the same")
+		return e.Busy
+	})
+	assert.Equal(t, 5, counter, "RunWithRetry did not run f enough times")
+}
+
+func TestRetrySubContextTimeoutPerAttempt(t *testing.T) {
+	e := getTestErrors()
+	ctx, cancel := NewContextBuilder(time.Second).
+		SetTimeoutPerAttempt(time.Millisecond).Build()
+	defer cancel()
+
+	ch, err := testutils.NewClient(nil)
+	require.NoError(t, err, "NewClient failed")
+
+	var lastDeadline time.Time
+
+	counter := 0
+	ch.RunWithRetry(ctx, func(sctx context.Context, _ *RequestState) error {
+		counter++
+
+		assert.NotEqual(t, ctx, sctx, "Sub-context should be different")
+		deadline, _ := sctx.Deadline()
+		assert.True(t, deadline.After(lastDeadline), "Deadline is invalid")
+		lastDeadline = deadline
+
+		overallDeadline, _ := ctx.Deadline()
+		assert.True(t, overallDeadline.After(deadline), "Deadline is invalid")
+
+		return e.Busy
+	})
+	assert.Equal(t, 5, counter, "RunWithRetry did not run f enough times")
+}
+
 func TestRetryNetConnect(t *testing.T) {
 	e := getTestErrors()
 	ch, err := testutils.NewClient(nil)

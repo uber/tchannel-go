@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"net"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -112,7 +113,9 @@ type RetryOptions struct {
 	// RetryOn is the types of errors to retry on.
 	RetryOn RetryOn
 
-	// TODO: Add TimeoutPerAttempt
+	// TimeoutPerAttempt is the per-retry timeout to use.
+	// If this is zero, then the original timeout is used.
+	TimeoutPerAttempt time.Duration
 }
 
 func getRetryOptions(ctx context.Context) *RetryOptions {
@@ -167,15 +170,23 @@ func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 	rs := &RequestState{retryOpts: opts}
 	for i := 0; i < opts.MaxAttempts; i++ {
 		rs.Attempt++
-		if err = f(ctx, rs); err == nil {
+
+		if opts.TimeoutPerAttempt == 0 {
+			err = f(ctx, rs)
+		} else {
+			ctx, cancel := context.WithTimeout(ctx, opts.TimeoutPerAttempt)
+			err = f(ctx, rs)
+			cancel()
+		}
+
+		if err == nil {
 			return nil
 		}
 		if !opts.RetryOn.CanRetry(err) {
 			return err
 		}
 
-		// TODO: log that a request failed with error, and it's being retried.
-		ch.log.Infof("Retrying request")
+		ch.log.Infof("Retrying request after it failed with error %v on attempt %v/%v", err, i, opts.MaxAttempts)
 	}
 
 	// Too many retries, return the last error
