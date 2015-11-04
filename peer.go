@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -115,7 +116,7 @@ func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 
 func (l *PeerList) choosePeer(peers []*Peer, prevSelected map[string]struct{}) *Peer {
 	var maxScore uint64
-	var choosenPeer *Peer
+	var bestPeer *Peer
 
 	// pick peer with highest score that is not in prevSelected.
 	for _, peer := range peers {
@@ -126,10 +127,14 @@ func (l *PeerList) choosePeer(peers []*Peer, prevSelected map[string]struct{}) *
 		score := l.scoreCalculator.GetScore(peer)
 		if score > maxScore {
 			maxScore = score
-			choosenPeer = peer
+			bestPeer = peer
 		}
 	}
-	return choosenPeer
+
+	if bestPeer != nil {
+		atomic.AddUint64(&bestPeer.chosenCount, 1)
+	}
+	return bestPeer
 }
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
@@ -164,6 +169,7 @@ type Peer struct {
 	mut                 sync.RWMutex // mut protects connections.
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
+	chosenCount         uint64
 }
 
 func newPeer(channel Connectable, hostPort string) *Peer {
