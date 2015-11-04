@@ -98,9 +98,7 @@ func Wrap(handler Handler) tchannel.Handler {
 		response := call.Response()
 		if err != nil {
 			resp = &Res{
-				IsErr: true,
-				Arg2:  nil,
-				Arg3:  []byte(err.Error()),
+				SystemErr: err,
 			}
 		}
 		if err := WriteResponse(response, resp); err != nil {

@@ -68,7 +68,9 @@ func (h *testHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, err
 	case "block":
 		<-ctx.Done()
 		h.blockErr <- ctx.Err()
-		return nil, errors.New("timeout")
+		return &raw.Res{
+			IsErr: true,
+		}, nil
 	case "echo":
 		return &raw.Res{
 			Arg2: args.Arg2,
