@@ -133,7 +133,7 @@ func (r *recordingStatsReporter) Validate(t *testing.T) {
 				continue
 			}
 
-			assert.Equal(t, expectedStat.count, stat.count,
+			assert.Equal(t, expectedStat, stat,
 				"Metric %v with tags %v has mismatched value", counterKey, tags)
 		}
 	}
