@@ -24,6 +24,8 @@ import (
 	"fmt"
 
 	"github.com/uber/tchannel-go"
+
+	"golang.org/x/net/context"
 )
 
 // ErrApplication is an application error which contains the object returned from the other side.
@@ -33,54 +35,133 @@ func (e ErrApplication) Error() string {
 	return fmt.Sprintf("JSON call failed: %v", map[string]interface{}(e))
 }
 
-func makeCall(ctx Context, call *tchannel.OutboundCall, arg interface{}, resp interface{}) error {
-	// Encode any headers as a JSON object.
-	if err := tchannel.NewArgWriter(call.Arg2Writer()).WriteJSON(ctx.Headers()); err != nil {
-		return fmt.Errorf("arg2 write failed: %v", err)
+// Client is used to make JSON calls to other services.
+type Client struct {
+	ch            *tchannel.Channel
+	targetService string
+	hostPort      string
+}
+
+// ClientOptions are options used when creating a client.
+type ClientOptions struct {
+	HostPort string
+}
+
+// NewClient returns a json.Client used to make outbound JSON calls.
+func NewClient(ch *tchannel.Channel, targetService string, opts *ClientOptions) *Client {
+	client := &Client{
+		ch:            ch,
+		targetService: targetService,
 	}
-	if err := tchannel.NewArgWriter(call.Arg3Writer()).WriteJSON(arg); err != nil {
-		return fmt.Errorf("arg3 write failed: %v", err)
+	if opts != nil && opts.HostPort != "" {
+		client.hostPort = opts.HostPort
+	}
+	return client
+}
+
+func makeCall(call *tchannel.OutboundCall, headers, arg3In, respHeaders, arg3Out, errorOut interface{}) (bool, string, error) {
+	if err := tchannel.NewArgWriter(call.Arg2Writer()).WriteJSON(headers); err != nil {
+		return false, "arg2 write failed", err
+	}
+	if err := tchannel.NewArgWriter(call.Arg3Writer()).WriteJSON(arg3In); err != nil {
+		return false, "arg3 write failed", err
 	}
 
-	// Call Arg2Reader before application error.
-	var respHeaders map[string]string
-	if err := tchannel.NewArgReader(call.Response().Arg2Reader()).ReadJSON(&respHeaders); err != nil {
-		return fmt.Errorf("arg2 read failed: %v", err)
+	// Call Arg2Reader before checking application error.
+	if err := tchannel.NewArgReader(call.Response().Arg2Reader()).ReadJSON(respHeaders); err != nil {
+		return false, "arg2 read failed", err
 	}
-	ctx.SetResponseHeaders(respHeaders)
 
 	// If this is an error response, read the response into a map and return a jsonCallErr.
 	if call.Response().ApplicationError() {
-		errResponse := make(ErrApplication)
-		if err := tchannel.NewArgReader(call.Response().Arg3Reader()).ReadJSON(&errResponse); err != nil {
-			return fmt.Errorf("arg3 read error failed: %v", err)
+		if err := tchannel.NewArgReader(call.Response().Arg3Reader()).ReadJSON(errorOut); err != nil {
+			return false, "arg3 read error failed", err
 		}
-		return errResponse
+		return false, "", nil
 	}
 
-	if err := tchannel.NewArgReader(call.Response().Arg3Reader()).ReadJSON(resp); err != nil {
-		return fmt.Errorf("arg3 read failed: %v", err)
+	if err := tchannel.NewArgReader(call.Response().Arg3Reader()).ReadJSON(arg3Out); err != nil {
+		return false, "arg3 read failed", err
+	}
+
+	return true, "", nil
+}
+
+func (c *Client) startCall(ctx context.Context, operation string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
+	if c.hostPort != "" {
+		return c.ch.BeginCall(ctx, c.hostPort, c.targetService, operation, callOptions)
+	}
+
+	return c.ch.GetSubChannel(c.targetService).BeginCall(ctx, operation, callOptions)
+}
+
+// Call makes a JSON call, with retries.
+func (c *Client) Call(ctx Context, operation string, arg, resp interface{}) error {
+	var (
+		headers = ctx.Headers()
+
+		respHeaders map[string]string
+		respErr     ErrApplication
+		errAt       string
+		isOK        bool
+	)
+
+	err := c.ch.RunWithRetry(ctx, func(ctx context.Context, rs *tchannel.RequestState) error {
+		call, err := c.startCall(ctx, operation, &tchannel.CallOptions{
+			Format:       tchannel.JSON,
+			RequestState: rs,
+		})
+		if err != nil {
+			return err
+		}
+
+		respHeaders, respErr = nil, nil
+		isOK, errAt, err = makeCall(call, headers, arg, &respHeaders, resp, &respErr)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %v", errAt, err)
+	}
+	if !isOK {
+		return respErr
 	}
 
 	return nil
 }
 
+// TODO(prashantv): Clean up json.Call* interfaces.
+func wrapCall(ctx Context, call *tchannel.OutboundCall, operation string, arg, resp interface{}) error {
+	var respHeaders map[string]string
+	var respErr ErrApplication
+	isOK, errAt, err := makeCall(call, ctx.Headers(), arg, &respHeaders, resp, &respErr)
+	if err != nil {
+		return fmt.Errorf("%s: %v", errAt, err)
+	}
+	if !isOK {
+		return respErr
+	}
+
+	fmt.Println("resp headers", respHeaders)
+	ctx.SetResponseHeaders(respHeaders)
+	return nil
+}
+
 // CallPeer makes a JSON call using the given peer.
-func CallPeer(ctx Context, peer *tchannel.Peer, serviceName, operation string, arg interface{}, resp interface{}) error {
+func CallPeer(ctx Context, peer *tchannel.Peer, serviceName, operation string, arg, resp interface{}) error {
 	call, err := peer.BeginCall(ctx, serviceName, operation, &tchannel.CallOptions{Format: tchannel.JSON})
 	if err != nil {
 		return err
 	}
 
-	return makeCall(ctx, call, arg, resp)
+	return wrapCall(ctx, call, operation, arg, resp)
 }
 
 // CallSC makes a JSON call using the given subchannel.
-func CallSC(ctx Context, sc *tchannel.SubChannel, operation string, arg interface{}, resp interface{}) error {
+func CallSC(ctx Context, sc *tchannel.SubChannel, operation string, arg, resp interface{}) error {
 	call, err := sc.BeginCall(ctx, operation, &tchannel.CallOptions{Format: tchannel.JSON})
 	if err != nil {
 		return err
 	}
 
-	return makeCall(ctx, call, arg, resp)
+	return wrapCall(ctx, call, operation, arg, resp)
 }

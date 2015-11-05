@@ -146,6 +146,11 @@ func (h *handler) Handle(tctx context.Context, call *tchannel.InboundCall) error
 	err := results[1].Interface()
 	// If an error was returned, we create an error arg3 to respond with.
 	if err != nil {
+		// TODO(prashantv): More consistent error handling between json/raw/thrift..
+		if serr, ok := err.(tchannel.SystemError); ok {
+			return call.Response().SendSystemError(serr)
+		}
+
 		call.Response().SetApplicationError()
 		// TODO(prashant): Allow client to customize the error in more ways.
 		res = struct {
