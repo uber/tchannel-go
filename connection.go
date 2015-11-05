@@ -264,6 +264,13 @@ func (c *Connection) callOnCloseStateChange() {
 	}
 }
 
+func (c *Connection) getInitParams() initParams {
+	return initParams{
+		InitParamHostPort:    c.localPeerInfo.HostPort,
+		InitParamProcessName: c.localPeerInfo.ProcessName,
+	}
+}
+
 // Initiates a handshake with a peer.
 func (c *Connection) sendInit(ctx context.Context) error {
 	err := c.withStateLock(func() error {
@@ -288,10 +295,7 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	initMsgID := c.NextMessageID()
 	req := initReq{initMessage{id: initMsgID}}
 	req.Version = CurrentProtocolVersion
-	req.initParams = initParams{
-		InitParamHostPort:    c.localPeerInfo.HostPort,
-		InitParamProcessName: c.localPeerInfo.ProcessName,
-	}
+	req.initParams = c.getInitParams()
 
 	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
 	if err != nil {
@@ -346,10 +350,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 	}
 
 	res := initRes{initMessage{id: frame.Header.ID}}
-	res.initParams = initParams{
-		InitParamHostPort:    c.localPeerInfo.HostPort,
-		InitParamProcessName: c.localPeerInfo.ProcessName,
-	}
+	res.initParams = c.getInitParams()
 	res.Version = CurrentProtocolVersion
 	if err := c.sendMessage(&res); err != nil {
 		c.connectionError(err)
