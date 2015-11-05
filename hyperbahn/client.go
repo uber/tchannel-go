@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
+	tjson "github.com/uber/tchannel-go/json"
 )
 
 // Client manages Hyperbahn connections and registrations.
@@ -36,6 +37,7 @@ type Client struct {
 	services []string
 	opts     ClientOptions
 	quit     chan struct{}
+	client   *tjson.Client
 }
 
 // FailStrategy is the strategy to use when registration fails maxRegistrationFailures
@@ -84,6 +86,7 @@ func NewClient(ch *tchannel.Channel, config Configuration, opts *ClientOptions) 
 		addPeer(ch, node)
 	}
 
+	client.client = tjson.NewClient(ch, hyperbahnServiceName, nil)
 	return client, nil
 }
 

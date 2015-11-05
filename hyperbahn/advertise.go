@@ -86,6 +86,7 @@ func (c *Client) advertiseLoop() {
 				}
 				return
 			}
+			c.tchan.Logger().Warnf("Hyperbahn client registration failed (will retry): %v", err)
 			c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: true})
 			sleepFor = fuzzInterval(advertiseRetryInterval * time.Duration(1<<consecutiveFailures))
 		} else {
