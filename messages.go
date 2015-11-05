@@ -70,9 +70,14 @@ type initParams map[string]string
 const (
 	// InitParamHostPort contains the host and port of the peer process
 	InitParamHostPort = "host_port"
-
 	// InitParamProcessName contains the name of the peer process
 	InitParamProcessName = "process_name"
+	// InitParamTChannelLanguage contains the library language.
+	InitParamTChannelLanguage = "tchannel_language"
+	// InitParamTChannelLanguageVersion contains the language build/runtime version.
+	InitParamTChannelLanguageVersion = "tchannel_language_version"
+	// InitParamTChannelVersion contains the library version.
+	InitParamTChannelVersion = "tchannel_version"
 )
 
 // initMessage is the base for messages in the initialization handshake

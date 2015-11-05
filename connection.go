@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -266,8 +268,11 @@ func (c *Connection) callOnCloseStateChange() {
 
 func (c *Connection) getInitParams() initParams {
 	return initParams{
-		InitParamHostPort:    c.localPeerInfo.HostPort,
-		InitParamProcessName: c.localPeerInfo.ProcessName,
+		InitParamHostPort:                c.localPeerInfo.HostPort,
+		InitParamProcessName:             c.localPeerInfo.ProcessName,
+		InitParamTChannelLanguage:        "go",
+		InitParamTChannelLanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+		InitParamTChannelVersion:         VersionInfo,
 	}
 }
 
