@@ -82,15 +82,16 @@ func TestZipkinTraceReporterFactory(t *testing.T) {
 }
 
 func TestBuildZipkinSpan(t *testing.T) {
-	endpoint := tchannel.TargetEndpoint{
+	span := *tchannel.NewRootSpan()
+	_, annotations := RandomAnnotations()
+	binaryAnnotations := []tchannel.BinaryAnnotation{{Key: "cn", Value: "string"}}
+	testEndpoint := tchannel.TargetEndpoint{
 		HostPort:    "127.0.0.1:8888",
 		ServiceName: "testServer",
 		Operation:   "test",
 	}
-	span := *tchannel.NewRootSpan()
-	_, annotations := RandomAnnotations()
-	binaryAnnotations := []tchannel.BinaryAnnotation{{Key: "cn", Value: "string"}}
-	thriftSpan, err := buildZipkinSpan(span, annotations, binaryAnnotations, endpoint)
+
+	thriftSpan, err := buildZipkinSpan(span, annotations, binaryAnnotations, testEndpoint)
 	assert.NoError(t, err)
 	tBinaryAnnotation, err := buildBinaryAnnotations(binaryAnnotations)
 	assert.NoError(t, err)
@@ -223,23 +224,13 @@ func ctxArg() mock.AnythingOfTypeArgument {
 
 func TestSubmit(t *testing.T) {
 	withSetup(t, func(ctx thrift.Context, args testArgs) {
-		endpoint := tchannel.TargetEndpoint{
-			HostPort:    "127.0.0.1:8888",
-			ServiceName: "testServer",
-			Operation:   "test",
-		}
-		span := *tchannel.NewRootSpan()
-		_, annotations := RandomAnnotations()
-		thriftSpan, err := buildZipkinSpan(span, annotations, nil, endpoint)
-		assert.NoError(t, err)
-		thriftSpan.BinaryAnnotations = []*gen.BinaryAnnotation{}
-
+		span, anns, banns, endpoint, expected := submitArgs(t)
 		called := make(chan struct{})
 		ret := &gen.Response{Ok: true}
-		args.s.On("Submit", ctxArg(), thriftSpan).Return(ret, nil).Run(func(_ mock.Arguments) {
+		args.s.On("Submit", ctxArg(), expected).Return(ret, nil).Run(func(_ mock.Arguments) {
 			close(called)
 		})
-		args.c.Report(span, annotations, nil, endpoint)
+		args.c.Report(span, anns, banns, endpoint)
 
 		// wait for the server's Submit to get called
 		select {
@@ -247,6 +238,51 @@ func TestSubmit(t *testing.T) {
 			t.Fatal("Submit not called")
 		case <-called:
 		}
+	})
+}
+
+func submitArgs(t *testing.T) (tchannel.Span, []tchannel.Annotation, []tchannel.BinaryAnnotation, tchannel.TargetEndpoint, *gen.Span) {
+	span := *tchannel.NewRootSpan()
+	_, anns := RandomAnnotations()
+	bAnns := RandomBinaryAnnotations()
+	endpoint := tchannel.TargetEndpoint{
+		HostPort:    "127.0.0.1:8888",
+		ServiceName: "testServer",
+		Operation:   "test",
+	}
+
+	genSpan, err := buildZipkinSpan(span, anns, bAnns, endpoint)
+	require.NoError(t, err, "Build test zipkin span failed")
+
+	return span, anns, bAnns, endpoint, genSpan
+}
+
+func TestSubmitNotRetried(t *testing.T) {
+	withSetup(t, func(ctx thrift.Context, args testArgs) {
+		span, anns, banns, endpoint, expected := submitArgs(t)
+		count := 0
+		args.s.On("Submit", ctxArg(), expected).Return(nil, tchannel.ErrServerBusy).Run(func(_ mock.Arguments) {
+			count++
+		})
+		args.c.Report(span, anns, banns, endpoint)
+
+		// Report another span that we use to detect that the previous span has been processed.
+		span, anns, banns, endpoint, expected = submitArgs(t)
+		completed := make(chan struct{})
+		args.s.On("Submit", ctxArg(), expected).Return(nil, nil).Run(func(_ mock.Arguments) {
+			close(completed)
+		})
+		args.c.Report(span, anns, banns, endpoint)
+
+		// wait for the server's Submit to get called
+		select {
+		case <-time.After(time.Second):
+			t.Fatal("Submit not called")
+		case <-completed:
+		}
+
+		// Verify that the initial span was not retried multiple times.
+		assert.Equal(t, 1, count, "tcollector Submit should not be retried")
 	})
 }
 
@@ -369,6 +405,15 @@ func generateBinaryAnnotationsTestCase() []BinaryAnnotationTestArgs {
 			expected:   &gen.BinaryAnnotation{Key: "bytes", BytesValue: bs, AnnotationType: gen.AnnotationType_BYTES},
 		},
 	}
+}
+
+func RandomBinaryAnnotations() []tchannel.BinaryAnnotation {
+	args := generateBinaryAnnotationsTestCase()
+	bAnns := make([]tchannel.BinaryAnnotation, len(args))
+	for i, arg := range args {
+		bAnns[i] = arg.annotation
+	}
+	return bAnns
 }
 
 func TestBuildBinaryAnnotation(t *testing.T) {

@@ -90,6 +90,7 @@ func (r *ZipkinTraceReporter) Report(
 func (r *ZipkinTraceReporter) zipkinReport(data *zipkinData) error {
 	ctx, cancel := tc.NewContextBuilder(time.Second).
 		DisableTracing().
+		SetRetryOptions(&tc.RetryOptions{RetryOn: tc.RetryNever}).
 		SetShardKey(base64Encode(data.Span.TraceID())).Build()
 	defer cancel()
 
@@ -106,7 +107,7 @@ func (r *ZipkinTraceReporter) zipkinReport(data *zipkinData) error {
 func (r *ZipkinTraceReporter) zipkinSpanWorker() {
 	for data := range r.c {
 		if err := r.zipkinReport(&data); err != nil {
-			r.logger.Infof("Zipkin Span submit failed. Get error: %v", err)
+			r.logger.Infof("Zipkin Span submit failed: %v", err)
 		}
 	}
 }

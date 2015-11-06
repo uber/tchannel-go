@@ -141,7 +141,6 @@ func wrapCall(ctx Context, call *tchannel.OutboundCall, operation string, arg, r
 		return respErr
 	}
 
-	fmt.Println("resp headers", respHeaders)
 	ctx.SetResponseHeaders(respHeaders)
 	return nil
 }
