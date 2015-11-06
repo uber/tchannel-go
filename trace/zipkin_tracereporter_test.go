@@ -257,6 +257,35 @@ func submitArgs(t *testing.T) (tchannel.Span, []tchannel.Annotation, []tchannel.
 	return span, anns, bAnns, endpoint, genSpan
 }
 
+func TestSubmitNotRetried(t *testing.T) {
+	withSetup(t, func(ctx thrift.Context, args testArgs) {
+		span, anns, banns, endpoint, expected := submitArgs(t)
+		count := 0
+		args.s.On("Submit", ctxArg(), expected).Return(nil, tchannel.ErrServerBusy).Run(func(_ mock.Arguments) {
+			count++
+		})
+		args.c.Report(span, anns, banns, endpoint)
+
+		// Report another span that we use to detect that the previous span has been processed.
+		span, anns, banns, endpoint, expected = submitArgs(t)
+		completed := make(chan struct{})
+		args.s.On("Submit", ctxArg(), expected).Return(nil, nil).Run(func(_ mock.Arguments) {
+			close(completed)
+		})
+		args.c.Report(span, anns, banns, endpoint)
+
+		// wait for the server's Submit to get called
+		select {
+		case <-time.After(time.Second):
+			t.Fatal("Submit not called")
+		case <-completed:
+		}
+
+		// Verify that the initial span was not retried multiple times.
+		assert.Equal(t, 1, count, "tcollector Submit should not be retried")
+	})
+}
+
 func withSetup(t *testing.T, f func(ctx thrift.Context, args testArgs)) {
 	args := testArgs{
 		s: new(mocks.TChanTCollector),
