@@ -73,6 +73,7 @@ func (c *Client) advertiseLoop() {
 	for {
 		timeSleep(sleepFor)
 		if c.IsClosed() {
+			c.tchan.Logger().Infof("Hyperbahn client closed")
 			return
 		}
 
