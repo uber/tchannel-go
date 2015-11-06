@@ -239,7 +239,8 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 
 	if mex == nil {
 		// This is ok since the exchange might have expired or been cancelled
-		mexset.log.Warnf("received frame %s for message exchange that no longer exists", frame.Header)
+		mexset.log.Warnf("received frame %s for %s message exchange that no longer exists",
+			frame.Header, mexset.name)
 		return nil
 	}
 
