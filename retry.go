@@ -197,7 +197,7 @@ func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 			return err
 		}
 
-		ch.log.Infof("Retrying request after it failed with error %v on attempt %v/%v", err, i, opts.MaxAttempts)
+		ch.log.Infof("Retrying request after it failed with error %v on attempt %v/%v", err, rs.Attempt, opts.MaxAttempts)
 	}
 
 	// Too many retries, return the last error

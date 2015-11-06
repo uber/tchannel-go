@@ -70,12 +70,9 @@ func (c *Client) sendAdvertise() error {
 	// Disable tracing on Hyperbahn advertise messages to avoid cascading failures (see #790).
 	tchannel.CurrentSpan(ctx).EnableTracing(false)
 
-	sc := c.tchan.GetSubChannel(hyperbahnServiceName)
-	arg := c.createRequest()
 	var resp AdResponse
 	c.opts.Handler.On(SendAdvertise)
-
-	if err := json.CallSC(ctx, sc, "ad", arg, &resp); err != nil {
+	if err := c.client.Call(ctx, "ad", c.createRequest(), &resp); err != nil {
 		return err
 	}
 

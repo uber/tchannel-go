@@ -47,6 +47,27 @@ func TestAdvertiseFailed(t *testing.T) {
 	})
 }
 
+func TestInitialAdvertiseFailedRetry(t *testing.T) {
+	withSetup(t, func(hypCh *tchannel.Channel, hyperbahnHostPort string) {
+		count := 0
+		adHandler := func(ctx json.Context, req *AdRequest) (*AdResponse, error) {
+			count++
+			return nil, tchannel.ErrServerBusy
+		}
+		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
+
+		ch, err := testutils.NewServer(nil)
+		require.NoError(t, err, "testutils NewServer failed")
+
+		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
+		assert.NoError(t, err, "hyperbahn NewClient failed")
+		defer client.Close()
+
+		assert.Error(t, client.Advertise(), "Advertise should not succeed")
+		assert.Equal(t, 5, count, "adHandler not retried correct number of times")
+	})
+}
+
 func TestNotListeningChannel(t *testing.T) {
 	withSetup(t, func(hypCh *tchannel.Channel, hyperbahnHostPort string) {
 		adHandler := func(ctx json.Context, req *AdRequest) (*AdResponse, error) {
