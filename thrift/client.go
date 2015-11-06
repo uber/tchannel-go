@@ -23,6 +23,7 @@ package thrift
 import (
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/uber/tchannel-go"
+	"golang.org/x/net/context"
 )
 
 // client implements TChanClient and makes outgoing Thrift calls.
@@ -50,73 +51,79 @@ func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TC
 	return client
 }
 
-func (c *client) Call(ctx Context, thriftService, methodName string, req, resp thrift.TStruct) (bool, error) {
-	var peer *tchannel.Peer
+func (c *client) startCall(ctx context.Context, operation string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
 	if c.opts.HostPort != "" {
-		peer = c.sc.Peers().GetOrAdd(c.opts.HostPort)
-	} else {
-		var err error
-		peer, err = c.sc.Peers().Get(nil)
-		if err != nil {
-			return false, err
-		}
+		return c.sc.Peers().GetOrAdd(c.opts.HostPort).
+			BeginCall(ctx, c.serviceName, operation, callOptions)
 	}
-	call, err := peer.BeginCall(ctx, c.serviceName, thriftService+"::"+methodName, &tchannel.CallOptions{Format: tchannel.Thrift})
-	if err != nil {
-		return false, err
-	}
+	return c.sc.BeginCall(ctx, operation, callOptions)
+}
 
+func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrift.TStruct) error {
 	writer, err := call.Arg2Writer()
 	if err != nil {
-		return false, err
+		return err
 	}
-	if err := writeHeaders(writer, ctx.Headers()); err != nil {
-		return false, err
+	if err := writeHeaders(writer, headers); err != nil {
+		return err
 	}
 	if err := writer.Close(); err != nil {
-		return false, err
+		return err
 	}
 
 	writer, err = call.Arg3Writer()
 	if err != nil {
-		return false, err
+		return err
 	}
-
 	protocol := thrift.NewTBinaryProtocolTransport(&readWriterTransport{Writer: writer})
 	if err := req.Write(protocol); err != nil {
-		return false, err
+		return err
 	}
-	if err := writer.Close(); err != nil {
-		return false, err
-	}
+	return writer.Close()
+}
 
-	reader, err := call.Response().Arg2Reader()
+// readResponse reads the response struct into resp, and returns:
+// (response headers, whether there was an application error, unexpected error).
+func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) (map[string]string, bool, error) {
+	reader, err := response.Arg2Reader()
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-
 	headers, err := readHeaders(reader)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	ctx.SetResponseHeaders(headers)
 	if err := reader.Close(); err != nil {
-		return false, err
+		return nil, false, err
 	}
 
-	success := !call.Response().ApplicationError()
-	reader, err = call.Response().Arg3Reader()
+	success := !response.ApplicationError()
+	reader, err = response.Arg3Reader()
 	if err != nil {
-		return success, err
+		return headers, success, err
 	}
-
-	protocol = thrift.NewTBinaryProtocolTransport(&readWriterTransport{Reader: reader})
+	protocol := thrift.NewTBinaryProtocolTransport(&readWriterTransport{Reader: reader})
 	if err := resp.Read(protocol); err != nil {
-		return success, err
+		return headers, success, err
 	}
-	if err := reader.Close(); err != nil {
-		return success, err
+	return headers, success, reader.Close()
+}
+
+func (c *client) Call(ctx Context, thriftService, methodName string, req, resp thrift.TStruct) (bool, error) {
+	callOpts := &tchannel.CallOptions{Format: tchannel.Thrift}
+	call, err := c.startCall(ctx, thriftService+"::"+methodName, callOpts)
+	if err != nil {
+		return false, err
 	}
 
+	if err := writeArgs(call, ctx.Headers(), req); err != nil {
+		return false, err
+	}
+
+	respHeaders, success, err := readResponse(call.Response(), resp)
+	if err != nil {
+		return false, err
+	}
+	ctx.SetResponseHeaders(respHeaders)
 	return success, nil
 }
