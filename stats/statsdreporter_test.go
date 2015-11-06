@@ -39,6 +39,7 @@ func TestDefaultMetricPrefix(t *testing.T) {
 		"service":         "callerS",
 		"target-service":  "targetS",
 		"target-endpoint": "targetE",
+		"retry-count":     "retryN",
 	}
 	inboundTags := map[string]string{
 		"service":         "targetS",
@@ -55,6 +56,11 @@ func TestDefaultMetricPrefix(t *testing.T) {
 			name:     "outbound.calls.sent",
 			tags:     outboundTags,
 			expected: "tchannel.outbound.calls.sent.callerS.targetS.targetE",
+		},
+		{
+			name:     "outbound.calls.retries",
+			tags:     outboundTags,
+			expected: "tchannel.outbound.calls.retries.callerS.targetS.targetE.retryN",
 		},
 		{
 			name:     "inbound.calls.recvd",

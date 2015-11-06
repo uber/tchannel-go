@@ -173,6 +173,14 @@ func (rs *RequestState) AddSelectedPeer(hostPort string) {
 	}
 }
 
+// RetryCount returns the retry attempt this is. Essentially, Attempt - 1.
+func (rs *RequestState) RetryCount() int {
+	if rs == nil {
+		return 0
+	}
+	return rs.Attempt - 1
+}
+
 // RunWithRetry will take a function that makes the TChannel call, and will
 // rerun it as specifed in the RetryOptions in the Context.
 func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {

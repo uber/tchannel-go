@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -292,6 +293,14 @@ func (c *Connection) handleError(frame *Frame) {
 	}
 }
 
+func cloneTags(tags map[string]string) map[string]string {
+	newTags := make(map[string]string, len(tags))
+	for k, v := range tags {
+		newTags[k] = v
+	}
+	return newTags
+}
+
 // doneReading shuts down the message exchange for this call.
 // For outgoing calls, the last message is reading the call response.
 func (response *OutboundCallResponse) doneReading(unexpected error) {
@@ -307,6 +316,11 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 	if lastAttempt {
 		requestLatency := response.requestState.SinceStart(now, latency)
 		response.statsReporter.RecordTimer("outbound.calls.latency", response.commonStatsTags, requestLatency)
+	}
+	if retryCount := response.requestState.RetryCount(); retryCount > 0 {
+		retryTags := cloneTags(response.commonStatsTags)
+		retryTags["retry-count"] = fmt.Sprint(retryCount)
+		response.statsReporter.IncCounter("outbound.calls.retries", retryTags, 1)
 	}
 
 	if unexpected != nil {

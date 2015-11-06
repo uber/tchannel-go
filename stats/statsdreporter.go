@@ -74,6 +74,9 @@ func DefaultMetricPrefix(name string, tags map[string]string) string {
 	switch {
 	case strings.HasPrefix(name, "outbound"):
 		addKeys = append(addKeys, "service", "target-service", "target-endpoint")
+		if strings.HasPrefix(name, "outbound.calls.retries") {
+			addKeys = append(addKeys, "retry-count")
+		}
 	case strings.HasPrefix(name, "inbound"):
 		addKeys = append(addKeys, "calling-service", "service", "endpoint")
 	}

@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -171,6 +172,19 @@ func TestStatsWithRetries(t *testing.T) {
 				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond),
 				overallLatency:      80 * time.Millisecond,
 			},
+			{
+				numFailures:         4,
+				numAttempts:         5,
+				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond),
+				overallLatency:      200 * time.Millisecond,
+			},
+			{
+				numFailures:         5,
+				numAttempts:         5,
+				expectErr:           ErrServerBusy,
+				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond),
+				overallLatency:      200 * time.Millisecond,
+			},
 		}
 
 		for _, tt := range tests {
@@ -196,8 +210,13 @@ func TestStatsWithRetries(t *testing.T) {
 				clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
 			}
 			clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, int64(tt.numAttempts))
-			for _, latency := range tt.perAttemptLatencies {
+			for i, latency := range tt.perAttemptLatencies {
 				clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, latency)
+				if i > 0 {
+					tags := tagsForOutboundCall(serverCh, ch, "req")
+					tags["retry-count"] = fmt.Sprint(i)
+					clientStats.Expected.IncCounter("outbound.calls.retries", tags, 1)
+				}
 			}
 			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, tt.overallLatency)
 			clientStats.Validate(t)
