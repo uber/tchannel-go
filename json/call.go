@@ -107,6 +107,8 @@ func (c *Client) Call(ctx Context, operation string, arg, resp interface{}) erro
 	)
 
 	err := c.ch.RunWithRetry(ctx, func(ctx context.Context, rs *tchannel.RequestState) error {
+		respHeaders, respErr, errAt, isOK = nil, nil, "", false
+
 		call, err := c.startCall(ctx, operation, &tchannel.CallOptions{
 			Format:       tchannel.JSON,
 			RequestState: rs,
@@ -115,7 +117,6 @@ func (c *Client) Call(ctx Context, operation string, arg, resp interface{}) erro
 			return err
 		}
 
-		respHeaders, respErr = nil, nil
 		isOK, errAt, err = makeCall(call, headers, arg, &respHeaders, resp, &respErr)
 		return err
 	})
