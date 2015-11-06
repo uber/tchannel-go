@@ -72,7 +72,7 @@ func readHeaders(r io.Reader) (map[string]string, error) {
 		return nil, buffer.Err()
 	}
 
-	headers := make(map[string]string)
+	headers := make(map[string]string, numHeaders)
 	for i := 0; i < int(numHeaders) && buffer.Err() == nil; i++ {
 		k := buffer.ReadLen16String()
 		v := buffer.ReadLen16String()
