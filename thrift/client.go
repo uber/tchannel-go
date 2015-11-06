@@ -28,6 +28,7 @@ import (
 
 // client implements TChanClient and makes outgoing Thrift calls.
 type client struct {
+	ch          *tchannel.Channel
 	sc          *tchannel.SubChannel
 	serviceName string
 	opts        ClientOptions
@@ -42,6 +43,7 @@ type ClientOptions struct {
 // NewClient returns a Client that makes calls over the given tchannel to the given Hyperbahn service.
 func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TChanClient {
 	client := &client{
+		ch:          ch,
 		sc:          ch.GetSubChannel(serviceName),
 		serviceName: serviceName,
 	}
@@ -110,20 +112,35 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 }
 
 func (c *client) Call(ctx Context, thriftService, methodName string, req, resp thrift.TStruct) (bool, error) {
-	callOpts := &tchannel.CallOptions{Format: tchannel.Thrift}
-	call, err := c.startCall(ctx, thriftService+"::"+methodName, callOpts)
+	var (
+		headers = ctx.Headers()
+
+		respHeaders map[string]string
+		isOK        bool
+	)
+
+	err := c.ch.RunWithRetry(ctx, func(ctx context.Context, rs *tchannel.RequestState) error {
+		respHeaders, isOK = nil, false
+
+		call, err := c.startCall(ctx, thriftService+"::"+methodName, &tchannel.CallOptions{
+			Format:       tchannel.Thrift,
+			RequestState: rs,
+		})
+		if err != nil {
+			return err
+		}
+
+		if err := writeArgs(call, headers, req); err != nil {
+			return err
+		}
+
+		respHeaders, isOK, err = readResponse(call.Response(), resp)
+		return err
+	})
 	if err != nil {
 		return false, err
 	}
 
-	if err := writeArgs(call, ctx.Headers(), req); err != nil {
-		return false, err
-	}
-
-	respHeaders, success, err := readResponse(call.Response(), resp)
-	if err != nil {
-		return false, err
-	}
 	ctx.SetResponseHeaders(respHeaders)
-	return success, nil
+	return isOK, nil
 }

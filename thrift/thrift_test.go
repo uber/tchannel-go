@@ -83,6 +83,18 @@ func TestRequest(t *testing.T) {
 	})
 }
 
+func TestRetryRequest(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		count := 0
+		args.s1.On("Simple", ctxArg()).Return(tchannel.ErrServerBusy).
+			Run(func(args mock.Arguments) {
+			count++
+		})
+		require.Error(t, args.c1.Simple(ctx), "Simple expected to fail")
+		assert.Equal(t, 5, count, "Expected Simple to be retried 5 times")
+	})
+}
+
 func TestRequestSubChannel(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
