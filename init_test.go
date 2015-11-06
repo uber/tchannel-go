@@ -23,6 +23,8 @@ package tchannel
 import (
 	"io"
 	"net"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,8 +143,11 @@ func TestHandleInitReqNewVersion(t *testing.T) {
 			initMessage: initMessage{
 				Version: CurrentProtocolVersion,
 				initParams: initParams{
-					InitParamHostPort:    ch.PeerInfo().HostPort,
-					InitParamProcessName: ch.PeerInfo().ProcessName,
+					InitParamHostPort:                ch.PeerInfo().HostPort,
+					InitParamProcessName:             ch.PeerInfo().ProcessName,
+					InitParamTChannelLanguage:        "go",
+					InitParamTChannelLanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+					InitParamTChannelVersion:         VersionInfo,
 				},
 			},
 		}, msg, "unexpected init res")
