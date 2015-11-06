@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -209,8 +210,13 @@ func TestStatsWithRetries(t *testing.T) {
 				clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
 			}
 			clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, int64(tt.numAttempts))
-			for _, latency := range tt.perAttemptLatencies {
+			for i, latency := range tt.perAttemptLatencies {
 				clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, latency)
+				if i > 0 {
+					tags := tagsForOutboundCall(serverCh, ch, "req")
+					tags["retry-count"] = fmt.Sprint(i)
+					clientStats.Expected.IncCounter("outbound.calls.retries", tags, 1)
+				}
 			}
 			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, tt.overallLatency)
 			clientStats.Validate(t)
