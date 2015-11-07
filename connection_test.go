@@ -326,7 +326,9 @@ func TestFragmentationSlowReader(t *testing.T) {
 		close(handlerComplete)
 	}
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// Inbound forward will timeout and cause a warning log.
+	opts := testutils.NewOpts().DisableLogVerification()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ch.Register(HandlerFunc(handler), "echo")
 
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
