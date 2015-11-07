@@ -557,9 +557,12 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 				return nil
 			default: // If the send buffer is full, log and return an error.
 			}
+			c.log.Warnf("Could not send error frame to %s for %d : %v",
+				c.remotePeerInfo, id, err)
+		} else {
+			c.log.Infof("Could not send error frame to %s on closed conn for %d : %v",
+				c.remotePeerInfo, id, err)
 		}
-		c.log.Warnf("Could not send error frame to %s for %d : %v",
-			c.remotePeerInfo, id, err)
 		return fmt.Errorf("failed to send error frame")
 	})
 }
