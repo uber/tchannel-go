@@ -21,31 +21,55 @@
 package testutils
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/uber/tchannel-go"
 )
 
+type errorLoggerState struct {
+	matchCount int
+}
+
 type errorLogger struct {
 	tchannel.Logger
 	t testing.TB
+	v *LogVerification
+	s *errorLoggerState
+}
+
+func (l errorLogger) checkErr(msg string, args ...interface{}) {
+	allowedCount := l.v.AllowedCount
+
+	if filter := l.v.AllowedFilter; filter != "" {
+		if !strings.Contains(msg, filter) {
+			l.t.Errorf(msg, args...)
+		}
+	}
+
+	l.s.matchCount++
+	if l.s.matchCount <= allowedCount {
+		return
+	}
+
+	l.t.Errorf(msg, args...)
 }
 
 func (l errorLogger) Fatalf(msg string, args ...interface{}) {
-	l.t.Errorf("[Fatal] "+msg, args...)
+	l.checkErr("[Fatal] "+msg, args...)
 	l.Logger.Fatalf(msg, args...)
 }
 
 func (l errorLogger) Errorf(msg string, args ...interface{}) {
-	l.t.Errorf("[Error] "+msg, args...)
+	l.checkErr("[Error] "+msg, args...)
 	l.Logger.Errorf(msg, args...)
 }
 
 func (l errorLogger) Warnf(msg string, args ...interface{}) {
-	l.t.Errorf("[Warn] "+msg, args...)
+	l.checkErr("[Warn] "+msg, args...)
 	l.Logger.Warnf(msg, args...)
 }
 
 func (l errorLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {
-	return errorLogger{l.Logger.WithFields(fields...), l.t}
+	return errorLogger{l.Logger.WithFields(fields...), l.t, l.v, l.s}
 }
