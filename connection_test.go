@@ -203,7 +203,7 @@ func TestPing(t *testing.T) {
 
 func TestBadRequest(t *testing.T) {
 	// ch will log an error when it receives a request for an unknown handler.
-	opts := testutils.NewOpts().DisableLogVerification()
+	opts := testutils.NewOpts().AddLogFilter("Could not find handler", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
@@ -327,7 +327,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 	}
 
 	// Inbound forward will timeout and cause a warning log.
-	opts := testutils.NewOpts().DisableLogVerification()
+	opts := testutils.NewOpts().AddLogFilter("Unable to forward frame", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ch.Register(HandlerFunc(handler), "echo")
 
