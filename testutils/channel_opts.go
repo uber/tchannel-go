@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"flag"
+	"testing"
 	"time"
 
 	"github.com/uber/tchannel-go"
@@ -113,7 +114,6 @@ func DefaultOpts(opts *ChannelOpts) *ChannelOpts {
 }
 
 // WrapLogger wraps the given logger with extra verification.
-func (v *LogVerification) WrapLogger(l tchannel.Logger) tchannel.Logger {
-	// TODO(prashant): Add error log verification.
-	return l
+func (v *LogVerification) WrapLogger(t testing.TB, l tchannel.Logger) tchannel.Logger {
+	return errorLogger{l, t}
 }
