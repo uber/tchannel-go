@@ -41,6 +41,17 @@ type ChannelOpts struct {
 
 	// ServiceName defaults to DefaultServerName or DefaultClientName.
 	ServiceName string
+
+	// LogVerification contains options for controlling the log verification.
+	LogVerification LogVerification
+
+	// optFn is run with the channel options before creating the channel.
+	optFn func(*ChannelOpts)
+}
+
+// LogVerification contains options to control the log verification.
+type LogVerification struct {
+	Disabled bool
 }
 
 // SetServiceName sets ServiceName.
@@ -84,6 +95,9 @@ func getChannelOptions(opts *ChannelOpts) *tchannel.ChannelOptions {
 	if opts.Logger == nil && *connectionLog {
 		opts.Logger = tchannel.SimpleLogger
 	}
+	if opts.optFn != nil {
+		opts.optFn(opts)
+	}
 	return &opts.ChannelOptions
 }
 
@@ -96,4 +110,10 @@ func DefaultOpts(opts *ChannelOpts) *ChannelOpts {
 		return NewOpts()
 	}
 	return opts
+}
+
+// WrapLogger wraps the given logger with extra verification.
+func (v *LogVerification) WrapLogger(l tchannel.Logger) tchannel.Logger {
+	// TODO(prashant): Add error log verification.
+	return l
 }

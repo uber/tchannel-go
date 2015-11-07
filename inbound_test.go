@@ -39,7 +39,7 @@ func TestActiveCallReq(t *testing.T) {
 	defer cancel()
 
 	// Note: This test leaks a message exchange due to the modification of IDs in the relay.
-	require.NoError(t, testutils.WithServer(nil, func(ch *Channel, hostPort string) {
+	testutils.WithServer(t, nil, func(ch *Channel, hostPort string) {
 		gotCall := make(chan struct{})
 		unblock := make(chan struct{})
 
@@ -74,7 +74,7 @@ func TestActiveCallReq(t *testing.T) {
 			"expected already active error, got %v", err)
 
 		close(unblock)
-	}))
+	})
 }
 
 func TestInboundConnection(t *testing.T) {

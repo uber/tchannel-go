@@ -31,19 +31,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// WithServer sets up a TChannel that is listening and runs the given function with the channel.
-func WithServer(opts *ChannelOpts, f func(ch *tchannel.Channel, hostPort string)) error {
-	ch, err := NewServer(opts)
-	if err != nil {
-		return err
-	}
-	f(ch, ch.PeerInfo().HostPort)
-	ch.Close()
-	return nil
-}
-
-// NewServer creates a TChannel that is listening and returns the channel.
-func NewServer(opts *ChannelOpts) (*tchannel.Channel, error) {
+// NewServerChannel creates a TChannel that is listening and returns the channel.
+func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	if opts == nil {
 		opts = &ChannelOpts{}
 	}
@@ -73,8 +62,8 @@ func NewServer(opts *ChannelOpts) (*tchannel.Channel, error) {
 
 var totalClients uint32
 
-// NewClient creates a TChannel that is not listening.
-func NewClient(opts *ChannelOpts) (*tchannel.Channel, error) {
+// NewClientChannel creates a TChannel that is not listening.
+func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	if opts == nil {
 		opts = &ChannelOpts{}
 	}

@@ -27,7 +27,6 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
 )
 
@@ -40,10 +39,9 @@ func TestPeersIncomingConnection(t *testing.T) {
 	}()
 
 	newService := func(svcName string) (*Channel, string) {
-		ch, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: svcName})
-		require.NoError(t, err, "NewServer failed")
+		ch, _, hostPort := NewServer(t, &testutils.ChannelOpts{ServiceName: svcName})
 		channels = append(channels, ch)
-		return ch, ch.PeerInfo().HostPort
+		return ch, hostPort
 	}
 
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {

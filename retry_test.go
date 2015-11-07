@@ -104,8 +104,7 @@ func TestCanRetry(t *testing.T) {
 }
 
 func TestNoRetry(t *testing.T) {
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
+	ch := testutils.NewClient(t, nil)
 
 	e := getTestErrors()
 	retryOpts := &RetryOptions{RetryOn: RetryNever}
@@ -121,8 +120,7 @@ func TestNoRetry(t *testing.T) {
 }
 
 func TestRetryTillMaxAttempts(t *testing.T) {
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
+	ch := testutils.NewClient(t, nil)
 
 	setErr := ErrServerBusy
 	runTest := func(maxAttempts, numErrors, expectCounter int, expectErr error) {
@@ -167,9 +165,7 @@ func TestRetrySubContextNoTimeoutPerAttempt(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
-
+	ch := testutils.NewClient(t, nil)
 	counter := 0
 	ch.RunWithRetry(ctx, func(sctx context.Context, _ *RequestState) error {
 		counter++
@@ -185,9 +181,7 @@ func TestRetrySubContextTimeoutPerAttempt(t *testing.T) {
 		SetTimeoutPerAttempt(time.Millisecond).Build()
 	defer cancel()
 
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
-
+	ch := testutils.NewClient(t, nil)
 	var lastDeadline time.Time
 
 	counter := 0
@@ -209,8 +203,7 @@ func TestRetrySubContextTimeoutPerAttempt(t *testing.T) {
 
 func TestRetryNetConnect(t *testing.T) {
 	e := getTestErrors()
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
+	ch := testutils.NewClient(t, nil)
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()

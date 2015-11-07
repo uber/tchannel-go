@@ -26,18 +26,17 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
 )
 
 // WithVerifiedServer runs the given test function with a server channel that is verified
 // at the end to make sure there are no leaks (e.g. no exchanges leaked).
 func WithVerifiedServer(t *testing.T, opts *testutils.ChannelOpts, f func(serverCh *Channel, hostPort string)) {
-	ch, err := testutils.NewServer(opts)
-	require.NoError(t, err, "NewServer failed")
-
-	f(ch, ch.PeerInfo().HostPort)
-	ch.Close()
+	var ch *Channel
+	testutils.WithServer(t, opts, func(serverCh *Channel, hostPort string) {
+		f(serverCh, hostPort)
+		ch = serverCh
+	})
 
 	// Wait till the channel is closed
 	for i := 0; i < 10; i++ {

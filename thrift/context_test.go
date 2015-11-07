@@ -47,7 +47,7 @@ func TestContextBuilder(t *testing.T) {
 	defer cancel()
 
 	var called bool
-	testutils.WithServer(nil, func(ch *tchannel.Channel, hostPort string) {
+	testutils.WithServer(t, nil, func(ch *tchannel.Channel, hostPort string) {
 		peerInfo := ch.PeerInfo()
 
 		testutils.RegisterFunc(t, ch, "SecondService::Echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {

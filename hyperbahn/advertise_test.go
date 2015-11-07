@@ -35,12 +35,11 @@ import (
 )
 
 func TestAdvertiseFailed(t *testing.T) {
-	withSetup(t, func(serverCh *tchannel.Channel, hostPort string) {
-		clientCh, err := tchannel.NewChannel("my-client", nil)
-		require.NoError(t, err)
-		defer clientCh.Close()
+	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
+		serverCh := testutils.NewServer(t, nil)
+		defer serverCh.Close()
 
-		client, err := NewClient(clientCh, configFor(hostPort), nil)
+		client, err := NewClient(serverCh, configFor(hostPort), nil)
 		require.NoError(t, err, "NewClient")
 		defer client.Close()
 		assert.Error(t, client.Advertise(), "Advertise without handler should fail")
@@ -56,9 +55,7 @@ func TestInitialAdvertiseFailedRetry(t *testing.T) {
 		}
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
-		ch, err := testutils.NewServer(nil)
-		require.NoError(t, err, "testutils NewServer failed")
-
+		ch := testutils.NewServer(t, nil)
 		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
 		assert.NoError(t, err, "hyperbahn NewClient failed")
 		defer client.Close()
@@ -75,9 +72,7 @@ func TestNotListeningChannel(t *testing.T) {
 		}
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
-		ch, err := testutils.NewClient(nil)
-		require.NoError(t, err, "testutils NewClient failed")
-
+		ch := testutils.NewClient(t, nil)
 		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
 		assert.NoError(t, err, "hyperbahn NewClient failed")
 		defer client.Close()
@@ -138,15 +133,15 @@ func runRetryTest(t *testing.T, f func(r *retryTest)) {
 	r.setup()
 	defer testutils.ResetSleepStub(&timeSleep)
 
-	withSetup(t, func(serverCh *tchannel.Channel, hostPort string) {
-		json.Register(serverCh, json.Handlers{"ad": r.adHandler}, nil)
+	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
+		json.Register(hypCh, json.Handlers{"ad": r.adHandler}, nil)
 
-		clientCh, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: "my-client"})
-		require.NoError(t, err, "NewServer failed")
-		defer clientCh.Close()
+		serverCh := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: "my-client"})
+		defer serverCh.Close()
 
-		r.ch = clientCh
-		r.client, err = NewClient(clientCh, configFor(hostPort), &ClientOptions{
+		var err error
+		r.ch = serverCh
+		r.client, err = NewClient(serverCh, configFor(hostPort), &ClientOptions{
 			Handler:      r,
 			FailStrategy: FailStrategyIgnore,
 		})

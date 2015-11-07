@@ -196,8 +196,7 @@ func TestPing(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		clientCh, err := testutils.NewClient(nil)
-		require.NoError(t, err)
+		clientCh := testutils.NewClient(t, nil)
 		require.NoError(t, clientCh.Ping(ctx, hostPort))
 	})
 }

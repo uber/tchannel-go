@@ -309,7 +309,7 @@ func withSetup(t *testing.T, f func(ctx thrift.Context, args testArgs)) {
 }
 
 func setupServer(h *mocks.TChanTCollector) (*tchannel.Channel, error) {
-	tchan, err := testutils.NewServer(&testutils.ChannelOpts{
+	tchan, err := testutils.NewServerChannel(&testutils.ChannelOpts{
 		ServiceName: tcollectorServiceName,
 	})
 	if err != nil {
@@ -322,7 +322,7 @@ func setupServer(h *mocks.TChanTCollector) (*tchannel.Channel, error) {
 }
 
 func getClient(dst string) (tchannel.TraceReporter, error) {
-	tchan, err := testutils.NewClient(nil)
+	tchan, err := testutils.NewClientChannel(nil)
 	if err != nil {
 		return nil, err
 	}

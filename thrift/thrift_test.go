@@ -196,10 +196,8 @@ func TestClientHostPort(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	s1ch, err := testutils.NewServer(nil)
-	require.NoError(t, err, "testutils.NewServer failed")
-	s2ch, err := testutils.NewServer(nil)
-	require.NoError(t, err, "testutils.NewServer failed")
+	s1ch := testutils.NewServer(t, nil)
+	s2ch := testutils.NewServer(t, nil)
 	defer s1ch.Close()
 	defer s2ch.Close()
 
@@ -289,7 +287,7 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 }
 
 func setupServer(h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tchannel.Channel, *Server, error) {
-	ch, err := testutils.NewServer(nil)
+	ch, err := testutils.NewServerChannel(nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,7 +300,7 @@ func setupServer(h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tc
 
 func getClients(serverCh *tchannel.Channel) (gen.TChanSimpleService, gen.TChanSecondService, error) {
 	serverInfo := serverCh.PeerInfo()
-	ch, err := testutils.NewClient(nil)
+	ch, err := testutils.NewClientChannel(nil)
 	if err != nil {
 		return nil, nil, err
 	}

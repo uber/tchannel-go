@@ -27,7 +27,6 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"golang.org/x/net/context"
@@ -37,18 +36,16 @@ func TestRequestStateRetry(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	server, err := testutils.NewServer(nil)
-	require.NoError(t, err, "NewServer failed")
+	server := testutils.NewServer(t, nil)
 	defer server.Close()
 	server.Register(raw.Wrap(newTestHandler(t)), "echo")
 
-	client, err := testutils.NewClient(nil)
+	client := testutils.NewClient(t, nil)
 	defer client.Close()
-	require.NoError(t, err, "NewClient failed")
 
 	counter := 0
 	sc := client.GetSubChannel(server.PeerInfo().ServiceName)
-	err = client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
+	err := client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
 		defer func() { counter++ }()
 
 		assert.Equal(t, counter, len(rs.SelectedPeers), "SelectedPeers should not be reused")

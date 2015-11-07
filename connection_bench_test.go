@@ -28,7 +28,6 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"golang.org/x/net/context"
@@ -47,8 +46,7 @@ func (h *benchmarkHandler) OnError(ctx context.Context, err error) {
 }
 
 func setupServer(b *testing.B) (ch *Channel, svcName, svcHostPort string) {
-	serverCh, err := testutils.NewServer(nil)
-	require.Nil(b, err)
+	serverCh := testutils.NewServer(b, nil)
 	handler := &benchmarkHandler{}
 	serverCh.Register(raw.Wrap(handler), "echo")
 
@@ -60,13 +58,12 @@ func BenchmarkCallsSerial(b *testing.B) {
 	serverCh, svcName, svcHostPort := setupServer(b)
 	defer serverCh.Close()
 
-	clientCh, err := testutils.NewClient(nil)
-	require.NoError(b, err)
+	clientCh := testutils.NewClient(b, nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := NewContext(time.Second)
-		_, _, _, err = raw.Call(ctx, clientCh, svcHostPort, svcName, "echo", []byte("data111"), []byte("data222"))
+		_, _, _, err := raw.Call(ctx, clientCh, svcHostPort, svcName, "echo", []byte("data111"), []byte("data222"))
 		assert.NoError(b, err)
 		cancel()
 	}
@@ -82,14 +79,13 @@ func BenchmarkCallsConcurrent(b *testing.B) {
 	inCh := make(chan struct{})
 	for i := 0; i < numWorkers; i++ {
 		go func() {
-			clientCh, err := testutils.NewClient(nil)
-			require.NoError(b, err)
+			clientCh := testutils.NewClient(b, nil)
 			defer clientCh.Close()
 
 			for range inCh {
 				ctx, cancel := NewContext(time.Second)
 
-				_, _, _, err = raw.Call(ctx, clientCh, svcHostPort, svcName, "echo", []byte("data111"), []byte("data222"))
+				_, _, _, err := raw.Call(ctx, clientCh, svcHostPort, svcName, "echo", []byte("data111"), []byte("data222"))
 				assert.NoError(b, err)
 
 				cancel()

@@ -25,18 +25,12 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
 )
 
 // NewServer creates a new server and returns the channel, service name, and host port.
 func NewServer(t testing.TB, opts *testutils.ChannelOpts) (*Channel, string, string) {
-	ch, err := testutils.NewServer(opts)
-	require.NoError(t, err, "NewServer failed")
-	if err != nil {
-		return nil, "", ""
-	}
-
+	ch := testutils.NewServer(t, opts)
 	peerInfo := ch.PeerInfo()
 	return ch, peerInfo.ServiceName, peerInfo.HostPort
 }

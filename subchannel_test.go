@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -36,8 +35,7 @@ type chanSet struct {
 }
 
 func withNewSet(t *testing.T, f func(*testing.T, chanSet)) {
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err)
+	ch := testutils.NewClient(t, nil)
 	f(t, chanSet{
 		main:     ch,
 		sub:      ch.GetSubChannel("hyperbahn"),

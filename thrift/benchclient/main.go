@@ -45,9 +45,9 @@ var (
 func main() {
 	flag.Parse()
 
-	ch, err := testutils.NewClient(nil)
+	ch, err := testutils.NewClientChannel(nil)
 	if err != nil {
-		log.Fatalf("err")
+		log.Fatalf("Failed to create client channel: %v", err)
 	}
 
 	for _, host := range flag.Args() {

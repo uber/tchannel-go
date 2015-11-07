@@ -25,14 +25,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
 )
 
 func TestRetryJSONCall(t *testing.T) {
-	ch, err := testutils.NewServer(nil)
-	require.NoError(t, err, "NewServer failed")
+	ch := testutils.NewServer(t, nil)
 	ch.Peers().Add(ch.PeerInfo().HostPort)
 
 	count := 0
@@ -51,7 +49,7 @@ func TestRetryJSONCall(t *testing.T) {
 	client := NewClient(ch, ch.ServiceName(), nil)
 
 	var res map[string]string
-	err = client.Call(ctx, "test", nil, &res)
+	err := client.Call(ctx, "test", nil, &res)
 	assert.NoError(t, err, "Call should succeed")
 	assert.Equal(t, 5, count, "Handler should have been invoked 5 times")
 }
