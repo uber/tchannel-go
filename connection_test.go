@@ -202,7 +202,9 @@ func TestPing(t *testing.T) {
 }
 
 func TestBadRequest(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// ch will log an error when it receives a request for an unknown handler.
+	opts := testutils.NewOpts().DisableLogVerification()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
