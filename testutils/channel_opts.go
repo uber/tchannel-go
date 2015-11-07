@@ -85,6 +85,12 @@ func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	return o
 }
 
+// DisableLogVerification disables log verification for this channel.
+func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
+	o.LogVerification.Disabled = true
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue

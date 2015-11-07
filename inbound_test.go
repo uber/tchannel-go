@@ -38,8 +38,11 @@ func TestActiveCallReq(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	// Note: This test leaks a message exchange due to the modification of IDs in the relay.
-	testutils.WithServer(t, nil, func(ch *Channel, hostPort string) {
+	// Note: This test cannot use log verification as the duplicate ID causes a log.
+	// It does not use a verified server, as it leaks a message exchange due to the
+	// modification of IDs in the relay.
+	opts := testutils.NewOpts().DisableLogVerification()
+	testutils.WithServer(t, opts, func(ch *Channel, hostPort string) {
 		gotCall := make(chan struct{})
 		unblock := make(chan struct{})
 
