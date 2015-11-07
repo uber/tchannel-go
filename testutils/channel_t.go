@@ -18,52 +18,51 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel_test
+package testutils
 
 import (
-	"bytes"
-	"log"
 	"testing"
-	"time"
-
-	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/raw"
-	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go"
 )
 
-func TestLargeRequest(t *testing.T) {
-	CheckStress(t)
-
-	const (
-		KB = 1024
-		MB = 1024 * KB
-		GB = 1024 * MB
-
-		maxRequestSize = 1 * GB
-	)
-
-	WithVerifiedServer(t, nil, func(serverCh *Channel, hostPort string) {
-		serverCh.Register(raw.Wrap(newTestHandler(t)), "echo")
-
-		for reqSize := 2; reqSize <= maxRequestSize; reqSize *= 2 {
-			log.Printf("reqSize = %v", reqSize)
-			arg3 := testutils.RandBytes(reqSize)
-			arg2 := testutils.RandBytes(reqSize / 2)
-
-			clientCh := testutils.NewClient(t, nil)
-			ctx, cancel := NewContext(time.Second * 30)
-			rArg2, rArg3, _, err := raw.Call(ctx, clientCh, hostPort, serverCh.PeerInfo().ServiceName, "echo", arg2, arg3)
-			require.NoError(t, err, "Call failed")
-
-			if !bytes.Equal(arg2, rArg2) {
-				t.Errorf("echo arg2 mismatch")
+func getOptsForTest(opts *ChannelOpts) *ChannelOpts {
+	if opts == nil {
+		opts = &ChannelOpts{}
+	}
+	if !opts.LogVerification.Disabled {
+		opts.optFn = func(opts *ChannelOpts) {
+			// Set a custom logger now.
+			if opts.Logger == nil {
+				opts.Logger = tchannel.NullLogger
 			}
-			if !bytes.Equal(arg3, rArg3) {
-				t.Errorf("echo arg3 mismatch")
-			}
-			cancel()
+			opts.Logger = opts.LogVerification.WrapLogger(opts.Logger)
 		}
-	})
+	}
+	return opts
+}
+
+// WithServer sets up a TChannel that is listening and runs the given function with the channel.
+func WithServer(t testing.TB, opts *ChannelOpts, f func(ch *tchannel.Channel, hostPort string)) {
+	opts = getOptsForTest(opts)
+	ch := NewServer(t, opts)
+	f(ch, ch.PeerInfo().HostPort)
+	ch.Close()
+}
+
+// NewServer returns a new TChannel server that listens on :0.
+func NewServer(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
+	opts = getOptsForTest(opts)
+	ch, err := NewServerChannel(opts)
+	require.NoError(t, err, "NewServerChannel failed")
+	return ch
+}
+
+// NewClient returns a new TChannel that is not listening.
+func NewClient(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
+	ch, err := NewClientChannel(opts)
+	require.NoError(t, err, "NewServerChannel failed")
+	return ch
+
 }

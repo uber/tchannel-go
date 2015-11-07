@@ -80,17 +80,17 @@ func TestStatsCalls(t *testing.T) {
 		serverCh.Register(handler, "echo")
 		serverCh.Register(handler, "app-error")
 
-		ch, err := testutils.NewClient(testutils.NewOpts().
+		ch := testutils.NewClient(t, testutils.NewOpts().
 			SetStatsReporter(clientStats).
 			SetTimeNow(nowStub))
-		require.NoError(t, err)
+		defer ch.Close()
 
 		ctx, cancel := NewContext(time.Second * 5)
 		defer cancel()
 
 		// Set now incrementor to 50ms, so expected Inbound latency is 50ms, outbound is 150ms.
 		nowFn(50 * time.Millisecond)
-		_, _, _, err = raw.Call(ctx, ch, hostPort, testServiceName, "echo", []byte("Headers"), []byte("Body"))
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", []byte("Headers"), []byte("Body"))
 		require.NoError(t, err)
 
 		outboundTags := tagsForOutboundCall(serverCh, ch, "echo")
@@ -133,10 +133,9 @@ func TestStatsWithRetries(t *testing.T) {
 	nowStub, nowFn := testutils.NowStub(initialTime)
 
 	clientStats := newRecordingStatsReporter()
-	ch, err := testutils.NewClient(testutils.NewOpts().
+	ch := testutils.NewClient(t, testutils.NewOpts().
 		SetStatsReporter(clientStats).
 		SetTimeNow(nowStub))
-	require.NoError(t, err)
 	defer ch.Close()
 
 	nowFn(10 * time.Millisecond)

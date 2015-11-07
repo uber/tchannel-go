@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -105,11 +104,10 @@ func TestParseConfiguration(t *testing.T) {
 		}
 
 		config := Configuration{InitialNodes: tt.peersArg, InitialNodesFile: peerFile}
-		ch, err := testutils.NewClient(nil)
-		require.NoError(t, err, "%v: testutils.NewClient failed", tt.name)
+		ch := testutils.NewClient(t, nil)
 		defer ch.Close()
 
-		_, err = NewClient(ch, config, nil)
+		_, err := NewClient(ch, config, nil)
 		if tt.wantErr {
 			assert.Error(t, err, "%v: NewClient expected to fail")
 			continue

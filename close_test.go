@@ -52,8 +52,7 @@ func makeCall(ch *Channel, hostPort, service string) error {
 }
 
 func TestCloseOnlyListening(t *testing.T) {
-	ch, err := testutils.NewServer(nil)
-	require.NoError(t, err, "NewServer failed")
+	ch := testutils.NewServer(t, nil)
 
 	// If there are no connections, then the channel should close immediately.
 	ch.Close()
@@ -62,8 +61,7 @@ func TestCloseOnlyListening(t *testing.T) {
 }
 
 func TestCloseNewClient(t *testing.T) {
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewServer failed")
+	ch := testutils.NewServer(t, nil)
 
 	// If there are no connections, then the channel should close immediately.
 	ch.Close()
@@ -80,10 +78,9 @@ func TestCloseAfterTimeout(t *testing.T) {
 		defer cancel()
 
 		// Make a call, wait for it to timeout.
-		clientCh, err := testutils.NewClient(nil)
-		require.NoError(t, err, "NewClient failed")
+		clientCh := testutils.NewClient(t, nil)
 		peerInfo := ch.PeerInfo()
-		_, _, _, err = raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "block", nil, nil)
+		_, _, _, err := raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "block", nil, nil)
 		require.Error(t, err, "Expected call to timeout")
 
 		// The client channel should also close immediately.
@@ -189,8 +186,7 @@ type closeSemanticsTest struct {
 }
 
 func (t *closeSemanticsTest) makeServer(name string) (*Channel, chan struct{}) {
-	ch, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: name})
-	require.NoError(t, err, "NewServer failed")
+	ch := testutils.NewServer(t.T, &testutils.ChannelOpts{ServiceName: name})
 
 	c := make(chan struct{})
 	testutils.RegisterFunc(t.T, ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -204,8 +200,7 @@ func (t *closeSemanticsTest) makeServer(name string) (*Channel, chan struct{}) {
 }
 
 func (t *closeSemanticsTest) withNewClient(f func(ch *Channel)) {
-	ch, err := testutils.NewClient(&testutils.ChannelOpts{ServiceName: "client"})
-	require.NoError(t, err, "NewClient failed")
+	ch := testutils.NewClient(t.T, &testutils.ChannelOpts{ServiceName: "client"})
 	f(ch)
 	ch.Close()
 }
@@ -330,9 +325,7 @@ func TestCloseSemanticsIsolated(t *testing.T) {
 func TestCloseSingleChannel(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
-
-	ch, err := testutils.NewServer(nil)
-	require.NoError(t, err, "NewServer failed")
+	ch := testutils.NewServer(t, nil)
 
 	var connected sync.WaitGroup
 	var completed sync.WaitGroup
@@ -376,10 +369,8 @@ func TestCloseOneSide(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	ch1, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: "client"})
-	ch2, err := testutils.NewServer(&testutils.ChannelOpts{ServiceName: "server"})
-	require.NoError(t, err, "NewServer 1 failed")
-	require.NoError(t, err, "NewServer 2 failed")
+	ch1 := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: "client"})
+	ch2 := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: "server"})
 
 	connected := make(chan struct{})
 	completed := make(chan struct{})
@@ -425,8 +416,7 @@ func TestCloseSendError(t *testing.T) {
 	ctx, cancel := NewContext(50 * time.Millisecond)
 	defer cancel()
 
-	serverCh, err := testutils.NewServer(nil)
-	require.NoError(t, err, "NewServer failed")
+	serverCh := testutils.NewServer(t, nil)
 
 	closed := uint32(0)
 	counter := uint32(0)
@@ -435,12 +425,11 @@ func TestCloseSendError(t *testing.T) {
 		return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
 	})
 
-	clientCh, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
+	clientCh := testutils.NewClient(t, nil)
 
 	// Make a call to create a connection that will be shared.
 	peerInfo := serverCh.PeerInfo()
-	_, _, _, err = raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "echo", nil, nil)
+	_, _, _, err := raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "echo", nil, nil)
 	require.NoError(t, err, "Call should succeed")
 
 	var wg sync.WaitGroup

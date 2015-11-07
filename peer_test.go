@@ -30,23 +30,18 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
 )
 
 func TestGetPeerNoPeer(t *testing.T) {
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
-
+	ch := testutils.NewClient(t, nil)
 	peer, err := ch.Peers().Get(nil)
 	assert.Equal(t, ErrNoPeers, err, "Empty peer list should return error")
 	assert.Nil(t, peer, "should not return peer")
 }
 
 func TestGetPeerSinglePeer(t *testing.T) {
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
-
+	ch := testutils.NewClient(t, nil)
 	ch.Peers().Add("1.1.1.1:1234")
 
 	peer, err := ch.Peers().Get(nil)
@@ -61,9 +56,7 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 		peer3 = "3.3.3.3:3"
 	)
 
-	ch, err := testutils.NewClient(nil)
-	require.NoError(t, err, "NewClient failed")
-
+	ch := testutils.NewClient(t, nil)
 	a, m := testutils.StrArray, testutils.StrMap
 	tests := []struct {
 		peers        []string

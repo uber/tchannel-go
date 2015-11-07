@@ -164,13 +164,11 @@ func TestTraceReportingEnabled(t *testing.T) {
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {
 			ch.Register(raw.Wrap(newTestHandler(t)), "echo")
 
-			clientCh, err := testutils.NewClient(tt.clientOpts)
-			require.NoError(t, err, "NewClient failed")
-
+			clientCh := testutils.NewClient(t, tt.clientOpts)
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()
 
-			_, _, _, err = raw.Call(ctx, clientCh, hostPort, ch.PeerInfo().ServiceName, "echo", nil, []byte("arg3"))
+			_, _, _, err := raw.Call(ctx, clientCh, hostPort, ch.PeerInfo().ServiceName, "echo", nil, []byte("arg3"))
 			require.NoError(t, err, "raw.Call failed")
 
 			binaryAnnotations := []BinaryAnnotation{
