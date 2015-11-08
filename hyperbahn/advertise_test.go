@@ -136,7 +136,11 @@ func runRetryTest(t *testing.T, f func(r *retryTest)) {
 	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
 		json.Register(hypCh, json.Handlers{"ad": r.adHandler}, nil)
 
-		serverCh := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: "my-client"})
+		// Advertise failures cause warning log messages.
+		opts := testutils.NewOpts().
+			SetServiceName("my-client").
+			AddLogFilter("Hyperbahn client registration failed", 10)
+		serverCh := testutils.NewServer(t, opts)
 		defer serverCh.Close()
 
 		var err error

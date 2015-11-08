@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"flag"
+	"testing"
 	"time"
 
 	"github.com/uber/tchannel-go"
@@ -52,6 +53,14 @@ type ChannelOpts struct {
 // LogVerification contains options to control the log verification.
 type LogVerification struct {
 	Disabled bool
+
+	// AllowedFilter specifies the substring match to search
+	// for in the log message to skip raising an error.
+	AllowedFilter string
+
+	// AllowedCount is the maximum number of allowed warn+ logs matching
+	// AllowedFilter before errors are raised.
+	AllowedCount int
 }
 
 // SetServiceName sets ServiceName.
@@ -84,6 +93,20 @@ func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	return o
 }
 
+// DisableLogVerification disables log verification for this channel.
+func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
+	o.LogVerification.Disabled = true
+	return o
+}
+
+// AddLogFilter sets an allowed filter for warning/error logs and sets
+// the maximum number of times that log can occur.
+func (o *ChannelOpts) AddLogFilter(filter string, maxCount int) *ChannelOpts {
+	o.LogVerification.AllowedFilter = filter
+	o.LogVerification.AllowedCount = maxCount
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue
@@ -113,7 +136,6 @@ func DefaultOpts(opts *ChannelOpts) *ChannelOpts {
 }
 
 // WrapLogger wraps the given logger with extra verification.
-func (v *LogVerification) WrapLogger(l tchannel.Logger) tchannel.Logger {
-	// TODO(prashant): Add error log verification.
-	return l
+func (v *LogVerification) WrapLogger(t testing.TB, l tchannel.Logger) tchannel.Logger {
+	return errorLogger{l, t, v, &errorLoggerState{}}
 }

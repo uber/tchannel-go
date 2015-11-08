@@ -21,48 +21,55 @@
 package testutils
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 )
 
-func getOptsForTest(t testing.TB, opts *ChannelOpts) *ChannelOpts {
-	if opts == nil {
-		opts = &ChannelOpts{}
-	}
-	if !opts.LogVerification.Disabled {
-		opts.optFn = func(opts *ChannelOpts) {
-			// Set a custom logger now.
-			if opts.Logger == nil {
-				opts.Logger = tchannel.NullLogger
-			}
-			opts.Logger = opts.LogVerification.WrapLogger(t, opts.Logger)
+type errorLoggerState struct {
+	matchCount int
+}
+
+type errorLogger struct {
+	tchannel.Logger
+	t testing.TB
+	v *LogVerification
+	s *errorLoggerState
+}
+
+func (l errorLogger) checkErr(msg string, args ...interface{}) {
+	allowedCount := l.v.AllowedCount
+
+	if filter := l.v.AllowedFilter; filter != "" {
+		if !strings.Contains(msg, filter) {
+			l.t.Errorf(msg, args...)
 		}
 	}
-	return opts
+
+	l.s.matchCount++
+	if l.s.matchCount <= allowedCount {
+		return
+	}
+
+	l.t.Errorf(msg, args...)
 }
 
-// WithServer sets up a TChannel that is listening and runs the given function with the channel.
-func WithServer(t testing.TB, opts *ChannelOpts, f func(ch *tchannel.Channel, hostPort string)) {
-	opts = getOptsForTest(t, opts)
-	ch := NewServer(t, opts)
-	f(ch, ch.PeerInfo().HostPort)
-	ch.Close()
+func (l errorLogger) Fatalf(msg string, args ...interface{}) {
+	l.checkErr("[Fatal] "+msg, args...)
+	l.Logger.Fatalf(msg, args...)
 }
 
-// NewServer returns a new TChannel server that listens on :0.
-func NewServer(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
-	opts = getOptsForTest(t, opts)
-	ch, err := NewServerChannel(opts)
-	require.NoError(t, err, "NewServerChannel failed")
-	return ch
+func (l errorLogger) Errorf(msg string, args ...interface{}) {
+	l.checkErr("[Error] "+msg, args...)
+	l.Logger.Errorf(msg, args...)
 }
 
-// NewClient returns a new TChannel that is not listening.
-func NewClient(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
-	ch, err := NewClientChannel(opts)
-	require.NoError(t, err, "NewServerChannel failed")
-	return ch
+func (l errorLogger) Warnf(msg string, args ...interface{}) {
+	l.checkErr("[Warn] "+msg, args...)
+	l.Logger.Warnf(msg, args...)
+}
 
+func (l errorLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {
+	return errorLogger{l.Logger.WithFields(fields...), l.t, l.v, l.s}
 }

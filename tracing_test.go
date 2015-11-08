@@ -165,6 +165,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 			ch.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 			clientCh := testutils.NewClient(t, tt.clientOpts)
+			defer clientCh.Close()
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()
 

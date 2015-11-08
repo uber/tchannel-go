@@ -202,7 +202,9 @@ func TestPing(t *testing.T) {
 }
 
 func TestBadRequest(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// ch will log an error when it receives a request for an unknown handler.
+	opts := testutils.NewOpts().AddLogFilter("Could not find handler", 1)
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -324,7 +326,9 @@ func TestFragmentationSlowReader(t *testing.T) {
 		close(handlerComplete)
 	}
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// Inbound forward will timeout and cause a warning log.
+	opts := testutils.NewOpts().AddLogFilter("Unable to forward frame", 1)
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ch.Register(HandlerFunc(handler), "echo")
 
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
@@ -343,10 +347,9 @@ func TestFragmentationSlowReader(t *testing.T) {
 }
 
 func TestWriteAfterTimeout(t *testing.T) {
-	ctx, cancel := NewContext(20 * time.Millisecond)
-	defer cancel()
-
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// The channel reads and writes during timeouts, causing warning logs.
+	opts := testutils.NewOpts().DisableLogVerification()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		timedOut := make(chan struct{})
 
 		handler := func(ctx context.Context, call *InboundCall) {
@@ -368,6 +371,8 @@ func TestWriteAfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
+		ctx, cancel := NewContext(20 * time.Millisecond)
+		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, nil)
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 

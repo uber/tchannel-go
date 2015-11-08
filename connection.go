@@ -134,6 +134,10 @@ type Connection struct {
 	nextMessageID   uint32
 	events          connectionEvents
 	commonStatsTags map[string]string
+
+	// closeNetworkCalled is used to avoid errors from being logged
+	// when this side closes a connection.
+	closeNetworkCalled int32
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -553,9 +557,12 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 				return nil
 			default: // If the send buffer is full, log and return an error.
 			}
+			c.log.Warnf("Could not send error frame to %s for %d : %v",
+				c.remotePeerInfo, id, err)
+		} else {
+			c.log.Infof("Could not send error frame to %s on closed conn for %d : %v",
+				c.remotePeerInfo, id, err)
 		}
-		c.log.Warnf("Could not send error frame to %s for %d : %v",
-			c.remotePeerInfo, id, err)
 		return fmt.Errorf("failed to send error frame")
 	})
 }
@@ -614,8 +621,12 @@ func (c *Connection) readFrames(_ uint32) {
 	for {
 		frame := c.framePool.Get()
 		if err := frame.ReadIn(c.conn); err != nil {
+			if atomic.LoadInt32(&c.closeNetworkCalled) == 0 {
+				c.connectionError(err)
+			} else {
+				c.log.Debugf("Ignoring error after connection was closed: %v", err)
+			}
 			c.framePool.Release(frame)
-			c.connectionError(err)
 			return
 		}
 
@@ -756,6 +767,7 @@ func (c *Connection) closeNetwork() {
 	// NB(mmihic): The sender goroutine will exit once the connection is
 	// closed; no need to close the send channel (and closing the send
 	// channel would be dangerous since other goroutine might be sending)
+	atomic.AddInt32(&c.closeNetworkCalled, 1)
 	if err := c.conn.Close(); err != nil {
 		c.log.Warnf("could not close connection to peer %s: %v", c.remotePeerInfo, err)
 	}
