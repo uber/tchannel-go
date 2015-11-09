@@ -462,3 +462,25 @@ func TestCloseSendError(t *testing.T) {
 	clientCh.Close()
 	VerifyNoBlockedGoroutines(t)
 }
+
+func callWithNewClient(t *testing.T, hostPort string) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	client := testutils.NewClient(t, nil)
+	assert.NoError(t, client.Ping(ctx, hostPort))
+	client.Close()
+}
+
+func TestNoLeakedState(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		state1 := ch.IntrospectState(&IntrospectionOptions{})
+		for i := 0; i < 100; i++ {
+			callWithNewClient(t, hostPort)
+		}
+
+		time.Sleep(time.Millisecond)
+		state2 := ch.IntrospectState(&IntrospectionOptions{})
+		assert.Equal(t, state1, state2, "State mismatch")
+	})
+}
