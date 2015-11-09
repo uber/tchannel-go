@@ -116,7 +116,7 @@ type Channel struct {
 		state    ChannelState
 		peerInfo LocalPeerInfo // May be ephemeral if this is a client only channel
 		l        net.Listener  // May be nil if this is a client only channel
-		conns    []*Connection
+		conns    map[uint32]*Connection
 	}
 }
 
@@ -183,6 +183,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		ServiceName: serviceName,
 	}
 	ch.mutable.state = ChannelClient
+	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
 
 	// TraceReporter may use the channel, so we must initialize it once the channel is ready.
@@ -443,7 +444,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	}
 
 	ch.mutable.mut.Lock()
-	ch.mutable.conns = append(ch.mutable.conns, c)
+	ch.mutable.conns[c.connID] = c
 	chState := ch.mutable.state
 	ch.mutable.mut.Unlock()
 
@@ -472,12 +473,22 @@ func (ch *Channel) incomingConnectionActive(c *Connection) {
 	p.AddInboundConnection(c)
 
 	ch.mutable.mut.Lock()
-	ch.mutable.conns = append(ch.mutable.conns, c)
+	ch.mutable.conns[c.connID] = c
 	ch.mutable.mut.Unlock()
+}
+
+// removeClosedConn removes a connection if it's closed.
+func (ch *Channel) removeClosedConn(c *Connection) {
+	if c.readState() != connectionClosed {
+		return
+	}
+
+	delete(ch.mutable.conns, c.connID)
 }
 
 // connectionCloseStateChange is called when a connection's close state changes.
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
+	ch.removeClosedConn(c)
 	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
 		peer.connectionStateChanged(c)
 	}
