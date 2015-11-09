@@ -49,6 +49,9 @@ type RuntimeState struct {
 
 	// Peers is the list of shared peers for this channel.
 	Peers []string `json:"peers"`
+
+	// NumConnections is the number of connections stored in the channel.
+	NumConnections int `json:"numConnections"`
 }
 
 // GoRuntimeStateOptions are the options used when getting Go runtime state.
@@ -104,11 +107,17 @@ type PeerRuntimeState struct {
 // IntrospectState returns the RuntimeState for this channel.
 // Note: this is purely for debugging and monitoring, and may slow down your Channel.
 func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
+	mut := ch.mutable
+	mut.mut.RLock()
+	conns := len(ch.mutable.conns)
+	mut.mut.RUnlock()
+
 	return &RuntimeState{
-		LocalPeer:   ch.PeerInfo(),
-		SubChannels: ch.subChannels.IntrospectState(opts),
-		RootPeers:   ch.rootPeers().IntrospectState(opts),
-		Peers:       ch.Peers().IntrospectList(opts),
+		LocalPeer:      ch.PeerInfo(),
+		SubChannels:    ch.subChannels.IntrospectState(opts),
+		RootPeers:      ch.rootPeers().IntrospectState(opts),
+		Peers:          ch.Peers().IntrospectList(opts),
+		NumConnections: conns,
 	}
 }
 
