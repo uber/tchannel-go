@@ -478,6 +478,10 @@ func (ch *Channel) incomingConnectionActive(c *Connection) {
 
 // connectionCloseStateChange is called when a connection's close state changes.
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
+	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
+		peer.connectionStateChanged(c)
+	}
+
 	chState := ch.State()
 	if chState != ChannelStartClose && chState != ChannelInboundClosed {
 		return

@@ -65,7 +65,7 @@ func (l *RootPeerList) Add(hostPort string) *Peer {
 	var p *Peer
 	// To avoid duplicate connections, only the root list should create new
 	// peers. All other lists should keep refs to the root list's peers.
-	p = newPeer(l.channel, hostPort)
+	p = newPeer(l.channel, hostPort, l.onConnChange)
 	l.peersByHostPort[hostPort] = p
 	return p
 }
@@ -88,6 +88,22 @@ func (l *RootPeerList) Get(hostPort string) (*Peer, bool) {
 	return p, ok
 }
 
+func (l *RootPeerList) onConnChange(peer *Peer) {
+	hostPort := peer.HostPort()
+	p, ok := l.Get(hostPort)
+	if !ok {
+		l.channel.Logger().Errorf("got connection state change for a peer not in the root peer list")
+		return
+	}
+
+	if p.canRemove() {
+		l.Lock()
+		delete(l.peersByHostPort, hostPort)
+		l.Unlock()
+		l.channel.Logger().Infof("Removed peer %s from root peer list", hostPort)
+	}
+}
+
 // Copy returns a map of the peer list. This method should only be used for testing.
 func (l *RootPeerList) Copy() map[string]*Peer {
 	l.RLock()
@@ -102,10 +118,7 @@ func (l *RootPeerList) Copy() map[string]*Peer {
 
 // Close closes connections for all peers.
 func (l *RootPeerList) Close() {
-	l.RLock()
-	defer l.RUnlock()
-
-	for _, p := range l.peersByHostPort {
+	for _, p := range l.Copy() {
 		p.Close()
 	}
 }

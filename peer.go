@@ -43,6 +43,8 @@ var (
 type Connectable interface {
 	// Connect tries to connect to the given hostPort.
 	Connect(ctx context.Context, hostPort string) (*Connection, error)
+	// Logger returns the logger to use.
+	Logger() Logger
 }
 
 // PeerList maintains a list of Peers.
@@ -164,8 +166,9 @@ func (l *PeerList) Copy() map[string]*Peer {
 
 // Peer represents a single autobahn service or client with a unique host:port.
 type Peer struct {
-	channel  Connectable
-	hostPort string
+	channel      Connectable
+	hostPort     string
+	onConnChange func(*Peer)
 
 	// scCount is the number of subchannels that this peer is added to.
 	scCount uint32
@@ -176,10 +179,11 @@ type Peer struct {
 	chosenCount         uint64
 }
 
-func newPeer(channel Connectable, hostPort string) *Peer {
+func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
 	return &Peer{
-		channel:  channel,
-		hostPort: hostPort,
+		channel:      channel,
+		hostPort:     hostPort,
+		onConnChange: onConnChange,
 	}
 }
 
@@ -191,16 +195,12 @@ func (p *Peer) HostPort() string {
 // getActive returns a list of active connections.
 // TODO(prashant): Should we clear inactive connections?
 func (p *Peer) getActive() []*Connection {
-	p.mut.RLock()
-
 	var active []*Connection
 	p.runWithConnections(func(c *Connection) {
 		if c.IsActive() {
 			active = append(active, c)
 		}
 	})
-
-	p.mut.RUnlock()
 	return active
 }
 
@@ -236,10 +236,19 @@ func (p *Peer) AddInboundConnection(c *Connection) error {
 	}
 
 	p.mut.Lock()
-	defer p.mut.Unlock()
-
 	p.inboundConnections = append(p.inboundConnections, c)
+	p.mut.Unlock()
+
+	p.connectionStateChanged(c)
 	return nil
+}
+
+// canRemove returns whether this peer can be safely removed from the root peer list.
+func (p *Peer) canRemove() bool {
+	p.mut.RLock()
+	count := len(p.inboundConnections) + len(p.outboundConnections) + int(p.scCount)
+	p.mut.RUnlock()
+	return count == 0
 }
 
 // AddOutboundConnection adds an active outbound connection to the peer's connection list.
@@ -253,10 +262,44 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	}
 
 	p.mut.Lock()
-	defer p.mut.Unlock()
-
 	p.outboundConnections = append(p.outboundConnections, c)
+	p.mut.Unlock()
+
+	p.connectionStateChanged(c)
 	return nil
+}
+
+// checkInboundConnection will check whether the changed connection is an inbound
+// connection, and will remove any closed connections.
+func (p *Peer) checkInboundConnection(changed *Connection) (updated bool, isInbound bool) {
+	newConns := p.inboundConnections[:0]
+	for _, c := range p.inboundConnections {
+		if c == changed {
+			isInbound = true
+		}
+
+		if c.readState() != connectionClosed {
+			newConns = append(newConns, c)
+		} else {
+			updated = true
+		}
+	}
+	if updated {
+		p.inboundConnections = newConns
+	}
+
+	return updated, isInbound
+}
+
+// connectionStateChanged is called when one of the peers' connections states changes.
+func (p *Peer) connectionStateChanged(changed *Connection) {
+	p.mut.Lock()
+	updated, _ := p.checkInboundConnection(changed)
+	p.mut.Unlock()
+
+	if updated {
+		p.onConnChange(p)
+	}
 }
 
 // Connect adds a new outbound connection to the peer.
@@ -306,20 +349,22 @@ func (p *Peer) NumInbound() int {
 }
 
 func (p *Peer) runWithConnections(f func(*Connection)) {
-	for _, c := range p.inboundConnections {
+	p.mut.RLock()
+	inboundConns := p.inboundConnections
+	outboundConns := p.outboundConnections
+	p.mut.RUnlock()
+
+	for _, c := range inboundConns {
 		f(c)
 	}
 
-	for _, c := range p.outboundConnections {
+	for _, c := range outboundConns {
 		f(c)
 	}
 }
 
 // Close closes all connections to this peer.
 func (p *Peer) Close() {
-	p.mut.RLock()
-	defer p.mut.RUnlock()
-
 	p.runWithConnections(func(c *Connection) {
 		c.Close()
 	})
