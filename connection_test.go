@@ -154,7 +154,7 @@ func TestReuseConnection(t *testing.T) {
 			// We need the servers to have their peers set before making outgoing calls
 			// for the outgoing calls to contain the correct peerInfo.
 			require.True(t, testutils.WaitFor(time.Second, func() bool {
-				return !ch1.PeerInfo().IsEphemeral() && !ch2.PeerInfo().IsEphemeral()
+				return !ch1.PeerInfo().IsEphemeral && !ch2.PeerInfo().IsEphemeral
 			}))
 
 			outbound, err := ch1.BeginCall(ctx, hostPort2, "s2", "echo", nil)
