@@ -88,6 +88,7 @@ func (l *PeerList) Add(hostPort string) *Peer {
 	}
 
 	p := l.parent.Add(hostPort)
+	atomic.AddUint32(&p.scCount, 1)
 	l.peersByHostPort[hostPort] = p
 	l.peers = append(l.peers, p)
 	return p
@@ -165,6 +166,9 @@ func (l *PeerList) Copy() map[string]*Peer {
 type Peer struct {
 	channel  Connectable
 	hostPort string
+
+	// scCount is the number of subchannels that this peer is added to.
+	scCount uint32
 
 	mut                 sync.RWMutex // mut protects connections.
 	inboundConnections  []*Connection

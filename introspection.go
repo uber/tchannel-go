@@ -98,6 +98,7 @@ type PeerRuntimeState struct {
 	OutboundConnections []ConnectionRuntimeState `json:"outboundConnections"`
 	InboundConnections  []ConnectionRuntimeState `json:"inboundConnections"`
 	ChosenCount         uint64                   `json:"chosenCount"`
+	SCCount             uint32                   `json:"scCount"`
 }
 
 // IntrospectState returns the RuntimeState for this channel.
@@ -167,18 +168,14 @@ func getConnectionRuntimeState(conns []*Connection, opts *IntrospectionOptions) 
 // IntrospectState returns the runtime state for this peer.
 func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 	p.mut.RLock()
-
-	hostPort := p.hostPort
-	inboundConns := getConnectionRuntimeState(p.inboundConnections, opts)
-	outboundConns := getConnectionRuntimeState(p.outboundConnections, opts)
-	chosenCount := p.chosenCount
-	p.mut.RUnlock()
+	defer p.mut.RUnlock()
 
 	return PeerRuntimeState{
-		HostPort:            hostPort,
-		InboundConnections:  inboundConns,
-		OutboundConnections: outboundConns,
-		ChosenCount:         chosenCount,
+		HostPort:            p.hostPort,
+		InboundConnections:  getConnectionRuntimeState(p.inboundConnections, opts),
+		OutboundConnections: getConnectionRuntimeState(p.outboundConnections, opts),
+		ChosenCount:         p.chosenCount,
+		SCCount:             p.scCount,
 	}
 }
 
