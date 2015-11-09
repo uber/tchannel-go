@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -107,6 +108,34 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 				tt.expected, got, tt.peers, tt.prevSelected)
 		}
 	}
+}
+
+func TestInboundEphemeralPeerRemoved(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		client := testutils.NewClient(t, nil)
+		assert.NoError(t, client.Ping(ctx, hostPort), "Ping to server failed")
+
+		// Server should have a host:port in the root peers for the client.
+		var clientHP string
+		peers := ch.RootPeers().Copy()
+		for k := range peers {
+			clientHP = k
+		}
+
+		// Close the connection, which should remove the peer from the server channel.
+		client.Close()
+		runtime.Gosched()
+		assert.Equal(t, ChannelClosed, client.State(), "Client should be closed")
+
+		// Wait for the channel to see the connection as closed and update the peer list.
+		time.Sleep(time.Millisecond)
+
+		_, ok := ch.RootPeers().Get(clientHP)
+		assert.False(t, ok, "server's root peers should remove peer for client on close")
+	})
 }
 
 func TestPeerSelectionPreferIncoming(t *testing.T) {

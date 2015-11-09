@@ -72,15 +72,20 @@ func (l *RootPeerList) Add(hostPort string) *Peer {
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
 func (l *RootPeerList) GetOrAdd(hostPort string) *Peer {
-	l.RLock()
-	p, ok := l.peersByHostPort[hostPort]
-	l.RUnlock()
-
+	peer, ok := l.Get(hostPort)
 	if ok {
-		return p
+		return peer
 	}
 
 	return l.Add(hostPort)
+}
+
+// Get returns a peer for the given hostPort if it exists.
+func (l *RootPeerList) Get(hostPort string) (*Peer, bool) {
+	l.RLock()
+	p, ok := l.peersByHostPort[hostPort]
+	l.RUnlock()
+	return p, ok
 }
 
 // Copy returns a map of the peer list. This method should only be used for testing.
