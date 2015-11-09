@@ -245,7 +245,7 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	}
 
 	if err := mex.forwardPeerFrame(frame); err != nil {
-		mexset.log.Warnf("Unable to forward frame ID %v type %v length %v to %s: %v",
+		mexset.log.Infof("Unable to forward frame ID %v type %v length %v to %s: %v",
 			frame.Header.ID, frame.Header.messageType, frame.Header.FrameSize(), mexset.name, err)
 		return err
 	}
