@@ -84,6 +84,10 @@ func TestLevelLogger(t *testing.T) {
 		buf.Reset()
 		levelLogger := NewLevelLogger(bufLogger, level)
 
+		for l := LogLevel(0); l <= LogLevelFatal; l++ {
+			assert.Equal(t, level <= l, levelLogger.Enabled(l), "levelLogger.Enabled(%v) at %v", l, level)
+		}
+
 		levelLogger.Debugf("debug")
 		levelLogger.Infof("info")
 		levelLogger.Warnf("warn")
