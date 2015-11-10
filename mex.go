@@ -156,7 +156,9 @@ type messageExchangeSet struct {
 // newExchange creates and adds a new message exchange to this set
 func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool FramePool,
 	msgType messageType, msgID uint32, bufferSize int) (*messageExchange, error) {
-	mexset.log.Debugf("Creating new %s message exchange for [%v:%d]", mexset.name, msgType, msgID)
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("Creating new %s message exchange for [%v:%d]", mexset.name, msgType, msgID)
+	}
 
 	mex := &messageExchange{
 		msgType:   msgType,
@@ -193,7 +195,9 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 // It decrements the sendChRefs wait group, signalling that this exchange no longer has
 // any active goroutines that will try to send to sendCh.
 func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
-	mexset.log.Debugf("Removing %s message exchange %d", mexset.name, msgID)
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("Removing %s message exchange %d", mexset.name, msgID)
+	}
 
 	mexset.mut.Lock()
 	delete(mexset.exchanges, msgID)
@@ -231,7 +235,9 @@ func (mexset *messageExchangeSet) count() int {
 // forwardPeerFrame forwards a frame from the peer to the appropriate message
 // exchange
 func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
-	mexset.log.Debugf("forwarding %s %s", mexset.name, frame.Header)
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("forwarding %s %s", mexset.name, frame.Header)
+	}
 
 	mexset.mut.RLock()
 	mex := mexset.exchanges[frame.Header.ID]

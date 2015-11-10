@@ -56,7 +56,6 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		return true
 	}
 
-	c.log.Debugf("span=%s", callReq.Tracing)
 	call := new(InboundCall)
 	call.conn = c
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
@@ -157,7 +156,9 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
-	c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
+	}
 
 	if err := call.readOperation(); err != nil {
 		c.log.Errorf("Could not read operation from %s: %v", c.remotePeerInfo, err)
@@ -175,8 +176,11 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 	// https://github.com/golang/go/issues/3512
 	h := c.handlers.find(call.ServiceName(), call.Operation())
 	if h == nil {
-		// CHeck the subchannel map to see if we find one there
-		c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Operation())
+		// Check the subchannel map to see if we find one there
+		if c.log.Enabled(LogLevelDebug) {
+			c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Operation())
+		}
+
 		h = c.subChannels.find(call.ServiceName(), call.Operation())
 	}
 	if h == nil {
@@ -193,7 +197,9 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 		}
 	}()
 
-	c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Operation(), c.remotePeerInfo)
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Operation(), c.remotePeerInfo)
+	}
 	h.Handle(call.mex.ctx, call)
 }
 
