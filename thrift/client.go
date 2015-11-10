@@ -55,8 +55,7 @@ func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TC
 
 func (c *client) startCall(ctx context.Context, operation string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
 	if c.opts.HostPort != "" {
-		return c.sc.Peers().GetOrAdd(c.opts.HostPort).
-			BeginCall(ctx, c.serviceName, operation, callOptions)
+		return c.ch.BeginCall(ctx, c.opts.HostPort, c.serviceName, operation, callOptions)
 	}
 	return c.sc.BeginCall(ctx, operation, callOptions)
 }
