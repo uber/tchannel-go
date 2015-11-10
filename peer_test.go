@@ -31,6 +31,7 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
 
@@ -135,6 +136,25 @@ func TestInboundEphemeralPeerRemoved(t *testing.T) {
 
 		_, ok := ch.RootPeers().Get(clientHP)
 		assert.False(t, ok, "server's root peers should remove peer for client on close")
+	})
+}
+
+func TestOutboundPeerNotAdded(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(server *Channel, hostPort string) {
+		server.Register(raw.Wrap(newTestHandler(t)), "echo")
+
+		ch := testutils.NewClient(t, nil)
+		defer ch.Close()
+
+		ch.Ping(ctx, hostPort)
+		raw.Call(ctx, ch, hostPort, server.PeerInfo().ServiceName, "echo", nil, nil)
+
+		peer, err := ch.Peers().Get(nil)
+		assert.Equal(t, ErrNoPeers, err, "Ping should not add peers")
+		assert.Nil(t, peer, "Expected no peer to be returned")
 	})
 }
 

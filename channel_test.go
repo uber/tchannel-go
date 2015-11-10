@@ -27,8 +27,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"golang.org/x/net/context"
 )
 
 func toMap(fields LogFields) map[string]interface{} {
@@ -106,7 +104,7 @@ func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
 
 	// Uses of the parent channel should be reflected in the subchannel, but
 	// not the isolated subchannel.
-	ch.BeginCall(context.Background(), "127.0.0.1:3000", "foo", "Bar::baz", nil)
+	ch.Peers().Add("127.0.0.1:3000")
 	assert.NotNil(t, ch.peers.peersByHostPort["127.0.0.1:3000"])
 	assert.NotNil(t, sub.peers.peersByHostPort["127.0.0.1:3000"])
 	assert.Nil(t, isolatedSub.peers.peersByHostPort["127.0.0.1:3000"])

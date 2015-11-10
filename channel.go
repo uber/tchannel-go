@@ -328,7 +328,7 @@ func (ch *Channel) rootPeers() *RootPeerList {
 // BeginCall starts a new call to a remote peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
 func (ch *Channel) BeginCall(ctx context.Context, hostPort, serviceName, operationName string, callOptions *CallOptions) (*OutboundCall, error) {
-	p := ch.peers.GetOrAdd(hostPort)
+	p := ch.rootPeers().GetOrAdd(hostPort)
 	return p.BeginCall(ctx, serviceName, operationName, callOptions)
 }
 
@@ -381,7 +381,7 @@ func (ch *Channel) serve() {
 
 // Ping sends a ping message to the given hostPort and waits for a response.
 func (ch *Channel) Ping(ctx context.Context, hostPort string) error {
-	peer := ch.Peers().GetOrAdd(hostPort)
+	peer := ch.rootPeers().GetOrAdd(hostPort)
 	conn, err := peer.GetConnection(ctx)
 	if err != nil {
 		return err
