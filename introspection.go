@@ -49,6 +49,9 @@ type RuntimeState struct {
 
 	// Peers is the list of shared peers for this channel.
 	Peers []string `json:"peers"`
+
+	// NumConnections is the number of connections stored in the channel.
+	NumConnections int `json:"numConnections"`
 }
 
 // GoRuntimeStateOptions are the options used when getting Go runtime state.
@@ -80,6 +83,7 @@ type ConnectionRuntimeState struct {
 	ConnectionState  string               `json:"connectionState"`
 	LocalHostPort    string               `json:"localHostPort"`
 	RemoteHostPort   string               `json:"remoteHostPort"`
+	IsEphemeral      bool                 `json:"isEphemeral"`
 	InboundExchange  ExchangeRuntimeState `json:"inboundExchange"`
 	OutboundExchange ExchangeRuntimeState `json:"outboundExchange"`
 }
@@ -97,16 +101,23 @@ type PeerRuntimeState struct {
 	OutboundConnections []ConnectionRuntimeState `json:"outboundConnections"`
 	InboundConnections  []ConnectionRuntimeState `json:"inboundConnections"`
 	ChosenCount         uint64                   `json:"chosenCount"`
+	SCCount             uint32                   `json:"scCount"`
 }
 
 // IntrospectState returns the RuntimeState for this channel.
 // Note: this is purely for debugging and monitoring, and may slow down your Channel.
 func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
+	mut := ch.mutable
+	mut.mut.RLock()
+	conns := len(ch.mutable.conns)
+	mut.mut.RUnlock()
+
 	return &RuntimeState{
-		LocalPeer:   ch.PeerInfo(),
-		SubChannels: ch.subChannels.IntrospectState(opts),
-		RootPeers:   ch.rootPeers().IntrospectState(opts),
-		Peers:       ch.Peers().IntrospectList(opts),
+		LocalPeer:      ch.PeerInfo(),
+		SubChannels:    ch.subChannels.IntrospectState(opts),
+		RootPeers:      ch.rootPeers().IntrospectState(opts),
+		Peers:          ch.Peers().IntrospectList(opts),
+		NumConnections: conns,
 	}
 }
 
@@ -166,18 +177,14 @@ func getConnectionRuntimeState(conns []*Connection, opts *IntrospectionOptions) 
 // IntrospectState returns the runtime state for this peer.
 func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 	p.mut.RLock()
-
-	hostPort := p.hostPort
-	inboundConns := getConnectionRuntimeState(p.inboundConnections, opts)
-	outboundConns := getConnectionRuntimeState(p.outboundConnections, opts)
-	chosenCount := p.chosenCount
-	p.mut.RUnlock()
+	defer p.mut.RUnlock()
 
 	return PeerRuntimeState{
-		HostPort:            hostPort,
-		InboundConnections:  inboundConns,
-		OutboundConnections: outboundConns,
-		ChosenCount:         chosenCount,
+		HostPort:            p.hostPort,
+		InboundConnections:  getConnectionRuntimeState(p.inboundConnections, opts),
+		OutboundConnections: getConnectionRuntimeState(p.outboundConnections, opts),
+		ChosenCount:         p.chosenCount,
+		SCCount:             p.scCount,
 	}
 }
 
@@ -191,6 +198,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		ConnectionState:  c.state.String(),
 		LocalHostPort:    c.conn.LocalAddr().String(),
 		RemoteHostPort:   c.conn.RemoteAddr().String(),
+		IsEphemeral:      c.remotePeerInfo.IsEphemeral,
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
 	}

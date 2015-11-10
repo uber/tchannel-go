@@ -60,7 +60,7 @@ func (c *Client) createRequest() *AdRequest {
 
 func (c *Client) sendAdvertise() error {
 	// Cannot advertise from an ephemeral peer.
-	if c.tchan.PeerInfo().IsEphemeral() {
+	if c.tchan.PeerInfo().IsEphemeralHostPort() {
 		return errEphemeralPeer
 	}
 

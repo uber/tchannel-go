@@ -41,14 +41,17 @@ type PeerInfo struct {
 
 	// The logical process name for the peer, used for only for logging / debugging
 	ProcessName string
+
+	// IsEphemeral returns whether the remote host:port is ephemeral (e.g. not listening).
+	IsEphemeral bool
 }
 
 func (p PeerInfo) String() string {
 	return fmt.Sprintf("%s(%s)", p.HostPort, p.ProcessName)
 }
 
-// IsEphemeral returns if hostPort is the default ephemeral hostPort.
-func (p PeerInfo) IsEphemeral() bool {
+// IsEphemeralHostPort returns if hostPort is the default ephemeral hostPort.
+func (p PeerInfo) IsEphemeralHostPort() bool {
 	return p.HostPort == "" || p.HostPort == ephemeralHostPort
 }
 
@@ -353,9 +356,9 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		c.protocolError(id, fmt.Errorf("Header %v is required", InitParamProcessName))
 		return
 	}
-	if c.remotePeerInfo.IsEphemeral() {
-		// TODO(prashant): Add an IsEphemeral bool to the peer info.
+	if c.remotePeerInfo.IsEphemeralHostPort() {
 		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
+		c.remotePeerInfo.IsEphemeral = true
 	}
 
 	res := initRes{initMessage{id: frame.Header.ID}}
@@ -458,8 +461,9 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 	}
 
 	c.remotePeerInfo.HostPort = res.initParams[InitParamHostPort]
-	if c.remotePeerInfo.IsEphemeral() {
+	if c.remotePeerInfo.IsEphemeralHostPort() {
 		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
+		c.remotePeerInfo.IsEphemeral = true
 	}
 	c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
 
@@ -712,7 +716,6 @@ func (c *Connection) checkExchanges() {
 	if updated != 0 {
 		// If the connection is closed, we can safely close the channel.
 		if updated == connectionClosed {
-
 			go func() {
 				// We cannot close sendCh until we are sure that there are no other goroutines
 				// that may try to write to sendCh.
