@@ -248,6 +248,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		events:          events,
 		commonStatsTags: ch.commonStatsTags,
 	}
+	c.log = log
 	c.inbound.onRemoved = c.checkExchanges
 	c.outbound.onRemoved = c.checkExchanges
 

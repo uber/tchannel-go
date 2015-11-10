@@ -320,6 +320,7 @@ func TestFragmentation(t *testing.T) {
 func TestFragmentationSlowReader(t *testing.T) {
 	startReading, handlerComplete := make(chan struct{}), make(chan struct{})
 	handler := func(ctx context.Context, call *InboundCall) {
+		<-ctx.Done()
 		<-startReading
 		_, err := raw.ReadArgs(call)
 		assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
