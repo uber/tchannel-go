@@ -289,7 +289,7 @@ func (c *Connection) handleError(frame *Frame) {
 	}
 
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.outbound.removeExchange(frame.Header.ID)
+		c.log.Infof("Failed to forward error frame %v to mex, error: %v", frame.Header, errMsg)
 	}
 }
 

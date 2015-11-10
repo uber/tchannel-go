@@ -555,19 +555,20 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 	// as we are sending the frame.
 	return c.withStateRLock(func() error {
 		// Errors cannot be sent if the connection has been closed.
-		if c.state != connectionClosed {
-			select {
-			case c.sendCh <- frame: // Good to go
-				return nil
-			default: // If the send buffer is full, log and return an error.
-			}
-			c.log.Warnf("Could not send error frame to %s for %d : %v",
-				c.remotePeerInfo, id, err)
-		} else {
+		if c.state == connectionClosed {
 			c.log.Infof("Could not send error frame to %s on closed conn for %d : %v",
 				c.remotePeerInfo, id, err)
+			return fmt.Errorf("failed to send error frame, connection state %v", c.state)
 		}
-		return fmt.Errorf("failed to send error frame")
+
+		select {
+		case c.sendCh <- frame: // Good to go
+			return nil
+		default: // If the send buffer is full, log and return an error.
+		}
+		c.log.Warnf("Could not send error frame to %s for %d : %v",
+			c.remotePeerInfo, id, err)
+		return fmt.Errorf("failed to send error frame, buffer full")
 	})
 }
 
