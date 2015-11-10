@@ -4,9 +4,9 @@ package tchannel
 
 import "fmt"
 
-const _RetryOn_name = "RetryDefaultRetryConnectionErrorRetryNeverRetryNonIdempotentRetryUnexpected"
+const _RetryOn_name = "RetryDefaultRetryConnectionErrorRetryNeverRetryNonIdempotentRetryUnexpectedRetryIdempotent"
 
-var _RetryOn_index = [...]uint8{0, 12, 32, 42, 60, 75}
+var _RetryOn_index = [...]uint8{0, 12, 32, 42, 60, 75, 90}
 
 func (i RetryOn) String() string {
 	if i < 0 || i+1 >= RetryOn(len(_RetryOn_index)) {
