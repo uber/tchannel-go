@@ -24,7 +24,6 @@ import (
 	"errors"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/json"
 )
 
 var errEphemeralPeer = errors.New("cannot advertise on channel that has not called ListenAndServe")
@@ -64,7 +63,9 @@ func (c *Client) sendAdvertise() error {
 		return errEphemeralPeer
 	}
 
-	ctx, cancel := json.NewContext(c.opts.Timeout)
+	ctx, cancel := tchannel.NewContextBuilder(c.opts.Timeout).
+		SetRetryOptions(&tchannel.RetryOptions{RetryOn: tchannel.RetryIdempotent}).
+		Build()
 	defer cancel()
 
 	// Disable tracing on Hyperbahn advertise messages to avoid cascading failures (see #790).

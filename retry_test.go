@@ -87,6 +87,7 @@ func TestCanRetry(t *testing.T) {
 		{RetryConnectionError, []error{e.Busy, e.Declined, e.Network, e.Connection}},
 		{RetryNonIdempotent, []error{e.Busy, e.Declined}},
 		{RetryUnexpected, []error{e.Busy, e.Declined, e.Unexpected}},
+		{RetryIdempotent, []error{e.Busy, e.Declined, e.Timeout, e.Network, e.Connection, e.Unexpected, e.Cancelled}},
 	}
 
 	for _, tt := range tests {

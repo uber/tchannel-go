@@ -49,6 +49,10 @@ const (
 
 	// RetryUnexpected will retry busy frames, declined frames, and unenxpected frames.
 	RetryUnexpected
+
+	// RetryIdempotent will retry all errors that can be retried. This should be used
+	// for idempotent endpoints.
+	RetryIdempotent
 )
 
 // RequestState is a global request state that persists across retries.
@@ -91,9 +95,12 @@ func (r RetryOn) CanRetry(err error) bool {
 
 	code := getErrCode(err)
 
-	// If retries are not Never, we always retry Busy and declined
 	if code == ErrCodeBusy || code == ErrCodeDeclined {
 		return true
+	}
+	// Never retry bad requests, since it will probably cause another bad request.
+	if code == ErrCodeBadRequest {
+		return false
 	}
 
 	switch r {
@@ -101,6 +108,8 @@ func (r RetryOn) CanRetry(err error) bool {
 		return code == ErrCodeNetwork
 	case RetryUnexpected:
 		return code == ErrCodeUnexpected
+	case RetryIdempotent:
+		return true
 	}
 
 	return false

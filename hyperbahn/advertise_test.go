@@ -51,7 +51,7 @@ func TestInitialAdvertiseFailedRetry(t *testing.T) {
 		count := 0
 		adHandler := func(ctx json.Context, req *AdRequest) (*AdResponse, error) {
 			count++
-			return nil, tchannel.ErrServerBusy
+			return nil, tchannel.NewSystemError(tchannel.ErrCodeUnexpected, "unexpected")
 		}
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
