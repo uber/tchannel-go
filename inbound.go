@@ -205,6 +205,7 @@ type InboundCall struct {
 	response        *InboundCallResponse
 	serviceName     string
 	operation       []byte
+	operationString string
 	headers         transportHeaders
 	span            Span
 	statsReporter   StatsReporter
@@ -219,6 +220,11 @@ func (call *InboundCall) ServiceName() string {
 // Operation returns the operation being called
 func (call *InboundCall) Operation() []byte {
 	return call.operation
+}
+
+// OperationString returns the operation being called as a string.
+func (call *InboundCall) OperationString() string {
+	return call.operationString
 }
 
 // Format the format of the request from the ArgScheme transport header.
@@ -244,6 +250,7 @@ func (call *InboundCall) readOperation() error {
 	}
 
 	call.operation = arg1
+	call.operationString = string(arg1)
 	return nil
 }
 
