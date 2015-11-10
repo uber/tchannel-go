@@ -483,7 +483,9 @@ func (ch *Channel) removeClosedConn(c *Connection) {
 		return
 	}
 
+	ch.mutable.mut.Lock()
 	delete(ch.mutable.conns, c.connID)
+	ch.mutable.mut.Unlock()
 }
 
 // connectionCloseStateChange is called when a connection's close state changes.
