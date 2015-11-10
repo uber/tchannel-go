@@ -385,3 +385,17 @@ func TestWriteAfterTimeout(t *testing.T) {
 	})
 	VerifyNoBlockedGoroutines(t)
 }
+
+func TestReadTimeout(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		for i := 0; i < 100; i++ {
+			ctx, cancel := NewContext(time.Second)
+			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				defer cancel()
+				return nil, ErrTimeout
+			}
+			testutils.RegisterFunc(t, ch, "call", handler)
+			raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
+		}
+	})
+}

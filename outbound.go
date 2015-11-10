@@ -266,7 +266,7 @@ func (response *OutboundCallResponse) Arg3Reader() (io.ReadCloser, error) {
 	return response.arg3Reader()
 }
 
-// handleError andles an error coming back from the peer. If the error is a
+// handleError handles an error coming back from the peer. If the error is a
 // protocol level error, the entire connection will be closed.  If the error is
 // a request specific error, it will be written to the request's response
 // channel and converted into a SystemError returned from the next reader or
@@ -289,7 +289,7 @@ func (c *Connection) handleError(frame *Frame) {
 	}
 
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.outbound.removeExchange(frame.Header.ID)
+		c.log.Infof("Failed to forward error frame %v to mex, error: %v", frame.Header, errMsg)
 	}
 }
 
