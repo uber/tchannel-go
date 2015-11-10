@@ -144,14 +144,23 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	return err
 }
 
+func getServiceMethod(operation string) (string, string, bool) {
+	s := string(operation)
+	sep := strings.Index(s, "::")
+	if sep == -1 {
+		return "", "", false
+	}
+	return s[:sep], s[sep+2:], true
+}
+
 // Handle handles an incoming TChannel call and forwards it to the correct handler.
 func (s *Server) Handle(ctx context.Context, call *tchannel.InboundCall) {
-	parts := strings.Split(string(call.Operation()), "::")
-	if len(parts) != 2 {
-		log.Fatalf("Handle got call for %v which does not match the expected call format", parts)
+	op := call.OperationString()
+	service, method, ok := getServiceMethod(op)
+	if !ok {
+		log.Fatalf("Handle got call for %s which does not match the expected call format", op)
 	}
 
-	service, method := parts[0], parts[1]
 	s.mut.RLock()
 	handler, ok := s.handlers[service]
 	s.mut.RUnlock()
