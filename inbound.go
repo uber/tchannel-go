@@ -85,11 +85,13 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 			ServiceName: callReq.Service,
 		},
 		timeNow: c.timeNow,
-		binaryAnnotations: []BinaryAnnotation{
+		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: callReq.Headers[CallerName]},
 			{Key: "as", Value: callReq.Headers[ArgScheme]},
 		},
 	}
+	response.annotations = response.annotationsBacking[:0]
+	response.binaryAnnotations = response.binaryAnnotationsBacking[:]
 	response.AddAnnotation(AnnotationKeyServerReceive)
 	response.mex = mex
 	response.conn = c

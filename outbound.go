@@ -116,11 +116,13 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 			Operation:   operation,
 		},
 		timeNow: c.timeNow,
-		binaryAnnotations: []BinaryAnnotation{
+		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: call.callReq.Headers[CallerName]},
 			{Key: "as", Value: call.callReq.Headers[ArgScheme]},
 		},
 	}
+	response.annotations = response.annotationsBacking[:0]
+	response.binaryAnnotations = response.binaryAnnotationsBacking[:]
 	response.AddAnnotation(AnnotationKeyClientSend)
 
 	response.requestState = callOptions.RequestState
@@ -225,8 +227,7 @@ type OutboundCallResponse struct {
 	reqResReader
 	Annotations
 
-	callRes     callRes
-	annotations Annotations
+	callRes callRes
 
 	requestState *RequestState
 	// startedAt is the time at which the outbound call was started.
