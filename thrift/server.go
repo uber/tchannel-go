@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/apache/thrift/lib/go/thrift"
 	tchannel "github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
 )
@@ -105,8 +104,11 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	}
 
 	ctx := WithHeaders(origCtx, headers)
-	protocol := thrift.NewTBinaryProtocolTransport(&readWriterTransport{Reader: reader})
-	success, resp, err := handler.server.Handle(ctx, method, protocol)
+
+	wp := getProtocolReader(reader)
+	success, resp, err := handler.server.Handle(ctx, method, wp.protocol)
+	thriftProtocolPool.Put(wp)
+
 	if err != nil {
 		reader.Close()
 		call.Response().SendSystemError(err)
@@ -133,8 +135,9 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	}
 
 	writer, err = call.Response().Arg3Writer()
-	protocol = thrift.NewTBinaryProtocolTransport(&readWriterTransport{Writer: writer})
-	resp.Write(protocol)
+	wp = getProtocolWriter(writer)
+	resp.Write(wp.protocol)
+	thriftProtocolPool.Put(wp)
 	err = writer.Close()
 
 	if handler.postResponseCB != nil {

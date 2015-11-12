@@ -22,6 +22,7 @@ package thrift
 
 import (
 	"io"
+	"sync"
 
 	"github.com/apache/thrift/lib/go/thrift"
 )
@@ -56,3 +57,30 @@ func (t *readWriterTransport) RemainingBytes() uint64 {
 }
 
 var _ thrift.TTransport = &readWriterTransport{}
+
+type thriftProtocol struct {
+	transport *readWriterTransport
+	protocol  *thrift.TBinaryProtocol
+}
+
+var thriftProtocolPool = sync.Pool{
+	New: func() interface{} {
+		transport := &readWriterTransport{}
+		protocol := thrift.NewTBinaryProtocolTransport(transport)
+		return &thriftProtocol{transport, protocol}
+	},
+}
+
+func getProtocolWriter(writer io.Writer) *thriftProtocol {
+	wp := thriftProtocolPool.Get().(*thriftProtocol)
+	wp.transport.Reader = nil
+	wp.transport.Writer = writer
+	return wp
+}
+
+func getProtocolReader(reader io.Reader) *thriftProtocol {
+	wp := thriftProtocolPool.Get().(*thriftProtocol)
+	wp.transport.Reader = reader
+	wp.transport.Writer = nil
+	return wp
+}
