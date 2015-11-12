@@ -56,7 +56,6 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		return true
 	}
 
-	c.log.Debugf("span=%s", callReq.Tracing)
 	call := new(InboundCall)
 	call.conn = c
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
@@ -86,11 +85,13 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 			ServiceName: callReq.Service,
 		},
 		timeNow: c.timeNow,
-		binaryAnnotations: []BinaryAnnotation{
+		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: callReq.Headers[CallerName]},
 			{Key: "as", Value: callReq.Headers[ArgScheme]},
 		},
 	}
+	response.annotations = response.annotationsBacking[:0]
+	response.binaryAnnotations = response.binaryAnnotationsBacking[:]
 	response.AddAnnotation(AnnotationKeyServerReceive)
 	response.mex = mex
 	response.conn = c
@@ -157,7 +158,9 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
-	c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
+	}
 
 	if err := call.readOperation(); err != nil {
 		c.log.Errorf("Could not read operation from %s: %v", c.remotePeerInfo, err)
@@ -175,8 +178,11 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 	// https://github.com/golang/go/issues/3512
 	h := c.handlers.find(call.ServiceName(), call.Operation())
 	if h == nil {
-		// CHeck the subchannel map to see if we find one there
-		c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Operation())
+		// Check the subchannel map to see if we find one there
+		if c.log.Enabled(LogLevelDebug) {
+			c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Operation())
+		}
+
 		h = c.subChannels.find(call.ServiceName(), call.Operation())
 	}
 	if h == nil {
@@ -193,7 +199,9 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 		}
 	}()
 
-	c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Operation(), c.remotePeerInfo)
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Operation(), c.remotePeerInfo)
+	}
 	h.Handle(call.mex.ctx, call)
 }
 
@@ -205,6 +213,7 @@ type InboundCall struct {
 	response        *InboundCallResponse
 	serviceName     string
 	operation       []byte
+	operationString string
 	headers         transportHeaders
 	span            Span
 	statsReporter   StatsReporter
@@ -219,6 +228,11 @@ func (call *InboundCall) ServiceName() string {
 // Operation returns the operation being called
 func (call *InboundCall) Operation() []byte {
 	return call.operation
+}
+
+// OperationString returns the operation being called as a string.
+func (call *InboundCall) OperationString() string {
+	return call.operationString
 }
 
 // Format the format of the request from the ArgScheme transport header.
@@ -244,6 +258,7 @@ func (call *InboundCall) readOperation() error {
 	}
 
 	call.operation = arg1
+	call.operationString = string(arg1)
 	return nil
 }
 

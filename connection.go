@@ -672,7 +672,10 @@ func (c *Connection) readFrames(_ uint32) {
 // writes them to the connection.
 func (c *Connection) writeFrames(_ uint32) {
 	for f := range c.sendCh {
-		c.log.Debugf("Writing frame %s", f.Header)
+		if c.log.Enabled(LogLevelDebug) {
+			c.log.Debugf("Writing frame %s", f.Header)
+		}
+
 		err := f.WriteOut(c.conn)
 		c.framePool.Release(f)
 		if err != nil {

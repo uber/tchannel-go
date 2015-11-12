@@ -94,6 +94,9 @@ type Annotations struct {
 	span              Span
 	annotations       []Annotation
 	binaryAnnotations []BinaryAnnotation
+
+	annotationsBacking       [2]Annotation
+	binaryAnnotationsBacking [2]BinaryAnnotation
 }
 
 // SetOperation sets the operation being called.

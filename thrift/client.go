@@ -76,10 +76,13 @@ func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrif
 	if err != nil {
 		return err
 	}
-	protocol := thrift.NewTBinaryProtocolTransport(&readWriterTransport{Writer: writer})
-	if err := req.Write(protocol); err != nil {
+
+	wp := getProtocolWriter(writer)
+	if err := req.Write(wp.protocol); err != nil {
+		thriftProtocolPool.Put(wp)
 		return err
 	}
+	thriftProtocolPool.Put(wp)
 	return writer.Close()
 }
 
@@ -90,10 +93,12 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 	if err != nil {
 		return nil, false, err
 	}
+
 	headers, err := readHeaders(reader)
 	if err != nil {
 		return nil, false, err
 	}
+
 	if err := reader.Close(); err != nil {
 		return nil, false, err
 	}
@@ -103,10 +108,13 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 	if err != nil {
 		return headers, success, err
 	}
-	protocol := thrift.NewTBinaryProtocolTransport(&readWriterTransport{Reader: reader})
-	if err := resp.Read(protocol); err != nil {
+
+	wp := getProtocolReader(reader)
+	if err := resp.Read(wp.protocol); err != nil {
+		thriftProtocolPool.Put(wp)
 		return headers, success, err
 	}
+	thriftProtocolPool.Put(wp)
 	return headers, success, reader.Close()
 }
 

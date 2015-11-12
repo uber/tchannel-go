@@ -36,6 +36,9 @@ import (
 // logrus, go-logging, etc).  The SimpleLogger adapts to the standard go log
 // package.
 type Logger interface {
+	// Enabled returns whether the given level is enabled.
+	Enabled(level LogLevel) bool
+
 	// Fatalf logs a message, then exits with os.Exit(1)
 	Fatalf(msg string, args ...interface{})
 
@@ -72,6 +75,7 @@ var NullLogger Logger = nullLogger{}
 
 type nullLogger struct{}
 
+func (nullLogger) Enabled(_ LogLevel) bool                { return false }
 func (nullLogger) Fatalf(msg string, arg ...interface{})  { os.Exit(1) }
 func (nullLogger) Errorf(msg string, args ...interface{}) {}
 func (nullLogger) Warnf(msg string, args ...interface{})  {}
@@ -100,6 +104,7 @@ func (l writerLogger) Fatalf(msg string, args ...interface{}) {
 	os.Exit(1)
 }
 
+func (l writerLogger) Enabled(_ LogLevel) bool                { return true }
 func (l writerLogger) Errorf(msg string, args ...interface{}) { l.printfn("E", msg, args...) }
 func (l writerLogger) Warnf(msg string, args ...interface{})  { l.printfn("W", msg, args...) }
 func (l writerLogger) Infof(msg string, args ...interface{})  { l.printfn("I", msg, args...) }
@@ -141,6 +146,10 @@ type levelLogger struct {
 // NewLevelLogger returns a logger that only logs messages with a minimum of level.
 func NewLevelLogger(logger Logger, level LogLevel) Logger {
 	return levelLogger{logger, level}
+}
+
+func (l levelLogger) Enabled(level LogLevel) bool {
+	return l.level <= level
 }
 
 func (l levelLogger) Fatalf(msg string, args ...interface{}) {

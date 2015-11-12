@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -129,14 +130,22 @@ type RetryOptions struct {
 	TimeoutPerAttempt time.Duration
 }
 
+var defaultRetryOptions = &RetryOptions{
+	MaxAttempts: 5,
+}
+
+var requestStatePool = sync.Pool{
+	New: func() interface{} { return &RequestState{} },
+}
+
 func getRetryOptions(ctx context.Context) *RetryOptions {
 	opts := getTChannelParams(ctx).retryOptions
 	if opts == nil {
-		opts = &RetryOptions{}
+		return defaultRetryOptions
 	}
 
 	if opts.MaxAttempts == 0 {
-		opts.MaxAttempts = 5
+		opts.MaxAttempts = defaultRetryOptions.MaxAttempts
 	}
 	return opts
 }
@@ -194,8 +203,11 @@ func (rs *RequestState) RetryCount() int {
 // rerun it as specifed in the RetryOptions in the Context.
 func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 	var err error
+
 	opts := getRetryOptions(ctx)
-	rs := &RequestState{Start: ch.timeNow(), retryOpts: opts}
+	rs := ch.getRequestState(opts)
+	defer requestStatePool.Put(rs)
+
 	for i := 0; i < opts.MaxAttempts; i++ {
 		rs.Attempt++
 
@@ -219,4 +231,13 @@ func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 
 	// Too many retries, return the last error
 	return err
+}
+
+func (ch *Channel) getRequestState(retryOpts *RetryOptions) *RequestState {
+	rs := requestStatePool.Get().(*RequestState)
+	*rs = RequestState{
+		Start:     ch.timeNow(),
+		retryOpts: retryOpts,
+	}
+	return rs
 }

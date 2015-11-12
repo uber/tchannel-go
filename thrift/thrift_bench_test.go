@@ -45,7 +45,7 @@ import (
 var (
 	useHyperbahn   = flag.Bool("useHyperbahn", false, "Whether to advertise and route requests through Hyperbahn")
 	hyperbahnNodes = flag.String("hyperbahnNodes", "127.0.0.1:21300,127.0.0.1:21301", "Comma-separated list of Hyperbahn nodes")
-	requestSize    = flag.Int("requestSize", 10000, "Call payload size")
+	requestSize    = flag.Int("requestSize", 4, "Call payload size")
 	timeout        = flag.Duration("callTimeout", time.Second, "Timeout for each call")
 )
 
@@ -78,7 +78,35 @@ func setupBenchServer() ([]string, error) {
 	return nodes, nil
 }
 
-func BenchmarkCallsSerial(b *testing.B) {
+func BenchmarkBothSerial(b *testing.B) {
+	serverAddr, err := setupBenchServer()
+	require.NoError(b, err, "setupBenchServer failed")
+
+	opts := testutils.NewOpts().SetFramePool(tchannel.NewSyncFramePool())
+	clientCh := testutils.NewClient(b, opts)
+	for _, addr := range serverAddr {
+		clientCh.Peers().Add(addr)
+	}
+
+	thriftClient := thrift.NewClient(clientCh, "bench-server", nil)
+	client := gen.NewTChanSecondServiceClient(thriftClient)
+	ctx, cancel := thrift.NewContext(10 * time.Millisecond)
+	client.Echo(ctx, "make connection")
+	cancel()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ctx, cancel := thrift.NewContext(10 * time.Millisecond)
+		defer cancel()
+
+		_, err := client.Echo(ctx, "hello world")
+		if err != nil {
+			b.Errorf("Echo failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkInboundSerial(b *testing.B) {
 	serverAddr, err := setupBenchServer()
 	require.NoError(b, err, "setupBenchServer failed")
 
@@ -92,7 +120,7 @@ func BenchmarkCallsSerial(b *testing.B) {
 	}
 }
 
-func BenchmarkCallsParallel(b *testing.B) {
+func BenchmarkInboundParallel(b *testing.B) {
 	var reqCount int32
 	serverAddr, err := setupBenchServer()
 	require.NoError(b, err, "setupBenchServer failed")

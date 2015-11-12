@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/apache/thrift/lib/go/thrift"
 	tchannel "github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
 )
@@ -105,8 +104,11 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	}
 
 	ctx := WithHeaders(origCtx, headers)
-	protocol := thrift.NewTBinaryProtocolTransport(&readWriterTransport{Reader: reader})
-	success, resp, err := handler.server.Handle(ctx, method, protocol)
+
+	wp := getProtocolReader(reader)
+	success, resp, err := handler.server.Handle(ctx, method, wp.protocol)
+	thriftProtocolPool.Put(wp)
+
 	if err != nil {
 		reader.Close()
 		call.Response().SendSystemError(err)
@@ -133,8 +135,9 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	}
 
 	writer, err = call.Response().Arg3Writer()
-	protocol = thrift.NewTBinaryProtocolTransport(&readWriterTransport{Writer: writer})
-	resp.Write(protocol)
+	wp = getProtocolWriter(writer)
+	resp.Write(wp.protocol)
+	thriftProtocolPool.Put(wp)
 	err = writer.Close()
 
 	if handler.postResponseCB != nil {
@@ -144,14 +147,23 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	return err
 }
 
+func getServiceMethod(operation string) (string, string, bool) {
+	s := string(operation)
+	sep := strings.Index(s, "::")
+	if sep == -1 {
+		return "", "", false
+	}
+	return s[:sep], s[sep+2:], true
+}
+
 // Handle handles an incoming TChannel call and forwards it to the correct handler.
 func (s *Server) Handle(ctx context.Context, call *tchannel.InboundCall) {
-	parts := strings.Split(string(call.Operation()), "::")
-	if len(parts) != 2 {
-		log.Fatalf("Handle got call for %v which does not match the expected call format", parts)
+	op := call.OperationString()
+	service, method, ok := getServiceMethod(op)
+	if !ok {
+		log.Fatalf("Handle got call for %s which does not match the expected call format", op)
 	}
 
-	service, method := parts[0], parts[1]
 	s.mut.RLock()
 	handler, ok := s.handlers[service]
 	s.mut.RUnlock()

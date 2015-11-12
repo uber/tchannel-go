@@ -60,13 +60,17 @@ func BenchmarkCallsSerial(b *testing.B) {
 
 	clientCh := testutils.NewClient(b, nil)
 
+	started := time.Now()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ctx, cancel := NewContext(time.Second)
+		ctx, cancel := NewContext(10 * time.Millisecond)
 		_, _, _, err := raw.Call(ctx, clientCh, svcHostPort, svcName, "echo", []byte("data111"), []byte("data222"))
 		assert.NoError(b, err)
 		cancel()
 	}
+	b.StopTimer()
+	duration := time.Since(started)
+	b.Logf("Executed %v calls in %v, avg time = %v\n", b.N, duration, duration/time.Duration(b.N))
 }
 
 func BenchmarkCallsConcurrent(b *testing.B) {
