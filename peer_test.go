@@ -29,8 +29,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/GaryBoone/GoStats/stats"
 	. "github.com/uber/tchannel-go"
+
+	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -303,6 +305,12 @@ func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
 			t.Errorf("Key %v has value %v which is out of range %v-%v", k, v, min, max)
 		}
 	}
+
+	cc := make([]float64, 0)
+	for _, y := range counts {
+		cc = append(cc, float64(y))
+	}
+	fmt.Printf("standard dev %+v\n", stats.StatsPopulationStandardDeviation(cc))
 }
 
 type peerSelectionTest struct {
@@ -493,7 +501,6 @@ func TestPeersHeapPerf(t *testing.T) {
 	for _, tt := range tests {
 		peersHeapStress(t, tt.numHyperbahn, tt.affinityRatio, tt.numConcurrent, tt.hasInboundCall)
 	}
-
 }
 
 func peersHeapStress(t testing.TB, numHyperbahn int, affinityRatio float64, numConcurrent int, hasInboundCall bool) {
@@ -526,7 +533,6 @@ func validateStressTest(t testing.TB, server *Channel, numAffinity int) {
 			counts = append(counts, int(p.ChosenCount))
 		}
 	}
-
 	// when number of affinity is zero, all peer suppose to be chosen.
 	if numAffinity == 0 {
 		numAffinity = len(state.Peers)
