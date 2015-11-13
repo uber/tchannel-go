@@ -347,7 +347,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 	VerifyNoBlockedGoroutines(t)
 }
 
-func TestWriteAfterTimeout(t *testing.T) {
+func TestWriteArg3AfterTimeout(t *testing.T) {
 	// The channel reads and writes during timeouts, causing warning logs.
 	opts := testutils.NewOpts().DisableLogVerification()
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
@@ -383,6 +383,32 @@ func TestWriteAfterTimeout(t *testing.T) {
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
+	})
+	VerifyNoBlockedGoroutines(t)
+}
+
+func TestWriteErrorAfterTimeout(t *testing.T) {
+	// TODO: Make this test block at different points (e.g. before, during read/write).
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		timedOut := make(chan struct{})
+		done := make(chan struct{})
+		handler := func(ctx context.Context, call *InboundCall) {
+			<-ctx.Done()
+			<-timedOut
+			args, err := raw.ReadArgs(call)
+			assert.Equal(t, ErrTimeout, err, "Read args should fail with timeout")
+			response := call.Response()
+			assert.Equal(t, ErrTimeout, response.SendSystemError(ErrServerBusy), "SendSystemError should fail")
+			close(done)
+		}
+		ch.Register(HandlerFunc(handler), "call")
+
+		ctx, cancel := NewContext(20 * time.Millisecond)
+		defer cancel()
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, testutils.RandBytes(100000))
+		assert.Equal(t, err, ErrTimeout, "Call should timeout")
+		close(timedOut)
+		<-done
 	})
 	VerifyNoBlockedGoroutines(t)
 }
