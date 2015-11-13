@@ -20,11 +20,7 @@
 
 package tchannel
 
-import (
-	"math"
-	"math/rand"
-	"time"
-)
+import "math"
 
 // ScoreCalculator defines the interface to calculate the score.
 type ScoreCalculator interface {
@@ -49,18 +45,24 @@ func newZeroCalculator() zeroCalculator {
 	return zeroCalculator{}
 }
 
-type preferIncoming struct {
-	rng *rand.Rand
-}
+type preferIncomingCalculator struct{}
 
-func (r *preferIncoming) GetScore(p *Peer) uint64 {
-	rn := uint64(r.rng.Int31())
-	if p.NumInbound() > 0 {
-		rn += math.MaxUint32
+func (preferIncomingCalculator) GetScore(p *Peer) uint64 {
+	if p.NumInbound() <= 0 {
+		return math.MaxUint64
 	}
-	return rn
+	count := 0
+	for _, c := range p.outboundConnections {
+		count = count + len(c.outbound.exchanges)
+	}
+
+	for _, c := range p.inboundConnections {
+		count = count + len(c.outbound.exchanges)
+	}
+
+	return uint64(count)
 }
 
-func newPreferIncoming() *preferIncoming {
-	return &preferIncoming{rng: NewRand(time.Now().UnixNano())}
+func newPreferIncomingCalculator() preferIncomingCalculator {
+	return preferIncomingCalculator{}
 }

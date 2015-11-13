@@ -61,7 +61,7 @@ func newPeerList(root *RootPeerList) *PeerList {
 	return &PeerList{
 		parent:          root,
 		peersByHostPort: make(map[string]*peerScore),
-		scoreCalculator: newZeroCalculator(),
+		scoreCalculator: newPreferIncomingCalculator(),
 		peerHeap:        newPeerHeap(),
 	}
 }
