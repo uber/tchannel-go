@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,6 +56,7 @@ type PeerList struct {
 	peersByHostPort map[string]*peerScore
 	peerHeap        *PeerHeap
 	scoreCalculator ScoreCalculator
+	lastSelected    uint64
 }
 
 func newPeerList(root *RootPeerList) *PeerList {
@@ -118,9 +120,10 @@ func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 }
 
 func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
-	ps := l.peerHeap.peek()
+	ps := l.peerHeap.PopPeer()
 	ps.score++
-	l.peerHeap.update(ps)
+	l.peerHeap.PushPeer(ps)
+
 	atomic.AddUint64(&(ps.chosenCount), 1)
 	return ps.Peer
 }
@@ -158,8 +161,12 @@ func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
 func (l *PeerList) UpdatePeerHeap(p *Peer) {
 	if ps, ok := l.exists(p.hostPort); ok {
 		l.Lock()
-		ps.score = l.scoreCalculator.GetScore(p)
-		l.peerHeap.update(ps)
+		score := l.scoreCalculator.GetScore(p)
+		if score != ps.score {
+			l.peerHeap.RemovePeer(ps)
+			ps.score = score
+			l.peerHeap.PushPeer(ps)
+		}
 		l.Unlock()
 	}
 }
@@ -169,10 +176,15 @@ type peerScore struct {
 
 	score uint64
 	index int
+	order uint64
 }
 
 func newPeerScore(p *Peer) *peerScore {
-	return &peerScore{Peer: p}
+	return &peerScore{
+		Peer:  p,
+		score: math.MaxUint64,
+		index: -1,
+	}
 }
 
 // Peer represents a single autobahn service or client with a unique host:port.

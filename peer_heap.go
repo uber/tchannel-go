@@ -23,6 +23,7 @@ package tchannel
 import (
 	"container/heap"
 	"math/rand"
+	"sync/atomic"
 	"time"
 )
 
@@ -30,6 +31,7 @@ import (
 type PeerHeap struct {
 	PeerScores []*peerScore
 	rng        *rand.Rand
+	order      uint64
 }
 
 func newPeerHeap() *PeerHeap {
@@ -38,15 +40,10 @@ func newPeerHeap() *PeerHeap {
 
 func (ph PeerHeap) Len() int { return len(ph.PeerScores) }
 
-func (ph PeerHeap) Less(i, j int) bool {
-
-	// We use random to avoid a deterministic round robin which can cause load on the same nodes from multiple clients
+func (ph *PeerHeap) Less(i, j int) bool {
 	if ph.PeerScores[i].score == ph.PeerScores[j].score {
-		// return random true or false when scores are the same.
-		return ph.rng.Intn(2) < 1
+		return ph.PeerScores[i].order < ph.PeerScores[j].order
 	}
-
-	// We want Pop to give us the lowest, not highest, score so we use less than here.
 	return ph.PeerScores[i].score < ph.PeerScores[j].score
 }
 
@@ -74,8 +71,9 @@ func (ph *PeerHeap) Pop() interface{} {
 	return item
 }
 
-func (ph *PeerHeap) update(peer *peerScore) {
-	heap.Fix(ph, peer.index)
+// RemovePeer remove peer at specific index.
+func (ph *PeerHeap) RemovePeer(peerScore *peerScore) {
+	heap.Remove(ph, peerScore.index)
 }
 
 // PopPeer pops the top peer of the heap.
@@ -85,6 +83,8 @@ func (ph *PeerHeap) PopPeer() *peerScore {
 
 // PushPeer pushes the new peer into the heap.
 func (ph *PeerHeap) PushPeer(peerScore *peerScore) {
+	atomic.AddUint64(&(ph.order), 1)
+	peerScore.order = ph.order
 	heap.Push(ph, peerScore)
 }
 
