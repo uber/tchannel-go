@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -120,6 +121,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 	ps := l.peerHeap.peek()
 	ps.score++
 	l.peerHeap.update(ps)
+	atomic.AddUint64(&(ps.chosenCount), 1)
 	return ps.Peer
 }
 
