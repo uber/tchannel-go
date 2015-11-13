@@ -22,6 +22,7 @@ package raw
 
 import (
 	"errors"
+	"io"
 
 	"github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
@@ -29,6 +30,27 @@ import (
 
 // ErrAppError is returned if the application sets an error response.
 var ErrAppError = errors.New("application error")
+
+// Readable is the interface for something that can be read.
+type Readable interface {
+	Arg2Reader() (io.ReadCloser, error)
+	Arg3Reader() (io.ReadCloser, error)
+}
+
+// ReadArgsV2 reads arg2 and arg3 from a reader.
+func ReadArgsV2(r Readable) ([]byte, []byte, error) {
+	var arg2, arg3 []byte
+
+	if err := tchannel.NewArgReader(r.Arg2Reader()).Read(&arg2); err != nil {
+		return nil, nil, err
+	}
+
+	if err := tchannel.NewArgReader(r.Arg3Reader()).Read(&arg3); err != nil {
+		return nil, nil, err
+	}
+
+	return arg2, arg3, nil
+}
 
 // WriteArgs writes the given arguments to the call, and returns the response args.
 func WriteArgs(call *tchannel.OutboundCall, arg2, arg3 []byte) ([]byte, []byte, *tchannel.OutboundCallResponse, error) {
