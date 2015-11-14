@@ -94,7 +94,7 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		peers := ch.GetSubChannel(fmt.Sprintf("test-%d", i), Isolated).Peers()
+		peers := ch.GetSubChannel(fmt.Sprintf("test%d", i), Isolated).Peers()
 		for _, p := range tt.peers {
 			peers.Add(p)
 		}
@@ -104,7 +104,6 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 			t.Errorf("Got unexpected error selecting peer: %v", err)
 			continue
 		}
-
 		got := gotPeer.HostPort()
 		if _, ok := tt.expected[got]; !ok {
 			t.Errorf("Got unexpected peer, expected one of %v got %v\n  Peers = %v PrevSelected = %v",
@@ -171,7 +170,7 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 
 		// 5 peers that make incoming connections to ch.
 		for i := 0; i < 5; i++ {
-			incoming, _, incomingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("hyperbahn-%d", i)})
+			incoming, _, incomingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("hyperbahn%d", i)})
 			allChannels = append(allChannels, incoming)
 			assert.NoError(t, incoming.Ping(ctx, ch.PeerInfo().HostPort), "Ping failed")
 			ch.Peers().Add(incomingHP)
@@ -185,7 +184,7 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 
 		// 5 random peers that we have outgoing connections to.
 		for i := 0; i < 5; i++ {
-			outgoing, _, outgoingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("outgoing-%d", i)})
+			outgoing, _, outgoingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("outgoing%d", i)})
 			allChannels = append(allChannels, outgoing)
 			assert.NoError(t, ch.Ping(ctx, outgoingHP), "Ping failed")
 			ch.Peers().Add(outgoingHP)
@@ -263,7 +262,7 @@ func TestIsolatedPeerHeap(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
 
 	ps1 := createSubChannelWNewStrategy(ch, "S1", numPeers, 1)
-	ps2 := createSubChannelWNewStrategy(ch, "S1", numPeers, -1, Isolated)
+	ps2 := createSubChannelWNewStrategy(ch, "S1", numPeers, 1, Isolated)
 
 	hostports := make([]string, numPeers)
 	for i := 0; i < numPeers; i++ {
@@ -302,11 +301,11 @@ func createSubChannelWNewStrategy(ch *Channel, name string, initial, delta int64
 func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
 	for k, v := range counts {
 		if float64(v) < min || float64(v) > max {
-			t.Errorf("Key %v has value %v which is out of range %v-%v", k, v, min, max)
+			t.Errorf("Key %v has value %v which is out of range %v%v", k, v, min, max)
 		}
 	}
 
-	cc := make([]float64, 0)
+	var cc []float64
 	for _, y := range counts {
 		cc = append(cc, float64(y))
 	}
@@ -336,7 +335,7 @@ func (pt *peerSelectionTest) setupServers(t testing.TB) {
 
 	// Set up numPeers servers.
 	for i := 0; i < pt.numPeers; i++ {
-		pt.servers[i], _ = pt.NewService(t, "hyperbahn")
+		pt.servers[i], _ = pt.NewService(t, "server")
 		pt.servers[i].Register(raw.Wrap(newTestHandler(pt.t)), "echo")
 	}
 }
@@ -395,24 +394,6 @@ func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
 	wg.Wait()
 }
 
-// Run these commands before run the benchmark.
-// sudo sysctl -w kern.maxfiles=50000
-// ulimit -n 50000
-func BenchmarkSimplePeersHeapPerf(b *testing.B) {
-	pt := &peerSelectionTest{
-		peerTest:      peerTest{t: b},
-		numPeers:      1000,
-		numConcurrent: 100,
-	}
-	defer pt.CleanUp()
-
-	pt.setupServers(b)
-	pt.setupClient(b)
-	pt.setupAffinity(b)
-	b.ResetTimer()
-	pt.runStressSimple(b)
-}
-
 func (pt *peerSelectionTest) runStress() {
 	numClock := pt.numConcurrent + pt.numAffinity
 	clocks := make([]chan struct{}, numClock)
@@ -435,6 +416,7 @@ func (pt *peerSelectionTest) runStress() {
 			pt.makeCall(sc)
 		}
 	}
+
 	// server outbound request
 	sc := pt.client.GetSubChannel("hyperbahn")
 	for i := 0; i < pt.numConcurrent; i++ {
@@ -467,6 +449,24 @@ func (pt *peerSelectionTest) runStress() {
 		close(clocks[i])
 	}
 	wg.Wait()
+}
+
+// Run these commands before run the benchmark.
+// sudo sysctl w kern.maxfiles=50000
+// ulimit n 50000
+func BenchmarkSimplePeersHeapPerf(b *testing.B) {
+	pt := &peerSelectionTest{
+		peerTest:      peerTest{t: b},
+		numPeers:      1000,
+		numConcurrent: 100,
+	}
+	defer pt.CleanUp()
+
+	pt.setupServers(b)
+	pt.setupClient(b)
+	pt.setupAffinity(b)
+	b.ResetTimer()
+	pt.runStressSimple(b)
 }
 
 func TestPeersHeapPerf(t *testing.T) {

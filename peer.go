@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"container/heap"
 	"errors"
 	"math"
 	"sync"
@@ -120,10 +121,27 @@ func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 }
 
 func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
-	ps := l.peerHeap.PopPeer()
+	var psPopList []*peerScore
+	var ps *peerScore
+
+	size := l.peerHeap.Len()
+	for i := 0; i < size; i++ {
+		ps = l.peerHeap.PopPeer()
+		if _, ok := prevSelected[ps.Peer.HostPort()]; !ok {
+			break
+		}
+		psPopList = append(psPopList, ps)
+	}
+
+	for _, p := range psPopList {
+		heap.Push(l.peerHeap, p)
+	}
+
+	if ps == nil {
+		return nil
+	}
 	ps.score++
 	l.peerHeap.PushPeer(ps)
-
 	atomic.AddUint64(&(ps.chosenCount), 1)
 	return ps.Peer
 }

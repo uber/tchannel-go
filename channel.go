@@ -472,8 +472,8 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 		// Hostport is unknown until we get init resp.
 		return
 	}
-
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	ch.peers.UpdatePeerHeap(p)
 	ch.subChannels.updatePeerHeap(p)
 }
 

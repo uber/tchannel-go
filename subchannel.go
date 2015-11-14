@@ -163,6 +163,8 @@ func (subChMap *subChannelMap) getOrAdd(serviceName string, ch *Channel) *SubCha
 
 func (subChMap *subChannelMap) updatePeerHeap(p *Peer) {
 	for _, subCh := range subChMap.subchannels {
-		subCh.Peers().UpdatePeerHeap(p)
+		if subCh.Isolated() {
+			subCh.Peers().UpdatePeerHeap(p)
+		}
 	}
 }
