@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/apache/thrift/lib/go/thrift"
 	tchannel "github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
 )
@@ -110,6 +111,11 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	thriftProtocolPool.Put(wp)
 
 	if err != nil {
+		if _, ok := err.(thrift.TProtocolException); ok {
+			// We failed to parse the Thrift generated code, so convert the error to bad request.
+			err = tchannel.NewSystemError(tchannel.ErrCodeBadRequest, err.Error())
+		}
+
 		reader.Close()
 		call.Response().SendSystemError(err)
 		return nil
