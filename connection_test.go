@@ -395,7 +395,7 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		handler := func(ctx context.Context, call *InboundCall) {
 			<-ctx.Done()
 			<-timedOut
-			args, err := raw.ReadArgs(call)
+			_, err := raw.ReadArgs(call)
 			assert.Equal(t, ErrTimeout, err, "Read args should fail with timeout")
 			response := call.Response()
 			assert.Equal(t, ErrTimeout, response.SendSystemError(ErrServerBusy), "SendSystemError should fail")
