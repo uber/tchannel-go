@@ -362,10 +362,3 @@ func (p *Peer) runWithConnections(f func(*Connection)) {
 		f(c)
 	}
 }
-
-// Close closes all connections to this peer.
-func (p *Peer) Close() {
-	p.runWithConnections(func(c *Connection) {
-		c.Close()
-	})
-}

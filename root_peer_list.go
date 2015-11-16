@@ -115,10 +115,3 @@ func (l *RootPeerList) Copy() map[string]*Peer {
 	}
 	return listCopy
 }
-
-// Close closes connections for all peers.
-func (l *RootPeerList) Close() {
-	for _, p := range l.Copy() {
-		p.Close()
-	}
-}
