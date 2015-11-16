@@ -546,6 +546,7 @@ func (ch *Channel) State() ChannelState {
 // 2. When all incoming connections are drained, the connection blocks new outgoing calls.
 // 3. When all connections are drainged, the channel's state is updated to Closed.
 func (ch *Channel) Close() {
+	var connections []*Connection
 	ch.mutable.mut.Lock()
 
 	if ch.mutable.l != nil {
@@ -556,7 +557,12 @@ func (ch *Channel) Close() {
 	if len(ch.mutable.conns) == 0 {
 		ch.mutable.state = ChannelClosed
 	}
+	for _, c := range ch.mutable.conns {
+		connections = append(connections, c)
+	}
 	ch.mutable.mut.Unlock()
 
-	ch.rootPeers().Close()
+	for _, c := range connections {
+		c.Close()
+	}
 }
