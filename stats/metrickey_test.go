@@ -26,14 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func mapWith(m map[string]string, key, value string) map[string]string {
-	newMap := map[string]string{key: value}
-	for k, v := range m {
-		newMap[k] = v
-	}
-	return newMap
-}
-
 func TestDefaultMetricPrefix(t *testing.T) {
 	outboundTags := map[string]string{
 		"service":         "callerS",
