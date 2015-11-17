@@ -21,15 +21,32 @@
 package stats
 
 import (
-	"regexp"
+	"bytes"
 	"strings"
+	"sync"
 )
 
 // DefaultMetricPrefix is the default mapping for metrics to statsd keys.
+// It uses a "tchannel" prefix for all stats.
 func DefaultMetricPrefix(name string, tags map[string]string) string {
-	parts := []string{"tchannel", name}
+	return MetricWithPrefix("tchannel.", name, tags)
+}
 
-	var addKeys []string
+var bufPool = sync.Pool{
+	New: func() interface{} { return &bytes.Buffer{} },
+}
+
+// MetricWithPrefix is the default mapping for metrics to statsd keys.
+func MetricWithPrefix(prefix, name string, tags map[string]string) string {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+
+	if prefix != "" {
+		buf.WriteString(prefix)
+	}
+	buf.WriteString(name)
+
+	addKeys := make([]string, 0, 5)
 	switch {
 	case strings.HasPrefix(name, "outbound"):
 		addKeys = append(addKeys, "service", "target-service", "target-endpoint")
@@ -41,18 +58,30 @@ func DefaultMetricPrefix(name string, tags map[string]string) string {
 	}
 
 	for _, k := range addKeys {
+		buf.WriteByte('.')
 		v, ok := tags[k]
-		if !ok {
-			v = "no-" + k
+		if ok {
+			writeClean(buf, v)
+		} else {
+			buf.WriteString("no-")
+			buf.WriteString(k)
 		}
-		parts = append(parts, clean(v))
 	}
-	return strings.Join(parts, ".")
+
+	m := buf.String()
+	bufPool.Put(buf)
+	return m
 }
 
-var specialChars = regexp.MustCompile(`[{}/\\:\s.]`)
-
-// clean replaces special characters [{}/\\:\s.] with '-'
-func clean(keyPart string) string {
-	return specialChars.ReplaceAllString(keyPart, "-")
+// writeClean writes v, after replacing special characters [{}/\\:\s.] with '-'
+func writeClean(buf *bytes.Buffer, v string) {
+	for i := 0; i < len(v); i++ {
+		c := v[i]
+		switch c {
+		case '{', '}', '/', '\\', ':', '.', ' ', '\t', '\r', '\n':
+			buf.WriteByte('-')
+		default:
+			buf.WriteByte(c)
+		}
+	}
 }

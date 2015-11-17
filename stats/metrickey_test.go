@@ -21,6 +21,7 @@
 package stats
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,7 +87,9 @@ func TestClean(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		assert.Equal(t, tt.expected, clean(tt.key), "clean(%q) failed", tt.key)
+		buf := &bytes.Buffer{}
+		writeClean(buf, tt.key)
+		assert.Equal(t, tt.expected, buf.String(), "clean(%q) failed", tt.key)
 	}
 }
 
@@ -99,6 +102,7 @@ func BenchmarkMetricPrefix(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
+		MetricWithPrefix("", "outbound.calls.retries", outboundTags)
 		DefaultMetricPrefix("outbound.calls.retries", outboundTags)
 	}
 }
