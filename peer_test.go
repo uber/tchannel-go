@@ -33,6 +33,7 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -335,9 +336,11 @@ func (pt *peerSelectionTest) setupServers(t testing.TB) {
 
 	// Set up numPeers servers.
 	for i := 0; i < pt.numPeers; i++ {
+
 		pt.servers[i], _ = pt.NewService(t, "server")
 		pt.servers[i].Register(raw.Wrap(newTestHandler(pt.t)), "echo")
 	}
+	fmt.Println("all server nodes setup")
 }
 
 func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
@@ -348,6 +351,7 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 
 	var wg sync.WaitGroup
 	wg.Add(pt.numAffinity)
+
 	// Connect from the affinity nodes to the service.
 	hostport := pt.client.PeerInfo().HostPort
 	serviceName := pt.client.PeerInfo().ServiceName
@@ -355,9 +359,9 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 		go func(affinity *Channel) {
 			affinity.Peers().Add(hostport)
 			pt.makeCall(affinity.GetSubChannel(serviceName))
-			wg.Done()
 		}(affinity)
 	}
+
 	wg.Wait()
 }
 
@@ -367,6 +371,7 @@ func (pt *peerSelectionTest) setupClient(t testing.TB) {
 	for _, server := range pt.servers {
 		pt.client.Peers().Add(server.PeerInfo().HostPort)
 	}
+	time.Sleep(time.Millisecond * 100)
 }
 
 func (pt *peerSelectionTest) makeCall(sc *SubChannel) {
@@ -435,11 +440,10 @@ func (pt *peerSelectionTest) runStress() {
 			clocks[i] <- struct{}{}
 		}
 	}
-
-	const tickNum = 10000
-	for i := 0; i < tickNum; i++ {
-		if i%(tickNum/10) == 0 {
-			fmt.Printf("Stress test progress: %v\n", 100*i/tickNum)
+	const numTicks = 10000
+	for i := 0; i < numTicks; i++ {
+		if i%(numTicks/10) == 0 {
+			fmt.Println("upto", i, (100.0 * float64(i) / numTicks))
 		}
 		tickAllClocks()
 	}
@@ -503,13 +507,22 @@ func TestPeersHeapPerf(t *testing.T) {
 	}
 }
 
-func peersHeapStress(t testing.TB, numHyperbahn int, affinityRatio float64, numConcurrent int, hasInboundCall bool) {
+func PeersHeapPerf(t *testing.T) {
+	CheckStress(t)
+
+	numHyperbahn := 1000
+	perAffinity := 0.1
+	numConcurrent := 5
+	hasInboundCall := true
+	peersHeapStress(t, numHyperbahn, perAffinity, numConcurrent, hasInboundCall)
+}
+
+func peersHeapStress(t *testing.T, numHyperbahn int, perAffinity float64, numConcurrent int, hasInboundCall bool) {
 	pt := &peerSelectionTest{
-		peerTest:       peerTest{t: t},
-		numPeers:       numHyperbahn,
-		numConcurrent:  numConcurrent,
-		hasInboundCall: hasInboundCall,
-		numAffinity:    int(float64(numHyperbahn) * affinityRatio),
+		peerTest:      peerTest{t: t},
+		numPeers:      numHyperbahn,
+		numConcurrent: numConcurrent,
+		numAffinity:   int(float64(numHyperbahn) * perAffinity),
 	}
 	defer pt.CleanUp()
 
@@ -524,6 +537,7 @@ func validateStressTest(t testing.TB, server *Channel, numAffinity int) {
 	state := server.IntrospectState(&IntrospectionOptions{IncludeEmptyPeers: true})
 
 	countsByPeer := make(map[string]int)
+
 	var counts []int
 	for _, peer := range state.Peers {
 		p, ok := state.RootPeers[peer]

@@ -99,7 +99,6 @@ func (l *PeerList) Add(hostPort string) *Peer {
 
 	l.peersByHostPort[hostPort] = ps
 	l.peerHeap.PushPeer(ps)
-
 	return p
 }
 
@@ -180,6 +179,7 @@ func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
 
 // UpdatePeerHeap updates the peer heap.
 func (l *PeerList) UpdatePeerHeap(p *Peer) {
+
 	ps, ok := l.exists(p.hostPort)
 	if !ok {
 		return

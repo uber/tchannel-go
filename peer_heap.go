@@ -84,7 +84,9 @@ func (ph *PeerHeap) PopPeer() *peerScore {
 // PushPeer pushes the new peer into the heap.
 func (ph *PeerHeap) PushPeer(peerScore *peerScore) {
 	atomic.AddUint64(&(ph.order), 1)
-	peerScore.order = ph.order
+	// randRange will affect the deviation of peer's chosenCount
+	randRange := ph.Len()/2 + 1
+	peerScore.order = ph.order + uint64(ph.rng.Intn(randRange))
 	heap.Push(ph, peerScore)
 }
 
