@@ -21,18 +21,11 @@
 package stats
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func mapWith(m map[string]string, key, value string) map[string]string {
-	newMap := map[string]string{key: value}
-	for k, v := range m {
-		newMap[k] = v
-	}
-	return newMap
-}
 
 func TestDefaultMetricPrefix(t *testing.T) {
 	outboundTags := map[string]string{
@@ -94,6 +87,22 @@ func TestClean(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		assert.Equal(t, tt.expected, clean(tt.key), "clean(%q) failed", tt.key)
+		buf := &bytes.Buffer{}
+		writeClean(buf, tt.key)
+		assert.Equal(t, tt.expected, buf.String(), "clean(%q) failed", tt.key)
+	}
+}
+
+func BenchmarkMetricPrefix(b *testing.B) {
+	outboundTags := map[string]string{
+		"service":         "callerS",
+		"target-service":  "targetS",
+		"target-endpoint": "targetE",
+		"retry-count":     "retryN",
+	}
+
+	for i := 0; i < b.N; i++ {
+		MetricWithPrefix("", "outbound.calls.retries", outboundTags)
+		DefaultMetricPrefix("outbound.calls.retries", outboundTags)
 	}
 }

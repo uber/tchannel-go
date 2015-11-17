@@ -21,8 +21,6 @@
 package stats
 
 import (
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/cactus/go-statsd-client/statsd"
@@ -64,36 +62,4 @@ func (r *statsdReporter) UpdateGauge(name string, tags map[string]string, value 
 
 func (r *statsdReporter) RecordTimer(name string, tags map[string]string, d time.Duration) {
 	r.client.TimingDuration(MetricKey(name, tags), d, samplingRate)
-}
-
-// DefaultMetricPrefix is the default mapping for metrics to statsd keys.
-func DefaultMetricPrefix(name string, tags map[string]string) string {
-	parts := []string{"tchannel", name}
-
-	var addKeys []string
-	switch {
-	case strings.HasPrefix(name, "outbound"):
-		addKeys = append(addKeys, "service", "target-service", "target-endpoint")
-		if strings.HasPrefix(name, "outbound.calls.retries") {
-			addKeys = append(addKeys, "retry-count")
-		}
-	case strings.HasPrefix(name, "inbound"):
-		addKeys = append(addKeys, "calling-service", "service", "endpoint")
-	}
-
-	for _, k := range addKeys {
-		v, ok := tags[k]
-		if !ok {
-			v = "no-" + k
-		}
-		parts = append(parts, clean(v))
-	}
-	return strings.Join(parts, ".")
-}
-
-var specialChars = regexp.MustCompile(`[{}/\\:\s.]`)
-
-// clean replaces special characters [{}/\\:\s.] with '-'
-func clean(keyPart string) string {
-	return specialChars.ReplaceAllString(keyPart, "-")
 }
