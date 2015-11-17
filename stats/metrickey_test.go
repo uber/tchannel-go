@@ -89,3 +89,16 @@ func TestClean(t *testing.T) {
 		assert.Equal(t, tt.expected, clean(tt.key), "clean(%q) failed", tt.key)
 	}
 }
+
+func BenchmarkMetricPrefix(b *testing.B) {
+	outboundTags := map[string]string{
+		"service":         "callerS",
+		"target-service":  "targetS",
+		"target-endpoint": "targetE",
+		"retry-count":     "retryN",
+	}
+
+	for i := 0; i < b.N; i++ {
+		DefaultMetricPrefix("outbound.calls.retries", outboundTags)
+	}
+}
