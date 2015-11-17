@@ -31,13 +31,16 @@ type SubChannelOption func(*SubChannel)
 
 // Isolated is a SubChannelOption that creates an isolated subchannel.
 func Isolated(s *SubChannel) {
+	s.Lock()
 	s.peers = s.topChannel.peers.newSibling()
+	s.Unlock()
 }
 
 // SubChannel allows calling a specific service on a channel.
 // TODO(prashant): Allow creating a subchannel with default call options.
 // TODO(prashant): Allow registering handlers on a subchannel.
 type SubChannel struct {
+	sync.RWMutex
 	serviceName        string
 	topChannel         *Channel
 	defaultCallOptions *CallOptions
@@ -162,9 +165,13 @@ func (subChMap *subChannelMap) getOrAdd(serviceName string, ch *Channel) *SubCha
 }
 
 func (subChMap *subChannelMap) updatePeerHeap(p *Peer) {
+	subChMap.mut.RLock()
 	for _, subCh := range subChMap.subchannels {
+		subCh.RLock()
 		if subCh.Isolated() {
 			subCh.Peers().UpdatePeerHeap(p)
 		}
+		subCh.RUnlock()
 	}
+	subChMap.mut.RUnlock()
 }

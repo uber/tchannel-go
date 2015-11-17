@@ -95,6 +95,7 @@ func (l *PeerList) Add(hostPort string) *Peer {
 
 	p := l.parent.Add(hostPort)
 	ps := newPeerScore(p)
+	ps.score = l.scoreCalculator.GetScore(p)
 
 	l.peersByHostPort[hostPort] = ps
 	l.peerHeap.PushPeer(ps)
@@ -140,9 +141,11 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 	if ps == nil {
 		return nil
 	}
+	ps.Lock()
 	ps.score++
+	ps.Unlock()
 	l.peerHeap.PushPeer(ps)
-	atomic.AddUint64(&(ps.chosenCount), 1)
+	atomic.AddUint64(&ps.chosenCount, 1)
 	return ps.Peer
 }
 
@@ -177,19 +180,30 @@ func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
 
 // UpdatePeerHeap updates the peer heap.
 func (l *PeerList) UpdatePeerHeap(p *Peer) {
-	if ps, ok := l.exists(p.hostPort); ok {
-		l.Lock()
-		score := l.scoreCalculator.GetScore(p)
-		if score != ps.score {
-			l.peerHeap.RemovePeer(ps)
-			ps.score = score
-			l.peerHeap.PushPeer(ps)
-		}
-		l.Unlock()
+	ps, ok := l.exists(p.hostPort)
+	if !ok {
+		return
 	}
+
+	score := l.scoreCalculator.GetScore(p)
+	ps.RLock()
+	if score == ps.score {
+		ps.RUnlock()
+		return
+	}
+	ps.RUnlock()
+
+	l.Lock()
+	l.peerHeap.RemovePeer(ps)
+	ps.Lock()
+	ps.score = score
+	ps.Unlock()
+	l.peerHeap.PushPeer(ps)
+	l.Unlock()
 }
 
 type peerScore struct {
+	sync.RWMutex
 	*Peer
 
 	score uint64
@@ -394,15 +408,12 @@ func (p *Peer) NumInbound() int {
 
 func (p *Peer) runWithConnections(f func(*Connection)) {
 	p.mut.RLock()
-	inboundConns := p.inboundConnections
-	outboundConns := p.outboundConnections
+	for _, c := range p.inboundConnections {
+		f(c)
+	}
+
+	for _, c := range p.outboundConnections {
+		f(c)
+	}
 	p.mut.RUnlock()
-
-	for _, c := range inboundConns {
-		f(c)
-	}
-
-	for _, c := range outboundConns {
-		f(c)
-	}
 }
