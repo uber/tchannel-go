@@ -31,6 +31,7 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/examples/keyvalue/gen-go/keyvalue"
 	"github.com/uber/tchannel-go/hyperbahn"
+	"github.com/uber/tchannel-go/pprof"
 	"github.com/uber/tchannel-go/thrift"
 )
 
@@ -47,6 +48,7 @@ func main() {
 	server := thrift.NewServer(ch)
 	server.Register(keyvalue.NewTChanKeyValueServer(h))
 	server.Register(keyvalue.NewTChanAdminServer(h))
+	pprof.Register(ch)
 
 	// Listen for connections on the external interface so we can receive connections.
 	ip, err := tchannel.ListenIP()
