@@ -20,29 +20,49 @@
 
 package thrift
 
-import "github.com/uber/tchannel-go/thrift/gen-go/meta"
+import (
+	"errors"
+	"runtime"
+	"strings"
+
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/thrift/gen-go/meta"
+)
 
 // HealthFunc is the interface for custom health endpoints.
 // ok is whether the service health is OK, and message is optional additional information for the health result.
 type HealthFunc func(ctx Context) (ok bool, message string)
 
 // healthHandler implements the default health check enpoint.
-type healthHandler struct {
-	handler HealthFunc
+type metaHandler struct {
+	healthFn HealthFunc
 }
 
-// newHealthHandler return a new HealthHandler instance.
-func newHealthHandler() *healthHandler {
-	return &healthHandler{handler: defaultHealth}
+// newMetaHandler return a new HealthHandler instance.
+func newMetaHandler() *metaHandler {
+	return &metaHandler{healthFn: defaultHealth}
 }
 
 // Health returns true as default Health endpoint.
-func (h *healthHandler) Health(ctx Context) (*meta.HealthStatus, error) {
-	ok, message := h.handler(ctx)
+func (h *metaHandler) Health(ctx Context) (*meta.HealthStatus, error) {
+	ok, message := h.healthFn(ctx)
 	if message == "" {
 		return &meta.HealthStatus{Ok: ok}, nil
 	}
 	return &meta.HealthStatus{Ok: ok, Message: &message}, nil
+}
+
+func (h *metaHandler) ThriftIDL(ctx Context) (*meta.ThriftIDLs, error) {
+	// TODO(prashant): Add thriftIDL to the generated code.
+	return nil, errors.New("unimplemented")
+}
+
+func (h *metaHandler) VersionInfo(ctx Context) (*meta.VersionInfo, error) {
+	return &meta.VersionInfo{
+		Language:        "go",
+		LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+		Version:         tchannel.VersionInfo,
+	}, nil
 }
 
 func defaultHealth(ctx Context) (bool, string) {
@@ -50,6 +70,6 @@ func defaultHealth(ctx Context) (bool, string) {
 }
 
 // SetHandler sets customized handler for health endpoint.
-func (h *healthHandler) setHandler(f HealthFunc) {
-	h.handler = f
+func (h *metaHandler) setHandler(f HealthFunc) {
+	h.healthFn = f
 }
