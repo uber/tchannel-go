@@ -322,7 +322,7 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	}
 
 	res := initRes{}
-	err = c.recvMessage(ctx, &res, mex.recvCh)
+	err = c.recvMessage(ctx, &res, mex)
 	if err != nil {
 		return c.connectionError(err)
 	}
@@ -396,7 +396,7 @@ func (c *Connection) ping(ctx context.Context) error {
 	}
 
 	res := &pingRes{}
-	err = c.recvMessage(ctx, res, mex.recvCh)
+	err = c.recvMessage(ctx, res, mex)
 	if err != nil {
 		return c.connectionError(err)
 	}
@@ -505,20 +505,18 @@ func (c *Connection) sendMessage(msg message) error {
 
 // recvMessage blocks waiting for a standalone response message (typically a
 // control message)
-func (c *Connection) recvMessage(ctx context.Context, msg message, resCh <-chan *Frame) error {
-	if err := ctx.Err(); err != nil {
-		return GetContextError(err)
-	}
-
-	select {
-	case <-ctx.Done():
-		return GetContextError(ctx.Err())
-
-	case frame := <-resCh:
-		err := frame.read(msg)
-		c.framePool.Release(frame)
+func (c *Connection) recvMessage(ctx context.Context, msg message, mex *messageExchange) error {
+	frame, err := mex.recvPeerFrameOfType(msg.messageType())
+	if err != nil {
+		if err, ok := err.(errorMessage); ok {
+			return err.AsSystemError()
+		}
 		return err
 	}
+
+	err = frame.read(msg)
+	c.framePool.Release(frame)
+	return err
 }
 
 // RemotePeerInfo returns the peer info for the remote peer.

@@ -194,3 +194,41 @@ func TestHandleInitRes(t *testing.T) {
 
 	<-listenerComplete
 }
+
+func TestInitReqGetsError(t *testing.T) {
+	l, err := net.Listen("tcp", ":0")
+	require.NoError(t, err, "net.Listen failed")
+	listenerComplete := make(chan struct{})
+	connectionComplete := make(chan struct{})
+	go func() {
+		defer func() { listenerComplete <- struct{}{} }()
+		conn, err := l.Accept()
+		require.NoError(t, err, "l.Accept failed")
+		defer conn.Close()
+
+		f, err := readFrame(conn)
+		require.NoError(t, err, "readFrame failed")
+		assert.Equal(t, messageTypeInitReq, f.Header.messageType, "expected initReq message")
+		err = writeMessage(conn, &errorMessage{
+			id:      f.Header.ID,
+			errCode: ErrCodeBadRequest,
+			message: "invalid host:port",
+		})
+		assert.NoError(t, err, "Failed to write errorMessage")
+		// Wait till GetConnection returns before closing the connection.
+		<-connectionComplete
+	}()
+
+	ch, err := NewChannel("test-svc", nil)
+	require.NoError(t, err, "NewClient failed")
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	_, err = ch.Peers().GetOrAdd(l.Addr().String()).GetConnection(ctx)
+	expectedErr := NewSystemError(ErrCodeBadRequest, "invalid host:port")
+	assert.Equal(t, expectedErr, err, "Error mismatch")
+	close(connectionComplete)
+
+	<-listenerComplete
+}
