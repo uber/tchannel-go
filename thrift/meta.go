@@ -27,18 +27,18 @@ import "github.com/uber/tchannel-go/thrift/gen-go/meta"
 type HealthFunc func(ctx Context) (ok bool, message string)
 
 // healthHandler implements the default health check enpoint.
-type healthHandler struct {
-	handler HealthFunc
+type metaHandler struct {
+	healthFn HealthFunc
 }
 
-// newHealthHandler return a new HealthHandler instance.
-func newHealthHandler() *healthHandler {
-	return &healthHandler{handler: defaultHealth}
+// newMetaHandler return a new HealthHandler instance.
+func newMetaHandler() *metaHandler {
+	return &metaHandler{healthFn: defaultHealth}
 }
 
 // Health returns true as default Health endpoint.
-func (h *healthHandler) Health(ctx Context) (*meta.HealthStatus, error) {
-	ok, message := h.handler(ctx)
+func (h *metaHandler) Health(ctx Context) (*meta.HealthStatus, error) {
+	ok, message := h.healthFn(ctx)
 	if message == "" {
 		return &meta.HealthStatus{Ok: ok}, nil
 	}
@@ -50,6 +50,6 @@ func defaultHealth(ctx Context) (bool, string) {
 }
 
 // SetHandler sets customized handler for health endpoint.
-func (h *healthHandler) setHandler(f HealthFunc) {
-	h.handler = f
+func (h *metaHandler) setHandler(f HealthFunc) {
+	h.healthFn = f
 }
