@@ -53,8 +53,11 @@ func NewServer(registrar tchannel.Registrar) *Server {
 		handlers:    make(map[string]handler),
 		metaHandler: metaHandler,
 	}
-
 	server.Register(newTChanMetaServer(metaHandler))
+	if ch, ok := registrar.(*tchannel.Channel); ok {
+		// Register the meta endpoints on the "tchannel" service name.
+		NewServer(ch.GetSubChannel("tchannel"))
+	}
 	return server
 }
 
