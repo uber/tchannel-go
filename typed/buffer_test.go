@@ -22,6 +22,7 @@ package typed
 
 import (
 	"bytes"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,6 +71,10 @@ func TestReadWrite(t *testing.T) {
 	w.WriteUint64(0x0123456789ABCDEF)
 	w.WriteUint32(0xABCDEF01)
 	w.WriteUint16(0x2345)
+	w.WriteUvarint(1)
+	w.WriteUvarint(math.MaxInt16)
+	w.WriteUvarint(math.MaxInt32)
+	w.WriteUvarint(math.MaxInt64)
 	w.WriteSingleByte(0xFF)
 	w.WriteString(s)
 	w.WriteBytes(bslice)
@@ -86,6 +91,10 @@ func TestReadWrite(t *testing.T) {
 	assert.Equal(t, uint64(0x0123456789ABCDEF), r.ReadUint64())
 	assert.Equal(t, uint32(0xABCDEF01), r.ReadUint32())
 	assert.Equal(t, uint16(0x2345), r.ReadUint16())
+	assert.Equal(t, uint64(1), r.ReadUvarint())
+	assert.Equal(t, uint64(math.MaxInt16), r.ReadUvarint())
+	assert.Equal(t, uint64(math.MaxInt32), r.ReadUvarint())
+	assert.Equal(t, uint64(math.MaxInt64), r.ReadUvarint())
 	assert.Equal(t, byte(0xFF), r.ReadSingleByte())
 	assert.Equal(t, s, r.ReadString(len(s)))
 	assert.Equal(t, bslice, r.ReadBytes(len(bslice)))

@@ -54,18 +54,24 @@ func NewReadBufferWithSize(size int) *ReadBuffer {
 
 // ReadSingleByte reads the next byte from the buffer
 func (r *ReadBuffer) ReadSingleByte() byte {
+	b, _ := r.ReadByte()
+	return b
+}
+
+// ReadByte returns the next byte from the buffer.
+func (r *ReadBuffer) ReadByte() (byte, error) {
 	if r.err != nil {
-		return 0
+		return 0, r.err
 	}
 
-	if len(r.remaining) == 0 {
+	if len(r.remaining) < 1 {
 		r.err = ErrEOF
-		return 0
+		return 0, r.err
 	}
 
 	b := r.remaining[0]
 	r.remaining = r.remaining[1:]
-	return b
+	return b, nil
 }
 
 // ReadBytes returns the next n bytes from the buffer
@@ -119,6 +125,12 @@ func (r *ReadBuffer) ReadUint64() uint64 {
 	}
 
 	return 0
+}
+
+// ReadUvarint reads an unsigned varint from the buffer.
+func (r *ReadBuffer) ReadUvarint() uint64 {
+	v, _ := binary.ReadUvarint(r)
+	return v
 }
 
 // ReadLen8String reads an 8-bit length preceded string value
@@ -217,6 +229,16 @@ func (w *WriteBuffer) WriteUint32(n uint32) {
 func (w *WriteBuffer) WriteUint64(n uint64) {
 	if b := w.reserve(8); b != nil {
 		binary.BigEndian.PutUint64(b, n)
+	}
+}
+
+// WriteUvarint writes an unsigned varint to the buffer
+func (w *WriteBuffer) WriteUvarint(n uint64) {
+	// A uvarint could be up to 10 bytes long.
+	buf := make([]byte, 10)
+	varBytes := binary.PutUvarint(buf, n)
+	if b := w.reserve(varBytes); b != nil {
+		copy(b, buf[0:varBytes])
 	}
 }
 
