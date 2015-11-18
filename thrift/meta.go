@@ -20,7 +20,14 @@
 
 package thrift
 
-import "github.com/uber/tchannel-go/thrift/gen-go/meta"
+import (
+	"fmt"
+	"runtime"
+	"strings"
+
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/thrift/gen-go/meta"
+)
 
 // HealthFunc is the interface for custom health endpoints.
 // ok is whether the service health is OK, and message is optional additional information for the health result.
@@ -43,6 +50,18 @@ func (h *metaHandler) Health(ctx Context) (*meta.HealthStatus, error) {
 		return &meta.HealthStatus{Ok: ok}, nil
 	}
 	return &meta.HealthStatus{Ok: ok, Message: &message}, nil
+}
+
+func (h *metaHandler) ThriftIDL(ctx Context) (*meta.ThriftIDLs, error) {
+	return nil, fmt.Errorf("unimplemented")
+}
+
+func (h *metaHandler) VersionInfo(ctx Context) (*meta.VersionInfo, error) {
+	return &meta.VersionInfo{
+		Language:        "go",
+		LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+		Version:         tchannel.VersionInfo,
+	}, nil
 }
 
 func defaultHealth(ctx Context) (bool, string) {
