@@ -113,6 +113,10 @@ func NewSystemError(code SystemErrCode, msg string, args ...interface{}) error {
 
 // NewWrappedSystemError defines a new SystemError wrapping an existing error
 func NewWrappedSystemError(code SystemErrCode, wrapped error) error {
+	if se, ok := wrapped.(SystemError); ok {
+		return se
+	}
+
 	return SystemError{code: code, msg: fmt.Sprintf("sys err %x: %s", code, wrapped.Error()), wrapped: wrapped}
 }
 

@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"runtime"
@@ -191,6 +192,46 @@ func TestHandleInitRes(t *testing.T) {
 
 	_, err = ch.Peers().GetOrAdd(l.Addr().String()).GetConnection(ctx)
 	require.NoError(t, err, "GetConnection failed")
+
+	<-listenerComplete
+}
+
+func TestInitReqGetsError(t *testing.T) {
+	l, err := net.Listen("tcp", ":0")
+	require.NoError(t, err, "net.Listen failed")
+	listenerComplete := make(chan struct{})
+	connectionComplete := make(chan struct{})
+	go func() {
+		defer func() { listenerComplete <- struct{}{} }()
+		conn, err := l.Accept()
+		require.NoError(t, err, "l.Accept failed")
+		defer conn.Close()
+
+		f, err := readFrame(conn)
+		require.NoError(t, err, "readFrame failed")
+		assert.Equal(t, messageTypeInitReq, f.Header.messageType, "expected initReq message")
+		err = writeMessage(conn, &errorMessage{
+			id:      f.Header.ID,
+			errCode: ErrCodeBadRequest,
+			message: "invalid host:port",
+		})
+		assert.NoError(t, err, "Failed to write errorMessage")
+		// Wait till GetConnection returns before closing the connection.
+		<-connectionComplete
+	}()
+
+	logOut := &bytes.Buffer{}
+	ch, err := NewChannel("test-svc", &ChannelOptions{Logger: NewLevelLogger(NewLogger(logOut), LogLevelWarn)})
+	require.NoError(t, err, "NewClient failed")
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	_, err = ch.Peers().GetOrAdd(l.Addr().String()).GetConnection(ctx)
+	expectedErr := NewSystemError(ErrCodeBadRequest, "invalid host:port")
+	assert.Equal(t, expectedErr, err, "Error mismatch")
+	assert.Contains(t, logOut.String(), "[E] Connection error: invalid host:port", "Error should be logged")
+	close(connectionComplete)
 
 	<-listenerComplete
 }
