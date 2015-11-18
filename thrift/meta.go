@@ -21,7 +21,7 @@
 package thrift
 
 import (
-	"fmt"
+	"errors"
 	"runtime"
 	"strings"
 
@@ -53,7 +53,8 @@ func (h *metaHandler) Health(ctx Context) (*meta.HealthStatus, error) {
 }
 
 func (h *metaHandler) ThriftIDL(ctx Context) (*meta.ThriftIDLs, error) {
-	return nil, fmt.Errorf("unimplemented")
+	// TODO(prashant): Add thriftIDL to the generated code.
+	return nil, errors.New("unimplemented")
 }
 
 func (h *metaHandler) VersionInfo(ctx Context) (*meta.VersionInfo, error) {

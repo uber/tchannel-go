@@ -22,6 +22,8 @@ package thrift
 
 import (
 	"net"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/thrift/gen-go/meta"
 )
 
 func TestDefaultHealth(t *testing.T) {
@@ -37,6 +40,28 @@ func TestDefaultHealth(t *testing.T) {
 		if assert.NoError(t, err, "Health endpoint failed") {
 			assert.True(t, ret.Ok, "Health status mismatch")
 			assert.Nil(t, ret.Message, "Health message mismatch")
+		}
+	})
+}
+
+func TestThriftIDL(t *testing.T) {
+	withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
+		_, err := c.ThriftIDL(ctx)
+		assert.Error(t, err, "Health endpoint failed")
+		assert.Contains(t, err.Error(), "unimplemented")
+	})
+}
+
+func TestVersionInfo(t *testing.T) {
+	withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
+		ret, err := c.VersionInfo(ctx)
+		if assert.NoError(t, err, "VersionInfo endpoint failed") {
+			expected := &meta.VersionInfo{
+				Language:        "go",
+				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+				Version:         tchannel.VersionInfo,
+			}
+			assert.Equal(t, expected, ret, "Unexpected version info")
 		}
 	})
 }
