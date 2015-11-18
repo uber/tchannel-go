@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"runtime"
@@ -219,7 +220,8 @@ func TestInitReqGetsError(t *testing.T) {
 		<-connectionComplete
 	}()
 
-	ch, err := NewChannel("test-svc", nil)
+	logOut := &bytes.Buffer{}
+	ch, err := NewChannel("test-svc", &ChannelOptions{Logger: NewLevelLogger(NewLogger(logOut), LogLevelWarn)})
 	require.NoError(t, err, "NewClient failed")
 
 	ctx, cancel := NewContext(time.Second)
@@ -228,6 +230,7 @@ func TestInitReqGetsError(t *testing.T) {
 	_, err = ch.Peers().GetOrAdd(l.Addr().String()).GetConnection(ctx)
 	expectedErr := NewSystemError(ErrCodeBadRequest, "invalid host:port")
 	assert.Equal(t, expectedErr, err, "Error mismatch")
+	assert.Contains(t, logOut.String(), "[E] Connection error: invalid host:port", "Error should be logged")
 	close(connectionComplete)
 
 	<-listenerComplete

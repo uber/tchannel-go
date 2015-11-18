@@ -576,7 +576,11 @@ func (c *Connection) connectionError(err error) error {
 	if err == io.EOF {
 		c.log.Debugf("Connection got EOF")
 	} else {
-		c.log.Warnf("Connection error: %v", err)
+		if se, ok := err.(SystemError); ok && se.Code() != ErrCodeNetwork {
+			c.log.Errorf("Connection error: %v", err)
+		} else {
+			c.log.Warnf("Connection error: %v", err)
+		}
 	}
 	c.Close()
 	return NewWrappedSystemError(ErrCodeNetwork, err)
