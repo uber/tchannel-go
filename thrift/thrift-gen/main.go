@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -46,6 +47,7 @@ var (
 	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
 	inputFile          = flag.String("inputFile", "", "The .thrift file to generate a client for")
 	outputFile         = flag.String("outputFile", "", "The output file to generate go code to")
+	dynamic            = flag.Bool("enableDynamic", false, "Generate go code for all *.thrift-gen files in the $GOPATH")
 	nlSpaceNL          = regexp.MustCompile(`\n[ \t]+\n`)
 )
 
@@ -83,13 +85,50 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 		return fmt.Errorf("Could not parse .thrift file: %v", err)
 	}
 
-	goTmpl := parseTemplate()
-	for filename, v := range parsed {
-		if err := generateCode(outputFile, goTmpl, packageName(filename), v); err != nil {
+	goTmpl := parseTemplate() // tchan-template
+
+	templateFiles, err := findThriftGenFiles("") // get files in $GOPATH
+	if err != nil {
+		return fmt.Errorf("Could not find thrift-gen files: %v", err)
+	}
+
+	templates, err := getTemplatesFromFiles(templateFiles)
+	if err != nil {
+		return fmt.Errorf("Could not parse thrift-gen files: %v", err)
+	}
+
+	for thriftFilename, AST := range parsed {
+		if err := generateCode(outputFile, goTmpl, packageName(thriftFilename), AST); err != nil {
 			return err
 		}
-		// TODO(prashant): Support multiple files / includes etc?
-		return nil
+
+		if *dynamic {
+			for templateFilename, template := range templates {
+				buf := &bytes.Buffer{}
+
+				if err := template.Execute(buf, AST); err != nil {
+					return fmt.Errorf("Could not parse thrift-gen template: %v", err)
+				}
+
+				fmt.Println("Have some code!")
+
+				// post process generated code
+				generatedBytes := buf.Bytes()
+				generatedBytes = cleanGeneratedCode(generatedBytes)
+
+				// do useful stuff with generated code
+				outputFilename := getOuputFilename(thriftFilename, AST, templateFilename)
+				fmt.Println(string(generatedBytes))
+
+				// write file
+				if err := ioutil.WriteFile(outputFilename, generatedBytes, 0666); err != nil {
+					return fmt.Errorf("cannot write output file %s: %v", outputFile, err)
+				} else {
+					fmt.Printf("Saved file: %s\n", outputFilename)
+				}
+			}
+		}
+
 	}
 
 	return nil
@@ -148,4 +187,89 @@ func cleanGeneratedCode(generated []byte) []byte {
 
 func contextType() string {
 	return "thrift.Context"
+}
+
+// find all the thrift files in the directory structure of root
+// using $GOPATH when root is nil
+func findThriftGenFiles(root string) ([]string, error) {
+	if root == "" {
+		root = os.Getenv("GOPATH")
+	}
+
+	var files []string
+	// walk the root directory to find the *.thrift-gen files
+	err := filepath.Walk(root, func(path string, f os.FileInfo, err error) error {
+		if f.Name() == "Godeps" {
+			// skip godeps
+			return filepath.SkipDir
+		}
+
+		if filepath.Ext(path) == ".thrift-gen" {
+			files = append(files, path)
+		}
+		return nil
+	})
+
+	// test if there is an error during walking the directory
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+func getTemplateFromFile(filename string) (*template.Template, error) {
+	funcs := map[string]interface{}{}
+
+	// read template file
+	templateBytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	templateString := string(templateBytes)
+
+	// parse template in usable form
+	return template.Must(template.
+		New("thrift-gen").
+		Funcs(funcs).
+		Parse(templateString)), nil
+}
+
+func getTemplatesFromFiles(files []string) (map[string]*template.Template, error) {
+	var output map[string]*template.Template
+	output = make(map[string]*template.Template)
+
+	var templates []*template.Template
+	for _, filename := range files {
+		parsedTemplate, err := getTemplateFromFile(filename)
+		if err != nil {
+			// PANIC!
+			return nil, err
+		} else {
+			// add parsed template to templates
+			output[filename] = parsedTemplate
+			templates = append(templates, parsedTemplate)
+		}
+	}
+	return output, nil
+}
+
+func outputDirectory(infile string, AST *parser.Thrift) string {
+	dir, _ := filepath.Split(infile)
+	genDir := filepath.Join(dir, ".gen", "go")
+	return genDir
+}
+
+func getOuputFilename(thriftFile string, AST *parser.Thrift, genFile string) string {
+	dir := outputDirectory(thriftFile, AST)
+
+	baseThriftFilename := getBasename(thriftFile)
+	baseGenFilename := getBasename(genFile)
+
+	return filepath.Join(dir, baseThriftFilename, baseThriftFilename+"-"+baseGenFilename+".go")
+}
+
+func getBasename(path string) string {
+	_, filename := filepath.Split(path)
+	return strings.TrimSuffix(filename, filepath.Ext(filename))
 }
