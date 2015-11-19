@@ -134,6 +134,8 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 				} else {
 					fmt.Printf("Saved file: %s\n", outputFilename)
 				}
+
+				exec.Command("gofmt", "-w", outputFilename).Run()
 			}
 		}
 
@@ -228,9 +230,11 @@ func findThriftGenFiles(root string) ([]string, error) {
 
 func getTemplateFromFile(filename string) (*template.Template, error) {
 	funcs := map[string]interface{}{
+		"contextType": contextType,
 		"lowercase": func(in string) string {
 			return strings.ToLower(in)
 		},
+		"goPublicName": goPublicName,
 	}
 
 	// read template file
