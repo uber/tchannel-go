@@ -58,17 +58,3 @@ func NewSpan(traceID uint64, parentID uint64, spanID uint64) Span {
 func (l *PeerList) GetHeap() *PeerHeap {
 	return l.peerHeap
 }
-
-func GetPendingRequests(p *Peer) int {
-	count := 0
-	for _, c := range p.outboundConnections {
-		count = count + len(c.inbound.exchanges)
-		count = count + len(c.outbound.exchanges)
-	}
-
-	for _, c := range p.inboundConnections {
-		count = count + len(c.inbound.exchanges)
-		count = count + len(c.outbound.exchanges)
-	}
-	return count
-}

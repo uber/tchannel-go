@@ -179,8 +179,8 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 			mexset.log.Warnf("msg id %d used for both active mex %s and new mex %s",
 				mex.msgID, existingMex.msgType, mex.msgType)
 		}
-		mexset.mut.Unlock()
 
+		mexset.mut.Unlock()
 		return nil, errDuplicateMex
 	}
 

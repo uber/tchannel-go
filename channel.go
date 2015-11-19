@@ -473,8 +473,8 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 		return
 	}
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
-	ch.peers.UpdatePeerHeap(p)
-	ch.subChannels.updatePeerHeap(p)
+	ch.peers.UpdatePeer(p)
+	ch.subChannels.updatePeer(p)
 }
 
 // incomingConnectionActive adds a new active connection to our peer list.

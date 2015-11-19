@@ -38,8 +38,7 @@ func TestPeerHeap(t *testing.T) {
 	peerScores := make([]*peerScore, numPeers)
 	minScore := uint64(math.MaxInt64)
 	for i := 0; i < numPeers; i++ {
-		peerScore := newPeerScore(&Peer{})
-		peerScore.score = uint64(r.Intn(numPeers * 5))
+		peerScore := newPeerScore(&Peer{}, uint64(r.Intn(numPeers*5)))
 		peerScores[i] = peerScore
 		if peerScore.score < minScore {
 			minScore = peerScore.score

@@ -23,7 +23,6 @@ package tchannel
 import (
 	"container/heap"
 	"errors"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,8 +93,7 @@ func (l *PeerList) Add(hostPort string) *Peer {
 	}
 
 	p := l.parent.Add(hostPort)
-	ps := newPeerScore(p)
-	ps.score = l.scoreCalculator.GetScore(p)
+	ps := newPeerScore(p, l.scoreCalculator.GetScore(p))
 
 	l.peersByHostPort[hostPort] = ps
 	l.peerHeap.PushPeer(ps)
@@ -140,9 +138,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 	if ps == nil {
 		return nil
 	}
-	ps.Lock()
-	ps.score++
-	ps.Unlock()
+
 	l.peerHeap.PushPeer(ps)
 	atomic.AddUint64(&ps.chosenCount, 1)
 	return ps.Peer
@@ -177,28 +173,22 @@ func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
 	return ps, ok
 }
 
-// UpdatePeerHeap updates the peer heap.
-func (l *PeerList) UpdatePeerHeap(p *Peer) {
-
+// UpdatePeer is called when there is a change that may cause the peer's score to change.
+// The new score is calculated, and the peer heap is updated with the new score if the score changes.
+func (l *PeerList) UpdatePeer(p *Peer) {
 	ps, ok := l.exists(p.hostPort)
 	if !ok {
 		return
 	}
 
-	score := l.scoreCalculator.GetScore(p)
-	ps.RLock()
-	if score == ps.score {
-		ps.RUnlock()
+	newScore := l.scoreCalculator.GetScore(p)
+	if newScore == ps.readScore() {
 		return
 	}
-	ps.RUnlock()
 
+	ps.setScore(newScore)
 	l.Lock()
-	l.peerHeap.RemovePeer(ps)
-	ps.Lock()
-	ps.score = score
-	ps.Unlock()
-	l.peerHeap.PushPeer(ps)
+	l.peerHeap.UpdatePeer(ps)
 	l.Unlock()
 }
 
@@ -211,12 +201,25 @@ type peerScore struct {
 	order uint64
 }
 
-func newPeerScore(p *Peer) *peerScore {
+func newPeerScore(p *Peer, score uint64) *peerScore {
 	return &peerScore{
 		Peer:  p,
-		score: math.MaxUint64,
+		score: score,
 		index: -1,
 	}
+}
+
+func (ps *peerScore) readScore() uint64 {
+	ps.RLock()
+	score := ps.score
+	ps.RUnlock()
+	return score
+}
+
+func (ps *peerScore) setScore(score uint64) {
+	ps.Lock()
+	ps.score = score
+	ps.Unlock()
 }
 
 // Peer represents a single autobahn service or client with a unique host:port.
@@ -402,6 +405,21 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName string, operationName 
 func (p *Peer) NumInbound() int {
 	p.mut.RLock()
 	count := len(p.inboundConnections)
+	p.mut.RUnlock()
+	return count
+}
+
+// NumPendingOutbound returns the number of pending outbound calls.
+func (p *Peer) NumPendingOutbound() int {
+	count := 0
+	p.mut.RLock()
+	for _, c := range p.outboundConnections {
+		count += c.outbound.count()
+	}
+
+	for _, c := range p.inboundConnections {
+		count += c.outbound.count()
+	}
 	p.mut.RUnlock()
 	return count
 }
