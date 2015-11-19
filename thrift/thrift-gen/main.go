@@ -59,6 +59,11 @@ type TemplateData struct {
 	TChannelImport string
 }
 
+type GenericTemplateDate struct {
+	Package string
+	AST     *parser.Thrift
+}
+
 func main() {
 	flag.Parse()
 	if *inputFile == "" {
@@ -106,7 +111,10 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 			for templateFilename, template := range templates {
 				buf := &bytes.Buffer{}
 
-				if err := template.Execute(buf, AST); err != nil {
+				if err := template.Execute(buf, &GenericTemplateDate{
+					Package: packageName(thriftFilename),
+					AST:     AST,
+				}); err != nil {
 					return fmt.Errorf("Could not parse thrift-gen template: %v", err)
 				}
 
@@ -219,7 +227,11 @@ func findThriftGenFiles(root string) ([]string, error) {
 }
 
 func getTemplateFromFile(filename string) (*template.Template, error) {
-	funcs := map[string]interface{}{}
+	funcs := map[string]interface{}{
+		"lowercase": func(in string) string {
+			return strings.ToLower(in)
+		},
+	}
 
 	// read template file
 	templateBytes, err := ioutil.ReadFile(filename)
