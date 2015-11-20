@@ -127,7 +127,7 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 				generatedBytes = cleanGeneratedCode(generatedBytes)
 
 				// do useful stuff with generated code
-				outputFilename := getOuputFilename(thriftFilename, AST, templateFilename)
+				outputFilename := getOuputFilename(outputFile, thriftFilename, AST, templateFilename)
 				fmt.Println(string(generatedBytes))
 
 				// write file
@@ -231,6 +231,7 @@ func findThriftGenFiles(root string) ([]string, error) {
 }
 
 func getTemplateFromFile(filename string, AST *parser.Thrift) (*template.Template, error) {
+	state := NewState(AST)
 	funcs := map[string]interface{}{
 		"contextType": contextType,
 		"lowercase": func(in string) string {
@@ -248,7 +249,6 @@ func getTemplateFromFile(filename string, AST *parser.Thrift) (*template.Templat
 		return nil, err
 	}
 	templateString := string(templateBytes)
-	state := NewState(AST)
 
 	// parse template in usable form
 	return template.Must(template.
@@ -278,17 +278,17 @@ func getTemplatesFromFiles(files []string, AST *parser.Thrift) (map[string]*temp
 
 func outputDirectory(infile string, AST *parser.Thrift) string {
 	dir, _ := filepath.Split(infile)
-	genDir := filepath.Join(dir, ".gen", "go")
-	return genDir
+	// genDir := filepath.Join(dir, ".gen", "go")
+	return dir
 }
 
-func getOuputFilename(thriftFile string, AST *parser.Thrift, genFile string) string {
-	dir := outputDirectory(thriftFile, AST)
+func getOuputFilename(outputFile string, thriftFile string, AST *parser.Thrift, genFile string) string {
+	dir := outputDirectory(outputFile, AST)
 
 	baseThriftFilename := getBasename(thriftFile)
 	baseGenFilename := getBasename(genFile)
 
-	return filepath.Join(dir, baseThriftFilename, baseThriftFilename+"-"+baseGenFilename+".go")
+	return filepath.Join(dir, baseGenFilename+"-"+baseThriftFilename+".go")
 }
 
 func getBasename(path string) string {
