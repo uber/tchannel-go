@@ -31,7 +31,6 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -267,21 +266,23 @@ func (pt *peerSelectionTest) setupServers(t testing.TB) {
 }
 
 func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
-	var wg sync.WaitGroup
 	pt.affinity = make([]*Channel, pt.numAffinity)
 	for i := range pt.affinity {
 		pt.affinity[i] = pt.servers[i]
 	}
 
+	hostport := pt.client.PeerInfo().HostPort
+	serviceName := pt.client.PeerInfo().ServiceName
+	var wg sync.WaitGroup
+	wg.Add(pt.numAffinity)
 	// Connect from the affinity nodes to the service.
 	for _, affinity := range pt.affinity {
-		affinity.Peers().Add(pt.client.PeerInfo().HostPort)
+		affinity.Peers().Add(hostport)
 		go func(affinity *Channel) {
-			pt.makeCall(affinity.GetSubChannel(pt.client.PeerInfo().ServiceName))
+			pt.makeCall(affinity.GetSubChannel(serviceName))
 			wg.Done()
 		}(affinity)
 	}
-	wg.Add(pt.numAffinity)
 	wg.Wait()
 }
 
@@ -297,11 +298,12 @@ func (pt *peerSelectionTest) makeCall(sc *SubChannel) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 	_, _, _, err := raw.CallSC(ctx, sc, "echo", nil, nil)
-	require.NoError(pt.t, err, "raw.Call failed")
+	assert.NoError(pt.t, err, "raw.Call failed")
 }
 
 func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
 	var wg sync.WaitGroup
+	wg.Add(pt.numConcurrent)
 
 	// server outbound request
 	sc := pt.client.GetSubChannel("hyperbahn")
@@ -314,7 +316,6 @@ func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
 		}(sc)
 	}
 
-	wg.Add(pt.numConcurrent)
 	wg.Wait()
 }
 
