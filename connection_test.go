@@ -46,13 +46,13 @@ var (
 type testHandler struct {
 	sync.Mutex
 
-	t        *testing.T
+	t        testing.TB
 	format   Format
 	caller   string
 	blockErr chan error
 }
 
-func newTestHandler(t *testing.T) *testHandler {
+func newTestHandler(t testing.TB) *testHandler {
 	return &testHandler{t: t, blockErr: make(chan error)}
 }
 
