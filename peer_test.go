@@ -217,3 +217,122 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 		c.Close()
 	}
 }
+
+type peerTest struct {
+	t        testing.TB
+	channels []*Channel
+}
+
+// NewService will return a new server channel and the host port.
+func (pt *peerTest) NewService(t testing.TB, svcName string) (*Channel, string) {
+	ch := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: svcName})
+	pt.channels = append(pt.channels, ch)
+	return ch, ch.PeerInfo().HostPort
+}
+
+// CleanUp will clean up all channels started as part of the peer test.
+func (pt *peerTest) CleanUp() {
+	for _, ch := range pt.channels {
+		ch.Close()
+	}
+}
+
+type peerSelectionTest struct {
+	peerTest
+
+	// numPeers is the number of peers added to the client channel.
+	numPeers int
+	// numAffinity is the number of affinity nodes.
+	numAffinity int
+	// numConcurrent is the number of concurrent goroutine to make outbound calls.
+	numConcurrent int
+	// hasInboundCall is the bool flag to tell whether to have inbound calls from affinity nodes
+	hasInboundCall bool
+
+	servers  []*Channel
+	affinity []*Channel
+	client   *Channel
+}
+
+// setupServers will create numPeer servers, and register handlers on them.
+func (pt *peerSelectionTest) setupServers(t testing.TB) {
+	pt.servers = make([]*Channel, pt.numPeers)
+
+	// Set up numPeers servers.
+	for i := 0; i < pt.numPeers; i++ {
+		pt.servers[i], _ = pt.NewService(t, "hyperbahn")
+		pt.servers[i].Register(raw.Wrap(newTestHandler(pt.t)), "echo")
+	}
+}
+
+func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
+	pt.affinity = make([]*Channel, pt.numAffinity)
+	for i := range pt.affinity {
+		pt.affinity[i] = pt.servers[i]
+	}
+
+	hostport := pt.client.PeerInfo().HostPort
+	serviceName := pt.client.PeerInfo().ServiceName
+	var wg sync.WaitGroup
+	wg.Add(pt.numAffinity)
+	// Connect from the affinity nodes to the service.
+	for _, affinity := range pt.affinity {
+		go func(affinity *Channel) {
+			affinity.Peers().Add(hostport)
+			pt.makeCall(affinity.GetSubChannel(serviceName))
+			wg.Done()
+		}(affinity)
+	}
+	wg.Wait()
+}
+
+func (pt *peerSelectionTest) setupClient(t testing.TB) {
+	pt.client, _ = pt.NewService(t, "client")
+	pt.client.Register(raw.Wrap(newTestHandler(pt.t)), "echo")
+	for _, server := range pt.servers {
+		pt.client.Peers().Add(server.PeerInfo().HostPort)
+	}
+}
+
+func (pt *peerSelectionTest) makeCall(sc *SubChannel) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+	_, _, _, err := raw.CallSC(ctx, sc, "echo", nil, nil)
+	assert.NoError(pt.t, err, "raw.Call failed")
+}
+
+func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
+	var wg sync.WaitGroup
+	wg.Add(pt.numConcurrent)
+
+	// server outbound request
+	sc := pt.client.GetSubChannel("hyperbahn")
+	for i := 0; i < pt.numConcurrent; i++ {
+		go func(sc *SubChannel) {
+			defer wg.Done()
+			for j := 0; j < b.N; j++ {
+				pt.makeCall(sc)
+			}
+		}(sc)
+	}
+
+	wg.Wait()
+}
+
+// Run these commands before run the benchmark.
+// sudo sysctl -w kern.maxfiles=50000
+// ulimit -n 50000
+func BenchmarkSimplePeersHeapPerf(b *testing.B) {
+	pt := &peerSelectionTest{
+		peerTest:      peerTest{t: b},
+		numPeers:      1000,
+		numConcurrent: 100,
+	}
+	defer pt.CleanUp()
+
+	pt.setupServers(b)
+	pt.setupClient(b)
+	pt.setupAffinity(b)
+	b.ResetTimer()
+	pt.runStressSimple(b)
+}
