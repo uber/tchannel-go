@@ -62,6 +62,7 @@ type TemplateData struct {
 type GenericTemplateDate struct {
 	Package string
 	AST     *parser.Thrift
+	State   *State
 }
 
 func main() {
@@ -97,23 +98,24 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 		return fmt.Errorf("Could not find thrift-gen files: %v", err)
 	}
 
-	templates, err := getTemplatesFromFiles(templateFiles)
-	if err != nil {
-		return fmt.Errorf("Could not parse thrift-gen files: %v", err)
-	}
-
 	for thriftFilename, AST := range parsed {
 		if err := generateCode(outputFile, goTmpl, packageName(thriftFilename), AST); err != nil {
 			return err
 		}
 
 		if *dynamic {
+			templates, err := getTemplatesFromFiles(templateFiles, AST)
+			if err != nil {
+				return fmt.Errorf("Could not parse thrift-gen files: %v", err)
+			}
+
 			for templateFilename, template := range templates {
 				buf := &bytes.Buffer{}
 
 				if err := template.Execute(buf, &GenericTemplateDate{
 					Package: packageName(thriftFilename),
 					AST:     AST,
+					State:   NewState(AST),
 				}); err != nil {
 					return fmt.Errorf("Could not parse thrift-gen template: %v", err)
 				}
@@ -228,13 +230,16 @@ func findThriftGenFiles(root string) ([]string, error) {
 	return files, nil
 }
 
-func getTemplateFromFile(filename string) (*template.Template, error) {
+func getTemplateFromFile(filename string, AST *parser.Thrift) (*template.Template, error) {
 	funcs := map[string]interface{}{
 		"contextType": contextType,
 		"lowercase": func(in string) string {
 			return strings.ToLower(in)
 		},
 		"goPublicName": goPublicName,
+		"goType": func(t *parser.Type) string {
+			return state.goType(t)
+		},
 	}
 
 	// read template file
@@ -243,6 +248,7 @@ func getTemplateFromFile(filename string) (*template.Template, error) {
 		return nil, err
 	}
 	templateString := string(templateBytes)
+	state := NewState(AST)
 
 	// parse template in usable form
 	return template.Must(template.
@@ -251,13 +257,13 @@ func getTemplateFromFile(filename string) (*template.Template, error) {
 		Parse(templateString)), nil
 }
 
-func getTemplatesFromFiles(files []string) (map[string]*template.Template, error) {
+func getTemplatesFromFiles(files []string, AST *parser.Thrift) (map[string]*template.Template, error) {
 	var output map[string]*template.Template
 	output = make(map[string]*template.Template)
 
 	var templates []*template.Template
 	for _, filename := range files {
-		parsedTemplate, err := getTemplateFromFile(filename)
+		parsedTemplate, err := getTemplateFromFile(filename, AST)
 		if err != nil {
 			// PANIC!
 			return nil, err
