@@ -241,13 +241,11 @@ func (pt *peerTest) CleanUp() {
 type peerSelectionTest struct {
 	peerTest
 
-	// numPeers is the number of peers added to the channel
+	// numPeers is the number of peers added to the client channel.
 	numPeers int
-	// numCalls is the number of calls to make concurrently.
-	numCalls int
 	// numAffinity is the number of affinity nodes.
 	numAffinity int
-	// numConcurrent is the number of concurrent gocoroutine.
+	// numConcurrent is the number of concurrent goroutine to make outbound calls.
 	numConcurrent int
 	// hasInboundCall is the bool flag to tell whether to have inbound calls from affinity nodes
 	hasInboundCall bool
@@ -275,7 +273,6 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 		pt.affinity[i] = pt.servers[i]
 	}
 
-	wg.Add(pt.numAffinity)
 	// Connect from the affinity nodes to the service.
 	for _, affinity := range pt.affinity {
 		affinity.Peers().Add(pt.client.PeerInfo().HostPort)
@@ -284,6 +281,7 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 			wg.Done()
 		}(affinity)
 	}
+	wg.Add(pt.numAffinity)
 	wg.Wait()
 }
 
@@ -305,22 +303,18 @@ func (pt *peerSelectionTest) makeCall(sc *SubChannel) {
 func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
 	var wg sync.WaitGroup
 
-	// helper that will make a request every n ticks.
-	reqEveryNTicks := func(n int, sc *SubChannel) {
-		defer wg.Done()
-		for i := 0; i < b.N; i++ {
-			pt.makeCall(sc)
-		}
-	}
-
-	wg.Add(pt.numConcurrent)
-
 	// server outbound request
 	sc := pt.client.GetSubChannel("hyperbahn")
 	for i := 0; i < pt.numConcurrent; i++ {
-		go reqEveryNTicks(1, sc)
+		go func(sc *SubChannel) {
+			defer wg.Done()
+			for j := 0; j < b.N; j++ {
+				pt.makeCall(sc)
+			}
+		}(sc)
 	}
 
+	wg.Add(pt.numConcurrent)
 	wg.Wait()
 }
 
@@ -328,7 +322,6 @@ func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
 // sudo sysctl -w kern.maxfiles=50000
 // ulimit -n 50000
 func BenchmarkSimplePeersHeapPerf(b *testing.B) {
-
 	pt := &peerSelectionTest{
 		peerTest:      peerTest{t: b},
 		numPeers:      1000,
