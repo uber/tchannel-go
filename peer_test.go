@@ -277,8 +277,8 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 	wg.Add(pt.numAffinity)
 	// Connect from the affinity nodes to the service.
 	for _, affinity := range pt.affinity {
-		affinity.Peers().Add(hostport)
 		go func(affinity *Channel) {
+			affinity.Peers().Add(hostport)
 			pt.makeCall(affinity.GetSubChannel(serviceName))
 			wg.Done()
 		}(affinity)
