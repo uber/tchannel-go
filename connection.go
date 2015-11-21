@@ -116,6 +116,9 @@ type connectionEvents struct {
 
 	// OnCloseStateChange is called when a connection that is closing changes state.
 	OnCloseStateChange func(c *Connection)
+
+	// OnExchangeUpdated is called when a message exchange added or removed.
+	OnExchangeUpdated func(c *Connection)
 }
 
 // Connection represents a connection to a remote peer.
@@ -251,10 +254,16 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 	c.log = log
 	c.inbound.onRemoved = c.checkExchanges
 	c.outbound.onRemoved = c.checkExchanges
+	c.inbound.onAdded = c.onExchangeAdded
+	c.outbound.onAdded = c.onExchangeAdded
 
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
 	return c
+}
+
+func (c *Connection) onExchangeAdded() {
+	c.callOnExchangeChange()
 }
 
 // IsActive returns whether this connection is in an active state.
@@ -281,6 +290,12 @@ func (c *Connection) getInitParams() initParams {
 		InitParamTChannelLanguage:        "go",
 		InitParamTChannelLanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
 		InitParamTChannelVersion:         VersionInfo,
+	}
+}
+
+func (c *Connection) callOnExchangeChange() {
+	if f := c.events.OnExchangeUpdated; f != nil {
+		f(c)
 	}
 }
 
@@ -692,6 +707,7 @@ func (c *Connection) writeFrames(_ uint32) {
 
 // checkExchanges is called whenever an exchange is removed, and when Close is called.
 func (c *Connection) checkExchanges() {
+	c.callOnExchangeChange()
 	moveState := func(fromState, toState connectionState) bool {
 		err := c.withStateLock(func() error {
 			if c.state != fromState {

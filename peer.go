@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"container/heap"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -52,17 +53,24 @@ type PeerList struct {
 	sync.RWMutex
 
 	parent          *RootPeerList
-	peersByHostPort map[string]*Peer
-	peers           []*Peer
-	scoreCalculator scoreCalculator
+	peersByHostPort map[string]*peerScore
+	peerHeap        *PeerHeap
+	scoreCalculator ScoreCalculator
+	lastSelected    uint64
 }
 
 func newPeerList(root *RootPeerList) *PeerList {
 	return &PeerList{
 		parent:          root,
-		peersByHostPort: make(map[string]*Peer),
-		scoreCalculator: newPreferIncoming(),
+		peersByHostPort: make(map[string]*peerScore),
+		scoreCalculator: newPreferIncomingCalculator(),
+		peerHeap:        newPeerHeap(),
 	}
+}
+
+// SetStrategy sets customized peer selection stratedgy.
+func (l *PeerList) SetStrategy(sc ScoreCalculator) {
+	l.scoreCalculator = sc
 }
 
 // Siblings don't share peer lists (though they take care not to double-connect
@@ -74,81 +82,73 @@ func (l *PeerList) newSibling() *PeerList {
 
 // Add adds a peer to the list if it does not exist, or returns any existing peer.
 func (l *PeerList) Add(hostPort string) *Peer {
-	l.RLock()
-
-	if p, ok := l.peersByHostPort[hostPort]; ok {
-		l.RUnlock()
-		return p
+	if ps, ok := l.exists(hostPort); ok {
+		return ps.Peer
 	}
-
-	l.RUnlock()
 	l.Lock()
 	defer l.Unlock()
 
 	if p, ok := l.peersByHostPort[hostPort]; ok {
-		return p
+		return p.Peer
 	}
 
 	p := l.parent.Add(hostPort)
-	atomic.AddUint32(&p.scCount, 1)
-	l.peersByHostPort[hostPort] = p
-	l.peers = append(l.peers, p)
+	ps := newPeerScore(p, l.scoreCalculator.GetScore(p))
+
+	l.peersByHostPort[hostPort] = ps
+	l.peerHeap.PushPeer(ps)
 	return p
 }
 
 // Get returns a peer from the peer list, or nil if none can be found.
-// Get will avoid peers in prevSelected unless there are no other peers left.
 func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
-	l.RLock()
-
-	if len(l.peers) == 0 {
-		l.RUnlock()
+	l.Lock()
+	if l.peerHeap.Len() == 0 {
+		l.Unlock()
 		return nil, ErrNoPeers
 	}
 
 	// Select a peer, avoiding previously selected peers. If all peers have been previously
 	// selected, then it's OK to repick them.
-	peer := l.choosePeer(l.peers, prevSelected)
+	peer := l.choosePeer(prevSelected)
 	if peer == nil {
-		peer = l.choosePeer(l.peers, nil)
+		peer = l.choosePeer(nil)
 	}
-	l.RUnlock()
-
+	l.Unlock()
 	return peer, nil
 }
 
-func (l *PeerList) choosePeer(peers []*Peer, prevSelected map[string]struct{}) *Peer {
-	var maxScore uint64
-	var bestPeer *Peer
+func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
+	var psPopList []*peerScore
+	var ps *peerScore
 
-	// pick peer with highest score that is not in prevSelected.
-	for _, peer := range peers {
-		if _, ok := prevSelected[peer.HostPort()]; ok {
-			continue
+	size := l.peerHeap.Len()
+	for i := 0; i < size; i++ {
+		ps = l.peerHeap.PopPeer()
+		if _, ok := prevSelected[ps.Peer.HostPort()]; !ok {
+			break
 		}
-
-		score := l.scoreCalculator.GetScore(peer)
-		if score > maxScore {
-			maxScore = score
-			bestPeer = peer
-		}
+		psPopList = append(psPopList, ps)
 	}
 
-	if bestPeer != nil {
-		atomic.AddUint64(&bestPeer.chosenCount, 1)
+	for _, p := range psPopList {
+		heap.Push(l.peerHeap, p)
 	}
-	return bestPeer
+
+	if ps == nil {
+		return nil
+	}
+
+	l.peerHeap.PushPeer(ps)
+	atomic.AddUint64(&ps.chosenCount, 1)
+	return ps.Peer
 }
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
 func (l *PeerList) GetOrAdd(hostPort string) *Peer {
-	l.RLock()
-	if p, ok := l.peersByHostPort[hostPort]; ok {
-		l.RUnlock()
-		return p
+	if ps, ok := l.exists(hostPort); ok {
+		return ps.Peer
 	}
-
-	l.RUnlock()
 	return l.Add(hostPort)
 }
 
@@ -159,9 +159,67 @@ func (l *PeerList) Copy() map[string]*Peer {
 
 	listCopy := make(map[string]*Peer)
 	for k, v := range l.peersByHostPort {
-		listCopy[k] = v
+		listCopy[k] = v.Peer
 	}
 	return listCopy
+}
+
+// exists checks if a hostport exists in the peer list.
+func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
+	l.RLock()
+	ps, ok := l.peersByHostPort[hostPort]
+	l.RUnlock()
+
+	return ps, ok
+}
+
+// UpdatePeer is called when there is a change that may cause the peer's score to change.
+// The new score is calculated, and the peer heap is updated with the new score if the score changes.
+func (l *PeerList) UpdatePeer(p *Peer) {
+	ps, ok := l.exists(p.hostPort)
+	if !ok {
+		return
+	}
+
+	newScore := l.scoreCalculator.GetScore(p)
+	if newScore == ps.readScore() {
+		return
+	}
+
+	ps.setScore(newScore)
+	l.Lock()
+	l.peerHeap.UpdatePeer(ps)
+	l.Unlock()
+}
+
+type peerScore struct {
+	sync.RWMutex
+	*Peer
+
+	score uint64
+	index int
+	order uint64
+}
+
+func newPeerScore(p *Peer, score uint64) *peerScore {
+	return &peerScore{
+		Peer:  p,
+		score: score,
+		index: -1,
+	}
+}
+
+func (ps *peerScore) readScore() uint64 {
+	ps.RLock()
+	score := ps.score
+	ps.RUnlock()
+	return score
+}
+
+func (ps *peerScore) setScore(score uint64) {
+	ps.Lock()
+	ps.score = score
+	ps.Unlock()
 }
 
 // Peer represents a single autobahn service or client with a unique host:port.
@@ -180,6 +238,9 @@ type Peer struct {
 }
 
 func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
+	if hostPort == "" {
+		panic("Cannot create peer with blank hostPort")
+	}
 	return &Peer{
 		channel:      channel,
 		hostPort:     hostPort,
@@ -348,17 +409,29 @@ func (p *Peer) NumInbound() int {
 	return count
 }
 
+// NumPendingOutbound returns the number of pending outbound calls.
+func (p *Peer) NumPendingOutbound() int {
+	count := 0
+	p.mut.RLock()
+	for _, c := range p.outboundConnections {
+		count += c.outbound.count()
+	}
+
+	for _, c := range p.inboundConnections {
+		count += c.outbound.count()
+	}
+	p.mut.RUnlock()
+	return count
+}
+
 func (p *Peer) runWithConnections(f func(*Connection)) {
 	p.mut.RLock()
-	inboundConns := p.inboundConnections
-	outboundConns := p.outboundConnections
+	for _, c := range p.inboundConnections {
+		f(c)
+	}
+
+	for _, c := range p.outboundConnections {
+		f(c)
+	}
 	p.mut.RUnlock()
-
-	for _, c := range inboundConns {
-		f(c)
-	}
-
-	for _, c := range outboundConns {
-		f(c)
-	}
 }

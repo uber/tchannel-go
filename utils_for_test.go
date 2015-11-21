@@ -54,3 +54,7 @@ func InboundConnection(call IncomingCall) (*Connection, net.Conn) {
 func NewSpan(traceID uint64, parentID uint64, spanID uint64) Span {
 	return Span{traceID: traceID, parentID: parentID, spanID: spanID, flags: defaultTracingFlags}
 }
+
+func (l *PeerList) GetHeap() *PeerHeap {
+	return l.peerHeap
+}

@@ -20,44 +20,43 @@
 
 package tchannel
 
-import "math"
+import (
+	"math"
+	"math/rand"
+	"testing"
+	"time"
 
-// ScoreCalculator defines the interface to calculate the score.
-type ScoreCalculator interface {
-	GetScore(p *Peer) uint64
-}
+	"github.com/stretchr/testify/assert"
+)
 
-// ScoreCalculatorFunc is an adapter that allows functions to be used as ScoreCalculator
-type ScoreCalculatorFunc func(p *Peer) uint64
+func TestPeerHeap(t *testing.T) {
+	const numPeers = 10
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-// GetScore calls the underlying function.
-func (f ScoreCalculatorFunc) GetScore(p *Peer) uint64 {
-	return f(p)
-}
+	peerHeap := newPeerHeap()
 
-type zeroCalculator struct{}
-
-func (zeroCalculator) GetScore(p *Peer) uint64 {
-	return 0
-}
-
-func newZeroCalculator() zeroCalculator {
-	return zeroCalculator{}
-}
-
-type preferIncomingCalculator struct{}
-
-func (preferIncomingCalculator) GetScore(p *Peer) uint64 {
-	if p.NumInbound() <= 0 {
-		return math.MaxUint64
+	peerScores := make([]*peerScore, numPeers)
+	minScore := uint64(math.MaxInt64)
+	for i := 0; i < numPeers; i++ {
+		peerScore := newPeerScore(&Peer{}, uint64(r.Intn(numPeers*5)))
+		peerScores[i] = peerScore
+		if peerScore.score < minScore {
+			minScore = peerScore.score
+		}
 	}
 
-	return uint64(p.NumPendingOutbound())
-}
+	for i := 0; i < numPeers; i++ {
+		peerHeap.PushPeer(peerScores[i])
+	}
 
-// newPreferIncomingCalculator calculates the score for peers. It prefers
-// peers who have incoming connections and choose based on the least pending
-// outbound calls. The less number of outbound calls, the smaller score the peer has.
-func newPreferIncomingCalculator() preferIncomingCalculator {
-	return preferIncomingCalculator{}
+	assert.Equal(t, numPeers, peerHeap.Len(), "Incorrect peer heap numPeers")
+	assert.Equal(t, minScore, peerHeap.peek().score, "PeerHeap top peer is not minimum")
+
+	lastScore := peerHeap.PopPeer().score
+	for i := 1; i < numPeers; i++ {
+		assert.Equal(t, numPeers-i, peerHeap.Len(), "Incorrect peer heap numPeers")
+		score := peerHeap.PopPeer().score
+		assert.True(t, score >= lastScore, "The order of the heap is invalid")
+		lastScore = score
+	}
 }

@@ -147,6 +147,7 @@ type messageExchangeSet struct {
 	log       Logger
 	name      string
 	onRemoved func()
+	onAdded   func()
 
 	exchanges  map[uint32]*messageExchange
 	sendChRefs sync.WaitGroup
@@ -170,8 +171,6 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 	}
 
 	mexset.mut.Lock()
-	defer mexset.mut.Unlock()
-
 	if existingMex := mexset.exchanges[mex.msgID]; existingMex != nil {
 		if existingMex == mex {
 			mexset.log.Warnf("%s mex for %s, %d registered multiple times",
@@ -181,11 +180,15 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 				mex.msgID, existingMex.msgType, mex.msgType)
 		}
 
+		mexset.mut.Unlock()
 		return nil, errDuplicateMex
 	}
 
 	mexset.exchanges[mex.msgID] = mex
 	mexset.sendChRefs.Add(1)
+	mexset.mut.Unlock()
+
+	mexset.onAdded()
 
 	// TODO(mmihic): Put into a deadline ordered heap so we can garbage collected expired exchanges
 	return mex, nil
