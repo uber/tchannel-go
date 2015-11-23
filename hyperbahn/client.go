@@ -102,6 +102,9 @@ func parseConfig(config *Configuration) error {
 		if err := decoder.Decode(&config.InitialNodes); err != nil {
 			return err
 		}
+		if err = f.Close(); err != nil {
+			return err
+		}
 	}
 
 	if len(config.InitialNodes) == 0 {
