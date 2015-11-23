@@ -97,6 +97,7 @@ func parseConfig(config *Configuration) error {
 		if err != nil {
 			return err
 		}
+		defer f.Close()
 
 		decoder := json.NewDecoder(f)
 		if err := decoder.Decode(&config.InitialNodes); err != nil {
