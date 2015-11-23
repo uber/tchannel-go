@@ -473,6 +473,11 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 		return
 	}
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	ch.updatePeer(p)
+}
+
+// updatePeer updates the score of the peer and update it's position in heap as well.
+func (ch *Channel) updatePeer(p *Peer) {
 	ch.peers.UpdatePeer(p)
 	ch.subChannels.updatePeer(p)
 }
@@ -508,6 +513,7 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	ch.removeClosedConn(c)
 	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
 		peer.connectionStateChanged(c)
+		ch.updatePeer(peer)
 	}
 
 	chState := ch.State()
