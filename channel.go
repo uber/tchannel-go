@@ -491,6 +491,7 @@ func (ch *Channel) incomingConnectionActive(c *Connection) {
 	// what services they implement.
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
 	p.AddInboundConnection(c)
+	ch.updatePeer(p)
 
 	ch.mutable.mut.Lock()
 	ch.mutable.conns[c.connID] = c
