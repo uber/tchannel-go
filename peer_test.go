@@ -523,7 +523,7 @@ func validateStressTest(t testing.TB, server *Channel, numAffinity int) {
 	countsByPeer := make(map[string]int)
 	var counts []int
 	for _, peer := range state.Peers {
-		p, ok := state.RootPeers[peer]
+		p, ok := state.RootPeers[peer.HostPort]
 		assert.True(t, ok, "Missing peer.")
 		if p.ChosenCount != 0 {
 			countsByPeer[p.HostPort] = int(p.ChosenCount)

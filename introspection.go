@@ -48,7 +48,7 @@ type RuntimeState struct {
 	RootPeers map[string]PeerRuntimeState `json:"rootPeers"`
 
 	// Peers is the list of shared peers for this channel.
-	Peers []string `json:"peers"`
+	Peers []SubPeerScore `json:"peers"`
 
 	// NumConnections is the number of connections stored in the channel.
 	NumConnections int `json:"numConnections"`
@@ -74,7 +74,13 @@ type SubChannelRuntimeState struct {
 	Service  string `json:"service"`
 	Isolated bool   `json:"isolated"`
 	// IsolatedPeers is the list of all isolated peers for this channel.
-	IsolatedPeers []string `json:"isolatedPeers,omitempty"`
+	IsolatedPeers []SubPeerScore `json:"isolatedPeers,omitempty"`
+}
+
+// SubPeerScore show the runtime state of a peer with score.
+type SubPeerScore struct {
+	HostPort string `json:"hostPort"`
+	Score    uint64 `json:"score"`
 }
 
 // ConnectionRuntimeState is the runtime state for a single connection.
@@ -242,12 +248,15 @@ func (ch *Channel) handleIntrospection(arg3 []byte) interface{} {
 	return ch.IntrospectState(&opts)
 }
 
-// IntrospectList returns the list of peers (host:port) in this peer list.
-func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []string {
-	var peers []string
+// IntrospectList returns the list of peers (hostport, score) in this peer list.
+func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []SubPeerScore {
+	var peers []SubPeerScore
 	l.RLock()
-	for peer := range l.peersByHostPort {
-		peers = append(peers, peer)
+	for _, ps := range l.peerHeap.PeerScores {
+		peers = append(peers, SubPeerScore{
+			HostPort: ps.Peer.hostPort,
+			Score:    ps.score,
+		})
 	}
 	l.RUnlock()
 
