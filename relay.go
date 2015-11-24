@@ -11,6 +11,7 @@ type relayItem struct {
 	destination *Relay
 }
 
+// ServiceHosts keeps track of the hosts registered to a service.
 type ServiceHosts struct {
 	sync.RWMutex
 
@@ -19,6 +20,7 @@ type ServiceHosts struct {
 	peers    map[string][]string
 }
 
+// NewServiceHosts creates a new empty ServiceHosts.
 func NewServiceHosts() *ServiceHosts {
 	return &ServiceHosts{
 		r:     rand.New(rand.NewSource(rand.Int63())),
@@ -26,6 +28,7 @@ func NewServiceHosts() *ServiceHosts {
 	}
 }
 
+// Register registers a peer for the given service.
 func (h *ServiceHosts) Register(service, hostPort string) {
 	h.Lock()
 	h.peers[service] = append(h.peers[service], hostPort)
@@ -73,13 +76,13 @@ func NewRelay(ch *Channel, conn *Connection) *Relay {
 
 // Receive receives a frame from another relay, and sends it to the underlying connection.
 func (r *Relay) Receive(frame *Frame) {
-	r.conn.log.Debugf("Relay received frame %v", frame.Header)
+	//r.conn.log.Debugf("Relay received frame %v", frame.Header)
 	r.conn.sendCh <- frame
 }
 
-// AddRelay adds a relay that will remap IDs from id to remapID
+// addRelay adds a relay that will remap IDs from id to remapID
 // and then send the frame to the given destination relay.
-func (r *Relay) AddRelay(id, remapID uint32, destination *Relay) relayItem {
+func (r *Relay) addRelay(id, remapID uint32, destination *Relay) relayItem {
 	newRelay := relayItem{
 		remapID:     remapID,
 		destination: destination,
@@ -94,7 +97,6 @@ func (r *Relay) AddRelay(id, remapID uint32, destination *Relay) relayItem {
 // RelayFrame relays the given frame.
 // TODO(prashant): Remove the id from the map once that sequence is complete.
 func (r *Relay) RelayFrame(frame *Frame) {
-	r.conn.log.Debugf("RelayFrame %v", frame.Header)
 	if frame.MessageType() != messageTypeCallReq {
 		r.RLock()
 		relay, ok := r.connections[frame.Header.ID]
@@ -120,12 +122,13 @@ func (r *Relay) RelayFrame(frame *Frame) {
 	if err != nil {
 		r.ch.Logger().Warnf("failed to connect to %v: %v", hostPort, err)
 		// TODO : return an error frame.
+		return
 	}
 
 	destinationID := c.NextMessageID()
-	c.relay.AddRelay(destinationID, frame.Header.ID, r)
+	c.relay.addRelay(destinationID, frame.Header.ID, r)
 	r.statsReporter.IncCounter("relay", nil, 1)
-	relayToDest := r.AddRelay(frame.Header.ID, destinationID, c.relay)
+	relayToDest := r.addRelay(frame.Header.ID, destinationID, c.relay)
 
 	frame.Header.ID = destinationID
 	relayToDest.destination.Receive(frame)
