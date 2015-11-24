@@ -239,12 +239,12 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		checksumType:  checksumType,
 		inbound: messageExchangeSet{
 			name:      messageExchangeSetInbound,
-			log:       log,
+			log:       log.WithFields(LogField{"exchange", messageExchangeSetInbound}),
 			exchanges: make(map[uint32]*messageExchange),
 		},
 		outbound: messageExchangeSet{
 			name:      messageExchangeSetOutbound,
-			log:       log,
+			log:       log.WithFields(LogField{"exchange", messageExchangeSetOutbound}),
 			exchanges: make(map[uint32]*messageExchange),
 		},
 		handlers:        ch.handlers,
