@@ -42,14 +42,29 @@ import (
 
 const tchannelThriftImport = "github.com/uber/tchannel-go/thrift"
 
+type stringslice []string
+
+func (s *stringslice) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringslice) Set(in string) error {
+	*s = append(*s, in)
+	return nil
+}
+
 var (
 	generateThrift     = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
 	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
 	inputFile          = flag.String("inputFile", "", "The .thrift file to generate a client for")
 	outputFile         = flag.String("outputFile", "", "The output file to generate go code to")
-	dynamic            = flag.Bool("enableDynamic", false, "Generate go code for all *.thrift-gen files in the $GOPATH")
 	nlSpaceNL          = regexp.MustCompile(`\n[ \t]+\n`)
+	templates          stringslice
 )
+
+func init() {
+	flag.Var(&templates, "template", "template file to compile code from")
+}
 
 // TemplateData is the data passed to the template that generates code.
 type TemplateData struct {
@@ -67,16 +82,17 @@ type GenericTemplateDate struct {
 
 func main() {
 	flag.Parse()
+
 	if *inputFile == "" {
 		log.Fatalf("Please specify an inputFile")
 	}
 
-	if err := processFile(*generateThrift, *inputFile, *outputFile); err != nil {
+	if err := processFile(*generateThrift, *inputFile, templates, *outputFile); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func processFile(generateThrift bool, inputFile string, outputFile string) error {
+func processFile(generateThrift bool, inputFile string, templateFiles []string, outputFile string) error {
 	if generateThrift {
 		if outFile, err := runThrift(inputFile, *apacheThriftImport); err != nil {
 			return fmt.Errorf("Could not generate thrift output: %v", err)
@@ -92,53 +108,41 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 	}
 
 	goTmpl := parseTemplate() // tchan-template
-
-	templateFiles, err := findThriftGenFiles("") // get files in $GOPATH
-	if err != nil {
-		return fmt.Errorf("Could not find thrift-gen files: %v", err)
-	}
-
 	for thriftFilename, AST := range parsed {
 		if err := generateCode(outputFile, goTmpl, packageName(thriftFilename), AST); err != nil {
 			return err
 		}
 
-		if *dynamic {
-			templates, err := getTemplatesFromFiles(templateFiles, AST)
-			if err != nil {
-				return fmt.Errorf("Could not parse thrift-gen files: %v", err)
+		templates, err := getTemplatesFromFiles(templateFiles, AST)
+		if err != nil {
+			return fmt.Errorf("Could not parse thrift-gen files: %v", err)
+		}
+
+		for templateFilename, template := range templates {
+			buf := &bytes.Buffer{}
+
+			if err := template.Execute(buf, &GenericTemplateDate{
+				Package: packageName(thriftFilename),
+				AST:     AST,
+				State:   NewState(AST),
+			}); err != nil {
+				return fmt.Errorf("Could not parse thrift-gen template: %v", err)
 			}
 
-			for templateFilename, template := range templates {
-				buf := &bytes.Buffer{}
+			// post process generated code
+			generatedBytes := buf.Bytes()
+			generatedBytes = cleanGeneratedCode(generatedBytes)
 
-				if err := template.Execute(buf, &GenericTemplateDate{
-					Package: packageName(thriftFilename),
-					AST:     AST,
-					State:   NewState(AST),
-				}); err != nil {
-					return fmt.Errorf("Could not parse thrift-gen template: %v", err)
-				}
+			// do useful stuff with generated code
+			outputFilename := getOuputFilename(outputFile, thriftFilename, AST, templateFilename)
 
-				fmt.Println("Have some code!")
-
-				// post process generated code
-				generatedBytes := buf.Bytes()
-				generatedBytes = cleanGeneratedCode(generatedBytes)
-
-				// do useful stuff with generated code
-				outputFilename := getOuputFilename(outputFile, thriftFilename, AST, templateFilename)
-				fmt.Println(string(generatedBytes))
-
-				// write file
-				if err := ioutil.WriteFile(outputFilename, generatedBytes, 0666); err != nil {
-					return fmt.Errorf("cannot write output file %s: %v", outputFile, err)
-				} else {
-					fmt.Printf("Saved file: %s\n", outputFilename)
-				}
-
-				exec.Command("gofmt", "-w", outputFilename).Run()
+			// write file
+			if err := ioutil.WriteFile(outputFilename, generatedBytes, 0666); err != nil {
+				return fmt.Errorf("cannot write output file %s: %v", outputFile, err)
 			}
+
+			exec.Command("gofmt", "-w", outputFilename).Run()
+
 		}
 
 	}
