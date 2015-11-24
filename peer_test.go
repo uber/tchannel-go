@@ -132,9 +132,7 @@ func TestInboundEphemeralPeerRemoved(t *testing.T) {
 		runtime.Gosched()
 		assert.Equal(t, ChannelClosed, client.State(), "Client should be closed")
 
-		// Wait for the channel to see the connection as closed and update the peer list.
-		time.Sleep(time.Millisecond)
-
+		waitTillInboundEmpty(t, ch, clientHP)
 		_, ok := ch.RootPeers().Get(clientHP)
 		assert.False(t, ok, "server's root peers should remove peer for client on close")
 	})
@@ -303,6 +301,26 @@ func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
 		if float64(v) < min || float64(v) > max {
 			t.Errorf("Key %v has value %v which is out of range %v%v", k, v, min, max)
 		}
+	}
+}
+
+// waitTillInboundEmpty will wait until the peer with hostPort in ch has 0 inbound connections.
+// It will fail the test after a second.
+func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string) {
+	peer, ok := ch.RootPeers().Get(hostPort)
+	if !ok {
+		return
+	}
+
+	start := time.Now()
+	timedOut := func() bool { return time.Since(start) > time.Second }
+	for peer.NumInbound() > 0 && !timedOut() {
+		time.Sleep(time.Microsecond)
+	}
+	time.Sleep(time.Microsecond) // so any extra processing can happen.
+
+	if timedOut() {
+		t.Errorf("Timed out waiting for peer %v to have 0 inbound", hostPort)
 	}
 }
 
@@ -566,18 +584,20 @@ func validateStressTest(t testing.TB, server *Channel, numAffinity int, numAffin
 func TestPeerSelectionAfterClosed(t *testing.T) {
 	pt := &peerSelectionTest{
 		peerTest:    peerTest{t: t},
-		numPeers:    100,
-		numAffinity: 20,
+		numPeers:    5,
+		numAffinity: 5,
 	}
 	defer pt.CleanUp()
 	pt.setup(t)
-	hostport := pt.affinity[pt.numAffinity-1].PeerInfo().HostPort
-	pt.affinity[pt.numAffinity-1].Close()
 
-	// wait the connection close.
-	time.Sleep(time.Second)
-	for i := 0; i < pt.numPeers; i++ {
-		peer, _ := pt.client.Peers().Get(nil)
-		assert.NotEqual(pt.t, peer.HostPort(), hostport, "this peer shouldn't bee choosen")
+	toClose := pt.affinity[pt.numAffinity-1]
+	closedHP := toClose.PeerInfo().HostPort
+	toClose.Close()
+	waitTillInboundEmpty(t, pt.client, closedHP)
+
+	for i := 0; i < 10*pt.numAffinity; i++ {
+		peer, err := pt.client.Peers().Get(nil)
+		assert.NoError(t, err, "Client failed to select a peer")
+		assert.NotEqual(pt.t, closedHP, peer.HostPort(), "Closed peer shouldn't be chosen")
 	}
 }
