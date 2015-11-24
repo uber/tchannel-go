@@ -313,14 +313,23 @@ type peerSelectionTest struct {
 	numPeers int
 	// numAffinity is the number of affinity nodes.
 	numAffinity int
+	// numAffinityWithNoCall is the number of affinity nodes which doesn't send call req to client.
+	numAffinityWithNoCall int
 	// numConcurrent is the number of concurrent goroutine to make outbound calls.
 	numConcurrent int
 	// hasInboundCall is the bool flag to tell whether to have inbound calls from affinity nodes
 	hasInboundCall bool
 
-	servers  []*Channel
-	affinity []*Channel
-	client   *Channel
+	servers            []*Channel
+	affinity           []*Channel
+	affinityWithNoCall []*Channel
+	client             *Channel
+}
+
+func (pt *peerSelectionTest) setup(t testing.TB) {
+	pt.setupServers(t)
+	pt.setupClient(t)
+	pt.setupAffinity(t)
 }
 
 // setupServers will create numPeer servers, and register handlers on them.
@@ -329,7 +338,6 @@ func (pt *peerSelectionTest) setupServers(t testing.TB) {
 
 	// Set up numPeers servers.
 	for i := 0; i < pt.numPeers; i++ {
-
 		pt.servers[i], _ = pt.NewService(t, "server")
 		pt.servers[i].Register(raw.Wrap(newTestHandler(pt.t)), "echo")
 	}
@@ -341,9 +349,13 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 		pt.affinity[i] = pt.servers[i]
 	}
 
+	pt.affinityWithNoCall = make([]*Channel, pt.numAffinityWithNoCall)
+	for i := range pt.affinityWithNoCall {
+		pt.affinityWithNoCall[i] = pt.servers[i+pt.numAffinity]
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(pt.numAffinity)
-
 	// Connect from the affinity nodes to the service.
 	hostport := pt.client.PeerInfo().HostPort
 	serviceName := pt.client.PeerInfo().ServiceName
@@ -354,7 +366,16 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 			wg.Done()
 		}(affinity)
 	}
+	wg.Wait()
 
+	wg.Add(pt.numAffinityWithNoCall)
+	for _, p := range pt.affinityWithNoCall {
+		go func(p *Channel) {
+			// use ping to build connection without sending call req.
+			pt.sendPing(p, hostport)
+			wg.Done()
+		}(p)
+	}
 	wg.Wait()
 }
 
@@ -371,6 +392,13 @@ func (pt *peerSelectionTest) makeCall(sc *SubChannel) {
 	defer cancel()
 	_, _, _, err := raw.CallSC(ctx, sc, "echo", nil, nil)
 	assert.NoError(pt.t, err, "raw.Call failed")
+}
+
+func (pt *peerSelectionTest) sendPing(ch *Channel, hostport string) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+	err := ch.Ping(ctx, hostport)
+	assert.NoError(pt.t, err, "ping failed")
 }
 
 func (pt *peerSelectionTest) runStressSimple(b *testing.B) {
@@ -423,8 +451,8 @@ func (pt *peerSelectionTest) runStress() {
 	// affinity incoming requests
 	if pt.hasInboundCall {
 		serviceName := pt.client.PeerInfo().ServiceName
-		for i := 0; i < pt.numAffinity; i++ {
-			go reqEveryNTicks(1, pt.affinity[i].GetSubChannel(serviceName), clocks[i+pt.numConcurrent])
+		for i, affinity := range pt.affinity {
+			go reqEveryNTicks(1, affinity.GetSubChannel(serviceName), clocks[i+pt.numConcurrent])
 		}
 	}
 
@@ -458,10 +486,7 @@ func BenchmarkSimplePeerHeapPerf(b *testing.B) {
 		numConcurrent: 100,
 	}
 	defer pt.CleanUp()
-
-	pt.setupServers(b)
-	pt.setupClient(b)
-	pt.setupAffinity(b)
+	pt.setup(b)
 	b.ResetTimer()
 	pt.runStressSimple(b)
 }
@@ -502,22 +527,20 @@ func TestPeerHeapPerf(t *testing.T) {
 
 func peerHeapStress(t testing.TB, numserver int, affinityRatio float64, numConcurrent int, hasInboundCall bool) {
 	pt := &peerSelectionTest{
-		peerTest:       peerTest{t: t},
-		numPeers:       numserver,
-		numConcurrent:  numConcurrent,
-		hasInboundCall: hasInboundCall,
-		numAffinity:    int(float64(numserver) * affinityRatio),
+		peerTest:              peerTest{t: t},
+		numPeers:              numserver,
+		numConcurrent:         numConcurrent,
+		hasInboundCall:        hasInboundCall,
+		numAffinity:           int(float64(numserver) * affinityRatio),
+		numAffinityWithNoCall: 3,
 	}
 	defer pt.CleanUp()
-
-	pt.setupServers(t)
-	pt.setupClient(t)
-	pt.setupAffinity(t)
+	pt.setup(t)
 	pt.runStress()
-	validateStressTest(t, pt.client, pt.numAffinity)
+	validateStressTest(t, pt.client, pt.numAffinity, pt.numAffinityWithNoCall)
 }
 
-func validateStressTest(t testing.TB, server *Channel, numAffinity int) {
+func validateStressTest(t testing.TB, server *Channel, numAffinity int, numAffinityWithNoCall int) {
 	state := server.IntrospectState(&IntrospectionOptions{IncludeEmptyPeers: true})
 
 	countsByPeer := make(map[string]int)
@@ -531,11 +554,30 @@ func validateStressTest(t testing.TB, server *Channel, numAffinity int) {
 		}
 	}
 	// when number of affinity is zero, all peer suppose to be chosen.
-	if numAffinity == 0 {
+	if numAffinity == 0 && numAffinityWithNoCall == 0 {
 		numAffinity = len(state.Peers)
 	}
-	assert.EqualValues(t, len(countsByPeer), numAffinity, "Number of affinities nodes mismatch.")
+	assert.EqualValues(t, len(countsByPeer), numAffinity+numAffinityWithNoCall, "Number of affinities nodes mismatch.")
 	sort.Ints(counts)
 	median := counts[len(counts)/2]
 	testDistribution(t, countsByPeer, float64(median)*0.9, float64(median)*1.1)
+}
+
+func TestPeerSelectionAfterClosed(t *testing.T) {
+	pt := &peerSelectionTest{
+		peerTest:    peerTest{t: t},
+		numPeers:    100,
+		numAffinity: 20,
+	}
+	defer pt.CleanUp()
+	pt.setup(t)
+	hostport := pt.affinity[pt.numAffinity-1].PeerInfo().HostPort
+	pt.affinity[pt.numAffinity-1].Close()
+
+	// wait the connection close.
+	time.Sleep(time.Second)
+	for i := 0; i < pt.numPeers; i++ {
+		peer, _ := pt.client.Peers().Get(nil)
+		assert.NotEqual(pt.t, peer.HostPort(), hostport, "this peer shouldn't bee choosen")
+	}
 }
