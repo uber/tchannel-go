@@ -112,8 +112,8 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 
 	default:
 		// TODO(mmihic): Should be treated as a protocol error
-		mex.mexset.log.Warnf("Received unexpected message %d for %d",
-			int(frame.Header.messageType), frame.Header.ID)
+		mex.mexset.log.Warnf("Received unexpected message %v, expected %v for %d",
+			frame.Header.messageType, msgType, frame.Header.ID)
 
 		return nil, errUnexpectedFrameType
 	}
