@@ -500,18 +500,18 @@ func TestPeerHeapPerf(t *testing.T) {
 		numConcurrent  int
 		hasInboundCall bool
 	}{
-		// {
-		// 	numserver:      1000,
-		// 	affinityRatio:  0.1,
-		// 	numConcurrent:  5,
-		// 	hasInboundCall: true,
-		// },
-		// {
-		// 	numserver:      1000,
-		// 	affinityRatio:  0.1,
-		// 	numConcurrent:  1,
-		// 	hasInboundCall: true,
-		// },
+		{
+			numserver:      1000,
+			affinityRatio:  0.1,
+			numConcurrent:  5,
+			hasInboundCall: true,
+		},
+		{
+			numserver:      1000,
+			affinityRatio:  0.1,
+			numConcurrent:  1,
+			hasInboundCall: true,
+		},
 		{
 			numserver:      100,
 			affinityRatio:  0.1,
@@ -565,10 +565,9 @@ func validateStressTest(t testing.TB, server *Channel, numAffinity int, numAffin
 
 func TestPeerSelectionAfterClosed(t *testing.T) {
 	pt := &peerSelectionTest{
-		peerTest:              peerTest{t: t},
-		numPeers:              100,
-		numAffinity:           20,
-		numAffinityWithNoCall: 0,
+		peerTest:    peerTest{t: t},
+		numPeers:    100,
+		numAffinity: 20,
 	}
 	defer pt.CleanUp()
 	pt.setup(t)
