@@ -87,7 +87,7 @@ func runTest(t *testing.T, thriftFile string) error {
 
 	// Generate code from the Thrift file.
 	t.Logf("runTest in %v", tempDir)
-	if err := processFile(true /* generateThrift */, thriftFile, ""); err != nil {
+	if err := processFile(true /* generateThrift */, thriftFile, []string{}, ""); err != nil {
 		return fmt.Errorf("processFile(%s) failed: %v", thriftFile, err)
 	}
 
