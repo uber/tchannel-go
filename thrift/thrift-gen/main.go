@@ -43,11 +43,10 @@ import (
 const tchannelThriftImport = "github.com/uber/tchannel-go/thrift"
 
 var (
-	generateThrift     = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
-	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
-	inputFile          = flag.String("inputFile", "", "The .thrift file to generate a client for")
-	outputDir          = flag.String("outputDir", "gen-go", "The output directory to generate go code to.")
-	nlSpaceNL          = regexp.MustCompile(`\n[ \t]+\n`)
+	generateThrift = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
+	inputFile      = flag.String("inputFile", "", "The .thrift file to generate a client for")
+	outputDir      = flag.String("outputDir", "gen-go", "The output directory to generate go code to.")
+	nlSpaceNL      = regexp.MustCompile(`\n[ \t]+\n`)
 )
 
 // TemplateData is the data passed to the template that generates code.
@@ -75,7 +74,7 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 	}
 
 	if generateThrift {
-		if err := runThrift(inputFile, outputDir, *apacheThriftImport); err != nil {
+		if err := runThrift(inputFile, outputDir); err != nil {
 			return fmt.Errorf("Could not generate thrift output: %v", err)
 		}
 	}

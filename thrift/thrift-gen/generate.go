@@ -29,7 +29,11 @@ import (
 	"strings"
 )
 
-var flagThriftBinary = flag.String("thriftBinary", "thrift", "Command to use for the Apache Thrift binary")
+var (
+	thriftBinary       = flag.String("thriftBinary", "thrift", "Command to use for the Apache Thrift binary")
+	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
+	packagePrefix      = flag.String("packagePrefix", "", "The package prefix (will be used similar to how Apache Thrift uses it)")
+)
 
 func execCmd(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
@@ -39,7 +43,7 @@ func execCmd(name string, args ...string) error {
 }
 
 func execThrift(args ...string) error {
-	return execCmd(*flagThriftBinary, args...)
+	return execCmd(*thriftBinary, args...)
 }
 
 func deleteRemote(dir string) error {
@@ -60,7 +64,7 @@ func deleteRemote(dir string) error {
 	})
 }
 
-func runThrift(inFile string, outDir string, thriftImport string) error {
+func runThrift(inFile string, outDir string) error {
 	inFile, err := filepath.Abs(inFile)
 	if err != nil {
 		return err
@@ -73,8 +77,9 @@ func runThrift(inFile string, outDir string, thriftImport string) error {
 	}
 
 	// Generate the Apache Thrift generated code.
-	if err := execThrift("-r", "--gen", "go:thrift_import="+thriftImport, "-out", outDir, inFile); err != nil {
-		return fmt.Errorf("Thrift compile failed: %v", err)
+	goArgs := fmt.Sprintf("go:thrift_import=%s,package_prefix=%s", *apacheThriftImport, *packagePrefix)
+	if err := execThrift("-r", "--gen", goArgs, "-out", outDir, inFile); err != nil {
+		return fmt.Errorf("thrift compile failed: %v", err)
 	}
 
 	// Delete the -remote folders.
