@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func ResolveWithGopath(filename string) (string, error) {
@@ -22,8 +21,7 @@ func ResolveWithGopath(filename string) (string, error) {
 func FileCandidatesWithGopath(filename string) []string {
 	candidates := []string{filename}
 
-	envGopath := os.Getenv("GOPATH")
-	paths := strings.Split(envGopath, ":")
+	paths := filepath.SplitList(os.Getenv("GOPATH"))
 
 	for _, path := range paths {
 		resolvedFilename := filepath.Join(path, "src", filename)

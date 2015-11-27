@@ -36,7 +36,7 @@ func TestFileCandidatesWithGopathMultipleGopath(t *testing.T) {
 	}
 	log.Printf("Error: %v", err)
 
-	os.Setenv("GOPATH", wd+":"+godeps)
+	os.Setenv("GOPATH", wd+string(filepath.ListSeparator)+godeps)
 
 	files := FileCandidatesWithGopath("github.com/uber/tchannel-go/tchan.thrift-gen")
 
