@@ -87,13 +87,13 @@ func runTest(t *testing.T, thriftFile string) error {
 
 	// Generate code from the Thrift file.
 	t.Logf("runTest in %v", tempDir)
-	if err := processFile(true /* generateThrift */, thriftFile, nil, ""); err != nil {
+	if err := processFile(true /* generateThrift */, thriftFile, nil, tempDir); err != nil {
 		return fmt.Errorf("processFile(%s) failed: %v", thriftFile, err)
 	}
 
 	// Run go build to ensure that the generated code builds.
 	cmd := exec.Command("go", "build", ".")
-	cmd.Dir = filepath.Join(tempDir, "gen-go", "test")
+	cmd.Dir = filepath.Join(tempDir, "test")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("Build failed. Output = \n%v\n", string(output))
 	}
