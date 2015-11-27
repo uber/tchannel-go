@@ -1,50 +1,41 @@
 package main
 
 import (
-	"log"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
 
-func TestFileCandidatesWithGopathSingleGopath(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Error(err)
-	}
-	log.Printf("Error: %v", err)
-
-	os.Setenv("GOPATH", wd)
-
-	files := FileCandidatesWithGopath("github.com/uber/tchannel-go/tchan.thrift-gen")
-
-	if !reflect.DeepEqual(files, []string{
-		"github.com/uber/tchannel-go/tchan.thrift-gen",
-		filepath.Join(wd, "src", "github.com/uber/tchannel-go/tchan.thrift-gen"),
-	}) {
-		t.Error("Expected different candidates")
-	}
+var FileCandidatesWithGopathTests = []struct {
+	GOPATH             string
+	filename           string
+	expectedCandidates []string
+}{
+	{
+		GOPATH:   "onepath",
+		filename: "github.com/uber/tchannel-go/tchan.thrift-gen",
+		expectedCandidates: []string{
+			"github.com/uber/tchannel-go/tchan.thrift-gen",
+			"onepath/src/github.com/uber/tchannel-go/tchan.thrift-gen",
+		},
+	},
+	{
+		GOPATH:   "onepath:secondpath",
+		filename: "github.com/uber/tchannel-go/tchan.thrift-gen",
+		expectedCandidates: []string{
+			"github.com/uber/tchannel-go/tchan.thrift-gen",
+			"onepath/src/github.com/uber/tchannel-go/tchan.thrift-gen",
+			"secondpath/src/github.com/uber/tchannel-go/tchan.thrift-gen",
+		},
+	},
 }
 
-func TestFileCandidatesWithGopathMultipleGopath(t *testing.T) {
-	wd, err := os.Getwd()
-	godeps := filepath.Join(wd, "Godeps")
-
-	if err != nil {
-		t.Error(err)
-	}
-	log.Printf("Error: %v", err)
-
-	os.Setenv("GOPATH", wd+string(filepath.ListSeparator)+godeps)
-
-	files := FileCandidatesWithGopath("github.com/uber/tchannel-go/tchan.thrift-gen")
-
-	if !reflect.DeepEqual(files, []string{
-		"github.com/uber/tchannel-go/tchan.thrift-gen",
-		filepath.Join(wd, "src", "github.com/uber/tchannel-go/tchan.thrift-gen"),
-		filepath.Join(wd, "Godeps", "src", "github.com/uber/tchannel-go/tchan.thrift-gen"),
-	}) {
-		t.Error("Expected different candidates")
+func TestFileCandidatesWithGopath(t *testing.T) {
+	for _, test := range FileCandidatesWithGopathTests {
+		os.Setenv("GOPATH", test.GOPATH)
+		candidates := FileCandidatesWithGopath(test.filename)
+		if !reflect.DeepEqual(candidates, test.expectedCandidates) {
+			t.Errorf("GOPATH=%s FileCandidatesWithGopath(%s) = %q, want %q", test.GOPATH, test.filename, candidates, test.expectedCandidates)
+		}
 	}
 }
