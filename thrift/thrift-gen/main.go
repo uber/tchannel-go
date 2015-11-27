@@ -218,6 +218,12 @@ func getTemplateFromFile(filename string, AST *parser.Thrift) (*template.Templat
 		},
 	}
 
+	// find which file to use for rendering
+	filename, err := ResolveWithGopath(filename)
+	if err != nil {
+		return nil, err
+	}
+
 	// read template file
 	templateBytes, err := ioutil.ReadFile(filename)
 	if err != nil {
