@@ -53,6 +53,7 @@ var (
 type TemplateData struct {
 	Package        string
 	Services       []*Service
+	Includes       map[string]*Include
 	ThriftImport   string
 	TChannelImport string
 }
@@ -85,11 +86,13 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 		return fmt.Errorf("Could not parse .thrift file: %v", err)
 	}
 
+	states := createStates(parsed)
 	goTmpl := parseTemplate()
 	for filename, v := range parsed {
+		s := states[filename]
 		pkg := packageName(filename)
 		outputFile := filepath.Join(outputDir, pkg, "tchan-"+pkg+".go")
-		if err := generateCode(outputFile, goTmpl, pkg, v); err != nil {
+		if err := generateCode(outputFile, goTmpl, pkg, v, s); err != nil {
 			return err
 		}
 		// TODO(prashant): Support multiple files / includes etc?
@@ -106,12 +109,12 @@ func parseTemplate() *template.Template {
 	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(serviceTmpl))
 }
 
-func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed *parser.Thrift) error {
+func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed *parser.Thrift, state *State) error {
 	if outputFile == "" {
 		return fmt.Errorf("must speciy an output file")
 	}
 
-	wrappedServices, err := wrapServices(parsed)
+	wrappedServices, err := wrapServices(parsed, state)
 	if err != nil {
 		log.Fatalf("Service parsing error: %v", err)
 	}
@@ -121,6 +124,7 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed
 	td := TemplateData{
 		Package:        pkg,
 		Services:       wrappedServices,
+		Includes:       state.includes,
 		ThriftImport:   *apacheThriftImport,
 		TChannelImport: tchannelThriftImport,
 	}

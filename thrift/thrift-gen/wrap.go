@@ -53,9 +53,8 @@ func setExtends(sortedServices []*Service) error {
 	return nil
 }
 
-func wrapServices(v *parser.Thrift) ([]*Service, error) {
+func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 	var services []*Service
-	state := NewState(v)
 	for _, s := range v.Services {
 		if err := checkExtends(v.Services, s, s.Extends); err != nil {
 			return nil, err
