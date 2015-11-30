@@ -95,8 +95,6 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 		if err := generateCode(outputFile, goTmpl, pkg, v, s); err != nil {
 			return err
 		}
-		// TODO(prashant): Support multiple files / includes etc?
-		return nil
 	}
 
 	return nil
@@ -113,6 +111,9 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed
 	if outputFile == "" {
 		return fmt.Errorf("must speciy an output file")
 	}
+	if len(parsed.Services) == 0 {
+		return nil
+	}
 
 	wrappedServices, err := wrapServices(parsed, state)
 	if err != nil {
@@ -120,7 +121,6 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed
 	}
 
 	buf := &bytes.Buffer{}
-
 	td := TemplateData{
 		Package:        pkg,
 		Services:       wrappedServices,
