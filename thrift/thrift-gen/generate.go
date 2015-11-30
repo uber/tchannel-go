@@ -23,7 +23,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,21 +43,21 @@ func execThrift(args ...string) error {
 }
 
 func deleteRemote(dir string) error {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-
-	for _, f := range files {
-		if f.IsDir() && strings.HasSuffix(f.Name(), "-remote") {
-			fullPath := filepath.Join(dir, f.Name())
-			if err := os.RemoveAll(fullPath); err != nil {
-				return err
-			}
+	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
-	}
 
-	return nil
+		if !info.IsDir() || !strings.HasSuffix(path, "-remote") {
+			return nil
+		}
+
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+		// Once the directory is deleted, we can skip the rest of it.
+		return filepath.SkipDir
+	})
 }
 
 func runThrift(inFile string, outDir string, thriftImport string) error {

@@ -91,7 +91,7 @@ func runTest(t *testing.T, thriftFile string) error {
 	}
 
 	// Run go build to ensure that the generated code builds.
-	cmd := exec.Command("go", "build", ".")
+	cmd := exec.Command("go", "build", "./...")
 	cmd.Dir = filepath.Join(tempDir, packageName(thriftFile))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("Build failed. Output = \n%v\n", string(output))
