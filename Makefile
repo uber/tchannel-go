@@ -89,7 +89,7 @@ thrift_gen:
 	$(BUILD)/thrift-gen --generateThrift --inputFile thrift/test.thrift
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/test.thrift
-	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift && cd trace && mv gen-go/* thrift/gen-go/
+	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift && cd trace && mv .gen/go/* thrift/gen-go/
 
 .PHONY: all help clean fmt format get_thrift install install_ci test test_ci vet
 .SILENT: all help clean fmt format test vet
