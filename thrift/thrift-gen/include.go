@@ -31,6 +31,8 @@ type Include struct {
 // Import returns the go import to use for this package.
 func (i *Include) Import() string {
 	// TODO(prashant): Rename imports so they don't clash with standard imports.
+	// This is not high priority since Apache thrift clashes already with "bytes" and "fmt".
+	// which are the same imports we would clash with.
 	return *packagePrefix + i.key
 }
 
