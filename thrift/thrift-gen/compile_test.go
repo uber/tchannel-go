@@ -68,32 +68,31 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// setupDirectory creates a temporary directory and copies the Thrift file into that directory.
-func setupDirectory(thriftFile string) (string, string, error) {
+// setupDirectory creates a temporary directory.
+func setupDirectory(thriftFile string) (string, error) {
 	tempDir, err := ioutil.TempDir("", "thrift-gen")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	outFile := filepath.Join(tempDir, "test.thrift")
-	return tempDir, outFile, copyFile(thriftFile, outFile)
+	return tempDir, nil
 }
 
 func runTest(t *testing.T, thriftFile string) error {
-	tempDir, thriftFile, err := setupDirectory(thriftFile)
+	tempDir, err := setupDirectory(thriftFile)
 	if err != nil {
 		return err
 	}
 
 	// Generate code from the Thrift file.
 	t.Logf("runTest in %v", tempDir)
-	if err := processFile(true /* generateThrift */, thriftFile, ""); err != nil {
+	if err := processFile(true /* generateThrift */, thriftFile, tempDir); err != nil {
 		return fmt.Errorf("processFile(%s) failed: %v", thriftFile, err)
 	}
 
 	// Run go build to ensure that the generated code builds.
-	cmd := exec.Command("go", "build", ".")
-	cmd.Dir = filepath.Join(tempDir, "gen-go", "test")
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = filepath.Join(tempDir, packageName(thriftFile))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("Build failed. Output = \n%v\n", string(output))
 	}

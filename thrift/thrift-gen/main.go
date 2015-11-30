@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -45,7 +46,7 @@ var (
 	generateThrift     = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
 	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
 	inputFile          = flag.String("inputFile", "", "The .thrift file to generate a client for")
-	outputFile         = flag.String("outputFile", "", "The output file to generate go code to")
+	outputDir          = flag.String("outputDir", "gen-go", "The output directory to generate go code to.")
 	nlSpaceNL          = regexp.MustCompile(`\n[ \t]+\n`)
 )
 
@@ -63,17 +64,19 @@ func main() {
 		log.Fatalf("Please specify an inputFile")
 	}
 
-	if err := processFile(*generateThrift, *inputFile, *outputFile); err != nil {
+	if err := processFile(*generateThrift, *inputFile, *outputDir); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func processFile(generateThrift bool, inputFile string, outputFile string) error {
+func processFile(generateThrift bool, inputFile string, outputDir string) error {
+	if err := os.MkdirAll(outputDir, 0770); err != nil {
+		return fmt.Errorf("failed to create output directory %q: %v", outputDir, err)
+	}
+
 	if generateThrift {
-		if outFile, err := runThrift(inputFile, *apacheThriftImport); err != nil {
+		if err := runThrift(inputFile, outputDir, *apacheThriftImport); err != nil {
 			return fmt.Errorf("Could not generate thrift output: %v", err)
-		} else if outputFile == "" {
-			outputFile = outFile
 		}
 	}
 
@@ -85,7 +88,9 @@ func processFile(generateThrift bool, inputFile string, outputFile string) error
 
 	goTmpl := parseTemplate()
 	for filename, v := range parsed {
-		if err := generateCode(outputFile, goTmpl, packageName(filename), v); err != nil {
+		pkg := packageName(filename)
+		outputFile := filepath.Join(outputDir, pkg, "tchan-"+pkg+".go")
+		if err := generateCode(outputFile, goTmpl, pkg, v); err != nil {
 			return err
 		}
 		// TODO(prashant): Support multiple files / includes etc?
@@ -125,7 +130,7 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed
 	}
 
 	generated := cleanGeneratedCode(buf.Bytes())
-	if err := ioutil.WriteFile(outputFile, generated, 0666); err != nil {
+	if err := ioutil.WriteFile(outputFile, generated, 0660); err != nil {
 		return fmt.Errorf("cannot write output file %s: %v", outputFile, err)
 	}
 

@@ -23,7 +23,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,48 +43,44 @@ func execThrift(args ...string) error {
 }
 
 func deleteRemote(dir string) error {
-	files, err := ioutil.ReadDir(dir)
+	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() || !strings.HasSuffix(path, "-remote") {
+			return nil
+		}
+
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+		// Once the directory is deleted, we can skip the rest of it.
+		return filepath.SkipDir
+	})
+}
+
+func runThrift(inFile string, outDir string, thriftImport string) error {
+	inFile, err := filepath.Abs(inFile)
 	if err != nil {
 		return err
 	}
 
-	for _, f := range files {
-		if f.IsDir() && strings.HasSuffix(f.Name(), "-remote") {
-			fullPath := filepath.Join(dir, f.Name())
-			if err := os.RemoveAll(fullPath); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func runThrift(inFile string, thriftImport string) (string, error) {
-	inFile, err := filepath.Abs(inFile)
-	if err != nil {
-		return "", err
-	}
-
-	dir, filename := filepath.Split(inFile)
-	baseName := strings.TrimSuffix(filename, filepath.Ext(filename))
-	genDir := filepath.Join(dir, "gen-go")
-	outDir := filepath.Join(genDir, baseName)
-
 	// Delete any existing generated code for this Thrift file.
-	if err := execCmd("rm", "-rf", outDir); err != nil {
-		return "", fmt.Errorf("failed to delete directory %s: %v", genDir, err)
+	genDir := filepath.Join(outDir, packageName(inFile))
+	if err := execCmd("rm", "-rf", genDir); err != nil {
+		return fmt.Errorf("failed to delete directory %s: %v", genDir, err)
 	}
 
 	// Generate the Apache Thrift generated code.
-	if err := execThrift("-r", "--gen", "go:thrift_import="+thriftImport, "-o", dir, inFile); err != nil {
-		return "", fmt.Errorf("Thrift compile failed: %v", err)
+	if err := execThrift("-r", "--gen", "go:thrift_import="+thriftImport, "-out", outDir, inFile); err != nil {
+		return fmt.Errorf("Thrift compile failed: %v", err)
 	}
 
 	// Delete the -remote folders.
 	if err := deleteRemote(outDir); err != nil {
-		return "", fmt.Errorf("failed to delete -remote folders: %v", err)
+		return fmt.Errorf("failed to delete -remote folders: %v", err)
 	}
 
-	return filepath.Join(outDir, "tchan-"+baseName+".go"), nil
+	return nil
 }
