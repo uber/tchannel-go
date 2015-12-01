@@ -69,6 +69,11 @@ func main() {
 	}
 }
 
+type parseState struct {
+	global   *State
+	services []*Service
+}
+
 func processFile(generateThrift bool, inputFile string, outputDir string) error {
 	if err := os.MkdirAll(outputDir, 0770); err != nil {
 		return fmt.Errorf("failed to create output directory %q: %v", outputDir, err)
@@ -86,13 +91,22 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 		return fmt.Errorf("Could not parse .thrift file: %v", err)
 	}
 
-	states := createStates(parsed)
-	goTmpl := parseTemplate()
+	allParsed := make(map[string]parseState)
 	for filename, v := range parsed {
-		s := states[filename]
+		state := newState(v, allParsed)
+		services, err := wrapServices(v, state)
+		if err != nil {
+			return err
+		}
+		allParsed[filename] = parseState{state, services}
+	}
+	setExtends(allParsed)
+
+	goTmpl := parseTemplate()
+	for filename, v := range allParsed {
 		pkg := packageName(filename)
 		outputFile := filepath.Join(outputDir, pkg, "tchan-"+pkg+".go")
-		if err := generateCode(outputFile, goTmpl, pkg, v, s); err != nil {
+		if err := generateCode(outputFile, goTmpl, pkg, v); err != nil {
 			return err
 		}
 	}
@@ -107,24 +121,19 @@ func parseTemplate() *template.Template {
 	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(serviceTmpl))
 }
 
-func generateCode(outputFile string, tmpl *template.Template, pkg string, parsed *parser.Thrift, state *State) error {
+func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
 	if outputFile == "" {
 		return fmt.Errorf("must speciy an output file")
 	}
-	if len(parsed.Services) == 0 {
+	if len(state.services) == 0 {
 		return nil
-	}
-
-	wrappedServices, err := wrapServices(parsed, state)
-	if err != nil {
-		log.Fatalf("Service parsing error: %v", err)
 	}
 
 	buf := &bytes.Buffer{}
 	td := TemplateData{
 		Package:        pkg,
-		Services:       wrappedServices,
-		Includes:       state.includes,
+		Services:       state.services,
+		Includes:       state.global.includes,
 		ThriftImport:   *apacheThriftImport,
 		TChannelImport: tchannelThriftImport,
 	}
