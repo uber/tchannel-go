@@ -48,6 +48,11 @@ func parseTemplate(contents string) (*template.Template, error) {
 }
 
 func parseTemplateFile(file string) (*Template, error) {
+	file, err := ResolveWithGoPath(file)
+	if err != nil {
+		return nil, err
+	}
+
 	bytes, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %q: %v", file, err)
