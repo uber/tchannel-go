@@ -35,21 +35,11 @@ type State struct {
 	includes map[string]*Include
 
 	// all is used for includes.
-	all map[string]*State
-}
-
-// createStates creates the states for all parsed files.
-func createStates(parsed map[string]*parser.Thrift) map[string]*State {
-	states := make(map[string]*State)
-	for k, v := range parsed {
-		states[k] = newState(v)
-		states[k].all = states
-	}
-	return states
+	all map[string]parseState
 }
 
 // newState parses the type information for a parsed Thrift file and returns the state.
-func newState(v *parser.Thrift) *State {
+func newState(v *parser.Thrift, all map[string]parseState) *State {
 	typedefs := make(map[string]*parser.Type)
 	for k, v := range v.Typedefs {
 		typedefs[k] = v
@@ -61,7 +51,7 @@ func newState(v *parser.Thrift) *State {
 		typedefs[k] = i64Type
 	}
 
-	return &State{typedefs, createIncludes(v), nil}
+	return &State{typedefs, createIncludes(v), all}
 }
 
 func (s *State) isBasicType(thriftType string) bool {
@@ -71,10 +61,30 @@ func (s *State) isBasicType(thriftType string) bool {
 
 // rootType recurses through typedefs and returns the underlying type.
 func (s *State) rootType(thriftType *parser.Type) *parser.Type {
+	if state, newType, _, include := s.checkInclude(thriftType); include {
+		return state.rootType(newType)
+	}
+
 	if v, ok := s.typedefs[thriftType.Name]; ok {
 		return s.rootType(v)
 	}
 	return thriftType
+}
+
+// checkInclude will check if the type is an included type, and if so, return the
+// state and type from the state for that file.
+func (s *State) checkInclude(thriftType *parser.Type) (*State, *parser.Type, string, bool) {
+	parts := strings.SplitN(thriftType.Name, ".", 2)
+	if len(parts) < 2 {
+		return nil, nil, "", false
+	}
+
+	newType := *thriftType
+	newType.Name = parts[1]
+
+	include := s.includes[parts[0]]
+	state := s.all[include.file]
+	return state.global, &newType, parts[0], true
 }
 
 // isResultPointer returns whether the result for this method is a pointer.
@@ -102,13 +112,8 @@ func (s *State) goTypePrefix(prefix string, thriftType *parser.Type) string {
 	}
 
 	// If the type is imported, then ignore the package.
-	if parts := strings.SplitN(thriftType.Name, ".", 2); len(parts) > 1 {
-		newType := *thriftType
-		newType.Name = parts[1]
-
-		include := s.includes[parts[0]]
-		state := s.all[include.file]
-		return state.goTypePrefix(parts[0]+".", &newType)
+	if state, newType, prefix, include := s.checkInclude(thriftType); include {
+		return state.goTypePrefix(prefix+".", newType)
 	}
 
 	// If the type is a direct Go type, use that.

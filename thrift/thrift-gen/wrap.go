@@ -8,57 +8,15 @@ import (
 	"github.com/samuel/go-thrift/parser"
 )
 
-func checkExtends(allServices map[string]*parser.Service, service *parser.Service, extends string) error {
-	if extends == "" {
-		return nil
-	}
-
-	baseService, ok := allServices[extends]
-	if !ok {
-		return fmt.Errorf("service %v extends base service %v that is not found", service.Name, extends)
-	}
-
-	for k := range baseService.Methods {
-		if _, ok := service.Methods[k]; ok {
-			return fmt.Errorf("service %v cannot extend base service %v as method %v clashes",
-				service.Name, extends, k)
-		}
-	}
-
-	// Recursively check the baseService for any extends.
-	return checkExtends(allServices, service, baseService.Extends)
-}
-
 type byServiceName []*Service
 
 func (l byServiceName) Len() int           { return len(l) }
 func (l byServiceName) Less(i, j int) bool { return l[i].Service.Name < l[j].Service.Name }
 func (l byServiceName) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
-func setExtends(sortedServices []*Service) error {
-	for _, s := range sortedServices {
-		if s.Extends == "" {
-			continue
-		}
-
-		foundService := sort.Search(len(sortedServices), func(i int) bool {
-			return sortedServices[i].Name >= s.Extends
-		})
-		if foundService == len(sortedServices) {
-			return fmt.Errorf("failed to find base service %q for %q", s.Extends, s.Name)
-		}
-		s.ExtendsService = sortedServices[foundService]
-	}
-
-	return nil
-}
-
 func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 	var services []*Service
 	for _, s := range v.Services {
-		if err := checkExtends(v.Services, s, s.Extends); err != nil {
-			return nil, err
-		}
 		if err := Validate(s); err != nil {
 			return nil, err
 		}
@@ -66,11 +24,8 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 		services = append(services, &Service{s, state, nil})
 	}
 
+	// Have a stable ordering for services so code generation is consistent.
 	sort.Sort(byServiceName(services))
-	if err := setExtends(services); err != nil {
-		return nil, err
-	}
-
 	return services, nil
 }
 
