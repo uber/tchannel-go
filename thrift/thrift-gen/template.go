@@ -11,7 +11,17 @@ import (
 
 athrift "{{ .ThriftImport }}"
 "{{ .TChannelImport }}"
+
+{{ range .Includes }}
+	"{{ .Import }}"
+{{ end }}
 )
+
+
+{{ range .Includes }}
+	var _ = {{ .Package }}.GoUnusedProtection__
+{{ end }}
+
 
 // Interfaces for the service and client for the services defined in the IDL.
 

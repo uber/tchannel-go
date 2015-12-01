@@ -20,16 +20,36 @@
 
 package main
 
-import "github.com/samuel/go-thrift/parser"
+import (
+	"strings"
+
+	"github.com/samuel/go-thrift/parser"
+)
 
 // State is global Thrift state for a file with type information.
 type State struct {
 	// typedefs is a map from a typedef name to the underlying type.
 	typedefs map[string]*parser.Type
+
+	// includes is a map from Thrift base name to the include.
+	includes map[string]*Include
+
+	// all is used for includes.
+	all map[string]*State
 }
 
-// NewState parses the type information for a parsed Thrift file and returns the state.
-func NewState(v *parser.Thrift) *State {
+// createStates creates the states for all parsed files.
+func createStates(parsed map[string]*parser.Thrift) map[string]*State {
+	states := make(map[string]*State)
+	for k, v := range parsed {
+		states[k] = newState(v)
+		states[k].all = states
+	}
+	return states
+}
+
+// newState parses the type information for a parsed Thrift file and returns the state.
+func newState(v *parser.Thrift) *State {
 	typedefs := make(map[string]*parser.Type)
 	for k, v := range v.Typedefs {
 		typedefs[k] = v
@@ -41,7 +61,7 @@ func NewState(v *parser.Thrift) *State {
 		typedefs[k] = i64Type
 	}
 
-	return &State{typedefs}
+	return &State{typedefs, createIncludes(v), nil}
 }
 
 func (s *State) isBasicType(thriftType string) bool {
@@ -65,6 +85,11 @@ func (s *State) isResultPointer(thriftType *parser.Type) bool {
 
 // goType returns the Go type name for the given thrift type.
 func (s *State) goType(thriftType *parser.Type) string {
+	return s.goTypePrefix("", thriftType)
+}
+
+// goTypePrefix returns the Go type name for the given thrift type with the prefix.
+func (s *State) goTypePrefix(prefix string, thriftType *parser.Type) string {
 	switch thriftType.Name {
 	case "binary":
 		return "[]byte"
@@ -76,12 +101,23 @@ func (s *State) goType(thriftType *parser.Type) string {
 		return "map[" + s.goType(thriftType.KeyType) + "]" + s.goType(thriftType.ValueType)
 	}
 
+	// If the type is imported, then ignore the package.
+	if parts := strings.SplitN(thriftType.Name, ".", 2); len(parts) > 1 {
+		newType := *thriftType
+		newType.Name = parts[1]
+
+		include := s.includes[parts[0]]
+		state := s.all[include.file]
+		return state.goTypePrefix(parts[0]+".", &newType)
+	}
+
 	// If the type is a direct Go type, use that.
 	if goType, ok := thriftToGo[thriftType.Name]; ok {
 		return goType
 	}
 
 	goThriftName := goPublicFieldName(thriftType.Name)
+	goThriftName = prefix + goThriftName
 
 	// Check if the type has a typedef to the direct Go type.
 	rootType := s.rootType(thriftType)
