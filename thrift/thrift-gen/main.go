@@ -148,3 +148,21 @@ func packageName(fullPath string) string {
 	file := strings.TrimSuffix(filename, filepath.Ext(filename))
 	return strings.ToLower(file)
 }
+
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringSliceFlag) Set(in string) error {
+	*s = append(*s, in)
+	return nil
+}
+
+// NewStringSliceFlag creates a new string slice flag. The default value is always nil.
+func NewStringSliceFlag(name string, usage string) *[]string {
+	var ss stringSliceFlag
+	flag.Var(&ss, name, usage)
+	return (*[]string)(&ss)
+}
