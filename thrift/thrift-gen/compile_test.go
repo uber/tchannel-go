@@ -46,7 +46,7 @@ func TestAllThrift(t *testing.T) {
 			continue
 		}
 
-		if err := runSingleFileTest(t, filepath.Join("test_files", fname)); err != nil {
+		if err := runTest(t, filepath.Join("test_files", fname)); err != nil {
 			t.Errorf("Thrift file %v failed: %v", fname, err)
 		}
 	}
@@ -62,14 +62,15 @@ func TestIncludeThrift(t *testing.T) {
 			continue
 		}
 
-		if err := runDirTest(t, filepath.Join("test_files/include_test/", dname)); err != nil {
+		thriftFile := filepath.Join(dname, path.Base(dname)+".thrift")
+		if err := runTest(t, filepath.Join("test_files/include_test/", thriftFile)); err != nil {
 			t.Errorf("Thrift test %v failed: %v", dname, err)
 		}
 	}
 }
 
 func TestMultipleFiles(t *testing.T) {
-	if err := runSingleFileTest(t, filepath.Join("test_files", "multi_test", "file1.thrift")); err != nil {
+	if err := runTest(t, filepath.Join("test_files", "multi_test", "file1.thrift")); err != nil {
 		t.Errorf("Multiple file test failed: %v", err)
 	}
 }
@@ -101,27 +102,12 @@ func setupDirectory(thriftFile string) (string, error) {
 	return tempDir, nil
 }
 
-func runSingleFileTest(t *testing.T, thriftFile string) error {
+func runTest(t *testing.T, thriftFile string) error {
 	tempDir, err := ioutil.TempDir("", "thrift-gen")
 	if err != nil {
 		return err
 	}
 
-	return runTest(t, tempDir, thriftFile)
-}
-
-func runDirTest(t *testing.T, thriftDir string) error {
-	tempDir, err := ioutil.TempDir("", "thrift-gen")
-	if err != nil {
-		return err
-	}
-
-	// The entry point should a file with the same basename as the dir.
-	thriftFile := filepath.Join(thriftDir, path.Base(thriftDir)+".thrift")
-	return runTest(t, tempDir, thriftFile)
-}
-
-func runTest(t *testing.T, tempDir, thriftFile string) error {
 	// Generate code from the Thrift file.
 	*packagePrefix = "../"
 	if err := processFile(true /* generateThrift */, thriftFile, tempDir); err != nil {
