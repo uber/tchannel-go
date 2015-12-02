@@ -43,15 +43,23 @@ var (
 	generateThrift = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
 	inputFile      = flag.String("inputFile", "", "The .thrift file to generate a client for")
 	outputDir      = flag.String("outputDir", "gen-go", "The output directory to generate go code to.")
-	nlSpaceNL      = regexp.MustCompile(`\n[ \t]+\n`)
+	skipTChannel   = flag.Bool("skipTChannel", false, "Whether to skip the TChannel template")
+	templateFiles  = NewStringSliceFlag("template", "Template file to compile code from")
+
+	nlSpaceNL = regexp.MustCompile(`\n[ \t]+\n`)
 )
 
 // TemplateData is the data passed to the template that generates code.
 type TemplateData struct {
 	Package  string
+	AST      *parser.Thrift
 	Services []*Service
 	Includes map[string]*Include
 	Imports  imports
+
+	// global should not be directly exported to the template, but functions on
+	// global can be exposed to templates.
+	global *State
 }
 
 type imports struct {
@@ -65,42 +73,88 @@ func main() {
 		log.Fatalf("Please specify an inputFile")
 	}
 
-	if err := processFile(*generateThrift, *inputFile, *outputDir); err != nil {
+	opts := processOptions{
+		InputFile:      *inputFile,
+		GenerateThrift: *generateThrift,
+		OutputDir:      *outputDir,
+		SkipTChannel:   *skipTChannel,
+		TemplateFiles:  *templateFiles,
+	}
+	if err := processFile(opts); err != nil {
 		log.Fatal(err)
 	}
 }
 
-type parseState struct {
-	global   *State
-	services []*Service
+type processOptions struct {
+	InputFile      string
+	GenerateThrift bool
+	OutputDir      string
+	SkipTChannel   bool
+	TemplateFiles  []string
 }
 
-func processFile(generateThrift bool, inputFile string, outputDir string) error {
-	if err := os.MkdirAll(outputDir, 0770); err != nil {
-		return fmt.Errorf("failed to create output directory %q: %v", outputDir, err)
+func processFile(opts processOptions) error {
+	if err := os.MkdirAll(opts.OutputDir, 0770); err != nil {
+		return fmt.Errorf("failed to create output directory %q: %v", opts.OutputDir, err)
 	}
 
-	if generateThrift {
-		if err := runThrift(inputFile, outputDir); err != nil {
-			return fmt.Errorf("failed to run thrift for file %q: %v", inputFile, err)
+	if opts.GenerateThrift {
+		if err := runThrift(opts.InputFile, opts.OutputDir); err != nil {
+			return fmt.Errorf("failed to run thrift for file %q: %v", opts.InputFile, err)
 		}
 	}
 
-	allParsed, err := parseFile(inputFile)
+	allParsed, err := parseFile(opts.InputFile)
 	if err != nil {
-		return fmt.Errorf("failed to parse file %q: %v", inputFile, err)
+		return fmt.Errorf("failed to parse file %q: %v", opts.InputFile, err)
 	}
 
-	goTmpl := parseTemplate()
+	allTemplates, err := parseTemplates(opts.SkipTChannel, opts.TemplateFiles)
+	if err != nil {
+		return fmt.Errorf("failed to parse templates: %v", err)
+	}
+
 	for filename, v := range allParsed {
 		pkg := packageName(filename)
-		outputFile := filepath.Join(outputDir, pkg, "tchan-"+pkg+".go")
-		if err := generateCode(outputFile, goTmpl, pkg, v); err != nil {
-			return err
+
+		for _, template := range allTemplates {
+			outputFile := filepath.Join(opts.OutputDir, pkg, template.outputFile(pkg))
+			if err := generateCode(outputFile, template, pkg, v); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
+}
+
+type parseState struct {
+	ast      *parser.Thrift
+	global   *State
+	services []*Service
+}
+
+// parseTemplates returns a list of Templates that must be rendered given the template files.
+func parseTemplates(skipTChannel bool, templateFiles []string) ([]*Template, error) {
+	var templates []*Template
+
+	if !skipTChannel {
+		templates = append(templates, &Template{
+			name:     "tchan",
+			template: template.Must(parseTemplate(tchannelTmpl)),
+		})
+	}
+
+	for _, f := range templateFiles {
+		t, err := parseTemplateFile(f)
+		if err != nil {
+			return nil, err
+		}
+
+		templates = append(templates, t)
+	}
+
+	return templates, nil
 }
 
 func parseFile(inputFile string) (map[string]parseState, error) {
@@ -117,12 +171,12 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 		if err != nil {
 			return nil, fmt.Errorf("wrap services failed: %v", err)
 		}
-		allParsed[filename] = parseState{state, services}
+		allParsed[filename] = parseState{v, state, services}
 	}
 	return allParsed, setExtends(allParsed)
 }
 
-func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
+func generateCode(outputFile string, template *Template, pkg string, state parseState) error {
 	if outputFile == "" {
 		return fmt.Errorf("must speciy an output file")
 	}
@@ -132,14 +186,16 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, state 
 
 	td := TemplateData{
 		Package:  pkg,
+		AST:      state.ast,
 		Includes: state.global.includes,
 		Services: state.services,
+		global:   state.global,
 		Imports: imports{
 			Thrift:   *apacheThriftImport,
 			TChannel: tchannelThriftImport,
 		},
 	}
-	return executeTemplate(outputFile, tmpl, td)
+	return template.execute(outputFile, td)
 }
 
 func packageName(fullPath string) string {
@@ -147,4 +203,22 @@ func packageName(fullPath string) string {
 	_, filename := filepath.Split(fullPath)
 	file := strings.TrimSuffix(filename, filepath.Ext(filename))
 	return strings.ToLower(file)
+}
+
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringSliceFlag) Set(in string) error {
+	*s = append(*s, in)
+	return nil
+}
+
+// NewStringSliceFlag creates a new string slice flag. The default value is always nil.
+func NewStringSliceFlag(name string, usage string) *[]string {
+	var ss stringSliceFlag
+	flag.Var(&ss, name, usage)
+	return (*[]string)(&ss)
 }
