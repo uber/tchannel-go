@@ -103,72 +103,108 @@ func (s *tchanMetaServer) Methods() []string {
 }
 
 func (s *tchanMetaServer) Handle(ctx Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	var args interface{}
+	var err error
 	switch methodName {
 	case "health":
-		return s.handleHealth(ctx, protocol)
+		args, err = s.readHealth(protocol)
+		if err != nil {
+			return false, nil, err
+		}
 	case "thriftIDL":
-		return s.handleThriftIDL(ctx, protocol)
+		args, err = s.readThriftIDL(protocol)
+		if err != nil {
+			return false, nil, err
+		}
 	case "versionInfo":
-		return s.handleVersionInfo(ctx, protocol)
+		args, err = s.readVersionInfo(protocol)
+		if err != nil {
+			return false, nil, err
+		}
+	default:
+		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
 
+func (s *tchanMetaServer) HandleArgs(ctx Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "health":
+		return s.handleHealth(ctx, args.(gen.MetaHealthArgs))
+	case "thriftIDL":
+		return s.handleThriftIDL(ctx, args.(gen.MetaThriftIDLArgs))
+	case "versionInfo":
+		return s.handleVersionInfo(ctx, args.(gen.MetaVersionInfoArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanMetaServer) handleHealth(ctx Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanMetaServer) readHealth(protocol athrift.TProtocol) (interface{}, error) {
 	var req gen.MetaHealthArgs
-	var res gen.MetaHealthResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanMetaServer) handleHealth(ctx Context, req gen.MetaHealthArgs) (bool, athrift.TStruct, error) {
+	var res gen.MetaHealthResult
 	r, err :=
 		s.handler.Health(ctx)
 
 	if err != nil {
 		return false, nil, err
+	} else {
+		res.Success = r
 	}
-	res.Success = r
 
 	return err == nil, &res, nil
 }
 
-func (s *tchanMetaServer) handleThriftIDL(ctx Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanMetaServer) readThriftIDL(protocol athrift.TProtocol) (interface{}, error) {
 	var req gen.MetaThriftIDLArgs
-	var res gen.MetaThriftIDLResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanMetaServer) handleThriftIDL(ctx Context, req gen.MetaThriftIDLArgs) (bool, athrift.TStruct, error) {
+	var res gen.MetaThriftIDLResult
 	r, err :=
 		s.handler.ThriftIDL(ctx)
 
 	if err != nil {
 		return false, nil, err
+	} else {
+		res.Success = r
 	}
-	res.Success = r
 
 	return err == nil, &res, nil
 }
 
-func (s *tchanMetaServer) handleVersionInfo(ctx Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanMetaServer) readVersionInfo(protocol athrift.TProtocol) (interface{}, error) {
 	var req gen.MetaVersionInfoArgs
-	var res gen.MetaVersionInfoResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanMetaServer) handleVersionInfo(ctx Context, req gen.MetaVersionInfoArgs) (bool, athrift.TStruct, error) {
+	var res gen.MetaVersionInfoResult
 	r, err :=
 		s.handler.VersionInfo(ctx)
 
 	if err != nil {
 		return false, nil, err
+	} else {
+		res.Success = r
 	}
-	res.Success = r
 
 	return err == nil, &res, nil
 }
