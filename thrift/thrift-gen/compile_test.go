@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,6 +29,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -102,6 +104,41 @@ func setupDirectory(thriftFile string) (string, error) {
 	return tempDir, nil
 }
 
+func createAdditionalTestFile(thriftFile, tempDir string) error {
+	f, err := os.Open(thriftFile)
+	if err != nil {
+		return err
+	}
+
+	var writer io.Writer
+	rdr := bufio.NewReader(f)
+	for {
+		line, err := rdr.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+		}
+
+		if strings.HasPrefix(line, "//Go code:") {
+			fileName := strings.TrimSpace(strings.TrimPrefix(line, "//Go code:"))
+			outFile := filepath.Join(tempDir, fileName)
+			f, err := os.OpenFile(outFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			writer = f
+		} else if writer != nil {
+			if strings.HasPrefix(line, "//") {
+				writer.Write([]byte(strings.TrimPrefix(line, "//")))
+			} else {
+				return nil
+			}
+		}
+	}
+}
+
 func runTest(t *testing.T, thriftFile string) error {
 	tempDir, err := ioutil.TempDir("", "thrift-gen")
 	if err != nil {
@@ -112,6 +149,11 @@ func runTest(t *testing.T, thriftFile string) error {
 	*packagePrefix = "../"
 	if err := processFile(true /* generateThrift */, thriftFile, tempDir); err != nil {
 		return fmt.Errorf("processFile(%s) in %q failed: %v", thriftFile, tempDir, err)
+	}
+
+	// Create any extra Go files as specified in the Thrift file.
+	if err := createAdditionalTestFile(thriftFile, tempDir); err != nil {
+		return fmt.Errorf("failed creating additional test files for %s in %q: %v", thriftFile, tempDir, err)
 	}
 
 	// Run go build to ensure that the generated code builds.
