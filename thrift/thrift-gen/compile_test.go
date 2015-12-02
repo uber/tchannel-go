@@ -48,7 +48,7 @@ func TestAllThrift(t *testing.T) {
 			continue
 		}
 
-		if err := runTest(t, filepath.Join("test_files", fname)); err != nil {
+		if err := runBuildTest(t, filepath.Join("test_files", fname)); err != nil {
 			t.Errorf("Thrift file %v failed: %v", fname, err)
 		}
 	}
@@ -65,16 +65,77 @@ func TestIncludeThrift(t *testing.T) {
 		}
 
 		thriftFile := filepath.Join(dname, path.Base(dname)+".thrift")
-		if err := runTest(t, filepath.Join("test_files/include_test/", thriftFile)); err != nil {
+		if err := runBuildTest(t, filepath.Join("test_files/include_test/", thriftFile)); err != nil {
 			t.Errorf("Thrift test %v failed: %v", dname, err)
 		}
 	}
 }
 
 func TestMultipleFiles(t *testing.T) {
-	if err := runTest(t, filepath.Join("test_files", "multi_test", "file1.thrift")); err != nil {
+	if err := runBuildTest(t, filepath.Join("test_files", "multi_test", "file1.thrift")); err != nil {
 		t.Errorf("Multiple file test failed: %v", err)
 	}
+}
+
+func TestExternalTemplate(t *testing.T) {
+	template1 := `package {{ .Package }}
+
+{{ range .AST.Services }}
+// Service {{ .Name }} has {{ len .Methods }} methods.
+{{ end }}
+	`
+	templateFile := writeTempFile(t, template1)
+	defer os.Remove(templateFile)
+
+	expected := `package service_extend
+
+// Service S1 has 1 methods.
+
+// Service S2 has 1 methods.
+
+// Service S3 has 1 methods.
+`
+
+	opts := processOptions{
+		InputFile:     "test_files/service_extend.thrift",
+		TemplateFiles: []string{templateFile},
+	}
+	checks := func(dir string) error {
+		dir = filepath.Join(dir, "service_extend")
+		if err := checkDirectoryFiles(dir, 6); err != nil {
+			return err
+		}
+
+		// Verify the contents of the extra file.
+		outFile := filepath.Join(dir, packageName(templateFile)+"-service_extend.go")
+		return verifyFileContents(outFile, expected)
+	}
+	if err := runTest(t, opts, checks); err != nil {
+		t.Errorf("Failed to run test: %v", err)
+	}
+}
+
+func writeTempFile(t *testing.T, contents string) string {
+	tempFile, err := ioutil.TempFile("", "temp")
+	require.NoError(t, err, "Failed to create temp file")
+	tempFile.Close()
+	require.NoError(t, ioutil.WriteFile(tempFile.Name(), []byte(contents), 0666),
+		"Write temp file failed")
+	return tempFile.Name()
+}
+
+func verifyFileContents(filename, expected string) error {
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	bytesStr := string(bytes)
+	if bytesStr != expected {
+		return fmt.Errorf("file contents mismatch. got:\n%vexpected:\n%v", bytesStr, expected)
+	}
+
+	return nil
 }
 
 func copyFile(src, dst string) error {
@@ -139,7 +200,29 @@ func createAdditionalTestFile(thriftFile, tempDir string) error {
 	}
 }
 
-func runTest(t *testing.T, thriftFile string) error {
+func checkDirectoryFiles(dir string, n int) error {
+	dirContents, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	if len(dirContents) < n {
+		return fmt.Errorf("expected to generate at least %v files, but found: %v", n, len(dirContents))
+	}
+
+	return nil
+}
+
+func runBuildTest(t *testing.T, thriftFile string) error {
+	extraChecks := func(dir string) error {
+		return checkDirectoryFiles(filepath.Join(dir, packageName(thriftFile)), 4)
+	}
+
+	opts := processOptions{InputFile: thriftFile}
+	return runTest(t, opts, extraChecks)
+}
+
+func runTest(t *testing.T, opts processOptions, extraChecks func(string) error) error {
 	tempDir, err := ioutil.TempDir("", "thrift-gen")
 	if err != nil {
 		return err
@@ -147,18 +230,15 @@ func runTest(t *testing.T, thriftFile string) error {
 
 	// Generate code from the Thrift file.
 	*packagePrefix = "../"
-	opts := processOptions{
-		GenerateThrift: true,
-		InputFile:      thriftFile,
-		OutputDir:      tempDir,
-	}
+	opts.GenerateThrift = true
+	opts.OutputDir = tempDir
 	if err := processFile(opts); err != nil {
-		return fmt.Errorf("processFile(%s) in %q failed: %v", thriftFile, tempDir, err)
+		return fmt.Errorf("processFile(%s) in %q failed: %v", opts.InputFile, tempDir, err)
 	}
 
 	// Create any extra Go files as specified in the Thrift file.
-	if err := createAdditionalTestFile(thriftFile, tempDir); err != nil {
-		return fmt.Errorf("failed creating additional test files for %s in %q: %v", thriftFile, tempDir, err)
+	if err := createAdditionalTestFile(opts.InputFile, tempDir); err != nil {
+		return fmt.Errorf("failed creating additional test files for %s in %q: %v", opts.InputFile, tempDir, err)
 	}
 
 	// Run go build to ensure that the generated code builds.
@@ -168,6 +248,11 @@ func runTest(t *testing.T, thriftFile string) error {
 	// https://github.com/golang/go/issues/11407
 	if output, err := cmd.CombinedOutput(); err != nil || len(output) > 0 {
 		return fmt.Errorf("Build in %q failed.\nError: %v Output:\n%v\n", tempDir, err, string(output))
+	}
+
+	// Run any extra checks the user may want.
+	if err := extraChecks(tempDir); err != nil {
+		return err
 	}
 
 	// Only delete the temp directory on success.
