@@ -37,17 +37,20 @@ func setExtends(state map[string]parseState) error {
 			}
 
 			var searchServices []*Service
+			var searchFor string
 			parts := strings.SplitN(s.Extends, ".", 2)
 			// If it's not imported, then look at the current file's services.
 			if len(parts) < 2 {
 				searchServices = v.services
+				searchFor = s.Extends
 			} else {
 				include := v.global.includes[parts[0]]
 				searchServices = state[include.file].services
+				searchFor = parts[1]
 			}
 
 			foundService := sort.Search(len(searchServices), func(i int) bool {
-				return searchServices[i].Name >= s.Extends
+				return searchServices[i].Name >= searchFor
 			})
 			if foundService == len(searchServices) {
 				return fmt.Errorf("failed to find base service %q for %q", s.Extends, s.Name)
