@@ -43,7 +43,10 @@ var (
 	generateThrift = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
 	inputFile      = flag.String("inputFile", "", "The .thrift file to generate a client for")
 	outputDir      = flag.String("outputDir", "gen-go", "The output directory to generate go code to.")
-	nlSpaceNL      = regexp.MustCompile(`\n[ \t]+\n`)
+	skipTChannel   = flag.Bool("skipTChannel", false, "Whether to skip the TChannel template")
+	templates      = NewStringSliceFlag("template", "Template file to compile code from")
+
+	nlSpaceNL = regexp.MustCompile(`\n[ \t]+\n`)
 )
 
 // TemplateData is the data passed to the template that generates code.
