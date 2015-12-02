@@ -52,6 +52,7 @@ var (
 // TemplateData is the data passed to the template that generates code.
 type TemplateData struct {
 	Package  string
+	AST      *parser.Thrift
 	Services []*Service
 	Includes map[string]*Include
 	Imports  imports
@@ -74,6 +75,7 @@ func main() {
 }
 
 type parseState struct {
+	ast      *parser.Thrift
 	global   *State
 	services []*Service
 }
@@ -144,7 +146,7 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 		if err != nil {
 			return nil, fmt.Errorf("wrap services failed: %v", err)
 		}
-		allParsed[filename] = parseState{state, services}
+		allParsed[filename] = parseState{v, state, services}
 	}
 	return allParsed, setExtends(allParsed)
 }
@@ -159,6 +161,7 @@ func generateCode(outputFile string, template *Template, pkg string, state parse
 
 	td := TemplateData{
 		Package:  pkg,
+		AST:      state.ast,
 		Includes: state.global.includes,
 		Services: state.services,
 		Imports: imports{
