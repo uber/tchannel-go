@@ -56,6 +56,10 @@ type TemplateData struct {
 	Services []*Service
 	Includes map[string]*Include
 	Imports  imports
+
+	// global should not be directly exported to the template, but functions on
+	// global can be exposed to templates.
+	global *State
 }
 
 type imports struct {
@@ -164,6 +168,7 @@ func generateCode(outputFile string, template *Template, pkg string, state parse
 		AST:      state.ast,
 		Includes: state.global.includes,
 		Services: state.services,
+		global:   state.global,
 		Imports: imports{
 			Thrift:   *apacheThriftImport,
 			TChannel: tchannelThriftImport,

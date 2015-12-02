@@ -40,7 +40,9 @@ type Template struct {
 
 func parseTemplate(contents string) (*template.Template, error) {
 	funcs := map[string]interface{}{
-		"contextType": contextType,
+		"contextType":   contextType,
+		"goPrivateName": goName,
+		"goPublicName":  goPublicName,
 	}
 	return template.New("thrift-gen").Funcs(funcs).Parse(contents)
 }
@@ -68,9 +70,16 @@ func cleanGeneratedCode(generated []byte) []byte {
 	return generated
 }
 
+// withStateFuncs adds functions to the template that are dependent upon state.
+func (t *Template) withStateFuncs(td TemplateData) *template.Template {
+	return t.template.Funcs(map[string]interface{}{
+		"goType": td.global.goType,
+	})
+}
+
 func (t *Template) execute(outputFile string, td TemplateData) error {
 	buf := &bytes.Buffer{}
-	if err := t.template.Execute(buf, td); err != nil {
+	if err := t.withStateFuncs(td).Execute(buf, td); err != nil {
 		return fmt.Errorf("failed to execute template: %v", err)
 	}
 
