@@ -21,7 +21,10 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 			return nil, err
 		}
 
-		services = append(services, &Service{s, state, nil})
+		services = append(services, &Service{
+			Service: s,
+			state:   state,
+		})
 	}
 
 	// Have a stable ordering for services so code generation is consistent.
@@ -32,9 +35,15 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 // Service is a wrapper for parser.Service.
 type Service struct {
 	*parser.Service
+	state *State
 
-	state          *State
+	// ExtendsService is not set in wrap, but in setExtends.
 	ExtendsService *Service
+
+	// methods is a cache of all methods.
+	methods []*Method
+	// inheritedMethods is a list of inherited method names.
+	inheritedMethods []string
 }
 
 // ThriftName returns the thrift identifier for this service.
@@ -57,11 +66,11 @@ func (s *Service) ClientConstructor() string {
 	return "NewTChan" + goPublicName(s.Name) + "Client"
 }
 
-// InternalClientConstructor returns the name of the internal constructor used to create the client
-// struct directly. This returns the type of ClientStruct rather than the interface, and is used
-// to recursively create any base service clients.
-func (s *Service) InternalClientConstructor() string {
-	return "newTChan" + goPublicName(s.Name) + "Client"
+// InheritedClientConstructor returns the name of the constructor used by the generated code
+// for inherited services. This allows the parent service to set the service name that should
+// be used.
+func (s *Service) InheritedClientConstructor() string {
+	return "NewTChan" + goPublicName(s.Name) + "InheritedClient"
 }
 
 // ServerStruct returns the name of the unexported struct that satisfies TChanServer.
@@ -74,16 +83,17 @@ func (s *Service) ServerConstructor() string {
 	return "NewTChan" + goPublicName(s.Name) + "Server"
 }
 
-// InternalServerConstructor is the name of the internal constructor used to create the service
-// directly. This returns the type of ServerStruct rather than the interface, and is used
-// to recursively create any base service structs.
-func (s *Service) InternalServerConstructor() string {
-	return "newTChan" + goPublicName(s.Name) + "Server"
-}
-
 // HasExtends returns whether this service extends another service.
 func (s *Service) HasExtends() bool {
 	return s.ExtendsService != nil
+}
+
+// ExtendsServicePrefix returns a package selector (if any) for the extended service.
+func (s *Service) ExtendsServicePrefix() string {
+	if dotIndex := strings.Index(s.Extends, "."); dotIndex > 0 {
+		return s.Extends[:dotIndex+1]
+	}
+	return ""
 }
 
 type byMethodName []*Method
@@ -92,14 +102,33 @@ func (l byMethodName) Len() int           { return len(l) }
 func (l byMethodName) Less(i, j int) bool { return l[i].Method.Name < l[j].Method.Name }
 func (l byMethodName) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
-// Methods returns the methods defined on this service.
+// Methods returns the methods on this service, not including methods from inherited services.
 func (s *Service) Methods() []*Method {
-	var methods []*Method
-	for _, m := range s.Service.Methods {
-		methods = append(methods, &Method{m, s, s.state})
+	if s.methods != nil {
+		return s.methods
 	}
-	sort.Sort(byMethodName(methods))
-	return methods
+
+	for _, m := range s.Service.Methods {
+		s.methods = append(s.methods, &Method{m, s, s.state})
+	}
+	sort.Sort(byMethodName(s.methods))
+	return s.methods
+}
+
+// InheritedMethods returns names for inherited methods on this service.
+func (s *Service) InheritedMethods() []string {
+	if s.inheritedMethods != nil {
+		return s.inheritedMethods
+	}
+
+	for svc := s.ExtendsService; svc != nil; svc = svc.ExtendsService {
+		for m := range svc.Service.Methods {
+			s.inheritedMethods = append(s.inheritedMethods, m)
+		}
+	}
+	sort.Strings(s.inheritedMethods)
+
+	return s.inheritedMethods
 }
 
 // Method is a wrapper for parser.Method.

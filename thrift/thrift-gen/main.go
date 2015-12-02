@@ -119,8 +119,7 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 		}
 		allParsed[filename] = parseState{state, services}
 	}
-	setExtends(allParsed)
-	return allParsed, nil
+	return allParsed, setExtends(allParsed)
 }
 
 func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {

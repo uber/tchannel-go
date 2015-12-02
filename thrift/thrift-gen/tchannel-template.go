@@ -29,7 +29,7 @@ athrift "{{ .Imports.Thrift }}"
 // {{ .Interface }} is the interface that defines the server handler and client interface.
 type {{ .Interface }} interface {
 	{{ if .HasExtends }}
-		{{ .ExtendsService.Interface }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
 
 	{{ end }}
 	{{ range .Methods }}
@@ -44,7 +44,7 @@ type {{ .Interface }} interface {
 {{ range $svc := .Services }}
 type {{ .ClientStruct }} struct {
 	{{ if .HasExtends }}
-		{{ .ExtendsService.ClientStruct }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
 
 	{{ end }}
 	thriftService string
@@ -52,10 +52,10 @@ type {{ .ClientStruct }} struct {
 }
 
 
-func {{ .InternalClientConstructor }}(thriftService string, client thrift.TChanClient) *{{ .ClientStruct }} {
+func {{ .InheritedClientConstructor }}(thriftService string, client thrift.TChanClient) *{{ .ClientStruct }} {
 	return &{{ .ClientStruct }}{
 		{{ if .HasExtends }}
-			*{{ .ExtendsService.InternalClientConstructor }}(thriftService, client),
+			{{ .ExtendsServicePrefix }}{{ .ExtendsService.InheritedClientConstructor }}(thriftService, client),
 		{{ end }}
 		thriftService,
 		client,
@@ -64,7 +64,7 @@ func {{ .InternalClientConstructor }}(thriftService string, client thrift.TChanC
 
 // {{ .ClientConstructor }} creates a client that can be used to make remote calls.
 func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
-	return {{ .InternalClientConstructor }}("{{ .ThriftName }}", client)
+	return {{ .InheritedClientConstructor }}("{{ .ThriftName }}", client)
 }
 
 {{ range .Methods }}
@@ -94,25 +94,21 @@ func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
 
 type {{ .ServerStruct }} struct {
 	{{ if .HasExtends }}
-		{{ .ExtendsService.ServerStruct }}
+		thrift.TChanServer
 
 	{{ end }}
 	handler {{ .Interface }}
 }
 
-func {{ .InternalServerConstructor }}(handler {{ .Interface }}) *{{ .ServerStruct }} {
-	return &{{ .ServerStruct }}{
-		{{ if .HasExtends }}
-			*{{ .ExtendsService.InternalServerConstructor }}(handler),
-		{{ end }}
-		handler,
-	}
-}
-
 // {{ .ServerConstructor }} wraps a handler for {{ .Interface }} so it can be
 // registered with a thrift.Server.
 func {{ .ServerConstructor }}(handler {{ .Interface }}) thrift.TChanServer {
-	return {{ .InternalServerConstructor }}(handler)
+	return &{{ .ServerStruct }}{
+		{{ if .HasExtends }}
+			{{ .ExtendsServicePrefix }}{{ .ExtendsService.ServerConstructor }}(handler),
+		{{ end }}
+		handler,
+	}
 }
 
 func (s *{{ .ServerStruct }}) Service() string {
@@ -124,10 +120,8 @@ func (s *{{ .ServerStruct }}) Methods() []string {
 		{{ range .Methods }}
 			"{{ .ThriftName }}",
 		{{ end }}
-		{{ if .HasExtends }}
-			{{ range .ExtendsService.Methods }}
-				"{{ .ThriftName }}",
-			{{ end }}
+		{{ range .InheritedMethods }}
+			"{{ . }}",
 		{{ end }}
 	}
 }
@@ -138,11 +132,9 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 			case "{{ .ThriftName }}":
 				return s.{{ .HandleFunc }}(ctx, protocol)
 		{{ end }}
-		{{ if .HasExtends }}
-			{{ range .ExtendsService.Methods }}
-				case "{{ .ThriftName }}":
-					return s.{{ .HandleFunc }}(ctx, protocol)
-			{{ end }}
+		{{ range .InheritedMethods }}
+			case "{{ . }}":
+				return s.TChanServer.Handle(ctx, methodName, protocol)
 		{{ end }}
 		default:
 			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
