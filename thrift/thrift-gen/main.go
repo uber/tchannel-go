@@ -44,7 +44,7 @@ var (
 	inputFile      = flag.String("inputFile", "", "The .thrift file to generate a client for")
 	outputDir      = flag.String("outputDir", "gen-go", "The output directory to generate go code to.")
 	skipTChannel   = flag.Bool("skipTChannel", false, "Whether to skip the TChannel template")
-	templates      = NewStringSliceFlag("template", "Template file to compile code from")
+	templateFiles  = NewStringSliceFlag("template", "Template file to compile code from")
 
 	nlSpaceNL = regexp.MustCompile(`\n[ \t]+\n`)
 )
@@ -94,16 +94,40 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 		return fmt.Errorf("failed to parse file %q: %v", inputFile, err)
 	}
 
-	goTmpl := parseTemplate()
+	allTemplates, err := parseTemplates(*templateFiles)
+	if err != nil {
+		return fmt.Errorf("failed to parse templates: %v", err)
+	}
+
 	for filename, v := range allParsed {
 		pkg := packageName(filename)
-		outputFile := filepath.Join(outputDir, pkg, "tchan-"+pkg+".go")
-		if err := generateCode(outputFile, goTmpl, pkg, v); err != nil {
-			return err
+
+		for _, template := range allTemplates {
+			outputFile := filepath.Join(outputDir, pkg, template.outputFile(pkg))
+			if err := generateCode(outputFile, template, pkg, v); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
+}
+
+// parseTemplates returns a list of Templates that must be rendered given the template files.
+func parseTemplates(templateFiles []string) ([]*Template, error) {
+	templates := []*Template{
+		{"tchan", template.Must(parseTemplate(tchannelTmpl))},
+	}
+	for _, f := range templateFiles {
+		t, err := parseTemplateFile(f)
+		if err != nil {
+			return nil, err
+		}
+
+		templates = append(templates, t)
+	}
+
+	return templates, nil
 }
 
 func parseFile(inputFile string) (map[string]parseState, error) {
@@ -125,7 +149,7 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 	return allParsed, setExtends(allParsed)
 }
 
-func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
+func generateCode(outputFile string, template *Template, pkg string, state parseState) error {
 	if outputFile == "" {
 		return fmt.Errorf("must speciy an output file")
 	}
@@ -142,7 +166,7 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, state 
 			TChannel: tchannelThriftImport,
 		},
 	}
-	return executeTemplate(outputFile, tmpl, td)
+	return template.execute(outputFile, td)
 }
 
 func packageName(fullPath string) string {

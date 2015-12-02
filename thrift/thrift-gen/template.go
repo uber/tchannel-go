@@ -32,11 +32,31 @@ import (
 	"text/template"
 )
 
-func parseTemplate() *template.Template {
+// Template represents a single thrift-gen template that will be used to generate code.
+type Template struct {
+	name     string
+	template *template.Template
+}
+
+func parseTemplate(contents string) (*template.Template, error) {
 	funcs := map[string]interface{}{
 		"contextType": contextType,
 	}
-	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(tchannelTmpl))
+	return template.New("thrift-gen").Funcs(funcs).Parse(contents)
+}
+
+func parseTemplateFile(file string) (*Template, error) {
+	bytes, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %q: %v", file, err)
+	}
+
+	t, err := parseTemplate(string(bytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template in file %q: %v", file, err)
+	}
+
+	return &Template{packageName(file), t}, nil
 }
 
 func contextType() string {
@@ -48,9 +68,9 @@ func cleanGeneratedCode(generated []byte) []byte {
 	return generated
 }
 
-func executeTemplate(outputFile string, tmpl *template.Template, td TemplateData) error {
+func (t *Template) execute(outputFile string, td TemplateData) error {
 	buf := &bytes.Buffer{}
-	if err := tmpl.Execute(buf, td); err != nil {
+	if err := t.template.Execute(buf, td); err != nil {
 		return fmt.Errorf("failed to execute template: %v", err)
 	}
 
@@ -62,4 +82,8 @@ func executeTemplate(outputFile string, tmpl *template.Template, td TemplateData
 	// Run gofmt on the file (ignore any errors)
 	exec.Command("gofmt", "-w", outputFile).Run()
 	return nil
+}
+
+func (t *Template) outputFile(pkg string) string {
+	return fmt.Sprintf("%v-%v.go", t.name, pkg)
 }
