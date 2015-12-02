@@ -25,7 +25,7 @@ type tchanTCollectorClient struct {
 	client        thrift.TChanClient
 }
 
-func newTChanTCollectorClient(thriftService string, client thrift.TChanClient) *tchanTCollectorClient {
+func NewTChanTCollectorInheritedClient(thriftService string, client thrift.TChanClient) *tchanTCollectorClient {
 	return &tchanTCollectorClient{
 		thriftService,
 		client,
@@ -34,7 +34,7 @@ func newTChanTCollectorClient(thriftService string, client thrift.TChanClient) *
 
 // NewTChanTCollectorClient creates a client that can be used to make remote calls.
 func NewTChanTCollectorClient(client thrift.TChanClient) TChanTCollector {
-	return newTChanTCollectorClient("TCollector", client)
+	return NewTChanTCollectorInheritedClient("TCollector", client)
 }
 
 func (c *tchanTCollectorClient) MultiSubmit(ctx thrift.Context, spans []*Span) ([]*Response, error) {
@@ -65,16 +65,12 @@ type tchanTCollectorServer struct {
 	handler TChanTCollector
 }
 
-func newTChanTCollectorServer(handler TChanTCollector) *tchanTCollectorServer {
-	return &tchanTCollectorServer{
-		handler,
-	}
-}
-
 // NewTChanTCollectorServer wraps a handler for TChanTCollector so it can be
 // registered with a thrift.Server.
 func NewTChanTCollectorServer(handler TChanTCollector) thrift.TChanServer {
-	return newTChanTCollectorServer(handler)
+	return &tchanTCollectorServer{
+		handler,
+	}
 }
 
 func (s *tchanTCollectorServer) Service() string {

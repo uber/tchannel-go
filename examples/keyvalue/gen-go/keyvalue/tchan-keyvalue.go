@@ -35,15 +35,15 @@ type TChanBaseService interface {
 // Implementation of a client and service handler.
 
 type tchanAdminClient struct {
-	tchanBaseServiceClient
+	TChanBaseService
 
 	thriftService string
 	client        thrift.TChanClient
 }
 
-func newTChanAdminClient(thriftService string, client thrift.TChanClient) *tchanAdminClient {
+func NewTChanAdminInheritedClient(thriftService string, client thrift.TChanClient) *tchanAdminClient {
 	return &tchanAdminClient{
-		*newTChanBaseServiceClient(thriftService, client),
+		NewTChanBaseServiceInheritedClient(thriftService, client),
 		thriftService,
 		client,
 	}
@@ -51,7 +51,7 @@ func newTChanAdminClient(thriftService string, client thrift.TChanClient) *tchan
 
 // NewTChanAdminClient creates a client that can be used to make remote calls.
 func NewTChanAdminClient(client thrift.TChanClient) TChanAdmin {
-	return newTChanAdminClient("Admin", client)
+	return NewTChanAdminInheritedClient("Admin", client)
 }
 
 func (c *tchanAdminClient) ClearAll(ctx thrift.Context) error {
@@ -68,22 +68,18 @@ func (c *tchanAdminClient) ClearAll(ctx thrift.Context) error {
 }
 
 type tchanAdminServer struct {
-	tchanBaseServiceServer
+	thrift.TChanServer
 
 	handler TChanAdmin
-}
-
-func newTChanAdminServer(handler TChanAdmin) *tchanAdminServer {
-	return &tchanAdminServer{
-		*newTChanBaseServiceServer(handler),
-		handler,
-	}
 }
 
 // NewTChanAdminServer wraps a handler for TChanAdmin so it can be
 // registered with a thrift.Server.
 func NewTChanAdminServer(handler TChanAdmin) thrift.TChanServer {
-	return newTChanAdminServer(handler)
+	return &tchanAdminServer{
+		NewTChanBaseServiceServer(handler),
+		handler,
+	}
 }
 
 func (s *tchanAdminServer) Service() string {
@@ -104,8 +100,7 @@ func (s *tchanAdminServer) Handle(ctx thrift.Context, methodName string, protoco
 		return s.handleClearAll(ctx, protocol)
 
 	case "HealthCheck":
-		return s.handleHealthCheck(ctx, protocol)
-
+		return s.TChanServer.Handle(ctx, methodName, protocol)
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
@@ -136,15 +131,15 @@ func (s *tchanAdminServer) handleClearAll(ctx thrift.Context, protocol athrift.T
 }
 
 type tchanKeyValueClient struct {
-	tchanBaseServiceClient
+	TChanBaseService
 
 	thriftService string
 	client        thrift.TChanClient
 }
 
-func newTChanKeyValueClient(thriftService string, client thrift.TChanClient) *tchanKeyValueClient {
+func NewTChanKeyValueInheritedClient(thriftService string, client thrift.TChanClient) *tchanKeyValueClient {
 	return &tchanKeyValueClient{
-		*newTChanBaseServiceClient(thriftService, client),
+		NewTChanBaseServiceInheritedClient(thriftService, client),
 		thriftService,
 		client,
 	}
@@ -152,7 +147,7 @@ func newTChanKeyValueClient(thriftService string, client thrift.TChanClient) *tc
 
 // NewTChanKeyValueClient creates a client that can be used to make remote calls.
 func NewTChanKeyValueClient(client thrift.TChanClient) TChanKeyValue {
-	return newTChanKeyValueClient("KeyValue", client)
+	return NewTChanKeyValueInheritedClient("KeyValue", client)
 }
 
 func (c *tchanKeyValueClient) Get(ctx thrift.Context, key string) (string, error) {
@@ -190,22 +185,18 @@ func (c *tchanKeyValueClient) Set(ctx thrift.Context, key string, value string) 
 }
 
 type tchanKeyValueServer struct {
-	tchanBaseServiceServer
+	thrift.TChanServer
 
 	handler TChanKeyValue
-}
-
-func newTChanKeyValueServer(handler TChanKeyValue) *tchanKeyValueServer {
-	return &tchanKeyValueServer{
-		*newTChanBaseServiceServer(handler),
-		handler,
-	}
 }
 
 // NewTChanKeyValueServer wraps a handler for TChanKeyValue so it can be
 // registered with a thrift.Server.
 func NewTChanKeyValueServer(handler TChanKeyValue) thrift.TChanServer {
-	return newTChanKeyValueServer(handler)
+	return &tchanKeyValueServer{
+		NewTChanBaseServiceServer(handler),
+		handler,
+	}
 }
 
 func (s *tchanKeyValueServer) Service() string {
@@ -229,8 +220,7 @@ func (s *tchanKeyValueServer) Handle(ctx thrift.Context, methodName string, prot
 		return s.handleSet(ctx, protocol)
 
 	case "HealthCheck":
-		return s.handleHealthCheck(ctx, protocol)
-
+		return s.TChanServer.Handle(ctx, methodName, protocol)
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
@@ -292,7 +282,7 @@ type tchanBaseServiceClient struct {
 	client        thrift.TChanClient
 }
 
-func newTChanBaseServiceClient(thriftService string, client thrift.TChanClient) *tchanBaseServiceClient {
+func NewTChanBaseServiceInheritedClient(thriftService string, client thrift.TChanClient) *tchanBaseServiceClient {
 	return &tchanBaseServiceClient{
 		thriftService,
 		client,
@@ -301,7 +291,7 @@ func newTChanBaseServiceClient(thriftService string, client thrift.TChanClient) 
 
 // NewTChanBaseServiceClient creates a client that can be used to make remote calls.
 func NewTChanBaseServiceClient(client thrift.TChanClient) TChanBaseService {
-	return newTChanBaseServiceClient("baseService", client)
+	return NewTChanBaseServiceInheritedClient("baseService", client)
 }
 
 func (c *tchanBaseServiceClient) HealthCheck(ctx thrift.Context) (string, error) {
@@ -318,16 +308,12 @@ type tchanBaseServiceServer struct {
 	handler TChanBaseService
 }
 
-func newTChanBaseServiceServer(handler TChanBaseService) *tchanBaseServiceServer {
-	return &tchanBaseServiceServer{
-		handler,
-	}
-}
-
 // NewTChanBaseServiceServer wraps a handler for TChanBaseService so it can be
 // registered with a thrift.Server.
 func NewTChanBaseServiceServer(handler TChanBaseService) thrift.TChanServer {
-	return newTChanBaseServiceServer(handler)
+	return &tchanBaseServiceServer{
+		handler,
+	}
 }
 
 func (s *tchanBaseServiceServer) Service() string {

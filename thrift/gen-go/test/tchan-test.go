@@ -30,7 +30,7 @@ type tchanSecondServiceClient struct {
 	client        thrift.TChanClient
 }
 
-func newTChanSecondServiceClient(thriftService string, client thrift.TChanClient) *tchanSecondServiceClient {
+func NewTChanSecondServiceInheritedClient(thriftService string, client thrift.TChanClient) *tchanSecondServiceClient {
 	return &tchanSecondServiceClient{
 		thriftService,
 		client,
@@ -39,7 +39,7 @@ func newTChanSecondServiceClient(thriftService string, client thrift.TChanClient
 
 // NewTChanSecondServiceClient creates a client that can be used to make remote calls.
 func NewTChanSecondServiceClient(client thrift.TChanClient) TChanSecondService {
-	return newTChanSecondServiceClient("SecondService", client)
+	return NewTChanSecondServiceInheritedClient("SecondService", client)
 }
 
 func (c *tchanSecondServiceClient) Echo(ctx thrift.Context, arg string) (string, error) {
@@ -58,16 +58,12 @@ type tchanSecondServiceServer struct {
 	handler TChanSecondService
 }
 
-func newTChanSecondServiceServer(handler TChanSecondService) *tchanSecondServiceServer {
-	return &tchanSecondServiceServer{
-		handler,
-	}
-}
-
 // NewTChanSecondServiceServer wraps a handler for TChanSecondService so it can be
 // registered with a thrift.Server.
 func NewTChanSecondServiceServer(handler TChanSecondService) thrift.TChanServer {
-	return newTChanSecondServiceServer(handler)
+	return &tchanSecondServiceServer{
+		handler,
+	}
 }
 
 func (s *tchanSecondServiceServer) Service() string {
@@ -115,7 +111,7 @@ type tchanSimpleServiceClient struct {
 	client        thrift.TChanClient
 }
 
-func newTChanSimpleServiceClient(thriftService string, client thrift.TChanClient) *tchanSimpleServiceClient {
+func NewTChanSimpleServiceInheritedClient(thriftService string, client thrift.TChanClient) *tchanSimpleServiceClient {
 	return &tchanSimpleServiceClient{
 		thriftService,
 		client,
@@ -124,7 +120,7 @@ func newTChanSimpleServiceClient(thriftService string, client thrift.TChanClient
 
 // NewTChanSimpleServiceClient creates a client that can be used to make remote calls.
 func NewTChanSimpleServiceClient(client thrift.TChanClient) TChanSimpleService {
-	return newTChanSimpleServiceClient("SimpleService", client)
+	return NewTChanSimpleServiceInheritedClient("SimpleService", client)
 }
 
 func (c *tchanSimpleServiceClient) Call(ctx thrift.Context, arg *Data) (*Data, error) {
@@ -156,16 +152,12 @@ type tchanSimpleServiceServer struct {
 	handler TChanSimpleService
 }
 
-func newTChanSimpleServiceServer(handler TChanSimpleService) *tchanSimpleServiceServer {
-	return &tchanSimpleServiceServer{
-		handler,
-	}
-}
-
 // NewTChanSimpleServiceServer wraps a handler for TChanSimpleService so it can be
 // registered with a thrift.Server.
 func NewTChanSimpleServiceServer(handler TChanSimpleService) thrift.TChanServer {
-	return newTChanSimpleServiceServer(handler)
+	return &tchanSimpleServiceServer{
+		handler,
+	}
 }
 
 func (s *tchanSimpleServiceServer) Service() string {
