@@ -147,7 +147,12 @@ func runTest(t *testing.T, thriftFile string) error {
 
 	// Generate code from the Thrift file.
 	*packagePrefix = "../"
-	if err := processFile(true /* generateThrift */, thriftFile, tempDir); err != nil {
+	opts := processOptions{
+		GenerateThrift: true,
+		InputFile:      thriftFile,
+		OutputDir:      tempDir,
+	}
+	if err := processFile(opts); err != nil {
 		return fmt.Errorf("processFile(%s) in %q failed: %v", thriftFile, tempDir, err)
 	}
 

@@ -73,34 +73,43 @@ func main() {
 		log.Fatalf("Please specify an inputFile")
 	}
 
-	if err := processFile(*generateThrift, *inputFile, *outputDir); err != nil {
+	opts := processOptions{
+		InputFile:      *inputFile,
+		GenerateThrift: *generateThrift,
+		OutputDir:      *outputDir,
+		SkipTChannel:   *skipTChannel,
+		TemplateFiles:  *templateFiles,
+	}
+	if err := processFile(opts); err != nil {
 		log.Fatal(err)
 	}
 }
 
-type parseState struct {
-	ast      *parser.Thrift
-	global   *State
-	services []*Service
+type processOptions struct {
+	InputFile      string
+	GenerateThrift bool
+	OutputDir      string
+	SkipTChannel   bool
+	TemplateFiles  []string
 }
 
-func processFile(generateThrift bool, inputFile string, outputDir string) error {
-	if err := os.MkdirAll(outputDir, 0770); err != nil {
-		return fmt.Errorf("failed to create output directory %q: %v", outputDir, err)
+func processFile(opts processOptions) error {
+	if err := os.MkdirAll(opts.OutputDir, 0770); err != nil {
+		return fmt.Errorf("failed to create output directory %q: %v", opts.OutputDir, err)
 	}
 
-	if generateThrift {
-		if err := runThrift(inputFile, outputDir); err != nil {
-			return fmt.Errorf("failed to run thrift for file %q: %v", inputFile, err)
+	if opts.GenerateThrift {
+		if err := runThrift(opts.InputFile, opts.OutputDir); err != nil {
+			return fmt.Errorf("failed to run thrift for file %q: %v", opts.InputFile, err)
 		}
 	}
 
-	allParsed, err := parseFile(inputFile)
+	allParsed, err := parseFile(opts.InputFile)
 	if err != nil {
-		return fmt.Errorf("failed to parse file %q: %v", inputFile, err)
+		return fmt.Errorf("failed to parse file %q: %v", opts.InputFile, err)
 	}
 
-	allTemplates, err := parseTemplates(*templateFiles)
+	allTemplates, err := parseTemplates(opts.SkipTChannel, opts.TemplateFiles)
 	if err != nil {
 		return fmt.Errorf("failed to parse templates: %v", err)
 	}
@@ -109,7 +118,7 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 		pkg := packageName(filename)
 
 		for _, template := range allTemplates {
-			outputFile := filepath.Join(outputDir, pkg, template.outputFile(pkg))
+			outputFile := filepath.Join(opts.OutputDir, pkg, template.outputFile(pkg))
 			if err := generateCode(outputFile, template, pkg, v); err != nil {
 				return err
 			}
@@ -119,11 +128,23 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 	return nil
 }
 
+type parseState struct {
+	ast      *parser.Thrift
+	global   *State
+	services []*Service
+}
+
 // parseTemplates returns a list of Templates that must be rendered given the template files.
-func parseTemplates(templateFiles []string) ([]*Template, error) {
-	templates := []*Template{
-		{"tchan", template.Must(parseTemplate(tchannelTmpl))},
+func parseTemplates(skipTChannel bool, templateFiles []string) ([]*Template, error) {
+	var templates []*Template
+
+	if !skipTChannel {
+		templates = append(templates, &Template{
+			name:     "tchan",
+			template: template.Must(parseTemplate(tchannelTmpl)),
+		})
 	}
+
 	for _, f := range templateFiles {
 		t, err := parseTemplateFile(f)
 		if err != nil {
