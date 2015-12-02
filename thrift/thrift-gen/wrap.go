@@ -21,7 +21,10 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 			return nil, err
 		}
 
-		services = append(services, &Service{s, state, nil})
+		services = append(services, &Service{
+			Service: s,
+			state:   state,
+		})
 	}
 
 	// Have a stable ordering for services so code generation is consistent.
@@ -32,9 +35,13 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 // Service is a wrapper for parser.Service.
 type Service struct {
 	*parser.Service
+	state *State
 
-	state          *State
+	// ExtendsService is not set in wrap, but in setExtends.
 	ExtendsService *Service
+
+	// methods is a cache of all methods.
+	methods []*Method
 }
 
 // ThriftName returns the thrift identifier for this service.
@@ -100,14 +107,17 @@ func (l byMethodName) Len() int           { return len(l) }
 func (l byMethodName) Less(i, j int) bool { return l[i].Method.Name < l[j].Method.Name }
 func (l byMethodName) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
-// Methods returns the methods defined on this service.
+// Methods returns the methods on this service, not including methods from inherited services.
 func (s *Service) Methods() []*Method {
-	var methods []*Method
-	for _, m := range s.Service.Methods {
-		methods = append(methods, &Method{m, s, s.state})
+	if s.methods != nil {
+		return s.methods
 	}
-	sort.Sort(byMethodName(methods))
-	return methods
+
+	for _, m := range s.Service.Methods {
+		s.methods = append(s.methods, &Method{m, s, s.state})
+	}
+	sort.Sort(byMethodName(s.methods))
+	return s.methods
 }
 
 // Method is a wrapper for parser.Method.
