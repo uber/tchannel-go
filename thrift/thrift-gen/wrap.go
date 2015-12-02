@@ -66,11 +66,11 @@ func (s *Service) ClientConstructor() string {
 	return "NewTChan" + goPublicName(s.Name) + "Client"
 }
 
-// InternalClientConstructor returns the name of the internal constructor used to create the client
-// struct directly. This returns the type of ClientStruct rather than the interface, and is used
-// to recursively create any base service clients.
-func (s *Service) InternalClientConstructor() string {
-	return "newTChan" + goPublicName(s.Name) + "Client"
+// InheritedClientConstructor returns the name of the constructor used by the generated code
+// for inherited services. This allows the parent service to set the service name that should
+// be used.
+func (s *Service) InheritedClientConstructor() string {
+	return "NewTChan" + goPublicName(s.Name) + "InheritedClient"
 }
 
 // ServerStruct returns the name of the unexported struct that satisfies TChanServer.
@@ -81,13 +81,6 @@ func (s *Service) ServerStruct() string {
 // ServerConstructor returns the name of the constructor used to create the TChanServer interface.
 func (s *Service) ServerConstructor() string {
 	return "NewTChan" + goPublicName(s.Name) + "Server"
-}
-
-// InternalServerConstructor is the name of the internal constructor used to create the service
-// directly. This returns the type of ServerStruct rather than the interface, and is used
-// to recursively create any base service structs.
-func (s *Service) InternalServerConstructor() string {
-	return "newTChan" + goPublicName(s.Name) + "Server"
 }
 
 // HasExtends returns whether this service extends another service.

@@ -52,10 +52,10 @@ type {{ .ClientStruct }} struct {
 }
 
 
-func {{ .InternalClientConstructor }}(thriftService string, client thrift.TChanClient) *{{ .ClientStruct }} {
+func {{ .InheritedClientConstructor }}(thriftService string, client thrift.TChanClient) *{{ .ClientStruct }} {
 	return &{{ .ClientStruct }}{
 		{{ if .HasExtends }}
-			*{{ .ExtendsService.InternalClientConstructor }}(thriftService, client),
+			{{ .ExtendsServicePrefix }}{{ .ExtendsService.InheritedClientConstructor }}(thriftService, client),
 		{{ end }}
 		thriftService,
 		client,
@@ -64,7 +64,7 @@ func {{ .InternalClientConstructor }}(thriftService string, client thrift.TChanC
 
 // {{ .ClientConstructor }} creates a client that can be used to make remote calls.
 func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
-	return {{ .InternalClientConstructor }}("{{ .ThriftName }}", client)
+	return {{ .InheritedClientConstructor }}("{{ .ThriftName }}", client)
 }
 
 {{ range .Methods }}
@@ -100,19 +100,15 @@ type {{ .ServerStruct }} struct {
 	handler {{ .Interface }}
 }
 
-func {{ .InternalServerConstructor }}(handler {{ .Interface }}) *{{ .ServerStruct }} {
-	return &{{ .ServerStruct }}{
-		{{ if .HasExtends }}
-			*{{ .ExtendsService.InternalServerConstructor }}(handler),
-		{{ end }}
-		handler,
-	}
-}
-
 // {{ .ServerConstructor }} wraps a handler for {{ .Interface }} so it can be
 // registered with a thrift.Server.
 func {{ .ServerConstructor }}(handler {{ .Interface }}) thrift.TChanServer {
-	return {{ .InternalServerConstructor }}(handler)
+	return &{{ .ServerStruct }}{
+		{{ if .HasExtends }}
+			{{ .ExtendsServicePrefix }}{{ .ExtendsService.ServerConstructor }}(handler),
+		{{ end }}
+		handler,
+	}
 }
 
 func (s *{{ .ServerStruct }}) Service() string {
