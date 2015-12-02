@@ -86,6 +86,14 @@ func (s *Service) HasExtends() bool {
 	return s.ExtendsService != nil
 }
 
+// ExtendsServicePrefix returns a package selector (if any) for the extended service.
+func (s *Service) ExtendsServicePrefix() string {
+	if dotIndex := strings.Index(s.Extends, "."); dotIndex > 0 {
+		return s.Extends[:dotIndex+1]
+	}
+	return ""
+}
+
 type byMethodName []*Method
 
 func (l byMethodName) Len() int           { return len(l) }

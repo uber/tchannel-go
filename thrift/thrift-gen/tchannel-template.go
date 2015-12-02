@@ -29,7 +29,7 @@ athrift "{{ .Imports.Thrift }}"
 // {{ .Interface }} is the interface that defines the server handler and client interface.
 type {{ .Interface }} interface {
 	{{ if .HasExtends }}
-		{{ .ExtendsService.Interface }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
 
 	{{ end }}
 	{{ range .Methods }}
@@ -44,7 +44,7 @@ type {{ .Interface }} interface {
 {{ range $svc := .Services }}
 type {{ .ClientStruct }} struct {
 	{{ if .HasExtends }}
-		{{ .ExtendsService.ClientStruct }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
 
 	{{ end }}
 	thriftService string
@@ -94,7 +94,7 @@ func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
 
 type {{ .ServerStruct }} struct {
 	{{ if .HasExtends }}
-		{{ .ExtendsService.ServerStruct }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
 
 	{{ end }}
 	handler {{ .Interface }}
