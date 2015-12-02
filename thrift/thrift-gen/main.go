@@ -86,22 +86,10 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 		}
 	}
 
-	parser := &parser.Parser{}
-	parsed, _, err := parser.ParseFile(inputFile)
+	allParsed, err := parseFile(inputFile)
 	if err != nil {
-		return fmt.Errorf("could not parse file %q: %v", inputFile, err)
+		return fmt.Errorf("failed to parse file %q: %v", inputFile, err)
 	}
-
-	allParsed := make(map[string]parseState)
-	for filename, v := range parsed {
-		state := newState(v, allParsed)
-		services, err := wrapServices(v, state)
-		if err != nil {
-			return err
-		}
-		allParsed[filename] = parseState{state, services}
-	}
-	setExtends(allParsed)
 
 	goTmpl := parseTemplate()
 	for filename, v := range allParsed {
@@ -113,6 +101,26 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 	}
 
 	return nil
+}
+
+func parseFile(inputFile string) (map[string]parseState, error) {
+	parser := &parser.Parser{}
+	parsed, _, err := parser.ParseFile(inputFile)
+	if err != nil {
+		return nil, err
+	}
+
+	allParsed := make(map[string]parseState)
+	for filename, v := range parsed {
+		state := newState(v, allParsed)
+		services, err := wrapServices(v, state)
+		if err != nil {
+			return nil, fmt.Errorf("wrap services failed: %v", err)
+		}
+		allParsed[filename] = parseState{state, services}
+	}
+	setExtends(allParsed)
+	return allParsed, nil
 }
 
 func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
