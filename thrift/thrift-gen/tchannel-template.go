@@ -94,7 +94,7 @@ func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
 
 type {{ .ServerStruct }} struct {
 	{{ if .HasExtends }}
-		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
+		thrift.TChanServer
 
 	{{ end }}
 	handler {{ .Interface }}
@@ -124,10 +124,8 @@ func (s *{{ .ServerStruct }}) Methods() []string {
 		{{ range .Methods }}
 			"{{ .ThriftName }}",
 		{{ end }}
-		{{ if .HasExtends }}
-			{{ range .ExtendsService.Methods }}
-				"{{ .ThriftName }}",
-			{{ end }}
+		{{ range .InheritedMethods }}
+			"{{ . }}",
 		{{ end }}
 	}
 }
@@ -138,11 +136,9 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 			case "{{ .ThriftName }}":
 				return s.{{ .HandleFunc }}(ctx, protocol)
 		{{ end }}
-		{{ if .HasExtends }}
-			{{ range .ExtendsService.Methods }}
-				case "{{ .ThriftName }}":
-					return s.{{ .HandleFunc }}(ctx, protocol)
-			{{ end }}
+		{{ range .InheritedMethods }}
+			case "{{ . }}":
+				return s.TChanServer.Handle(ctx, methodName, protocol)
 		{{ end }}
 		default:
 			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())

@@ -42,6 +42,8 @@ type Service struct {
 
 	// methods is a cache of all methods.
 	methods []*Method
+	// inheritedMethods is a list of inherited method names.
+	inheritedMethods []string
 }
 
 // ThriftName returns the thrift identifier for this service.
@@ -118,6 +120,22 @@ func (s *Service) Methods() []*Method {
 	}
 	sort.Sort(byMethodName(s.methods))
 	return s.methods
+}
+
+// InheritedMethods returns names for inherited methods on this service.
+func (s *Service) InheritedMethods() []string {
+	if s.inheritedMethods != nil {
+		return s.inheritedMethods
+	}
+
+	for svc := s.ExtendsService; svc != nil; svc = svc.ExtendsService {
+		for m := range svc.Service.Methods {
+			s.inheritedMethods = append(s.inheritedMethods, m)
+		}
+	}
+	sort.Strings(s.inheritedMethods)
+
+	return s.inheritedMethods
 }
 
 // Method is a wrapper for parser.Method.
