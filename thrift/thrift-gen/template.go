@@ -9,8 +9,8 @@ package {{ .Package }}
 import (
 "fmt"
 
-athrift "{{ .ThriftImport }}"
-"{{ .TChannelImport }}"
+athrift "{{ .Imports.Thrift }}"
+"{{ .Imports.TChannel }}"
 
 {{ range .Includes }}
 	"{{ .Import }}"

@@ -51,11 +51,15 @@ var (
 
 // TemplateData is the data passed to the template that generates code.
 type TemplateData struct {
-	Package        string
-	Services       []*Service
-	Includes       map[string]*Include
-	ThriftImport   string
-	TChannelImport string
+	Package  string
+	Services []*Service
+	Includes map[string]*Include
+	Imports  imports
+}
+
+type imports struct {
+	Thrift   string
+	TChannel string
 }
 
 func main() {
@@ -131,11 +135,13 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, state 
 
 	buf := &bytes.Buffer{}
 	td := TemplateData{
-		Package:        pkg,
-		Services:       state.services,
-		Includes:       state.global.includes,
-		ThriftImport:   *apacheThriftImport,
-		TChannelImport: tchannelThriftImport,
+		Package:  pkg,
+		Services: state.services,
+		Includes: state.global.includes,
+		Imports: imports{
+			Thrift:   *apacheThriftImport,
+			TChannel: tchannelThriftImport,
+		},
 	}
 	if err := tmpl.Execute(buf, td); err != nil {
 		return fmt.Errorf("failed to execute template: %v", err)
