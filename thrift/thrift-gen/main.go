@@ -25,13 +25,10 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -51,11 +48,15 @@ var (
 
 // TemplateData is the data passed to the template that generates code.
 type TemplateData struct {
-	Package        string
-	Services       []*Service
-	Includes       map[string]*Include
-	ThriftImport   string
-	TChannelImport string
+	Package  string
+	Services []*Service
+	Includes map[string]*Include
+	Imports  imports
+}
+
+type imports struct {
+	Thrift   string
+	TChannel string
 }
 
 func main() {
@@ -81,26 +82,14 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 
 	if generateThrift {
 		if err := runThrift(inputFile, outputDir); err != nil {
-			return fmt.Errorf("Could not generate thrift output: %v", err)
+			return fmt.Errorf("failed to run thrift for file %q: %v", inputFile, err)
 		}
 	}
 
-	parser := &parser.Parser{}
-	parsed, _, err := parser.ParseFile(inputFile)
+	allParsed, err := parseFile(inputFile)
 	if err != nil {
-		return fmt.Errorf("Could not parse .thrift file: %v", err)
+		return fmt.Errorf("failed to parse file %q: %v", inputFile, err)
 	}
-
-	allParsed := make(map[string]parseState)
-	for filename, v := range parsed {
-		state := newState(v, allParsed)
-		services, err := wrapServices(v, state)
-		if err != nil {
-			return err
-		}
-		allParsed[filename] = parseState{state, services}
-	}
-	setExtends(allParsed)
 
 	goTmpl := parseTemplate()
 	for filename, v := range allParsed {
@@ -114,11 +103,24 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 	return nil
 }
 
-func parseTemplate() *template.Template {
-	funcs := map[string]interface{}{
-		"contextType": contextType,
+func parseFile(inputFile string) (map[string]parseState, error) {
+	parser := &parser.Parser{}
+	parsed, _, err := parser.ParseFile(inputFile)
+	if err != nil {
+		return nil, err
 	}
-	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(serviceTmpl))
+
+	allParsed := make(map[string]parseState)
+	for filename, v := range parsed {
+		state := newState(v, allParsed)
+		services, err := wrapServices(v, state)
+		if err != nil {
+			return nil, fmt.Errorf("wrap services failed: %v", err)
+		}
+		allParsed[filename] = parseState{state, services}
+	}
+	setExtends(allParsed)
+	return allParsed, nil
 }
 
 func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
@@ -129,26 +131,16 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, state 
 		return nil
 	}
 
-	buf := &bytes.Buffer{}
 	td := TemplateData{
-		Package:        pkg,
-		Services:       state.services,
-		Includes:       state.global.includes,
-		ThriftImport:   *apacheThriftImport,
-		TChannelImport: tchannelThriftImport,
+		Package:  pkg,
+		Includes: state.global.includes,
+		Services: state.services,
+		Imports: imports{
+			Thrift:   *apacheThriftImport,
+			TChannel: tchannelThriftImport,
+		},
 	}
-	if err := tmpl.Execute(buf, td); err != nil {
-		return fmt.Errorf("failed to execute template: %v", err)
-	}
-
-	generated := cleanGeneratedCode(buf.Bytes())
-	if err := ioutil.WriteFile(outputFile, generated, 0660); err != nil {
-		return fmt.Errorf("cannot write output file %s: %v", outputFile, err)
-	}
-
-	// Run gofmt on the file (ignore any errors)
-	exec.Command("gofmt", "-w", outputFile).Run()
-	return nil
+	return executeTemplate(outputFile, tmpl, td)
 }
 
 func packageName(fullPath string) string {
@@ -156,13 +148,4 @@ func packageName(fullPath string) string {
 	_, filename := filepath.Split(fullPath)
 	file := strings.TrimSuffix(filename, filepath.Ext(filename))
 	return strings.ToLower(file)
-}
-
-func cleanGeneratedCode(generated []byte) []byte {
-	generated = nlSpaceNL.ReplaceAll(generated, []byte("\n"))
-	return generated
-}
-
-func contextType() string {
-	return "thrift.Context"
 }
