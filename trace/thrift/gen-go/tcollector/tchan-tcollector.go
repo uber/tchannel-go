@@ -99,27 +99,54 @@ func (s *tchanTCollectorServer) Methods() []string {
 }
 
 func (s *tchanTCollectorServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	var args interface{}
+	var err error
 	switch methodName {
 	case "getSamplingStrategy":
-		return s.handleGetSamplingStrategy(ctx, protocol)
+		args, err = s.readGetSamplingStrategy(protocol)
+		if err != nil {
+			return false, nil, err
+		}
 	case "submit":
-		return s.handleSubmit(ctx, protocol)
+		args, err = s.readSubmit(protocol)
+		if err != nil {
+			return false, nil, err
+		}
 	case "submitBatch":
-		return s.handleSubmitBatch(ctx, protocol)
+		args, err = s.readSubmitBatch(protocol)
+		if err != nil {
+			return false, nil, err
+		}
+	default:
+		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
 
+func (s *tchanTCollectorServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "getSamplingStrategy":
+		return s.handleGetSamplingStrategy(ctx, args.(TCollectorGetSamplingStrategyArgs))
+	case "submit":
+		return s.handleSubmit(ctx, args.(TCollectorSubmitArgs))
+	case "submitBatch":
+		return s.handleSubmitBatch(ctx, args.(TCollectorSubmitBatchArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanTCollectorServer) handleGetSamplingStrategy(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanTCollectorServer) readGetSamplingStrategy(protocol athrift.TProtocol) (interface{}, error) {
 	var req TCollectorGetSamplingStrategyArgs
-	var res TCollectorGetSamplingStrategyResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanTCollectorServer) handleGetSamplingStrategy(ctx thrift.Context, req TCollectorGetSamplingStrategyArgs) (bool, athrift.TStruct, error) {
+	var res TCollectorGetSamplingStrategyResult
 	r, err :=
 		s.handler.GetSamplingStrategy(ctx, req.ServiceName)
 
@@ -132,14 +159,17 @@ func (s *tchanTCollectorServer) handleGetSamplingStrategy(ctx thrift.Context, pr
 	return err == nil, &res, nil
 }
 
-func (s *tchanTCollectorServer) handleSubmit(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanTCollectorServer) readSubmit(protocol athrift.TProtocol) (interface{}, error) {
 	var req TCollectorSubmitArgs
-	var res TCollectorSubmitResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanTCollectorServer) handleSubmit(ctx thrift.Context, req TCollectorSubmitArgs) (bool, athrift.TStruct, error) {
+	var res TCollectorSubmitResult
 	r, err :=
 		s.handler.Submit(ctx, req.Span)
 
@@ -152,14 +182,17 @@ func (s *tchanTCollectorServer) handleSubmit(ctx thrift.Context, protocol athrif
 	return err == nil, &res, nil
 }
 
-func (s *tchanTCollectorServer) handleSubmitBatch(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanTCollectorServer) readSubmitBatch(protocol athrift.TProtocol) (interface{}, error) {
 	var req TCollectorSubmitBatchArgs
-	var res TCollectorSubmitBatchResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanTCollectorServer) handleSubmitBatch(ctx thrift.Context, req TCollectorSubmitBatchArgs) (bool, athrift.TStruct, error) {
+	var res TCollectorSubmitBatchResult
 	r, err :=
 		s.handler.SubmitBatch(ctx, req.Spans)
 

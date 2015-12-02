@@ -127,14 +127,27 @@ func (s *{{ .ServerStruct }}) Methods() []string {
 }
 
 func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	var args interface{}
+	var err error
 	switch methodName {
-		{{ range .Methods }}
+		{{ range .AllMethods }}
 			case "{{ .ThriftName }}":
-				return s.{{ .HandleFunc }}(ctx, protocol)
+				args, err = s.{{ .ReadFunc }}(protocol)
+				if err != nil {
+					return false, nil, err
+				}
 		{{ end }}
-		{{ range .InheritedMethods }}
-			case "{{ . }}":
-				return s.TChanServer.Handle(ctx, methodName, protocol)
+		default:
+			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *{{ .ServerStruct }}) HandleArgs(ctx {{ contextType }}, methodName string, args interface{ }) (bool, athrift.TStruct, error) {
+	switch methodName {
+		{{ range .AllMethods }}
+			case "{{ .ThriftName }}":
+				return s.{{ .HandleFunc }}(ctx, args.({{ .ArgsType }}))
 		{{ end }}
 		default:
 			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
@@ -142,14 +155,17 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 }
 
 {{ range .Methods }}
-	func (s *{{ $svc.ServerStruct }}) {{ .HandleFunc }}(ctx {{ contextType }}, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	func (s *{{ $svc.ServerStruct }}) {{ .ReadFunc }}(protocol athrift.TProtocol) (interface{}, error) {
 		var req {{ .ArgsType }}
-		var res {{ .ResultType }}
 
 		if err := req.Read(protocol); err != nil {
-			return false, nil, err
+			return nil, err
 		}
+		return req, nil
+	}
 
+	func (s *{{ $svc.ServerStruct }}) {{ .HandleFunc }}(ctx {{ contextType }}, req {{ .ArgsType }}) (bool, athrift.TStruct, error) {
+		var res {{ .ResultType }}
 		{{ if .HasReturn }}
 			r, err :=
 		{{ else }}
@@ -174,10 +190,10 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 				return false, nil, err
 			{{ end }}
 		} else {
-    {{ if .HasReturn }}
+	{{ if .HasReturn }}
 		  res.Success = {{ .WrapResult "r" }}
 		{{ end }}
-    }
+	}
 
 		return err == nil, &res, nil
 	}
