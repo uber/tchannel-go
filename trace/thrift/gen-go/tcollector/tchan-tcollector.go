@@ -99,28 +99,25 @@ func (s *tchanTCollectorServer) Methods() []string {
 }
 
 func (s *tchanTCollectorServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanTCollectorServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "getSamplingStrategy":
 		args, err = s.readGetSamplingStrategy(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "submit":
 		args, err = s.readSubmit(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "submitBatch":
 		args, err = s.readSubmitBatch(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanTCollectorServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {

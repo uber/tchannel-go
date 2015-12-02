@@ -95,23 +95,23 @@ func (s *tchanAdminServer) Methods() []string {
 }
 
 func (s *tchanAdminServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanAdminServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "clearAll":
 		args, err = s.readClearAll(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "HealthCheck":
 		args, err = s.readHealthCheck(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanAdminServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
@@ -238,28 +238,25 @@ func (s *tchanKeyValueServer) Methods() []string {
 }
 
 func (s *tchanKeyValueServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanKeyValueServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "Get":
 		args, err = s.readGet(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "Set":
 		args, err = s.readSet(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "HealthCheck":
 		args, err = s.readHealthCheck(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanKeyValueServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
@@ -391,18 +388,21 @@ func (s *tchanBaseServiceServer) Methods() []string {
 }
 
 func (s *tchanBaseServiceServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanBaseServiceServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "HealthCheck":
 		args, err = s.readHealthCheck(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanBaseServiceServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {

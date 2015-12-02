@@ -103,28 +103,25 @@ func (s *tchanMetaServer) Methods() []string {
 }
 
 func (s *tchanMetaServer) Handle(ctx Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanMetaServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "health":
 		args, err = s.readHealth(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "thriftIDL":
 		args, err = s.readThriftIDL(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "versionInfo":
 		args, err = s.readVersionInfo(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanMetaServer) HandleArgs(ctx Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {

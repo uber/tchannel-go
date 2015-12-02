@@ -127,20 +127,23 @@ func (s *{{ .ServerStruct }}) Methods() []string {
 }
 
 func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *{{ .ServerStruct }}) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 		{{ range .AllMethods }}
 			case "{{ .ThriftName }}":
 				args, err = s.{{ .ReadFunc }}(protocol)
-				if err != nil {
-					return false, nil, err
-				}
 		{{ end }}
 		default:
-			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+			err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *{{ .ServerStruct }}) HandleArgs(ctx {{ contextType }}, methodName string, args interface{ }) (bool, athrift.TStruct, error) {

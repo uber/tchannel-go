@@ -77,18 +77,21 @@ func (s *tchanSecondServiceServer) Methods() []string {
 }
 
 func (s *tchanSecondServiceServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanSecondServiceServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "Echo":
 		args, err = s.readEcho(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanSecondServiceServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
@@ -189,23 +192,23 @@ func (s *tchanSimpleServiceServer) Methods() []string {
 }
 
 func (s *tchanSimpleServiceServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
-	var args interface{}
-	var err error
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanSimpleServiceServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "Call":
 		args, err = s.readCall(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	case "Simple":
 		args, err = s.readSimple(protocol)
-		if err != nil {
-			return false, nil, err
-		}
 	default:
-		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
-	return s.HandleArgs(ctx, methodName, args)
+	return
 }
 
 func (s *tchanSimpleServiceServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
