@@ -122,7 +122,7 @@ func parseTemplate() *template.Template {
 	funcs := map[string]interface{}{
 		"contextType": contextType,
 	}
-	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(serviceTmpl))
+	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(tchannelTmpl))
 }
 
 func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
