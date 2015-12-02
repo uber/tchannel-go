@@ -25,13 +25,10 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -118,13 +115,6 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 	return nil
 }
 
-func parseTemplate() *template.Template {
-	funcs := map[string]interface{}{
-		"contextType": contextType,
-	}
-	return template.Must(template.New("thrift-gen").Funcs(funcs).Parse(tchannelTmpl))
-}
-
 func generateCode(outputFile string, tmpl *template.Template, pkg string, state parseState) error {
 	if outputFile == "" {
 		return fmt.Errorf("must speciy an output file")
@@ -133,28 +123,16 @@ func generateCode(outputFile string, tmpl *template.Template, pkg string, state 
 		return nil
 	}
 
-	buf := &bytes.Buffer{}
 	td := TemplateData{
 		Package:  pkg,
-		Services: state.services,
 		Includes: state.global.includes,
+		Services: state.services,
 		Imports: imports{
 			Thrift:   *apacheThriftImport,
 			TChannel: tchannelThriftImport,
 		},
 	}
-	if err := tmpl.Execute(buf, td); err != nil {
-		return fmt.Errorf("failed to execute template: %v", err)
-	}
-
-	generated := cleanGeneratedCode(buf.Bytes())
-	if err := ioutil.WriteFile(outputFile, generated, 0660); err != nil {
-		return fmt.Errorf("cannot write output file %s: %v", outputFile, err)
-	}
-
-	// Run gofmt on the file (ignore any errors)
-	exec.Command("gofmt", "-w", outputFile).Run()
-	return nil
+	return executeTemplate(outputFile, tmpl, td)
 }
 
 func packageName(fullPath string) string {
@@ -162,13 +140,4 @@ func packageName(fullPath string) string {
 	_, filename := filepath.Split(fullPath)
 	file := strings.TrimSuffix(filename, filepath.Ext(filename))
 	return strings.ToLower(file)
-}
-
-func cleanGeneratedCode(generated []byte) []byte {
-	generated = nlSpaceNL.ReplaceAll(generated, []byte("\n"))
-	return generated
-}
-
-func contextType() string {
-	return "thrift.Context"
 }
