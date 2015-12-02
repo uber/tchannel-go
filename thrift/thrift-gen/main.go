@@ -85,14 +85,14 @@ func processFile(generateThrift bool, inputFile string, outputDir string) error 
 
 	if generateThrift {
 		if err := runThrift(inputFile, outputDir); err != nil {
-			return fmt.Errorf("Could not generate thrift output: %v", err)
+			return fmt.Errorf("failed to run thrift for file %q: %v", inputFile, err)
 		}
 	}
 
 	parser := &parser.Parser{}
 	parsed, _, err := parser.ParseFile(inputFile)
 	if err != nil {
-		return fmt.Errorf("Could not parse .thrift file: %v", err)
+		return fmt.Errorf("could not parse file %q: %v", inputFile, err)
 	}
 
 	allParsed := make(map[string]parseState)
