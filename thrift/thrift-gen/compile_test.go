@@ -115,6 +115,45 @@ func TestExternalTemplate(t *testing.T) {
 	}
 }
 
+func TestExternalTemplateWithGoType(t *testing.T) {
+	template1 := `package {{ .Package }}
+
+{{ range .AST.Services }}
+// Service {{ .Name }} has {{ len .Methods }} methods.
+{{ range .Methods }}
+// func {{ .Name | goPublicName }} ({{ range .Arguments }}{{ .Type | goType }}, {{ end }}) ({{ .ReturnType | goType }}){{ end }}
+{{ end }}
+	`
+	templateFile := writeTempFile(t, template1)
+	defer os.Remove(templateFile)
+
+	expected := `package binary
+
+// Service Test has 2 methods.
+
+// func M1 ([]byte, ) ([]byte)
+// func M2 ([]byte, *S, ) (*S)
+`
+
+	opts := processOptions{
+		InputFile:     "test_files/binary.thrift",
+		TemplateFiles: []string{templateFile},
+	}
+	checks := func(dir string) error {
+		dir = filepath.Join(dir, "binary")
+		if err := checkDirectoryFiles(dir, 5); err != nil {
+			return err
+		}
+
+		// Verify the contents of the extra file.
+		outFile := filepath.Join(dir, packageName(templateFile)+"-binary.go")
+		return verifyFileContents(outFile, expected)
+	}
+	if err := runTest(t, opts, checks); err != nil {
+		t.Errorf("Failed to run test: %v", err)
+	}
+}
+
 func writeTempFile(t *testing.T, contents string) string {
 	tempFile, err := ioutil.TempFile("", "temp")
 	require.NoError(t, err, "Failed to create temp file")

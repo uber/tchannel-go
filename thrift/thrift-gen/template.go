@@ -43,6 +43,7 @@ func parseTemplate(contents string) (*template.Template, error) {
 		"contextType":   contextType,
 		"goPrivateName": goName,
 		"goPublicName":  goPublicName,
+		"goType":        func() string { return "" },
 	}
 	return template.New("thrift-gen").Funcs(funcs).Parse(contents)
 }
