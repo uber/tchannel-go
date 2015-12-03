@@ -1,9 +1,13 @@
+struct S {
+  1: binary s1
+}
+
 service S1 {
-  void M1()
+  binary M1(1: binary bits)
 }
 
 service S2 extends S1 {
-  void M2()
+  S M2(1: S s)
 }
 
 service S3 extends S2 {
