@@ -38,11 +38,19 @@ type Template struct {
 	template *template.Template
 }
 
+// dummyGoType is a function to be passed to the test/template package as the named
+// function 'goType'. This named function is overwritten by an actual implementation
+// specific to the thrift file being rendered at the time of rendering.
+func dummyGoType() string {
+	return ""
+}
+
 func parseTemplate(contents string) (*template.Template, error) {
 	funcs := map[string]interface{}{
 		"contextType":   contextType,
 		"goPrivateName": goName,
 		"goPublicName":  goPublicName,
+		"goType":        dummyGoType,
 	}
 	return template.New("thrift-gen").Funcs(funcs).Parse(contents)
 }

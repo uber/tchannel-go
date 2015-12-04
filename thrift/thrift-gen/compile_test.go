@@ -82,6 +82,8 @@ func TestExternalTemplate(t *testing.T) {
 
 {{ range .AST.Services }}
 // Service {{ .Name }} has {{ len .Methods }} methods.
+{{ range .Methods }}
+// func {{ .Name | goPublicName }} ({{ range .Arguments }}{{ .Type | goType }}, {{ end }}) ({{ if .ReturnType }}{{ .ReturnType | goType }}{{ end }}){{ end }}
 {{ end }}
 	`
 	templateFile := writeTempFile(t, template1)
@@ -91,9 +93,15 @@ func TestExternalTemplate(t *testing.T) {
 
 // Service S1 has 1 methods.
 
+// func M1 ([]byte, ) ([]byte)
+
 // Service S2 has 1 methods.
 
+// func M2 (*S, ) (*S)
+
 // Service S3 has 1 methods.
+
+// func M3 () ()
 `
 
 	opts := processOptions{
