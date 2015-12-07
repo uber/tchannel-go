@@ -27,19 +27,21 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 )
 
-func (c *Client) Discover(serviceName string) ([]*hyperbahn.ServicePeer, error) {
-
-	thriftClient := thrift.NewClient(c.tchan, hyperbahnServiceName, nil)
-	hyperbahnClient := hyperbahn.NewTChanHyperbahnClient(thriftClient)
-
+// Discover queries Hyperbahn for a list of peers that are currently
+// advertised with the specified service name.
+func (c *Client) Discover(serviceName string) ([]string, error) {
 	ctx, cancel := thrift.NewContext(time.Second)
-	ctx = thrift.WithHeaders(ctx, map[string]string{"user": "anonymous"})
 	defer cancel()
 
-	result, err := hyperbahnClient.Discover(ctx, &hyperbahn.DiscoveryQuery{ServiceName: serviceName})
+	result, err := c.hyperbahnClient.Discover(ctx, &hyperbahn.DiscoveryQuery{ServiceName: serviceName})
 	if err != nil {
 		return nil, err
 	}
 
-	return result.GetPeers(), nil
+	var hostPorts []string
+	for _, peer := range result.GetPeers() {
+		hostPorts = append(hostPorts, servicePeerToHostPort(peer))
+	}
+
+	return hostPorts, nil
 }
