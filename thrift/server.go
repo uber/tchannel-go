@@ -86,7 +86,12 @@ func (s *Server) RegisterHealthHandler(f HealthFunc) {
 
 func (s *Server) onError(err error) {
 	// TODO(prashant): Expose incoming call errors through options for NewServer.
-	s.log.Errorf("thrift Server error: %v", err)
+	// Timeouts should not be reported as errors.
+	if se, ok := err.(tchannel.SystemError); ok && se.Code() == tchannel.ErrCodeTimeout {
+		s.log.Debugf("thrift Server timeout: %v", err)
+	} else {
+		s.log.Errorf("thrift Server error: %v", err)
+	}
 }
 
 func (s *Server) handle(origCtx context.Context, handler handler, method string, call *tchannel.InboundCall) error {
