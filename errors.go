@@ -120,9 +120,9 @@ func NewWrappedSystemError(code SystemErrCode, wrapped error) error {
 	return SystemError{code: code, msg: fmt.Sprintf("sys err %x: %s", code, wrapped.Error()), wrapped: wrapped}
 }
 
-// Error returns the SystemError message, conforming to the error interface
+// Error returns the code and message, conforming to the error interface
 func (se SystemError) Error() string {
-	return se.msg
+	return fmt.Sprintf("tchannel error %v: %s", se.Code(), se.msg)
 }
 
 // Wrapped returns the wrapped error
@@ -133,6 +133,11 @@ func (se SystemError) Code() SystemErrCode {
 	return se.code
 }
 
+// Message returns the SystemError message.
+func (se SystemError) Message() string {
+	return se.msg
+}
+
 // GetContextError converts the context error to a tchannel error.
 func GetContextError(err error) error {
 	if err == context.DeadlineExceeded {
@@ -141,12 +146,22 @@ func GetContextError(err error) error {
 	return err
 }
 
-// GetSystemErrorCode returns the code to report for the given error.  If the error is a SystemError, we can
-// get the code directly.  Otherwise treat it as an unexpected error
+// GetSystemErrorCode returns the code to report for the given error.  If the error is a
+// SystemError, we can get the code directly.  Otherwise treat it as an unexpected error
 func GetSystemErrorCode(err error) SystemErrCode {
 	if se, ok := err.(SystemError); ok {
 		return se.Code()
 	}
 
 	return ErrCodeUnexpected
+}
+
+// GetSystemErrorMessage returns the message to report for the given error.  If the error is a
+// SystemError, we can get the underlying message. Otherwise, use the Error() method.
+func GetSystemErrorMessage(err error) string {
+	if se, ok := err.(SystemError); ok {
+		return se.Message()
+	}
+
+	return err.Error()
 }

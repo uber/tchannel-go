@@ -230,7 +230,9 @@ func TestInitReqGetsError(t *testing.T) {
 	_, err = ch.Peers().GetOrAdd(l.Addr().String()).GetConnection(ctx)
 	expectedErr := NewSystemError(ErrCodeBadRequest, "invalid host:port")
 	assert.Equal(t, expectedErr, err, "Error mismatch")
-	assert.Contains(t, logOut.String(), "[E] Connection error: invalid host:port", "Error should be logged")
+	assert.Contains(t, logOut.String(),
+		"[E] Connection error: tchannel error ErrCodeBadRequest: invalid host:port",
+		"Error should be logged")
 	close(connectionComplete)
 
 	<-listenerComplete

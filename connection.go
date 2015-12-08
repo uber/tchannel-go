@@ -557,7 +557,8 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 		id:      id,
 		errCode: GetSystemErrorCode(err),
 		tracing: errorSpan,
-		message: err.Error()}); err != nil {
+		message: GetSystemErrorMessage(err),
+	}); err != nil {
 
 		// This shouldn't happen - it means writing the errorMessage is broken.
 		c.log.Warnf("Could not create outbound frame to %s for %d: %v",
