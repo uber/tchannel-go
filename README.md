@@ -1,7 +1,7 @@
 # TChannel
 
 [![GoDoc](https://godoc.org/github.com/uber/tchannel-go?status.svg)](https://godoc.org/github.com/uber/tchannel-go)
-
+[![Build Status](https://travis-ci.org/uber/tchannel-go.svg?branch=master)](https://travis-ci.org/uber/tchannel-go)
 
 [TChannel](https://github.com/uber/tchannel/blob/master/docs/protocol.md) is a multiplexing and framing protocol for RPC calls.
 
