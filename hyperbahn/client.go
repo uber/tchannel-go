@@ -41,7 +41,6 @@ type Client struct {
 	quit     chan struct{}
 
 	jsonClient      *tjson.Client
-	thriftClient    tthrift.TChanClient
 	hyperbahnClient htypes.TChanHyperbahn
 }
 
@@ -92,8 +91,8 @@ func NewClient(ch *tchannel.Channel, config Configuration, opts *ClientOptions) 
 	}
 
 	client.jsonClient = tjson.NewClient(ch, hyperbahnServiceName, nil)
-	client.thriftClient = tthrift.NewClient(ch, hyperbahnServiceName, nil)
-	client.hyperbahnClient = htypes.NewTChanHyperbahnClient(client.thriftClient)
+	thriftClient := tthrift.NewClient(ch, hyperbahnServiceName, nil)
+	client.hyperbahnClient = htypes.NewTChanHyperbahnClient(thriftClient)
 
 	return client, nil
 }
