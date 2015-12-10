@@ -21,25 +21,36 @@
 package hyperbahn
 
 import (
-	"net"
-	"strconv"
+	"testing"
 
-	"github.com/uber/tchannel-go/hyperbahn/gen-go/hyperbahn"
+	"github.com/stretchr/testify/assert"
 )
 
-// intToIP4 converts an integer IP representation into a 4-byte net.IP struct
-func intToIP4(ip uint32) net.IP {
-	return net.IP{
-		byte(ip >> 24 & 0xff),
-		byte(ip >> 16 & 0xff),
-		byte(ip >> 8 & 0xff),
-		byte(ip & 0xff),
+func TestIntToIP4(t *testing.T) {
+	tests := []struct {
+		ip       uint32
+		expected string
+	}{
+		{
+			ip:       0,
+			expected: "0.0.0.0",
+		},
+		{
+			ip:       0x01010101,
+			expected: "1.1.1.1",
+		},
+		{
+			ip:       0x01030507,
+			expected: "1.3.5.7",
+		},
+		{
+			ip:       0xFFFFFFFF,
+			expected: "255.255.255.255",
+		},
 	}
-}
 
-// servicePeerToHostPort converts a Hyperbahn ServicePeer into a hostPort string.
-func servicePeerToHostPort(peer *hyperbahn.ServicePeer) string {
-	host := intToIP4(uint32(*peer.IP.Ipv4)).String()
-	port := strconv.Itoa(int(peer.Port))
-	return net.JoinHostPort(host, port)
+	for _, tt := range tests {
+		got := intToIP4(tt.ip).String()
+		assert.Equal(t, tt.expected, got, "IP %v not converted correctly", tt.ip)
+	}
 }
