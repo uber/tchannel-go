@@ -35,22 +35,22 @@ var config = struct {
 }{}
 
 // setupServer is the application code we are attempting to test.
-func setupServer() error {
+func setupServer() (*hyperbahn.Client, error) {
 	ch, err := tchannel.NewChannel("myservice", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := ch.ListenAndServe("127.0.0.1:0"); err != nil {
-		return err
+		return nil, err
 	}
 
 	client, err := hyperbahn.NewClient(ch, config.hyperbahnConfig, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return client.Advertise()
+	return client, client.Advertise()
 }
 
 func TestMockHyperbahn(t *testing.T) {
@@ -59,6 +59,27 @@ func TestMockHyperbahn(t *testing.T) {
 	defer mh.Close()
 
 	config.hyperbahnConfig = mh.Configuration()
-	require.NoError(t, setupServer(), "setupServer failed")
+	_, err = setupServer()
+	require.NoError(t, err, "setupServer failed")
 	assert.Equal(t, []string{"myservice"}, mh.GetAdvertised())
+}
+
+func TestMockDiscovery(t *testing.T) {
+	mh, err := mockhyperbahn.New()
+	require.NoError(t, err, "mock hyperbahn failed")
+	defer mh.Close()
+
+	peers := []string{
+		"1.3.5.7:1456",
+		"255.255.255.255:25",
+	}
+	mh.SetDiscoverResult("discover-svc", peers)
+
+	config.hyperbahnConfig = mh.Configuration()
+	client, err := setupServer()
+	require.NoError(t, err, "setupServer failed")
+
+	gotPeers, err := client.Discover("discover-svc")
+	require.NoError(t, err, "Discover failed")
+	assert.Equal(t, peers, gotPeers, "Discover returned invalid peers")
 }
