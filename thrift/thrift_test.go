@@ -261,6 +261,29 @@ func TestRegisterPostResponseCB(t *testing.T) {
 	})
 }
 
+func TestThriftTimeout(t *testing.T) {
+	defer testutils.SetTimeout(t, time.Second)()
+
+	withSetup(t, func(ctx Context, args testArgs) {
+		handler := make(chan struct{})
+
+		args.s2.On("Echo", ctxArg(), "asd").Return("asd", nil).Run(func(args mock.Arguments) {
+			time.Sleep(15 * time.Millisecond)
+			close(handler)
+			return
+		})
+
+		ctx, cancel := NewContext(10 * time.Millisecond)
+		defer cancel()
+
+		_, err := args.c2.Echo(ctx, "asd")
+		assert.Equal(t, err, tchannel.ErrTimeout, "Expect call to time out")
+
+		// Wait for the handler to return, otherwise the test ends before the Server gets an error.
+		<-handler
+	})
+}
+
 func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	args := testArgs{
 		s1: new(mocks.TChanSimpleService),
