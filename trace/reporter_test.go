@@ -35,9 +35,9 @@ import (
 	"github.com/uber/tchannel-go/trace/thrift/mocks"
 )
 
-func TestZipkinTraceReporterFactory(t *testing.T) {
+func TestTraceReporterFactory(t *testing.T) {
 	ch, err := tchannel.NewChannel("svc", &tchannel.ChannelOptions{
-		TraceReporterFactory: ZipkinTraceReporterFactory,
+		TraceReporterFactory: TCollectorReporterFactory,
 	})
 	assert.NoError(t, err)
 
@@ -81,7 +81,7 @@ func TestZipkinTraceReporterFactory(t *testing.T) {
 	}
 }
 
-func TestBuildZipkinSpan(t *testing.T) {
+func TestBuildSpan(t *testing.T) {
 	data := &tchannel.TraceData{
 		Span:              *tchannel.NewRootSpan(),
 		BinaryAnnotations: []tchannel.BinaryAnnotation{{Key: "cn", Value: "string"}},
@@ -97,7 +97,7 @@ func TestBuildZipkinSpan(t *testing.T) {
 	}
 	_, data.Annotations = RandomAnnotations()
 
-	thriftSpan, err := buildZipkinSpan(data, 12345)
+	thriftSpan, err := buildSpan(data, 12345)
 	assert.NoError(t, err)
 	binaryAnns, err := buildBinaryAnnotations(data.BinaryAnnotations)
 	assert.NoError(t, err)
@@ -116,7 +116,7 @@ func TestBuildZipkinSpan(t *testing.T) {
 		Name:              "test",
 		ID:                uint64ToBytes(data.Span.SpanID()),
 		ParentId:          uint64ToBytes(data.Span.ParentID()),
-		Annotations:       buildZipkinAnnotations(data.Annotations),
+		Annotations:       buildAnnotations(data.Annotations),
 		BinaryAnnotations: binaryAnns,
 	}
 
@@ -135,7 +135,7 @@ func TestBase64Encode(t *testing.T) {
 	assert.Equal(t, base64Encode(12711515087145684), "AC0pDj1TitQ=")
 }
 
-func TestBuildZipkinAnnotations(t *testing.T) {
+func TestBuildAnnotations(t *testing.T) {
 	baseTime, testAnnotations := RandomAnnotations()
 	baseTimeMillis := float64(1420167845000)
 	testExpected := []*gen.Annotation{
@@ -197,7 +197,7 @@ func TestBuildZipkinAnnotations(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := buildZipkinAnnotations(tt.annotations)
+		got := buildAnnotations(tt.annotations)
 		assert.Equal(t, tt.expected, got, "result spans mismatch")
 	}
 }
@@ -268,8 +268,8 @@ func submitArgs(t testing.TB) (*tchannel.TraceData, *gen.Span) {
 	}
 	_, data.Annotations = RandomAnnotations()
 
-	genSpan, err := buildZipkinSpan(data, 0)
-	require.NoError(t, err, "Build test zipkin span failed")
+	genSpan, err := buildSpan(data, 0)
+	require.NoError(t, err, "Build test span failed")
 
 	return data, genSpan
 }
@@ -345,14 +345,14 @@ func getClient(dst string) (tchannel.TraceReporter, error) {
 	}
 
 	tchan.Peers().Add(dst)
-	return NewZipkinTraceReporter(tchan), nil
+	return NewTCollectorReporter(tchan), nil
 }
 
 func BenchmarkBuildThrift(b *testing.B) {
 	data, _ := submitArgs(b)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buildZipkinSpan(data, 0)
+		buildSpan(data, 0)
 	}
 }
 
