@@ -261,6 +261,29 @@ func TestRegisterPostResponseCB(t *testing.T) {
 	})
 }
 
+func TestThriftTimeout(t *testing.T) {
+	defer testutils.SetTimeout(t, time.Second)()
+
+	withSetup(t, func(ctx Context, args testArgs) {
+		handler := make(chan struct{})
+
+		args.s2.On("Echo", ctxArg(), "asd").Return("asd", nil).Run(func(args mock.Arguments) {
+			time.Sleep(15 * time.Millisecond)
+			close(handler)
+			return
+		})
+
+		ctx, cancel := NewContext(10 * time.Millisecond)
+		defer cancel()
+
+		_, err := args.c2.Echo(ctx, "asd")
+		assert.Equal(t, err, tchannel.ErrTimeout, "Expect call to time out")
+
+		// Wait for the handler to return, otherwise the test ends before the Server gets an error.
+		<-handler
+	})
+}
+
 func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	args := testArgs{
 		s1: new(mocks.TChanSimpleService),
@@ -271,14 +294,12 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	defer cancel()
 
 	// Start server
-	ch, server, err := setupServer(args.s1, args.s2)
-	require.NoError(t, err)
+	ch, server := setupServer(t, args.s1, args.s2)
 	defer ch.Close()
 	args.server = server
 
 	// Get client1
-	args.c1, args.c2, err = getClients(ch)
-	require.NoError(t, err)
+	args.c1, args.c2 = getClients(t, ch)
 
 	f(ctx, args)
 
@@ -286,29 +307,22 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	args.s2.AssertExpectations(t)
 }
 
-func setupServer(h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tchannel.Channel, *Server, error) {
-	ch, err := testutils.NewServerChannel(nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func setupServer(t *testing.T, h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tchannel.Channel, *Server) {
+	ch := testutils.NewServer(t, nil)
 	server := NewServer(ch)
 	server.Register(gen.NewTChanSimpleServiceServer(h))
 	server.Register(gen.NewTChanSecondServiceServer(sh))
-	return ch, server, nil
+	return ch, server
 }
 
-func getClients(serverCh *tchannel.Channel) (gen.TChanSimpleService, gen.TChanSecondService, error) {
+func getClients(t *testing.T, serverCh *tchannel.Channel) (gen.TChanSimpleService, gen.TChanSecondService) {
 	serverInfo := serverCh.PeerInfo()
-	ch, err := testutils.NewClientChannel(nil)
-	if err != nil {
-		return nil, nil, err
-	}
+	ch := testutils.NewClient(t, nil)
 
 	ch.Peers().Add(serverInfo.HostPort)
 	client := NewClient(ch, serverInfo.ServiceName, nil)
 
 	simpleClient := gen.NewTChanSimpleServiceClient(client)
 	secondClient := gen.NewTChanSecondServiceClient(client)
-	return simpleClient, secondClient, nil
+	return simpleClient, secondClient
 }
