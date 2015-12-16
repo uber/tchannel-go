@@ -105,6 +105,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 		// TODO(mmihic): Potentially reject calls that are made outside a root context?
 		call.callReq.Tracing.EnableTracing(false)
 	}
+	call.callReq.Tracing.sampleRootSpan(c.traceSampleRate)
 
 	response := new(OutboundCallResponse)
 	response.Annotations = Annotations{

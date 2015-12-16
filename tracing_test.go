@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -212,4 +213,94 @@ func TestTraceReportingDisabled(t *testing.T) {
 
 		assert.Equal(t, 0, gotCalls, "TraceReporter should not report if disabled")
 	})
+}
+
+func TestTraceSamplingRate(t *testing.T) {
+	rand.Seed(10)
+
+	tests := []struct {
+		sampleRate  float64
+		count       int
+		expectedMin int
+		expectedMax int
+	}{
+		{1.0, 100, 100, 100},
+		{0.5, 100, 40, 60},
+		{0.1, 100, 5, 15},
+		{0.0000001, 100, 0, 0},
+	}
+
+	for _, tt := range tests {
+		var reportedTraces int
+		testTraceReporter := TraceReporterFunc(func(_ TraceData) {
+			reportedTraces++
+		})
+
+		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+			var tracedCalls int
+			testutils.RegisterFunc(t, ch, "t", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				if CurrentSpan(ctx).TracingEnabled() {
+					tracedCalls++
+				}
+
+				return &raw.Res{}, nil
+			})
+
+			client := testutils.NewClient(t,
+				testutils.NewOpts().SetTraceReporter(testTraceReporter).SetTraceSampleRate(tt.sampleRate))
+			defer client.Close()
+
+			for i := 0; i < tt.count; i++ {
+				ctx, cancel := NewContext(time.Second)
+				defer cancel()
+
+				_, _, _, err := raw.Call(ctx, client, hostPort, ch.PeerInfo().ServiceName, "t", nil, nil)
+				require.NoError(t, err, "raw.Call failed")
+			}
+
+			assert.Equal(t, reportedTraces, tracedCalls,
+				"Number of traces report doesn't match calls with tracing enabled")
+			assert.True(t, tracedCalls >= tt.expectedMin,
+				"Number of trace enabled calls (%v) expected to be greater than %v", tracedCalls, tt.expectedMin)
+			assert.True(t, tracedCalls <= tt.expectedMax,
+				"Number of trace enabled calls (%v) expected to be less than %v", tracedCalls, tt.expectedMax)
+		})
+	}
+}
+
+func TestChildCallsNotSampled(t *testing.T) {
+	var traceEnabledCalls int
+
+	s1 := testutils.NewServer(t, testutils.NewOpts().SetTraceSampleRate(0.0001))
+	defer s1.Close()
+	s2 := testutils.NewServer(t, nil)
+	defer s2.Close()
+
+	testutils.RegisterFunc(t, s1, "s1", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		_, _, _, err := raw.Call(ctx, s1, s2.PeerInfo().HostPort, s2.ServiceName(), "s2", nil, nil)
+		require.NoError(t, err, "raw.Call from s1 to s2 failed")
+		return &raw.Res{}, nil
+	})
+
+	testutils.RegisterFunc(t, s2, "s2", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		if CurrentSpan(ctx).TracingEnabled() {
+			traceEnabledCalls++
+		}
+		return &raw.Res{}, nil
+	})
+
+	client := testutils.NewClient(t, nil)
+	defer client.Close()
+
+	const numCalls = 100
+	for i := 0; i < numCalls; i++ {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, client, s1.PeerInfo().HostPort, s1.ServiceName(), "s1", nil, nil)
+		require.NoError(t, err, "raw.Call to s1 failed")
+	}
+
+	// Even though s1 has sampling enabled, it should not affect incoming calls.
+	assert.Equal(t, numCalls, traceEnabledCalls, "Trace sampling should not inbound calls")
 }

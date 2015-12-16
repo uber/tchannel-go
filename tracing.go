@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/uber/tchannel-go/typed"
@@ -108,4 +109,15 @@ func (s Span) NewChildSpan() *Span {
 		childSpan.spanID = uint64(traceRng.Int63())
 	}
 	return childSpan
+}
+
+func (s *Span) sampleRootSpan(sampleRate float64) {
+	// Sampling only affects root spans
+	if s.ParentID() != 0 {
+		return
+	}
+
+	if rand.Float64() > sampleRate {
+		s.EnableTracing(false)
+	}
 }

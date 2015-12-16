@@ -43,6 +43,9 @@ var (
 
 const (
 	ephemeralHostPort = "0.0.0.0:0"
+
+	// DefaultTraceSampleRate is the default sampling rate for traces.
+	DefaultTraceSampleRate = 1.0
 )
 
 // TraceReporterFactory is the interface of the method to generate TraceReporter instance.
@@ -71,6 +74,10 @@ type ChannelOptions struct {
 
 	// Trace reporter factory to generate trace reporter instance.
 	TraceReporterFactory TraceReporterFactory
+
+	// TraceSampleRate is the rate of requests to sample, and should be in the range (0, 1].
+	// If this value is 0, then DefaultTraceSampleRate is used.
+	TraceSampleRate float64
 }
 
 // ChannelState is the state of a channel.
@@ -123,11 +130,12 @@ type Channel struct {
 // channelConnectionCommon is the list of common objects that both use
 // and can be copied directly from the channel to the connection.
 type channelConnectionCommon struct {
-	log           Logger
-	statsReporter StatsReporter
-	traceReporter TraceReporter
-	subChannels   *subChannelMap
-	timeNow       func() time.Time
+	log             Logger
+	statsReporter   StatsReporter
+	traceReporter   TraceReporter
+	subChannels     *subChannelMap
+	timeNow         func() time.Time
+	traceSampleRate float64
 }
 
 // NewChannel creates a new Channel.  The new channel can be used to send outbound requests
@@ -162,12 +170,18 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeNow = time.Now
 	}
 
+	traceSampleRate := opts.TraceSampleRate
+	if traceSampleRate == 0 {
+		traceSampleRate = DefaultTraceSampleRate
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
-			log:           logger.WithFields(LogField{"service", serviceName}),
-			statsReporter: statsReporter,
-			subChannels:   &subChannelMap{},
-			timeNow:       timeNow,
+			log:             logger.WithFields(LogField{"service", serviceName}),
+			statsReporter:   statsReporter,
+			subChannels:     &subChannelMap{},
+			timeNow:         timeNow,
+			traceSampleRate: traceSampleRate,
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,
