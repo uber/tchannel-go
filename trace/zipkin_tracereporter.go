@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	tc "github.com/uber/tchannel-go"
@@ -40,46 +39,40 @@ const (
 	chanBufferSize        = 100
 )
 
-type zipkinData struct {
-	Span              tc.Span
-	Annotations       []tc.Annotation
-	BinaryAnnotations []tc.BinaryAnnotation
-	TargetEndpoint    tc.TargetEndpoint
-}
-
 // ZipkinTraceReporter is a trace reporter that submits trace spans in to zipkin trace server.
 type ZipkinTraceReporter struct {
-	tchannel *tc.Channel
-	client   tcollector.TChanTCollector
-	c        chan zipkinData
-	logger   tc.Logger
+	tchannel  *tc.Channel
+	client    tcollector.TChanTCollector
+	curHostIP uint32
+	c         chan tc.TraceData
+	logger    tc.Logger
 }
 
 // NewZipkinTraceReporter returns a zipkin trace reporter that submits span to tcollector service.
 func NewZipkinTraceReporter(ch *tc.Channel) *ZipkinTraceReporter {
 	thriftClient := thrift.NewClient(ch, tcollectorServiceName, nil)
 	client := tcollector.NewTChanTCollectorClient(thriftClient)
+
+	curHostIP, err := tc.ListenIP()
+	if err != nil {
+		ch.Logger().Warnf("tcollector TraceReporter failed to get IP: %v", err)
+		curHostIP = net.IPv4(0, 0, 0, 0)
+	}
+
 	// create the goroutine method to actually to the submit Span.
 	reporter := &ZipkinTraceReporter{
-		tchannel: ch,
-		client:   client,
-		c:        make(chan zipkinData, chanBufferSize),
-		logger:   ch.Logger(),
+		tchannel:  ch,
+		client:    client,
+		c:         make(chan tc.TraceData, chanBufferSize),
+		logger:    ch.Logger(),
+		curHostIP: inetAton(curHostIP.String()),
 	}
 	go reporter.zipkinSpanWorker()
 	return reporter
 }
 
 // Report method will submit trace span to tcollector server.
-func (r *ZipkinTraceReporter) Report(
-	span tc.Span, annotations []tc.Annotation, binaryAnnotations []tc.BinaryAnnotation, targetEndpoint tc.TargetEndpoint) {
-	data := zipkinData{
-		Span:              span,
-		Annotations:       annotations,
-		BinaryAnnotations: binaryAnnotations,
-		TargetEndpoint:    targetEndpoint,
-	}
-
+func (r *ZipkinTraceReporter) Report(data tc.TraceData) {
 	select {
 	case r.c <- data:
 	default:
@@ -87,19 +80,18 @@ func (r *ZipkinTraceReporter) Report(
 	}
 }
 
-func (r *ZipkinTraceReporter) zipkinReport(data *zipkinData) error {
+func (r *ZipkinTraceReporter) zipkinReport(data *tc.TraceData) error {
 	ctx, cancel := tc.NewContextBuilder(time.Second).
 		DisableTracing().
 		SetRetryOptions(&tc.RetryOptions{RetryOn: tc.RetryNever}).
 		SetShardKey(base64Encode(data.Span.TraceID())).Build()
 	defer cancel()
 
-	thriftSpan, err := buildZipkinSpan(data.Span, data.Annotations, data.BinaryAnnotations, data.TargetEndpoint)
+	thriftSpan, err := buildZipkinSpan(data, r.curHostIP)
 	if err != nil {
 		return err
 	}
 	// client submit
-	// ignore the response result because TChannel shouldn't care about it.
 	_, err = r.client.Submit(ctx, thriftSpan)
 	return err
 }
@@ -112,28 +104,52 @@ func (r *ZipkinTraceReporter) zipkinSpanWorker() {
 	}
 }
 
-// buildZipkinSpan builds zipkin span based on tchannel span.
-func buildZipkinSpan(span tc.Span, annotations []tc.Annotation, binaryAnnotations []tc.BinaryAnnotation, targetEndpoint tc.TargetEndpoint) (*tcollector.Span, error) {
-	hostport := strings.Split(targetEndpoint.HostPort, ":")
-	port, _ := strconv.ParseInt(hostport[1], 10, 32)
-	host := tcollector.Endpoint{
-		Ipv4:        int32(inetAton(hostport[0])),
-		Port:        int32(port),
-		ServiceName: targetEndpoint.ServiceName,
+func buildEndpoint(ep tc.TraceEndpoint) (*tcollector.Endpoint, error) {
+	host, portStr, err := net.SplitHostPort(ep.HostPort)
+	if err != nil {
+		return nil, err
 	}
 
-	tBinaryAnnotations, err := buildBinaryAnnotations(binaryAnnotations)
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tcollector.Endpoint{
+		Ipv4:        int32(inetAton(host)),
+		Port:        int32(port),
+		ServiceName: ep.ServiceName,
+	}, nil
+}
+
+// buildZipkinSpan builds zipkin span based on tchannel span.
+func buildZipkinSpan(data *tc.TraceData, curHostIP uint32) (*tcollector.Span, error) {
+	source, err := buildEndpoint(data.Source)
+	if err != nil {
+		return nil, err
+	}
+	if source.Ipv4 == 0 {
+		source.Ipv4 = int32(curHostIP)
+	}
+
+	target, err := buildEndpoint(data.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	binaryAnns, err := buildBinaryAnnotations(data.BinaryAnnotations)
 	if err != nil {
 		return nil, err
 	}
 	thriftSpan := tcollector.Span{
-		TraceId:           uint64ToBytes(span.TraceID()),
-		Host:              &host,
-		Name:              targetEndpoint.Operation,
-		ID:                uint64ToBytes(span.SpanID()),
-		ParentId:          uint64ToBytes(span.ParentID()),
-		Annotations:       buildZipkinAnnotations(annotations),
-		BinaryAnnotations: tBinaryAnnotations,
+		TraceId:           uint64ToBytes(data.Span.TraceID()),
+		SpanHost:          source,
+		Host:              target,
+		Name:              data.Method,
+		ID:                uint64ToBytes(data.Span.SpanID()),
+		ParentId:          uint64ToBytes(data.Span.ParentID()),
+		Annotations:       buildZipkinAnnotations(data.Annotations),
+		BinaryAnnotations: binaryAnns,
 	}
 
 	return &thriftSpan, nil

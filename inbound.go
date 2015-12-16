@@ -79,19 +79,22 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response := new(InboundCallResponse)
 	response.Annotations = Annotations{
 		reporter: c.traceReporter,
-		span:     callReq.Tracing,
-		endpoint: TargetEndpoint{
-			HostPort:    c.localPeerInfo.HostPort,
-			ServiceName: callReq.Service,
+		timeNow:  c.timeNow,
+		data: TraceData{
+			Span: callReq.Tracing,
+			Source: TraceEndpoint{
+				HostPort:    c.localPeerInfo.HostPort,
+				ServiceName: callReq.Service,
+			},
 		},
-		timeNow: c.timeNow,
 		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: callReq.Headers[CallerName]},
 			{Key: "as", Value: callReq.Headers[ArgScheme]},
 		},
 	}
-	response.annotations = response.annotationsBacking[:0]
-	response.binaryAnnotations = response.binaryAnnotationsBacking[:]
+	response.data.Target = response.data.Source
+	response.data.Annotations = response.annotationsBacking[:0]
+	response.data.BinaryAnnotations = response.binaryAnnotationsBacking[:]
 	response.AddAnnotation(AnnotationKeyServerReceive)
 	response.mex = mex
 	response.conn = c

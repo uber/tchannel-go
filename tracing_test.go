@@ -113,19 +113,15 @@ func TestTracingPropagates(t *testing.T) {
 	})
 }
 
-type traceReportArgs struct {
-	Annotations       []Annotation
-	BinaryAnnotations []BinaryAnnotation
-	TargetEndpoint    TargetEndpoint
-}
-
 func TestTraceReportingEnabled(t *testing.T) {
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
 
-	var gotCalls []traceReportArgs
+	var gotCalls []TraceData
 	var gotSpans []Span
-	testTraceReporter := TraceReporterFunc(func(span Span, annotations []Annotation, binaryAnnotations []BinaryAnnotation, targetEndpoint TargetEndpoint) {
-		gotCalls = append(gotCalls, traceReportArgs{annotations, binaryAnnotations, targetEndpoint})
+	testTraceReporter := TraceReporterFunc(func(data TraceData) {
+		span := data.Span
+		data.Span = Span{}
+		gotCalls = append(gotCalls, data)
 		gotSpans = append(gotSpans, span)
 	})
 
@@ -135,6 +131,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 		serverOpts *testutils.ChannelOpts
 		clientOpts *testutils.ChannelOpts
 		expected   []Annotation
+		fromServer bool
 	}{
 		{
 			name:       "inbound",
@@ -143,6 +140,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 				{Key: "sr", Timestamp: initialTime.Add(3 * time.Second)},
 				{Key: "ss", Timestamp: initialTime.Add(5 * time.Second)},
 			},
+			fromServer: true,
 		},
 		{
 			name:       "outbound",
@@ -176,12 +174,18 @@ func TestTraceReportingEnabled(t *testing.T) {
 				{"cn", clientCh.PeerInfo().ServiceName},
 				{"as", Raw.String()},
 			}
-			targetEndpoint := TargetEndpoint{
+			target := TraceEndpoint{
 				HostPort:    hostPort,
-				ServiceName: ch.PeerInfo().ServiceName,
-				Operation:   "echo",
+				ServiceName: ch.ServiceName(),
 			}
-			expected := []traceReportArgs{{tt.expected, binaryAnnotations, targetEndpoint}}
+			source := target
+			if !tt.fromServer {
+				source = TraceEndpoint{
+					HostPort:    "0.0.0.0:0",
+					ServiceName: clientCh.ServiceName(),
+				}
+			}
+			expected := []TraceData{{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}}
 			assert.Equal(t, expected, gotCalls, "%v: Report args mismatch", tt.name)
 			curSpan := CurrentSpan(ctx)
 			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), gotSpans[0], "Span mismatch")
@@ -191,7 +195,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 
 func TestTraceReportingDisabled(t *testing.T) {
 	var gotCalls int
-	testTraceReporter := TraceReporterFunc(func(span Span, annotations []Annotation, binaryAnnotations []BinaryAnnotation, targetEndpoint TargetEndpoint) {
+	testTraceReporter := TraceReporterFunc(func(_ TraceData) {
 		gotCalls++
 	})
 

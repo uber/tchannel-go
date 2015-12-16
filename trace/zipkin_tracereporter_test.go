@@ -82,31 +82,42 @@ func TestZipkinTraceReporterFactory(t *testing.T) {
 }
 
 func TestBuildZipkinSpan(t *testing.T) {
-	span := *tchannel.NewRootSpan()
-	_, annotations := RandomAnnotations()
-	binaryAnnotations := []tchannel.BinaryAnnotation{{Key: "cn", Value: "string"}}
-	testEndpoint := tchannel.TargetEndpoint{
-		HostPort:    "127.0.0.1:8888",
-		ServiceName: "testServer",
-		Operation:   "test",
-	}
-
-	thriftSpan, err := buildZipkinSpan(span, annotations, binaryAnnotations, testEndpoint)
-	assert.NoError(t, err)
-	tBinaryAnnotation, err := buildBinaryAnnotations(binaryAnnotations)
-	assert.NoError(t, err)
-	expectedSpan := &gen.Span{
-		TraceId: uint64ToBytes(span.TraceID()),
-		Host: &gen.Endpoint{
-			Ipv4:        (int32)(inetAton("127.0.0.1")),
-			Port:        8888,
+	data := &tchannel.TraceData{
+		Span:              *tchannel.NewRootSpan(),
+		BinaryAnnotations: []tchannel.BinaryAnnotation{{Key: "cn", Value: "string"}},
+		Source: tchannel.TraceEndpoint{
+			HostPort:    "0.0.0.0:0",
 			ServiceName: "testServer",
 		},
+		Target: tchannel.TraceEndpoint{
+			HostPort:    "127.0.0.1:9999",
+			ServiceName: "targetServer",
+		},
+		Method: "test",
+	}
+	_, data.Annotations = RandomAnnotations()
+
+	thriftSpan, err := buildZipkinSpan(data, 12345)
+	assert.NoError(t, err)
+	binaryAnns, err := buildBinaryAnnotations(data.BinaryAnnotations)
+	assert.NoError(t, err)
+	expectedSpan := &gen.Span{
+		TraceId: uint64ToBytes(data.Span.TraceID()),
+		SpanHost: &gen.Endpoint{
+			Ipv4:        12345,
+			Port:        0,
+			ServiceName: "testServer",
+		},
+		Host: &gen.Endpoint{
+			Ipv4:        (int32)(inetAton("127.0.0.1")),
+			Port:        9999,
+			ServiceName: "targetServer",
+		},
 		Name:              "test",
-		ID:                uint64ToBytes(span.SpanID()),
-		ParentId:          uint64ToBytes(span.ParentID()),
-		Annotations:       buildZipkinAnnotations(annotations),
-		BinaryAnnotations: tBinaryAnnotation,
+		ID:                uint64ToBytes(data.Span.SpanID()),
+		ParentId:          uint64ToBytes(data.Span.ParentID()),
+		Annotations:       buildZipkinAnnotations(data.Annotations),
+		BinaryAnnotations: binaryAnns,
 	}
 
 	assert.Equal(t, thriftSpan, expectedSpan, "Span mismatch")
@@ -224,13 +235,13 @@ func ctxArg() mock.AnythingOfTypeArgument {
 
 func TestSubmit(t *testing.T) {
 	withSetup(t, func(ctx thrift.Context, args testArgs) {
-		span, anns, banns, endpoint, expected := submitArgs(t)
+		data, expected := submitArgs(t)
 		called := make(chan struct{})
 		ret := &gen.Response{Ok: true}
 		args.s.On("Submit", ctxArg(), expected).Return(ret, nil).Run(func(_ mock.Arguments) {
 			close(called)
 		})
-		args.c.Report(span, anns, banns, endpoint)
+		args.c.Report(*data)
 
 		// wait for the server's Submit to get called
 		select {
@@ -241,38 +252,44 @@ func TestSubmit(t *testing.T) {
 	})
 }
 
-func submitArgs(t *testing.T) (tchannel.Span, []tchannel.Annotation, []tchannel.BinaryAnnotation, tchannel.TargetEndpoint, *gen.Span) {
-	span := *tchannel.NewRootSpan()
-	_, anns := RandomAnnotations()
-	bAnns := RandomBinaryAnnotations()
-	endpoint := tchannel.TargetEndpoint{
-		HostPort:    "127.0.0.1:8888",
-		ServiceName: "testServer",
-		Operation:   "test",
+func submitArgs(t testing.TB) (*tchannel.TraceData, *gen.Span) {
+	data := &tchannel.TraceData{
+		Span:              *tchannel.NewRootSpan(),
+		BinaryAnnotations: RandomBinaryAnnotations(),
+		Method:            "echo",
+		Source: tchannel.TraceEndpoint{
+			HostPort:    "127.0.0.1:8888",
+			ServiceName: "testServer",
+		},
+		Target: tchannel.TraceEndpoint{
+			HostPort:    "127.0.0.1:9999",
+			ServiceName: "targetServer",
+		},
 	}
+	_, data.Annotations = RandomAnnotations()
 
-	genSpan, err := buildZipkinSpan(span, anns, bAnns, endpoint)
+	genSpan, err := buildZipkinSpan(data, 0)
 	require.NoError(t, err, "Build test zipkin span failed")
 
-	return span, anns, bAnns, endpoint, genSpan
+	return data, genSpan
 }
 
 func TestSubmitNotRetried(t *testing.T) {
 	withSetup(t, func(ctx thrift.Context, args testArgs) {
-		span, anns, banns, endpoint, expected := submitArgs(t)
+		data, expected := submitArgs(t)
 		count := 0
 		args.s.On("Submit", ctxArg(), expected).Return(nil, tchannel.ErrServerBusy).Run(func(_ mock.Arguments) {
 			count++
 		})
-		args.c.Report(span, anns, banns, endpoint)
+		args.c.Report(*data)
 
 		// Report another span that we use to detect that the previous span has been processed.
-		span, anns, banns, endpoint, expected = submitArgs(t)
+		data, expected = submitArgs(t)
 		completed := make(chan struct{})
 		args.s.On("Submit", ctxArg(), expected).Return(nil, nil).Run(func(_ mock.Arguments) {
 			close(completed)
 		})
-		args.c.Report(span, anns, banns, endpoint)
+		args.c.Report(*data)
 
 		// wait for the server's Submit to get called
 		select {
@@ -332,17 +349,10 @@ func getClient(dst string) (tchannel.TraceReporter, error) {
 }
 
 func BenchmarkBuildThrift(b *testing.B) {
-	endpoint := tchannel.TargetEndpoint{
-		HostPort:    "127.0.0.1:8888",
-		ServiceName: "testServer",
-		Operation:   "test",
-	}
-	span := *tchannel.NewRootSpan()
-	_, annotations := RandomAnnotations()
-
+	data, _ := submitArgs(b)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buildZipkinSpan(span, annotations, nil, endpoint)
+		buildZipkinSpan(data, 0)
 	}
 }
 

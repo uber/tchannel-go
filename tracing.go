@@ -37,13 +37,6 @@ const (
 // traceRng is a thread-safe random number generator for generating trace IDs.
 var traceRng = NewRand(time.Now().UnixNano())
 
-// TargetEndpoint represents target server endpoint information.
-type TargetEndpoint struct {
-	HostPort    string
-	ServiceName string
-	Operation   string
-}
-
 // Span represents Zipkin-style span.
 type Span struct {
 	traceID  uint64
