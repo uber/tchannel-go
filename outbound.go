@@ -109,20 +109,26 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	response := new(OutboundCallResponse)
 	response.Annotations = Annotations{
 		reporter: c.traceReporter,
-		span:     call.callReq.Tracing,
-		endpoint: TargetEndpoint{
-			HostPort:    c.remotePeerInfo.HostPort,
-			ServiceName: serviceName,
-			Operation:   operation,
+		timeNow:  c.timeNow,
+		data: TraceData{
+			Span: call.callReq.Tracing,
+			Source: TraceEndpoint{
+				HostPort:    c.localPeerInfo.HostPort,
+				ServiceName: c.localPeerInfo.ServiceName,
+			},
+			Target: TraceEndpoint{
+				HostPort:    c.remotePeerInfo.HostPort,
+				ServiceName: serviceName,
+			},
+			Method: operation,
 		},
-		timeNow: c.timeNow,
 		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: call.callReq.Headers[CallerName]},
 			{Key: "as", Value: call.callReq.Headers[ArgScheme]},
 		},
 	}
-	response.annotations = response.annotationsBacking[:0]
-	response.binaryAnnotations = response.binaryAnnotationsBacking[:]
+	response.data.Annotations = response.annotationsBacking[:0]
+	response.data.BinaryAnnotations = response.binaryAnnotationsBacking[:]
 	response.AddAnnotation(AnnotationKeyClientSend)
 
 	response.requestState = callOptions.RequestState
