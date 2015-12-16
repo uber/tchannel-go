@@ -93,6 +93,12 @@ func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	return o
 }
 
+// SetTraceSampleRate sets the TraceSampleRate in ChannelOptions.
+func (o *ChannelOpts) SetTraceSampleRate(sampleRate float64) *ChannelOpts {
+	o.ChannelOptions.TraceSampleRate = sampleRate
+	return o
+}
+
 // DisableLogVerification disables log verification for this channel.
 func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
 	o.LogVerification.Disabled = true
