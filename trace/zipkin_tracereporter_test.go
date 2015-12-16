@@ -86,7 +86,7 @@ func TestBuildZipkinSpan(t *testing.T) {
 		Span:              *tchannel.NewRootSpan(),
 		BinaryAnnotations: []tchannel.BinaryAnnotation{{Key: "cn", Value: "string"}},
 		Source: tchannel.TraceEndpoint{
-			HostPort:    "127.0.0.1:8888",
+			HostPort:    "0.0.0.0:0",
 			ServiceName: "testServer",
 		},
 		Target: tchannel.TraceEndpoint{
@@ -97,15 +97,15 @@ func TestBuildZipkinSpan(t *testing.T) {
 	}
 	_, data.Annotations = RandomAnnotations()
 
-	thriftSpan, err := buildZipkinSpan(data)
+	thriftSpan, err := buildZipkinSpan(data, 12345)
 	assert.NoError(t, err)
 	binaryAnns, err := buildBinaryAnnotations(data.BinaryAnnotations)
 	assert.NoError(t, err)
 	expectedSpan := &gen.Span{
 		TraceId: uint64ToBytes(data.Span.TraceID()),
 		SpanHost: &gen.Endpoint{
-			Ipv4:        (int32)(inetAton("127.0.0.1")),
-			Port:        8888,
+			Ipv4:        12345,
+			Port:        0,
 			ServiceName: "testServer",
 		},
 		Host: &gen.Endpoint{
@@ -268,7 +268,7 @@ func submitArgs(t testing.TB) (*tchannel.TraceData, *gen.Span) {
 	}
 	_, data.Annotations = RandomAnnotations()
 
-	genSpan, err := buildZipkinSpan(data)
+	genSpan, err := buildZipkinSpan(data, 0)
 	require.NoError(t, err, "Build test zipkin span failed")
 
 	return data, genSpan
@@ -352,7 +352,7 @@ func BenchmarkBuildThrift(b *testing.B) {
 	data, _ := submitArgs(b)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buildZipkinSpan(data)
+		buildZipkinSpan(data, 0)
 	}
 }
 

@@ -41,22 +41,31 @@ const (
 
 // ZipkinTraceReporter is a trace reporter that submits trace spans in to zipkin trace server.
 type ZipkinTraceReporter struct {
-	tchannel *tc.Channel
-	client   tcollector.TChanTCollector
-	c        chan tc.TraceData
-	logger   tc.Logger
+	tchannel  *tc.Channel
+	client    tcollector.TChanTCollector
+	curHostIP uint32
+	c         chan tc.TraceData
+	logger    tc.Logger
 }
 
 // NewZipkinTraceReporter returns a zipkin trace reporter that submits span to tcollector service.
 func NewZipkinTraceReporter(ch *tc.Channel) *ZipkinTraceReporter {
 	thriftClient := thrift.NewClient(ch, tcollectorServiceName, nil)
 	client := tcollector.NewTChanTCollectorClient(thriftClient)
+
+	curHostIP, err := tc.ListenIP()
+	if err != nil {
+		ch.Logger().Warnf("tcollector TraceReporter failed to get IP: %v", err)
+		curHostIP = net.IPv4(0, 0, 0, 0)
+	}
+
 	// create the goroutine method to actually to the submit Span.
 	reporter := &ZipkinTraceReporter{
-		tchannel: ch,
-		client:   client,
-		c:        make(chan tc.TraceData, chanBufferSize),
-		logger:   ch.Logger(),
+		tchannel:  ch,
+		client:    client,
+		c:         make(chan tc.TraceData, chanBufferSize),
+		logger:    ch.Logger(),
+		curHostIP: inetAton(curHostIP.String()),
 	}
 	go reporter.zipkinSpanWorker()
 	return reporter
@@ -78,7 +87,7 @@ func (r *ZipkinTraceReporter) zipkinReport(data *tc.TraceData) error {
 		SetShardKey(base64Encode(data.Span.TraceID())).Build()
 	defer cancel()
 
-	thriftSpan, err := buildZipkinSpan(data)
+	thriftSpan, err := buildZipkinSpan(data, r.curHostIP)
 	if err != nil {
 		return err
 	}
@@ -114,10 +123,13 @@ func buildEndpoint(ep tc.TraceEndpoint) (*tcollector.Endpoint, error) {
 }
 
 // buildZipkinSpan builds zipkin span based on tchannel span.
-func buildZipkinSpan(data *tc.TraceData) (*tcollector.Span, error) {
+func buildZipkinSpan(data *tc.TraceData, curHostIP uint32) (*tcollector.Span, error) {
 	source, err := buildEndpoint(data.Source)
 	if err != nil {
 		return nil, err
+	}
+	if source.Ipv4 == 0 {
+		source.Ipv4 = int32(curHostIP)
 	}
 
 	target, err := buildEndpoint(data.Target)
