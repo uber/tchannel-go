@@ -219,7 +219,7 @@ func TestTraceSamplingRate(t *testing.T) {
 	rand.Seed(10)
 
 	tests := []struct {
-		sampleRate  float64
+		sampleRate  float64 // if this is < 0, then the value is not set.
 		count       int
 		expectedMin int
 		expectedMax int
@@ -227,7 +227,8 @@ func TestTraceSamplingRate(t *testing.T) {
 		{1.0, 100, 100, 100},
 		{0.5, 100, 40, 60},
 		{0.1, 100, 5, 15},
-		{0.0000001, 100, 0, 0},
+		{0, 100, 0, 0},
+		{-1, 100, 100, 100}, // default of 1.0 should be used.
 	}
 
 	for _, tt := range tests {
@@ -246,8 +247,12 @@ func TestTraceSamplingRate(t *testing.T) {
 				return &raw.Res{}, nil
 			})
 
-			client := testutils.NewClient(t,
-				testutils.NewOpts().SetTraceReporter(testTraceReporter).SetTraceSampleRate(tt.sampleRate))
+			opts := testutils.NewOpts().SetTraceReporter(testTraceReporter)
+			if tt.sampleRate >= 0 {
+				opts.SetTraceSampleRate(tt.sampleRate)
+			}
+
+			client := testutils.NewClient(t, opts)
 			defer client.Close()
 
 			for i := 0; i < tt.count; i++ {
