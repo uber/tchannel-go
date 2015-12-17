@@ -45,6 +45,24 @@ func newZeroCalculator() zeroCalculator {
 	return zeroCalculator{}
 }
 
+type leastPendingCalculator struct{}
+
+func (leastPendingCalculator) GetScore(p *Peer) uint64 {
+	inbound, outbound := p.NumConnections()
+	if inbound+outbound == 0 {
+		return math.MaxUint64
+	}
+
+	return uint64(p.NumPendingOutbound())
+}
+
+// newLeastPendingCalculator returns a strategy prefers any connected peer.
+// Within connected peers, least pending calls is used. Peers with less pending outbound calls
+// get a smaller score.
+func newLeastPendingCalculator() leastPendingCalculator {
+	return leastPendingCalculator{}
+}
+
 type preferIncomingCalculator struct{}
 
 func (preferIncomingCalculator) GetScore(p *Peer) uint64 {
