@@ -97,7 +97,7 @@ func TestExternalTemplate(t *testing.T) {
 
 // Service S2 has 1 methods.
 
-// func M2 (*S, ) (*S)
+// func M2 (*S, int32, ) (*S)
 
 // Service S3 has 1 methods.
 
