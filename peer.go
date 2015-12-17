@@ -409,6 +409,15 @@ func (p *Peer) NumInbound() int {
 	return count
 }
 
+// NumConnections returns the number of inbound and outbound connections for this peer.
+func (p *Peer) NumConnections() (inbound int, outbound int) {
+	p.mut.RLock()
+	inbound = len(p.inboundConnections)
+	outbound = len(p.outboundConnections)
+	p.mut.RUnlock()
+	return inbound, outbound
+}
+
 // NumPendingOutbound returns the number of pending outbound calls.
 func (p *Peer) NumPendingOutbound() int {
 	count := 0

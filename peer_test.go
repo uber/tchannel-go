@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -158,62 +159,88 @@ func TestOutboundPeerNotAdded(t *testing.T) {
 }
 
 func TestPeerSelectionPreferIncoming(t *testing.T) {
-	var allChannels []*Channel
+	tests := []struct {
+		numIncoming, numOutgoing, numUnconnected int
+		expectedPeers                            string
+	}{
+		{
+			numIncoming:    5,
+			numOutgoing:    5,
+			numUnconnected: 5,
+			expectedPeers:  "incoming",
+		},
+		{
+			numOutgoing:    5,
+			numUnconnected: 5,
+			expectedPeers:  "outgoing",
+		},
+		{
+			numUnconnected: 5,
+			expectedPeers:  "unconnected",
+		},
+	}
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		expected := make(map[string]bool)
+	for _, tt := range tests {
+		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+			expected := make(map[string]bool)
 
-		// 5 peers that make incoming connections to ch.
-		for i := 0; i < 5; i++ {
-			incoming, _, incomingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("server%d", i)})
-			allChannels = append(allChannels, incoming)
-			assert.NoError(t, incoming.Ping(ctx, ch.PeerInfo().HostPort), "Ping failed")
-			ch.Peers().Add(incomingHP)
-			expected[incomingHP] = true
-		}
+			// 5 peers that make incoming connections to ch.
+			for i := 0; i < tt.numIncoming; i++ {
+				incoming, _, incomingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("incoming%d", i)})
+				defer incoming.Close()
+				assert.NoError(t, incoming.Ping(ctx, ch.PeerInfo().HostPort), "Ping failed")
+				ch.Peers().Add(incomingHP)
 
-		// 5 random peers that don't have any connections.
-		for i := 0; i < 5; i++ {
-			ch.Peers().Add(fmt.Sprintf("1.1.1.1:1%d", i))
-		}
+				if strings.Contains(tt.expectedPeers, "incoming") {
+					expected[incomingHP] = true
+				}
+			}
 
-		// 5 random peers that we have outgoing connections to.
-		for i := 0; i < 5; i++ {
-			outgoing, _, outgoingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("outgoing%d", i)})
-			allChannels = append(allChannels, outgoing)
-			assert.NoError(t, ch.Ping(ctx, outgoingHP), "Ping failed")
-			ch.Peers().Add(outgoingHP)
-		}
+			// 5 random peers that don't have any connections.
+			for i := 0; i < tt.numUnconnected; i++ {
+				hp := fmt.Sprintf("1.1.1.1:1%d", i)
+				ch.Peers().Add(hp)
+				if strings.Contains(tt.expectedPeers, "unconnected") {
+					expected[hp] = true
+				}
+			}
 
-		// Now select peers in parallel
-		selected := make([]string, 1000)
-		var selectedIndex int32
-		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			// 5 random peers that we have outgoing connections to.
+			for i := 0; i < tt.numOutgoing; i++ {
+				outgoing, _, outgoingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("outgoing%d", i)})
+				defer outgoing.Close()
+				assert.NoError(t, ch.Ping(ctx, outgoingHP), "Ping failed")
+				ch.Peers().Add(outgoingHP)
+
+				if strings.Contains(tt.expectedPeers, "outgoing") {
+					expected[outgoingHP] = true
+				}
+			}
+
+			peerCheck := func() {
 				for i := 0; i < 100; i++ {
 					peer, err := ch.Peers().Get(nil)
 					if assert.NoError(t, err, "Peers.Get failed") {
-						selected[int(atomic.AddInt32(&selectedIndex, 1))-1] = peer.HostPort()
+						assert.True(t, expected[peer.HostPort()],
+							"Peers.Get got unexpected peer: %v expected %v", peer.HostPort(), tt.expectedPeers)
 					}
 				}
-			}()
-		}
-		wg.Wait()
+			}
 
-		for _, v := range selected {
-			assert.True(t, expected[v], "Peers.Get got unexpected peer: %v", v)
-		}
-	})
-
-	// Clean up allChannels
-	for _, c := range allChannels {
-		c.Close()
+			// Now select peers in parallel
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					peerCheck()
+				}()
+			}
+			wg.Wait()
+		})
 	}
 }
 
