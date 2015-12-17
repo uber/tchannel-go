@@ -95,7 +95,7 @@ func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 
 // SetTraceSampleRate sets the TraceSampleRate in ChannelOptions.
 func (o *ChannelOpts) SetTraceSampleRate(sampleRate float64) *ChannelOpts {
-	o.ChannelOptions.TraceSampleRate = sampleRate
+	o.ChannelOptions.TraceSampleRate = &sampleRate
 	return o
 }
 

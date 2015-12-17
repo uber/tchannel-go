@@ -75,9 +75,9 @@ type ChannelOptions struct {
 	// Trace reporter factory to generate trace reporter instance.
 	TraceReporterFactory TraceReporterFactory
 
-	// TraceSampleRate is the rate of requests to sample, and should be in the range (0, 1].
-	// If this value is 0, then DefaultTraceSampleRate is used.
-	TraceSampleRate float64
+	// TraceSampleRate is the rate of requests to sample, and should be in the range [0, 1].
+	// If this value is not set, then DefaultTraceSampleRate is used.
+	TraceSampleRate *float64
 }
 
 // ChannelState is the state of a channel.
@@ -170,9 +170,9 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeNow = time.Now
 	}
 
-	traceSampleRate := opts.TraceSampleRate
-	if traceSampleRate == 0 {
-		traceSampleRate = DefaultTraceSampleRate
+	traceSampleRate := DefaultTraceSampleRate
+	if opts.TraceSampleRate != nil {
+		traceSampleRate = *opts.TraceSampleRate
 	}
 
 	ch := &Channel{
