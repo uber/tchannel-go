@@ -341,7 +341,10 @@ func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string) {
 
 	start := time.Now()
 	timedOut := func() bool { return time.Since(start) > time.Second }
-	for peer.NumInbound() > 0 && !timedOut() {
+	for !timedOut() {
+		if inbound, _ := peer.NumConnections(); inbound == 0 {
+			break
+		}
 		time.Sleep(time.Microsecond)
 	}
 	time.Sleep(time.Microsecond) // so any extra processing can happen.
