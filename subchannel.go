@@ -33,6 +33,7 @@ type SubChannelOption func(*SubChannel)
 func Isolated(s *SubChannel) {
 	s.Lock()
 	s.peers = s.topChannel.peers.newSibling()
+	s.peers.SetStrategy(newLeastPendingCalculator())
 	s.Unlock()
 }
 
