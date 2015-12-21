@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -161,22 +160,50 @@ func TestOutboundPeerNotAdded(t *testing.T) {
 func TestPeerSelectionPreferIncoming(t *testing.T) {
 	tests := []struct {
 		numIncoming, numOutgoing, numUnconnected int
-		expectedPeers                            string
+		isolated                                 bool
+		expectedIncoming                         int
+		expectedOutgoing                         int
+		expectedUnconnected                      int
 	}{
 		{
-			numIncoming:    5,
-			numOutgoing:    5,
-			numUnconnected: 5,
-			expectedPeers:  "incoming",
+			numIncoming:      5,
+			numOutgoing:      5,
+			numUnconnected:   5,
+			expectedIncoming: 5,
 		},
 		{
-			numOutgoing:    5,
-			numUnconnected: 5,
-			expectedPeers:  "outgoing",
+			numOutgoing:      5,
+			numUnconnected:   5,
+			expectedOutgoing: 5,
 		},
 		{
-			numUnconnected: 5,
-			expectedPeers:  "unconnected",
+			numUnconnected:      5,
+			expectedUnconnected: 5,
+		},
+		{
+			numIncoming:      5,
+			numOutgoing:      5,
+			numUnconnected:   5,
+			isolated:         true,
+			expectedIncoming: 5,
+			expectedOutgoing: 5,
+		},
+		{
+			numOutgoing:      5,
+			numUnconnected:   5,
+			isolated:         true,
+			expectedOutgoing: 5,
+		},
+		{
+			numIncoming:      5,
+			numUnconnected:   5,
+			isolated:         true,
+			expectedIncoming: 5,
+		},
+		{
+			numUnconnected:      5,
+			isolated:            true,
+			expectedUnconnected: 5,
 		},
 	}
 
@@ -185,27 +212,29 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 
 	for _, tt := range tests {
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-			expected := make(map[string]bool)
+			selectedIncoming := make(map[string]int)
+			selectedOutgoing := make(map[string]int)
+			selectedUnconnected := make(map[string]int)
+
+			peers := ch.Peers()
+			if tt.isolated {
+				peers = ch.GetSubChannel("isolated", Isolated).Peers()
+			}
 
 			// 5 peers that make incoming connections to ch.
 			for i := 0; i < tt.numIncoming; i++ {
 				incoming, _, incomingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("incoming%d", i)})
 				defer incoming.Close()
 				assert.NoError(t, incoming.Ping(ctx, ch.PeerInfo().HostPort), "Ping failed")
-				ch.Peers().Add(incomingHP)
-
-				if strings.Contains(tt.expectedPeers, "incoming") {
-					expected[incomingHP] = true
-				}
+				peers.Add(incomingHP)
+				selectedIncoming[incomingHP] = 0
 			}
 
 			// 5 random peers that don't have any connections.
 			for i := 0; i < tt.numUnconnected; i++ {
 				hp := fmt.Sprintf("1.1.1.1:1%d", i)
-				ch.Peers().Add(hp)
-				if strings.Contains(tt.expectedPeers, "unconnected") {
-					expected[hp] = true
-				}
+				peers.Add(hp)
+				selectedUnconnected[hp] = 0
 			}
 
 			// 5 random peers that we have outgoing connections to.
@@ -213,19 +242,37 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 				outgoing, _, outgoingHP := NewServer(t, &testutils.ChannelOpts{ServiceName: fmt.Sprintf("outgoing%d", i)})
 				defer outgoing.Close()
 				assert.NoError(t, ch.Ping(ctx, outgoingHP), "Ping failed")
-				ch.Peers().Add(outgoingHP)
+				peers.Add(outgoingHP)
+				selectedOutgoing[outgoingHP] = 0
+			}
 
-				if strings.Contains(tt.expectedPeers, "outgoing") {
-					expected[outgoingHP] = true
+			checkMap := func(m map[string]int, peer string) bool {
+				if _, ok := m[peer]; !ok {
+					return false
 				}
+				m[peer]++
+				return true
+			}
+
+			numSelectedPeers := func(m map[string]int) int {
+				count := 0
+				for _, v := range m {
+					if v > 0 {
+						count++
+					}
+				}
+				return count
 			}
 
 			peerCheck := func() {
 				for i := 0; i < 100; i++ {
-					peer, err := ch.Peers().Get(nil)
+					peer, err := peers.Get(nil)
 					if assert.NoError(t, err, "Peers.Get failed") {
-						assert.True(t, expected[peer.HostPort()],
-							"Peers.Get got unexpected peer: %v expected %v", peer.HostPort(), tt.expectedPeers)
+						peerHP := peer.HostPort()
+						inMap := checkMap(selectedIncoming, peerHP) ||
+							checkMap(selectedOutgoing, peerHP) ||
+							checkMap(selectedUnconnected, peerHP)
+						assert.True(t, inMap, "Couldn't find peer %v in any of our maps", peerHP)
 					}
 				}
 			}
@@ -240,6 +287,13 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 				}()
 			}
 			wg.Wait()
+
+			assert.Equal(t, tt.expectedIncoming, numSelectedPeers(selectedIncoming),
+				"Selected incoming mismatch: %v", selectedIncoming)
+			assert.Equal(t, tt.expectedOutgoing, numSelectedPeers(selectedOutgoing),
+				"Selected outgoing mismatch: %v", selectedOutgoing)
+			assert.Equal(t, tt.expectedUnconnected, numSelectedPeers(selectedUnconnected),
+				"Selected unconnected mismatch: %v", selectedUnconnected)
 		})
 	}
 }
