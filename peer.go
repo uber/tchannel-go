@@ -401,12 +401,13 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName string, operationName 
 	return call, err
 }
 
-// NumInbound returns the number of inbound connections to this node.
-func (p *Peer) NumInbound() int {
+// NumConnections returns the number of inbound and outbound connections for this peer.
+func (p *Peer) NumConnections() (inbound int, outbound int) {
 	p.mut.RLock()
-	count := len(p.inboundConnections)
+	inbound = len(p.inboundConnections)
+	outbound = len(p.outboundConnections)
 	p.mut.RUnlock()
-	return count
+	return inbound, outbound
 }
 
 // NumPendingOutbound returns the number of pending outbound calls.
