@@ -133,7 +133,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response.commonStatsTags = call.commonStatsTags
 
 	setResponseHeaders(call.headers, response.headers)
-	go c.dispatchInbound(c.connID, callReq.ID(), call)
+	go c.dispatchInbound(c.connID, callReq.ID(), call, frame)
 	return false
 }
 
@@ -160,13 +160,18 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 }
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
-func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
+func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, frame *Frame) {
+	releaseFrame := func() {
+		c.framePool.Release(frame)
+	}
+
 	if c.log.Enabled(LogLevelDebug) {
 		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
 
 	if err := call.readOperation(); err != nil {
 		c.log.Errorf("Could not read operation from %s: %v", c.remotePeerInfo, err)
+		releaseFrame()
 		return
 	}
 
@@ -192,6 +197,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall) {
 		c.log.Errorf("Could not find handler for %s:%s", call.ServiceName(), call.Operation())
 		call.Response().SendSystemError(
 			NewSystemError(ErrCodeBadRequest, "no handler for service %q and operation %q", call.ServiceName(), call.Operation()))
+		releaseFrame()
 		return
 	}
 
