@@ -279,10 +279,15 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 				selectedOutgoing[outgoingHP] = 0
 			}
 
+			var mu sync.Mutex
 			checkMap := func(m map[string]int, peer string) bool {
+				mu.Lock()
+				defer mu.Unlock()
+
 				if _, ok := m[peer]; !ok {
 					return false
 				}
+
 				m[peer]++
 				return true
 			}
