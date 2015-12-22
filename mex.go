@@ -82,6 +82,7 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 	case frame := <-mex.recvCh:
 		if frame.Header.ID != mex.msgID {
 			mex.mexset.log.Errorf("recvPeerFrame mex %v received message with unexpected ID: %v", mex.msgID, frame.Header)
+			return nil, errUnexpectedFrameType
 		}
 		return frame, nil
 	case <-mex.ctx.Done():
