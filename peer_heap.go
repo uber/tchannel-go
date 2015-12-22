@@ -71,7 +71,7 @@ func (ph *PeerHeap) Pop() interface{} {
 	return item
 }
 
-//UpdatePeer updates peer at specific index of the heap.
+// UpdatePeer updates the score for the given peer.
 func (ph *PeerHeap) UpdatePeer(peerScore *peerScore) {
 	heap.Fix(ph, peerScore.index)
 }
