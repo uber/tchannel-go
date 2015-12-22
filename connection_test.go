@@ -415,7 +415,7 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 
 func TestReadTimeout(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				defer cancel()
