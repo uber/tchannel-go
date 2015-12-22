@@ -50,8 +50,10 @@ godep:
 test_ci: test
 
 test: clean setup
-	echo Testing packages:
+	@echo Testing packages:
 	go test $(TEST_PKGS) $(TEST_ARG) -parallel=4
+	@echo Running frame pool tests
+	go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
 benchmark: clean setup
 	echo Running benchmarks:
