@@ -279,7 +279,8 @@ func (response *OutboundCallResponse) Arg3Reader() (io.ReadCloser, error) {
 // a request specific error, it will be written to the request's response
 // channel and converted into a SystemError returned from the next reader or
 // access call.
-func (c *Connection) handleError(frame *Frame) {
+// The return value is whether the frame should be released immediately.
+func (c *Connection) handleError(frame *Frame) bool {
 	errMsg := errorMessage{
 		id: frame.Header.ID,
 	}
@@ -287,18 +288,22 @@ func (c *Connection) handleError(frame *Frame) {
 	if err := errMsg.read(rbuf); err != nil {
 		c.log.Warnf("Unable to read Error frame from %s: %v", c.remotePeerInfo, err)
 		c.connectionError(err)
-		return
+		return true
 	}
 
 	if errMsg.errCode == ErrCodeProtocol {
 		c.log.Warnf("Peer %s reported protocol error: %s", c.remotePeerInfo, errMsg.message)
 		c.connectionError(errMsg.AsSystemError())
-		return
+		return true
 	}
 
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
 		c.log.Infof("Failed to forward error frame %v to mex, error: %v", frame.Header, errMsg)
+		return true
 	}
+
+	// If the frame was forwarded, then the other side is responsible for releasing the frame.
+	return false
 }
 
 func cloneTags(tags map[string]string) map[string]string {

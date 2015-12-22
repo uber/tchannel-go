@@ -674,7 +674,7 @@ func (c *Connection) readFrames(_ uint32) {
 		case messageTypePingRes:
 			releaseFrame = c.handlePingRes(frame)
 		case messageTypeError:
-			c.handleError(frame)
+			releaseFrame = c.handleError(frame)
 		default:
 			// TODO(mmihic): Log and close connection with protocol error
 			c.log.Errorf("Received unexpected frame %s from %s", frame.Header, c.remotePeerInfo)
