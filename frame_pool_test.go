@@ -54,6 +54,39 @@ func (*swapper) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 	}, nil
 }
 
+func doPingAndCall(t *testing.T, clientCh *Channel, hostPort string) {
+	ctx, cancel := NewContext(time.Second * 5)
+	defer cancel()
+
+	require.NoError(t, clientCh.Ping(ctx, hostPort))
+
+	const maxRandArg = 512 * 1024
+
+	arg2 := testutils.RandBytes(rand.Intn(maxRandArg))
+	arg3 := testutils.RandBytes(rand.Intn(maxRandArg))
+	resArg2, resArg3, _, err := raw.Call(ctx, clientCh, hostPort, "swap-server", "swap", arg2, arg3)
+	if !assert.NoError(t, err, "error during sendRecv") {
+		return
+	}
+
+	// We expect the arguments to be swapped.
+	if bytes.Compare(arg3, resArg2) != 0 {
+		t.Errorf("returned arg2 does not match expected:\n  got %v\n want %v", resArg2, arg3)
+	}
+	if bytes.Compare(arg2, resArg3) != 0 {
+		t.Errorf("returned arg2 does not match expected:\n  got %v\n want %v", resArg3, arg2)
+	}
+}
+
+func doErrorCall(t *testing.T, clientCh *Channel, hostPort string) {
+	ctx, cancel := NewContext(time.Second * 5)
+	defer cancel()
+
+	_, _, _, err := raw.Call(ctx, clientCh, hostPort, "swap-server", "non-existent", nil, nil)
+	assert.Error(t, err, "Call to non-existent endpoint should fail")
+	assert.Equal(t, ErrCodeBadRequest, GetSystemErrorCode(err), "Error code mismatch")
+}
+
 func TestFramesReleased(t *testing.T) {
 	CheckStress(t)
 
@@ -61,19 +94,19 @@ func TestFramesReleased(t *testing.T) {
 	const (
 		requestsPerGoroutine = 10
 		numGoroutines        = 10
-		maxRandArg           = 512 * 1024
 	)
 
 	var serverExchanges, clientExchanges string
 	pool := NewRecordingFramePool()
 	opts := testutils.NewOpts().
 		SetServiceName("swap-server").
-		SetFramePool(pool)
+		SetFramePool(pool).
+		AddLogFilter("Could not find handler", numGoroutines*requestsPerGoroutine)
 	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
 
-		clientCh, err := NewChannel("swap-client", nil)
-		require.NoError(t, err)
+		clientOpts := testutils.NewOpts().SetFramePool(pool)
+		clientCh := testutils.NewClient(t, clientOpts)
 		defer clientCh.Close()
 
 		// Create an active connection that can be shared by the goroutines by calling Ping.
@@ -82,34 +115,16 @@ func TestFramesReleased(t *testing.T) {
 		require.NoError(t, clientCh.Ping(ctx, hostPort))
 
 		var wg sync.WaitGroup
-		worker := func() {
-			for i := 0; i < requestsPerGoroutine; i++ {
-				ctx, cancel := NewContext(time.Second * 5)
-				defer cancel()
-
-				require.NoError(t, clientCh.Ping(ctx, hostPort))
-
-				arg2 := testutils.RandBytes(rand.Intn(maxRandArg))
-				arg3 := testutils.RandBytes(rand.Intn(maxRandArg))
-				resArg2, resArg3, _, err := raw.Call(ctx, clientCh, hostPort, "swap-server", "swap", arg2, arg3)
-				if !assert.NoError(t, err, "error during sendRecv") {
-					continue
-				}
-
-				// We expect the arguments to be swapped.
-				if bytes.Compare(arg3, resArg2) != 0 {
-					t.Errorf("returned arg2 does not match expected:\n  got %v\n want %v", resArg2, arg3)
-				}
-				if bytes.Compare(arg2, resArg3) != 0 {
-					t.Errorf("returned arg2 does not match expected:\n  got %v\n want %v", resArg3, arg2)
-				}
-			}
-			wg.Done()
-		}
-
 		for i := 0; i < numGoroutines; i++ {
 			wg.Add(1)
-			go worker()
+			go func() {
+				defer wg.Done()
+
+				for i := 0; i < requestsPerGoroutine; i++ {
+					doPingAndCall(t, clientCh, hostPort)
+					doErrorCall(t, clientCh, hostPort)
+				}
+			}()
 		}
 
 		wg.Wait()
