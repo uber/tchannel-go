@@ -80,6 +80,9 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 
 	select {
 	case frame := <-mex.recvCh:
+		if frame.Header.ID != mex.msgID {
+			mex.mexset.log.Errorf("recvPeerFrame mex %v received message with unexpected ID: %v", mex.msgID, frame.Header)
+		}
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
@@ -115,8 +118,8 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 
 	default:
 		// TODO(mmihic): Should be treated as a protocol error
-		mex.mexset.log.Warnf("Received unexpected message %v, expected %v for %d",
-			frame.Header.messageType, msgType, frame.Header.ID)
+		mex.mexset.log.Warnf("Received unexpected frame: %v expected %v[%v]",
+			frame.Header, msgType, mex.msgID)
 
 		return nil, errUnexpectedFrameType
 	}
@@ -257,8 +260,8 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	}
 
 	if err := mex.forwardPeerFrame(frame); err != nil {
-		mexset.log.Infof("Unable to forward frame ID %v type %v length %v to %s: %v",
-			frame.Header.ID, frame.Header.messageType, frame.Header.FrameSize(), mexset.name, err)
+		mexset.log.Infof("Unable to forward frame %v length %v to %s: %v",
+			frame.Header, frame.Header.FrameSize(), mexset.name, err)
 		return err
 	}
 
