@@ -100,6 +100,9 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 		return frame, nil
 
 	case messageTypeError:
+		// If we read an error frame, we can release it once we deserialize it.
+		defer mex.framePool.Release(frame)
+
 		errMsg := errorMessage{
 			id: frame.Header.ID,
 		}
