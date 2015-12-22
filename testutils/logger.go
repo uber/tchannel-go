@@ -22,13 +22,14 @@ package testutils
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/uber/tchannel-go"
 )
 
 type errorLoggerState struct {
-	matchCount int
+	matchCount uint32
 }
 
 type errorLogger struct {
@@ -47,8 +48,8 @@ func (l errorLogger) checkErr(msg string, args ...interface{}) {
 		}
 	}
 
-	l.s.matchCount++
-	if l.s.matchCount <= allowedCount {
+	matchCount := atomic.AddUint32(&l.s.matchCount, 1)
+	if int(matchCount) <= allowedCount {
 		return
 	}
 
