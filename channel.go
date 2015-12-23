@@ -177,7 +177,9 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
-			log:             logger.WithFields(LogField{"service", serviceName}),
+			log: logger.WithFields(
+				LogField{"service", serviceName},
+				LogField{"process", processName}),
 			statsReporter:   statsReporter,
 			subChannels:     &subChannelMap{},
 			timeNow:         timeNow,
@@ -238,6 +240,8 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.state = ChannelListening
 
 	mutable.peerInfo.HostPort = l.Addr().String()
+	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
+
 	peerInfo := mutable.peerInfo
 	ch.log.Debugf("%v (%v) listening on %v", peerInfo.ProcessName, peerInfo.ServiceName, peerInfo.HostPort)
 	go ch.serve()
