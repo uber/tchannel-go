@@ -229,6 +229,9 @@ type Peer struct {
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
 	chosenCount         uint64
+
+	// onUpdate is a test-only hook.
+	onUpdate func(*Peer)
 }
 
 func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
@@ -436,4 +439,14 @@ func (p *Peer) runWithConnections(f func(*Connection)) {
 		f(c)
 	}
 	p.mut.RUnlock()
+}
+
+func (p *Peer) callOnUpdateComplete() {
+	p.mut.RLock()
+	f := p.onUpdate
+	p.mut.RUnlock()
+
+	if f != nil {
+		f(p)
+	}
 }

@@ -498,6 +498,7 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 func (ch *Channel) updatePeer(p *Peer) {
 	ch.peers.UpdatePeer(p)
 	ch.subChannels.updatePeer(p)
+	p.callOnUpdateComplete()
 }
 
 // incomingConnectionActive adds a new active connection to our peer list.
