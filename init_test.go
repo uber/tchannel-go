@@ -163,10 +163,12 @@ func TestHandleInitRes(t *testing.T) {
 	listenerComplete := make(chan struct{})
 
 	go func() {
-		defer func() { listenerComplete <- struct{}{} }()
 		conn, err := l.Accept()
 		require.NoError(t, err, "l.Accept failed")
+
+		// The connection should be kept open until the test has completed running.
 		defer conn.Close()
+		defer func() { listenerComplete <- struct{}{} }()
 
 		f, err := readFrame(conn)
 		require.NoError(t, err, "readFrame failed")
@@ -185,7 +187,7 @@ func TestHandleInitRes(t *testing.T) {
 	}()
 
 	ch, err := NewChannel("test-svc", nil)
-	require.NoError(t, err, "NewClient failed")
+	require.NoError(t, err, "NewChannel failed")
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
