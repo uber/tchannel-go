@@ -93,6 +93,7 @@ func (l *PeerList) Add(hostPort string) *Peer {
 	}
 
 	p := l.parent.Add(hostPort)
+	p.addSC()
 	ps := newPeerScore(p, l.scoreCalculator.GetScore(p))
 
 	l.peersByHostPort[hostPort] = ps
@@ -302,6 +303,13 @@ func (p *Peer) AddInboundConnection(c *Connection) error {
 
 	p.connectionStateChanged(c)
 	return nil
+}
+
+// addSC adds a reference to a peer from a subchannel (e.g. peer list).
+func (p *Peer) addSC() {
+	p.mut.Lock()
+	p.scCount++
+	p.mut.Unlock()
 }
 
 // canRemove returns whether this peer can be safely removed from the root peer list.
