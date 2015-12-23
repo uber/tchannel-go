@@ -80,9 +80,6 @@ var (
 	// request through a connection which has not yet been initialized
 	ErrConnectionNotReady = errors.New("connection is not yet ready")
 
-	// errConnectionInvalidState is returned when the connection is in an unknown state.
-	errConnectionUnknownState = errors.New("connection is in an invalid state")
-
 	// ErrSendBufferFull is returned when a message cannot be sent to the
 	// peer because the frame sending buffer has become full.  Typically
 	// this indicates that the connection is stuck and writes have become
@@ -93,6 +90,16 @@ var (
 	errConnectionWaitingOnPeerInit = errors.New("connection is waiting for the peer to sent init")
 	errCannotHandleInitRes         = errors.New("could not return init-res to handshake thread")
 )
+
+// errConnectionInvalidState is returned when the connection is in an unknown state.
+type errConnectionUnknownState struct {
+	site  string
+	state connectionState
+}
+
+func (e errConnectionUnknownState) Error() string {
+	return fmt.Sprintf("connection is in unknown state: %v at %v", e.state, e.site)
+}
 
 // ConnectionOptions are options that control the behavior of a Connection
 type ConnectionOptions struct {
@@ -313,7 +320,7 @@ func (c *Connection) sendInit(ctx context.Context) error {
 		case connectionActive, connectionWaitingToRecvInitRes:
 			return errConnectionAlreadyActive
 		default:
-			return errConnectionUnknownState
+			return errConnectionUnknownState{"sendInit", c.state}
 		}
 	})
 	if err != nil {
@@ -446,7 +453,7 @@ func (c *Connection) handlePingReq(frame *Frame) {
 // InitRes, forward the InitRes to the waiting goroutine
 func (c *Connection) handleInitRes(frame *Frame) bool {
 	var err error
-	switch c.readState() {
+	switch state := c.readState(); state {
 	case connectionWaitingToRecvInitRes:
 		err = nil
 	case connectionClosed, connectionStartClose, connectionInboundClosed:
@@ -458,7 +465,7 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 	case connectionWaitingToRecvInitReq:
 		err = errConnectionWaitingOnPeerInit
 	default:
-		err = errConnectionUnknownState
+		err = errConnectionUnknownState{"handleInitRes", state}
 	}
 	if err != nil {
 		c.connectionError(err)
