@@ -66,7 +66,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 			err = errInboundRequestAlreadyActive
 		}
 		c.log.Errorf("could not register exchange for %s", frame.Header)
-		c.SendSystemError(frame.Header.ID, nil, err)
+		c.protocolError(frame.Header.ID, errInboundRequestAlreadyActive)
 		return true
 	}
 
