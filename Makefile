@@ -3,19 +3,26 @@ OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
 PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
-TEST_PKGS_NOPREFIX := $(shell go list ./... | sed -e 's/^.*uber\/tchannel-go//')
-TEST_PKGS := github.com/uber/tchannel-go $(addprefix github.com/uber/tchannel-go,$(TEST_PKGS_NOPREFIX))
 TEST_ARG ?= -race
 BUILD := ./build
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 export GOPATH = $(GODEPS):$(OLDGOPATH)
 export PATH := $(realpath ./scripts/travis/thrift-release/linux-x86_64):$(PATH)
 
+
+# Separate packages that use testutils and don't, since they can have different flags.
+# This is especially useful for timeoutMultiplier and connectionLog
+TESTUTILS_TEST_PKGS := . hyperbahn testutils http json thrift pprof trace
+NO_TESTUTILS_PKGS := stats thrift/thrift-gen typed
+
 # Cross language test args
 TEST_HOST=127.0.0.1
 TEST_PORT=0
 
 all: test examples
+
+packages_test:
+	go list -json ./... | jq -r '. | select ((.TestGoFiles | length) > 0)  | .ImportPath'
 
 setup:
 	mkdir -p $(BUILD)
@@ -52,9 +59,10 @@ test_ci: test
 
 test: clean setup
 	@echo Testing packages:
-	go test $(TEST_PKGS) $(TEST_ARG) -parallel=4
+	go test $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS)) $(TEST_ARG) -parallel=4
+	go test $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS)) $(TEST_ARG) -timeoutMultiplier 10 -parallel=4
 	@echo Running frame pool tests
-	go test -run TestFramesReleased -stressTest $(TEST_ARG)
+	go test -run TestFramesReleased -stressTest $(TEST_ARG) -timeoutMultiplier 10
 
 benchmark: clean setup
 	echo Running benchmarks:
@@ -95,5 +103,5 @@ thrift_gen:
 	$(BUILD)/thrift-gen --generateThrift --inputFile hyperbahn/hyperbahn.thrift --outputDir hyperbahn/gen-go
 	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift --outputDir trace/thrift/gen-go/
 
-.PHONY: all help clean fmt format get_thrift install install_ci test test_ci vet
+.PHONY: all help clean fmt format get_thrift install install_ci packages_test test test_ci vet
 .SILENT: all help clean fmt format test vet
