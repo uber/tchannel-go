@@ -104,6 +104,12 @@ func streamPartialHandler(t *testing.T) HandlerFunc {
 
 			// Magic number to cause a failure
 			if arg3[0] == streamRequestError {
+				// Make sure that the reader is closed.
+				if err := argReader.Close(); err != nil {
+					onError(fmt.Errorf("request error failed to close argReader: %v", err))
+					return
+				}
+
 				response.SendSystemError(errors.New("intentional failure"))
 				return
 			}
@@ -197,12 +203,11 @@ func TestStreamSendError(t *testing.T) {
 		// Send the magic number to request an error.
 		_, err := argWriter.Write([]byte{streamRequestError})
 		require.NoError(t, err, "arg3 write failed")
-		require.NoError(t, argWriter.Flush(), "arg3 flush")
+		require.NoError(t, argWriter.Close(), "arg3 close failed")
 
 		// Now we expect an error on our next read.
 		_, err = ioutil.ReadAll(argReader)
 		assert.Error(t, err, "ReadAll should fail")
 		assert.True(t, strings.Contains(err.Error(), "intentional failure"), "err %v unexpected", err)
-		require.NoError(t, argWriter.Close(), "arg3 close failed")
 	})
 }
