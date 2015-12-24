@@ -426,3 +426,15 @@ func TestReadTimeout(t *testing.T) {
 		}
 	})
 }
+
+func TestGracefulClose(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch1 *Channel, hp1 string) {
+		WithVerifiedServer(t, nil, func(ch2 *Channel, hp2 string) {
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+
+			assert.NoError(t, ch1.Ping(ctx, hp2), "Ping from ch1 -> ch2 failed")
+			assert.NoError(t, ch2.Ping(ctx, hp1), "Ping from ch2 -> ch1 failed")
+		})
+	})
+}
