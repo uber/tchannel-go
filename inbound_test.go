@@ -35,6 +35,8 @@ import (
 )
 
 func TestActiveCallReq(t *testing.T) {
+	t.Skip("Test skipped due to unreliable way to test for protocol errors")
+
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -53,8 +55,8 @@ func TestActiveCallReq(t *testing.T) {
 		})
 
 		relayFunc := func(outgoing bool, frame *Frame) *Frame {
-			if outgoing && frame.Header.ID == 2 {
-				frame.Header.ID = 3
+			if outgoing && frame.Header.ID == 3 {
+				frame.Header.ID = 2
 			}
 			return frame
 		}
@@ -62,9 +64,11 @@ func TestActiveCallReq(t *testing.T) {
 		relayHostPort, closeRelay := testutils.FrameRelay(t, hostPort, relayFunc)
 		defer closeRelay()
 
+		firstComplete := make(chan struct{})
 		go func() {
 			// This call will block until we close unblock.
 			raw.Call(ctx, ch, relayHostPort, ch.PeerInfo().ServiceName, "blocked", nil, nil)
+			close(firstComplete)
 		}()
 
 		// Wait for the first call to be received by the server
@@ -77,6 +81,7 @@ func TestActiveCallReq(t *testing.T) {
 			"expected already active error, got %v", err)
 
 		close(unblock)
+		<-firstComplete
 	})
 }
 
