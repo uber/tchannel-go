@@ -794,6 +794,7 @@ func (c *Connection) closeNetwork() {
 	// NB(mmihic): The sender goroutine will exit once the connection is
 	// closed; no need to close the send channel (and closing the send
 	// channel would be dangerous since other goroutine might be sending)
+	c.log.Debugf("Closing underlying network connection")
 	atomic.AddInt32(&c.closeNetworkCalled, 1)
 	if err := c.conn.Close(); err != nil {
 		c.log.Warnf("could not close connection to peer %s: %v", c.remotePeerInfo, err)
