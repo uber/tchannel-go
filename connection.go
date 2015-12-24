@@ -334,19 +334,19 @@ func (c *Connection) sendInit(ctx context.Context) error {
 
 	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
 	if err != nil {
-		return c.connectionError(err)
+		return c.connectionError("create init req", err)
 	}
 
 	defer c.outbound.removeExchange(req.ID())
 
 	if err := c.sendMessage(&req); err != nil {
-		return c.connectionError(err)
+		return c.connectionError("send init req", err)
 	}
 
 	res := initRes{}
 	err = c.recvMessage(ctx, &res, mex)
 	if err != nil {
-		return c.connectionError(err)
+		return c.connectionError("receive init res", err)
 	}
 
 	return nil
@@ -361,7 +361,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 	rbuf := typed.NewReadBuffer(frame.SizedPayload())
 	if err := req.read(rbuf); err != nil {
 		// TODO(mmihic): Technically probably a protocol error
-		c.connectionError(err)
+		c.connectionError("parse init req", err)
 		return
 	}
 
@@ -388,7 +388,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 	res.initParams = c.getInitParams()
 	res.Version = CurrentProtocolVersion
 	if err := c.sendMessage(&res); err != nil {
-		c.connectionError(err)
+		c.connectionError("send init res", err)
 		return
 	}
 
@@ -409,18 +409,18 @@ func (c *Connection) ping(ctx context.Context) error {
 	req := &pingReq{id: c.NextMessageID()}
 	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
 	if err != nil {
-		return c.connectionError(err)
+		return c.connectionError("create ping exchange", err)
 	}
 	defer c.outbound.removeExchange(req.ID())
 
 	if err := c.sendMessage(req); err != nil {
-		return c.connectionError(err)
+		return c.connectionError("send ping", err)
 	}
 
 	res := &pingRes{}
 	err = c.recvMessage(ctx, res, mex)
 	if err != nil {
-		return c.connectionError(err)
+		return c.connectionError("receive pong", err)
 	}
 
 	return nil
@@ -445,7 +445,7 @@ func (c *Connection) handlePingReq(frame *Frame) {
 
 	pingRes := &pingRes{id: frame.Header.ID}
 	if err := c.sendMessage(pingRes); err != nil {
-		c.connectionError(err)
+		c.connectionError("send pong", err)
 	}
 }
 
@@ -468,13 +468,13 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		err = errConnectionUnknownState{"handleInitRes", state}
 	}
 	if err != nil {
-		c.connectionError(err)
+		c.connectionError("handle init res", err)
 		return true
 	}
 
 	res := initRes{initMessage{id: frame.Header.ID}}
 	if err := frame.read(&res); err != nil {
-		c.connectionError(fmt.Errorf("failed to read initRes from frame"))
+		c.connectionError("parse init res", fmt.Errorf("failed to read initRes from frame"))
 		return true
 	}
 
@@ -501,7 +501,7 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 	// We forward the peer frame, as the other side is blocked waiting on this frame.
 	// Rather than add another mechanism, we use the mex to block the sender till we get initRes.
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.connectionError(errCannotHandleInitRes)
+		c.connectionError("forard init res", errCannotHandleInitRes)
 		return true
 	}
 
@@ -595,14 +595,14 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 }
 
 // connectionError handles a connection level error
-func (c *Connection) connectionError(err error) error {
+func (c *Connection) connectionError(site string, err error) error {
 	if err == io.EOF {
 		c.log.Debugf("Connection got EOF")
 	} else {
 		if se, ok := err.(SystemError); ok && se.Code() != ErrCodeNetwork {
-			c.log.Errorf("Connection error: %v", err)
+			c.log.Errorf("Connection error at %v: %v", site, err)
 		} else {
-			c.log.Warnf("Connection error: %v", err)
+			c.log.Warnf("Connection error at %v: %v", site, err)
 		}
 	}
 	c.Close()
@@ -653,7 +653,7 @@ func (c *Connection) readFrames(_ uint32) {
 		frame := c.framePool.Get()
 		if err := frame.ReadIn(c.conn); err != nil {
 			if atomic.LoadInt32(&c.closeNetworkCalled) == 0 {
-				c.connectionError(err)
+				c.connectionError("read frames", err)
 			} else {
 				c.log.Debugf("Ignoring error after connection was closed: %v", err)
 			}
@@ -704,7 +704,7 @@ func (c *Connection) writeFrames(_ uint32) {
 		err := f.WriteOut(c.conn)
 		c.framePool.Release(f)
 		if err != nil {
-			c.connectionError(err)
+			c.connectionError("write frames", err)
 			return
 		}
 	}
