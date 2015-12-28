@@ -237,8 +237,8 @@ func (t *closeSemanticsTest) callStream(from *Channel, to *Channel) <-chan struc
 
 	go func() {
 		var d []byte
-		require.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&d), "read arg2 from %v to %v", from.PeerInfo(), to.PeerInfo())
-		require.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&d), "read arg3")
+		assert.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&d), "read arg2 from %v to %v", from.PeerInfo(), to.PeerInfo())
+		assert.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&d), "read arg3")
 		c <- struct{}{}
 	}()
 
