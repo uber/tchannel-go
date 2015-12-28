@@ -85,20 +85,26 @@ type SubPeerScore struct {
 
 // ConnectionRuntimeState is the runtime state for a single connection.
 type ConnectionRuntimeState struct {
-	ID               uint32               `json:"id"`
-	ConnectionState  string               `json:"connectionState"`
-	LocalHostPort    string               `json:"localHostPort"`
-	RemoteHostPort   string               `json:"remoteHostPort"`
-	IsEphemeral      bool                 `json:"isEphemeral"`
-	InboundExchange  ExchangeRuntimeState `json:"inboundExchange"`
-	OutboundExchange ExchangeRuntimeState `json:"outboundExchange"`
+	ID               uint32                  `json:"id"`
+	ConnectionState  string                  `json:"connectionState"`
+	LocalHostPort    string                  `json:"localHostPort"`
+	RemoteHostPort   string                  `json:"remoteHostPort"`
+	IsEphemeral      bool                    `json:"isEphemeral"`
+	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
+	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
 }
 
-// ExchangeRuntimeState is the runtime state for a message exchange set.
+// ExchangeSetRuntimeState is the runtime state for a message exchange set.
+type ExchangeSetRuntimeState struct {
+	Name      string                 `json:"name"`
+	Count     int                    `json:"count"`
+	Exchanges []ExchangeRuntimeState `json:"exchanges,omitempty"`
+}
+
+// ExchangeRuntimeState is the runtime state for a single message exchange.
 type ExchangeRuntimeState struct {
-	Name      string   `json:"name"`
-	Count     int      `json:"count"`
-	Exchanges []uint32 `json:"exchanges,omitempty"`
+	ID          uint32      `json:"id"`
+	MessageType messageType `json:"messageType"`
 }
 
 // PeerRuntimeState is the runtime state for a single peer.
@@ -210,23 +216,26 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 }
 
 // IntrospectState returns the runtime state for this messsage exchange set.
-func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) ExchangeRuntimeState {
+func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) ExchangeSetRuntimeState {
 	mexset.mut.RLock()
-	state := ExchangeRuntimeState{
+	setState := ExchangeSetRuntimeState{
 		Name:  mexset.name,
 		Count: len(mexset.exchanges),
 	}
 
 	if opts.IncludeExchanges {
-		state.Exchanges = make([]uint32, 0, len(mexset.exchanges))
-		for k := range mexset.exchanges {
-			state.Exchanges = append(state.Exchanges, k)
+		setState.Exchanges = make([]ExchangeRuntimeState, 0, len(mexset.exchanges))
+		for k, v := range mexset.exchanges {
+			state := ExchangeRuntimeState{
+				ID:          k,
+				MessageType: v.msgType,
+			}
+			setState.Exchanges = append(setState.Exchanges, state)
 		}
 	}
 
 	mexset.mut.RUnlock()
-
-	return state
+	return setState
 }
 
 func getStacks() []byte {
