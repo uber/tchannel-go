@@ -69,6 +69,12 @@ func (o *ChannelOpts) SetServiceName(svcName string) *ChannelOpts {
 	return o
 }
 
+// SetProcessName sets the ProcessName in ChannelOptions.
+func (o *ChannelOpts) SetProcessName(processName string) *ChannelOpts {
+	o.ProcessName = processName
+	return o
+}
+
 // SetStatsReporter sets StatsReporter in ChannelOptions.
 func (o *ChannelOpts) SetStatsReporter(statsReporter tchannel.StatsReporter) *ChannelOpts {
 	o.StatsReporter = statsReporter

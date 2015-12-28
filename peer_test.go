@@ -304,8 +304,9 @@ type peerTest struct {
 }
 
 // NewService will return a new server channel and the host port.
-func (pt *peerTest) NewService(t testing.TB, svcName string) (*Channel, string) {
-	ch := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: svcName})
+func (pt *peerTest) NewService(t testing.TB, svcName, processName string) (*Channel, string) {
+	opts := testutils.NewOpts().SetServiceName(svcName).SetProcessName(processName)
+	ch := testutils.NewServer(t, opts)
 	pt.channels = append(pt.channels, ch)
 	return ch, ch.PeerInfo().HostPort
 }
@@ -328,7 +329,7 @@ func TestPeerSelection(t *testing.T) {
 		}
 
 		strategy, count := createScoreStrategy(0, 1)
-		s2, _ := pt.NewService(t, "S2")
+		s2, _ := pt.NewService(t, "S2", "S2")
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
@@ -440,7 +441,7 @@ func (pt *peerSelectionTest) setupServers(t testing.TB) {
 
 	// Set up numPeers servers.
 	for i := 0; i < pt.numPeers; i++ {
-		pt.servers[i], _ = pt.NewService(t, "server")
+		pt.servers[i], _ = pt.NewService(t, "server", fmt.Sprintf("server-%v", i))
 		pt.servers[i].Register(raw.Wrap(newTestHandler(pt.t)), "echo")
 	}
 }
@@ -482,7 +483,7 @@ func (pt *peerSelectionTest) setupAffinity(t testing.TB) {
 }
 
 func (pt *peerSelectionTest) setupClient(t testing.TB) {
-	pt.client, _ = pt.NewService(t, "client")
+	pt.client, _ = pt.NewService(t, "client", "client")
 	pt.client.Register(raw.Wrap(newTestHandler(pt.t)), "echo")
 	for _, server := range pt.servers {
 		pt.client.Peers().Add(server.PeerInfo().HostPort)

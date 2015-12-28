@@ -34,7 +34,7 @@ const maxOperationSize = 16 * 1024
 
 // beginCall begins an outbound call on the connection
 func (c *Connection) beginCall(ctx context.Context, serviceName string, callOptions *CallOptions, operation string) (*OutboundCall, error) {
-	switch c.readState() {
+	switch state := c.readState(); state {
 	case connectionActive, connectionStartClose:
 		break
 	case connectionInboundClosed, connectionClosed:
@@ -42,7 +42,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
 		return nil, ErrConnectionNotReady
 	default:
-		return nil, errConnectionUnknownState
+		return nil, errConnectionUnknownState{"beginCall", state}
 	}
 
 	deadline, ok := ctx.Deadline()
@@ -287,13 +287,13 @@ func (c *Connection) handleError(frame *Frame) bool {
 	rbuf := typed.NewReadBuffer(frame.SizedPayload())
 	if err := errMsg.read(rbuf); err != nil {
 		c.log.Warnf("Unable to read Error frame from %s: %v", c.remotePeerInfo, err)
-		c.connectionError(err)
+		c.connectionError("parsing error frame", err)
 		return true
 	}
 
 	if errMsg.errCode == ErrCodeProtocol {
 		c.log.Warnf("Peer %s reported protocol error: %s", c.remotePeerInfo, errMsg.message)
-		c.connectionError(errMsg.AsSystemError())
+		c.connectionError("received protocol error", errMsg.AsSystemError())
 		return true
 	}
 
