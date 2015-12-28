@@ -157,6 +157,39 @@ func TestOutboundPeerNotAdded(t *testing.T) {
 	})
 }
 
+func TestPeerRemovedFromRootPeers(t *testing.T) {
+	tests := []struct {
+		addHostPort bool
+		expectFound bool
+	}{
+		{true, true},
+		{false, false},
+	}
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	for _, tt := range tests {
+		WithVerifiedServer(t, nil, func(server *Channel, hostPort string) {
+			ch := testutils.NewServer(t, nil)
+			clientHP := ch.PeerInfo().HostPort
+
+			if tt.addHostPort {
+				server.Peers().Add(clientHP)
+			}
+
+			assert.NoError(t, ch.Ping(ctx, hostPort), "Ping failed")
+
+			ch.Close()
+			waitTillInboundEmpty(t, server, clientHP)
+
+			rootPeers := server.RootPeers()
+			_, found := rootPeers.Get(clientHP)
+			assert.Equal(t, tt.expectFound, found, "Peer found mismatch, addHostPort: %v", tt.addHostPort)
+		})
+	}
+}
+
 func TestPeerSelectionPreferIncoming(t *testing.T) {
 	tests := []struct {
 		numIncoming, numOutgoing, numUnconnected int
