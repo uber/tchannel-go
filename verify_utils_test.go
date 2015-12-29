@@ -23,11 +23,31 @@ package tchannel_test
 import (
 	"runtime"
 	"testing"
+	"time"
 
 	. "github.com/uber/tchannel-go"
 
 	"github.com/uber/tchannel-go/testutils"
 )
+
+func waitForChannelClose(t *testing.T, ch *Channel) bool {
+	var state ChannelState
+	for i := 0; i < 10; i++ {
+		if state = ch.State(); state == ChannelClosed {
+			return true
+		}
+
+		if i > 5 {
+			time.Sleep(time.Millisecond)
+		} else {
+			runtime.Gosched()
+		}
+	}
+
+	// Channel is not closing, fail the test.
+	t.Errorf("Channel did not close, last state: %v", state)
+	return false
+}
 
 // WithVerifiedServer runs the given test function with a server channel that is verified
 // at the end to make sure there are no leaks (e.g. no exchanges leaked).
@@ -38,12 +58,8 @@ func WithVerifiedServer(t *testing.T, opts *testutils.ChannelOpts, f func(server
 		ch = serverCh
 	})
 
-	// Wait till the channel is closed
-	for i := 0; i < 10; i++ {
-		if ch.State() == ChannelClosed {
-			break
-		}
-		runtime.Gosched()
+	if !waitForChannelClose(t, ch) {
+		return
 	}
 
 	// Check the message exchanges and make sure they are all empty.
