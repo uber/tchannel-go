@@ -31,7 +31,7 @@ import (
 type PeerHeap struct {
 	PeerScores []*peerScore
 	rng        *rand.Rand
-	order      uint64
+	order      uint64 // atomic
 }
 
 func newPeerHeap() *PeerHeap {
@@ -88,13 +88,14 @@ func (ph *PeerHeap) PopPeer() *peerScore {
 
 // PushPeer pushes the new peer into the heap.
 func (ph *PeerHeap) PushPeer(peerScore *peerScore) {
-	atomic.AddUint64(&(ph.order), 1)
+	newOrder := atomic.AddUint64(&(ph.order), 1)
 	// randRange will affect the deviation of peer's chosenCount
 	randRange := ph.Len()/2 + 1
-	peerScore.order = ph.order + uint64(ph.rng.Intn(randRange))
+	peerScore.order = newOrder + uint64(ph.rng.Intn(randRange))
 	heap.Push(ph, peerScore)
 }
 
+// Exposed for testing purposes.
 func (ph *PeerHeap) peek() *peerScore {
 	return ph.PeerScores[0]
 }
