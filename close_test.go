@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"math/rand"
+	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -227,6 +228,21 @@ func (t *closeSemanticsTest) call(from *Channel, to *Channel) error {
 	return err
 }
 
+// checkClosed is used to ensure that the hostPort is no longer accepting connections.
+func (t *closeSemanticsTest) checkClosed(hostPort string) {
+	for i := 0; i < 10; i++ {
+		conn, err := net.Dial("tcp", hostPort)
+		if err != nil {
+			return
+		}
+
+		conn.Close()
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Errorf("%v is not closed", hostPort)
+}
+
 func (t *closeSemanticsTest) callStream(from *Channel, to *Channel) <-chan struct{} {
 	c := make(chan struct{})
 
@@ -263,6 +279,7 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 
 	// Close s1, should no longer be able to call it.
 	s1.Close()
+	t.checkClosed(s1.PeerInfo().HostPort)
 	assert.Equal(t, ChannelStartClose, s1.State())
 	t.withNewClient(func(ch *Channel) {
 		assert.Error(t, t.call(ch, s1), "closed channel should not accept incoming calls")

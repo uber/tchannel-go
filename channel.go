@@ -587,6 +587,7 @@ func (ch *Channel) State() ChannelState {
 // 2. When all incoming connections are drained, the connection blocks new outgoing calls.
 // 3. When all connections are drainged, the channel's state is updated to Closed.
 func (ch *Channel) Close() {
+	ch.Logger().Infof("Channel.Close called")
 	var connections []*Connection
 	ch.mutable.mut.Lock()
 
