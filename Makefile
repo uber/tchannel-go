@@ -8,7 +8,12 @@ TEST_PKGS := $(addprefix github.com/uber/tchannel-go,$(TEST_PKGS_NOPREFIX))
 BUILD := ./build
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 export GOPATH = $(GODEPS):$(OLDGOPATH)
-export PATH := $(realpath ./scripts/travis/thrift-release/linux-x86_64):$(PATH)
+
+PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH := $(shell uname -m)
+THRIFT_REL := ./scripts/travis/thrift-release/$(PLATFORM)-$(ARCH)
+
+export PATH := $(realpath $(THRIFT_REL)):$(PATH)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
