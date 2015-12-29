@@ -4,3 +4,4 @@
 build
 Godeps/_workspace
 thrift-gen-release/
+.idea

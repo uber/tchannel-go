@@ -32,6 +32,8 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
+
+	"gopkg.in/yaml.v2"
 )
 
 func TestAdvertiseFailed(t *testing.T) {
@@ -302,6 +304,46 @@ func TestRetryFailure(t *testing.T) {
 		default:
 		}
 	})
+}
+
+func TestCanUnmarshallYAMLFailStrategy(t *testing.T) {
+	tests := []struct {
+		strategy string
+		expected FailStrategy
+		wantErr  bool
+	}{
+		{
+			strategy: "fatal",
+			expected: FailStrategyFatal,
+		},
+		{
+			strategy: "ignore",
+			expected: FailStrategyIgnore,
+		},
+		{
+			strategy: "unknown",
+			wantErr:  true,
+		},
+		{
+			// YAML uses type default when parsing an empty string which is 0 == FailStrategyFatal.
+			strategy: "",
+			expected: FailStrategyFatal,
+		},
+	}
+
+	for _, tt := range tests {
+		var fs FailStrategy
+		err := yaml.Unmarshal([]byte(tt.strategy), &fs)
+		if tt.wantErr {
+			assert.Error(t, err, "Unmarshal %v should fail", tt.strategy)
+		} else {
+			assert.NoError(t, err, "Unmarshal %v shouldn't fail", tt.strategy)
+		}
+		if err != nil {
+			continue
+		}
+		assert.Equal(t, tt.expected, fs, "FailStrategy mismatch")
+	}
 }
 
 func checkAdvertiseInterval(t *testing.T, sleptFor time.Duration) {
