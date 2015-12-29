@@ -72,13 +72,12 @@ func TestPeersIncomingConnection(t *testing.T) {
 		}
 
 		// verify number of peers/connections on the client side
-		opts := &IntrospectionOptions{}
-		serverState := ch.IntrospectState(opts).RootPeers
+		serverState := ch.IntrospectState(nil).RootPeers
 		serverHostPort := ch.PeerInfo().HostPort
 
 		assert.Equal(t, len(serverState), 2, "Incorrect peer count")
 		for _, client := range []*Channel{ringpop, hyperbahn} {
-			clientPeerState := client.IntrospectState(opts).RootPeers
+			clientPeerState := client.IntrospectState(nil).RootPeers
 			clientHostPort := client.PeerInfo().HostPort
 			assert.Equal(t, len(clientPeerState), 1, "Incorrect peer count")
 			assert.Equal(t, len(clientPeerState[serverHostPort].OutboundConnections), 1, "Incorrect outbound connection count")
