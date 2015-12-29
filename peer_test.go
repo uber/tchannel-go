@@ -65,30 +65,36 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 		peers        []string
 		prevSelected map[string]struct{}
 		expected     map[string]struct{}
+		expectedLen  int
 	}{
 		{
-			peers:    a(peer1),
-			expected: m(peer1),
+			peers:       a(peer1),
+			expected:    m(peer1),
+			expectedLen: 1,
 		},
 		{
 			peers:        a(peer1, peer2),
 			prevSelected: m(peer1),
 			expected:     m(peer2),
+			expectedLen:  2,
 		},
 		{
 			peers:        a(peer1, peer2, peer3),
 			prevSelected: m(peer1, peer2),
 			expected:     m(peer3),
+			expectedLen:  3,
 		},
 		{
 			peers:        a(peer1),
 			prevSelected: m(peer1),
 			expected:     m(peer1),
+			expectedLen:  1,
 		},
 		{
 			peers:        a(peer1, peer2, peer3),
 			prevSelected: m(peer1, peer2, peer3),
 			expected:     m(peer1, peer2, peer3),
+			expectedLen:  3,
 		},
 	}
 
@@ -96,6 +102,11 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 		peers := ch.GetSubChannel(fmt.Sprintf("test%d", i), Isolated).Peers()
 		for _, p := range tt.peers {
 			peers.Add(p)
+		}
+
+		if peers.PeerCount() != tt.expectedLen {
+			t.Errorf("Unexpected heap size: %d, for case %d",
+				peers.PeerCount(), i)
 		}
 
 		gotPeer, err := peers.Get(tt.prevSelected)
@@ -108,6 +119,11 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 		if _, ok := tt.expected[got]; !ok {
 			t.Errorf("Got unexpected peer, expected one of %v got %v\n  Peers = %v PrevSelected = %v",
 				tt.expected, got, tt.peers, tt.prevSelected)
+		}
+
+		if peers.PeerCount() != tt.expectedLen {
+			t.Errorf("Unexpected heap size: got %d, expected %d, for case %d",
+				peers.PeerCount(), tt.expectedLen, i)
 		}
 	}
 }

@@ -126,10 +126,10 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 	size := l.peerHeap.Len()
 	for i := 0; i < size; i++ {
 		ps = l.peerHeap.PopPeer()
+		psPopList = append(psPopList, ps)
 		if _, ok := prevSelected[ps.Peer.HostPort()]; !ok {
 			break
 		}
-		psPopList = append(psPopList, ps)
 	}
 
 	for _, p := range psPopList {
@@ -140,7 +140,6 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 		return nil
 	}
 
-	l.peerHeap.PushPeer(ps)
 	atomic.AddUint64(&ps.chosenCount, 1)
 	return ps.Peer
 }
@@ -191,6 +190,11 @@ func (l *PeerList) UpdatePeer(p *Peer) {
 	l.Lock()
 	l.peerHeap.UpdatePeer(ps)
 	l.Unlock()
+}
+
+// PeerCount Returns the number of peers in the list.
+func (l *PeerList) PeerCount() int {
+	return l.peerHeap.Len()
 }
 
 type peerScore struct {
