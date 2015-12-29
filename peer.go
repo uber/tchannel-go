@@ -82,7 +82,7 @@ func (l *PeerList) newSibling() *PeerList {
 
 // Add adds a peer to the list if it does not exist, or returns any existing peer.
 func (l *PeerList) Add(hostPort string) *Peer {
-	if ps, ok := l.exists(hostPort); ok {
+	if ps, _, ok := l.exists(hostPort); ok {
 		return ps.Peer
 	}
 	l.Lock()
@@ -147,7 +147,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
 func (l *PeerList) GetOrAdd(hostPort string) *Peer {
-	if ps, ok := l.exists(hostPort); ok {
+	if ps, _, ok := l.exists(hostPort); ok {
 		return ps.Peer
 	}
 	return l.Add(hostPort)
@@ -166,35 +166,41 @@ func (l *PeerList) Copy() map[string]*Peer {
 }
 
 // exists checks if a hostport exists in the peer list.
-func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
+func (l *PeerList) exists(hostPort string) (*peerScore, uint64, bool) {
+	var score uint64
+
 	l.RLock()
 	ps, ok := l.peersByHostPort[hostPort]
+	if ok {
+		score = ps.score
+	}
 	l.RUnlock()
 
-	return ps, ok
+	return ps, score, ok
 }
 
 // UpdatePeer is called when there is a change that may cause the peer's score to change.
 // The new score is calculated, and the peer heap is updated with the new score if the score changes.
 func (l *PeerList) UpdatePeer(p *Peer) {
-	ps, ok := l.exists(p.hostPort)
+	ps, psScore, ok := l.exists(p.hostPort)
 	if !ok {
 		return
 	}
 
 	newScore := l.scoreCalculator.GetScore(p)
-	if newScore == ps.readScore() {
+	if newScore == psScore {
 		return
 	}
 
-	ps.setScore(newScore)
 	l.Lock()
+	ps.score = newScore
 	l.peerHeap.UpdatePeer(ps)
 	l.Unlock()
 }
 
+// peerScore represents a peer and scoring for the peer heap.
+// It is not safe for concurrent access, it should only be used through the PeerList.
 type peerScore struct {
-	sync.RWMutex
 	*Peer
 
 	score uint64
@@ -210,19 +216,6 @@ func newPeerScore(p *Peer, score uint64) *peerScore {
 	}
 }
 
-func (ps *peerScore) readScore() uint64 {
-	ps.RLock()
-	score := ps.score
-	ps.RUnlock()
-	return score
-}
-
-func (ps *peerScore) setScore(score uint64) {
-	ps.Lock()
-	ps.score = score
-	ps.Unlock()
-}
-
 // Peer represents a single autobahn service or client with a unique host:port.
 type Peer struct {
 	channel      Connectable
@@ -236,6 +229,9 @@ type Peer struct {
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
 	chosenCount         uint64
+
+	// onUpdate is a test-only hook.
+	onUpdate func(*Peer)
 }
 
 func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
@@ -443,4 +439,14 @@ func (p *Peer) runWithConnections(f func(*Connection)) {
 		f(c)
 	}
 	p.mut.RUnlock()
+}
+
+func (p *Peer) callOnUpdateComplete() {
+	p.mut.RLock()
+	f := p.onUpdate
+	p.mut.RUnlock()
+
+	if f != nil {
+		f(p)
+	}
 }

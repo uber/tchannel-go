@@ -22,7 +22,6 @@ package tchannel_test
 
 import (
 	"fmt"
-	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -127,12 +126,11 @@ func TestInboundEphemeralPeerRemoved(t *testing.T) {
 			clientHP = k
 		}
 
-		// Close the connection, which should remove the peer from the server channel.
-		client.Close()
-		runtime.Gosched()
+		waitTillInboundEmpty(t, ch, clientHP, func() {
+			client.Close()
+		})
 		assert.Equal(t, ChannelClosed, client.State(), "Client should be closed")
 
-		waitTillInboundEmpty(t, ch, clientHP)
 		_, ok := ch.RootPeers().Get(clientHP)
 		assert.False(t, ok, "server's root peers should remove peer for client on close")
 	})
@@ -180,8 +178,9 @@ func TestPeerRemovedFromRootPeers(t *testing.T) {
 
 			assert.NoError(t, ch.Ping(ctx, hostPort), "Ping failed")
 
-			ch.Close()
-			waitTillInboundEmpty(t, server, clientHP)
+			waitTillInboundEmpty(t, server, clientHP, func() {
+				ch.Close()
+			})
 
 			rootPeers := server.RootPeers()
 			_, found := rootPeers.Get(clientHP)
@@ -279,10 +278,15 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 				selectedOutgoing[outgoingHP] = 0
 			}
 
+			var mu sync.Mutex
 			checkMap := func(m map[string]int, peer string) bool {
+				mu.Lock()
+				defer mu.Unlock()
+
 				if _, ok := m[peer]; !ok {
 					return false
 				}
+
 				m[peer]++
 				return true
 			}
@@ -419,26 +423,32 @@ func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
 	}
 }
 
-// waitTillInboundEmpty will wait until the peer with hostPort in ch has 0 inbound connections.
-// It will fail the test after a second.
-func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string) {
+// waitTillInboundEmpty will run f which should end up causing the peer with hostPort in ch
+// to have 0 inbound connections. It will fail the test after a second.
+func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string, f func()) {
 	peer, ok := ch.RootPeers().Get(hostPort)
 	if !ok {
 		return
 	}
 
-	start := time.Now()
-	timedOut := func() bool { return time.Since(start) > time.Second }
-	for !timedOut() {
-		if inbound, _ := peer.NumConnections(); inbound == 0 {
-			break
+	inboundEmpty := make(chan struct{})
+	var onUpdateOnce sync.Once
+	onUpdate := func(p *Peer) {
+		if inbound, _ := p.NumConnections(); inbound == 0 {
+			onUpdateOnce.Do(func() {
+				close(inboundEmpty)
+			})
 		}
-		time.Sleep(time.Microsecond)
 	}
-	time.Sleep(time.Microsecond) // so any extra processing can happen.
+	peer.SetOnUpdate(onUpdate)
 
-	if timedOut() {
-		t.Errorf("Timed out waiting for peer %v to have 0 inbound", hostPort)
+	f()
+
+	select {
+	case <-inboundEmpty:
+		return
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for peer %v to have no inbound connections", hostPort)
 	}
 }
 
@@ -710,8 +720,10 @@ func TestPeerSelectionAfterClosed(t *testing.T) {
 
 	toClose := pt.affinity[pt.numAffinity-1]
 	closedHP := toClose.PeerInfo().HostPort
-	toClose.Close()
-	waitTillInboundEmpty(t, pt.client, closedHP)
+	toClose.Logger().Debugf("About to Close %v", closedHP)
+	waitTillInboundEmpty(t, pt.client, closedHP, func() {
+		toClose.Close()
+	})
 
 	for i := 0; i < 10*pt.numAffinity; i++ {
 		peer, err := pt.client.Peers().Get(nil)

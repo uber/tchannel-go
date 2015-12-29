@@ -242,6 +242,10 @@ func TestProxyRequests(t *testing.T) {
 	for _, tt := range tests {
 		resp1 := makeHTTPCall(t, tt.f(httpAddr))
 		resp2 := makeHTTPCall(t, tt.f(proxyAddr+"/proxy/"+httpAddr))
+
+		// Delete the Date header since the calls are made at different times.
+		resp1.Header.Del("Date")
+		resp2.Header.Del("Date")
 		compareResponses(t, tt.name, resp1, resp2)
 	}
 }

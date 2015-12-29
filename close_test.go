@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"math/rand"
+	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -74,7 +75,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 		testHandler := onErrorTestHandler{newTestHandler(t), func(_ context.Context, err error) {}}
 		ch.Register(raw.Wrap(testHandler), "block")
 
-		ctx, cancel := NewContext(10 * time.Millisecond)
+		ctx, cancel := NewContext(100 * time.Millisecond)
 		defer cancel()
 
 		// Make a call, wait for it to timeout.
@@ -227,6 +228,21 @@ func (t *closeSemanticsTest) call(from *Channel, to *Channel) error {
 	return err
 }
 
+// checkClosed is used to ensure that the hostPort is no longer accepting connections.
+func (t *closeSemanticsTest) checkClosed(hostPort string) {
+	for i := 0; i < 10; i++ {
+		conn, err := net.Dial("tcp", hostPort)
+		if err != nil {
+			return
+		}
+
+		conn.Close()
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Errorf("%v is not closed", hostPort)
+}
+
 func (t *closeSemanticsTest) callStream(from *Channel, to *Channel) <-chan struct{} {
 	c := make(chan struct{})
 
@@ -237,8 +253,8 @@ func (t *closeSemanticsTest) callStream(from *Channel, to *Channel) <-chan struc
 
 	go func() {
 		var d []byte
-		require.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&d), "read arg2 from %v to %v", from.PeerInfo(), to.PeerInfo())
-		require.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&d), "read arg3")
+		assert.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&d), "read arg2 from %v to %v", from.PeerInfo(), to.PeerInfo())
+		assert.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&d), "read arg3")
 		c <- struct{}{}
 	}()
 
@@ -263,6 +279,7 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 
 	// Close s1, should no longer be able to call it.
 	s1.Close()
+	t.checkClosed(s1.PeerInfo().HostPort)
 	assert.Equal(t, ChannelStartClose, s1.State())
 	t.withNewClient(func(ch *Channel) {
 		assert.Error(t, t.call(ch, s1), "closed channel should not accept incoming calls")
@@ -413,48 +430,37 @@ func TestCloseOneSide(t *testing.T) {
 // frame being added to the channel just as it is closed.
 // TODO(prashant): This test is waiting for timeout, but socket close shouldn't wait for timeout.
 func TestCloseSendError(t *testing.T) {
-	ctx, cancel := NewContext(50 * time.Millisecond)
-	defer cancel()
-
-	serverCh := testutils.NewServer(t, nil)
-
 	closed := uint32(0)
 	counter := uint32(0)
-	testutils.RegisterFunc(t, serverCh, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-		atomic.AddUint32(&counter, 1)
-		return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+
+	serverCh := testutils.NewServer(t, nil)
+	testutils.RegisterEcho(t, serverCh, func() {
+		if atomic.AddUint32(&counter, 1) > 10 {
+			// Close the server in a goroutine to possibly trigger more race conditions.
+			go func() {
+				atomic.AddUint32(&closed, 1)
+				serverCh.Close()
+			}()
+		}
 	})
 
 	clientCh := testutils.NewClient(t, nil)
 
-	// Make a call to create a connection that will be shared.
-	peerInfo := serverCh.PeerInfo()
-	_, _, _, err := raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "echo", nil, nil)
-	require.NoError(t, err, "Call should succeed")
+	// Create a connection that will be shared.
+	require.NoError(t, testutils.Ping(clientCh, serverCh), "Ping from client to server failed")
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Microsecond)
-			_, _, _, err := raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "echo", nil, nil)
+			err := testutils.CallEcho(clientCh, serverCh, nil)
 			if err != nil && atomic.LoadUint32(&closed) == 0 {
 				t.Errorf("Call failed: %v", err)
 			}
 			wg.Done()
 		}()
 	}
-
-	// Wait for the server to have processed some number of these calls.
-	for {
-		if atomic.LoadUint32(&counter) >= 10 {
-			break
-		}
-		runtime.Gosched()
-	}
-
-	atomic.AddUint32(&closed, 1)
-	serverCh.Close()
 
 	// Wait for all the goroutines to end
 	wg.Wait()

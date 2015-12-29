@@ -23,6 +23,7 @@ package tchannel_test
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -117,13 +118,20 @@ func TestTracingPropagates(t *testing.T) {
 func TestTraceReportingEnabled(t *testing.T) {
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
 
-	var gotCalls []TraceData
-	var gotSpans []Span
+	var state struct {
+		sync.Mutex
+
+		calls []TraceData
+		spans []Span
+	}
 	testTraceReporter := TraceReporterFunc(func(data TraceData) {
+		state.Lock()
+		defer state.Unlock()
+
 		span := data.Span
 		data.Span = Span{}
-		gotCalls = append(gotCalls, data)
-		gotSpans = append(gotSpans, span)
+		state.calls = append(state.calls, data)
+		state.spans = append(state.spans, span)
 	})
 
 	traceReporterOpts := testutils.NewOpts().SetTraceReporter(testTraceReporter)
@@ -154,14 +162,15 @@ func TestTraceReportingEnabled(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		gotCalls, gotSpans = nil, nil
+		state.calls, state.spans = nil, nil
+
 		nowStub, addFn := testutils.NowStub(initialTime)
 		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(nowStub)
 		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(nowStub)
 		addFn(time.Second)
 
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {
-			ch.Register(raw.Wrap(newTestHandler(t)), "echo")
+			testutils.RegisterEcho(t, ch, nil)
 
 			clientCh := testutils.NewClient(t, tt.clientOpts)
 			defer clientCh.Close()
@@ -186,10 +195,14 @@ func TestTraceReportingEnabled(t *testing.T) {
 					ServiceName: clientCh.ServiceName(),
 				}
 			}
+
+			state.Lock()
+			defer state.Unlock()
+
 			expected := []TraceData{{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}}
-			assert.Equal(t, expected, gotCalls, "%v: Report args mismatch", tt.name)
+			assert.Equal(t, expected, state.calls, "%v: Report args mismatch", tt.name)
 			curSpan := CurrentSpan(ctx)
-			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), gotSpans[0], "Span mismatch")
+			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), state.spans[0], "Span mismatch")
 		})
 	}
 }

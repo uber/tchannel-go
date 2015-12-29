@@ -21,56 +21,44 @@
 package testutils
 
 import (
-	"strings"
-	"sync/atomic"
 	"testing"
+	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/raw"
 )
 
-type errorLoggerState struct {
-	matchCount uint32
+// CallEcho calls the "echo" endpoint from the given src to target.
+func CallEcho(src, target *tchannel.Channel, args *raw.Args) error {
+	ctx, cancel := tchannel.NewContext(getTimeout(100 * time.Millisecond))
+	defer cancel()
+
+	if args == nil {
+		args = &raw.Args{}
+	}
+
+	peerInfo := target.PeerInfo()
+	_, _, _, err := raw.Call(ctx, src, peerInfo.HostPort, peerInfo.ServiceName, "echo", args.Arg2, args.Arg3)
+	return err
 }
 
-type errorLogger struct {
-	tchannel.Logger
-	t testing.TB
-	v *LogVerification
-	s *errorLoggerState
-}
-
-func (l errorLogger) checkErr(msg string, args ...interface{}) {
-	allowedCount := l.v.AllowedCount
-
-	if filter := l.v.AllowedFilter; filter != "" {
-		if !strings.Contains(msg, filter) {
-			l.t.Errorf(msg, args...)
+// RegisterEcho registers an echo endpoint on the given channel. The optional provided
+// function is run before the handler returns.
+func RegisterEcho(t *testing.T, src *tchannel.Channel, f func()) {
+	RegisterFunc(t, src, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		if f != nil {
+			f()
 		}
-	}
-
-	matchCount := atomic.AddUint32(&l.s.matchCount, 1)
-	if int(matchCount) <= allowedCount {
-		return
-	}
-
-	l.t.Errorf(msg, args...)
+		return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+	})
 }
 
-func (l errorLogger) Fatalf(msg string, args ...interface{}) {
-	l.checkErr("[Fatal] "+msg, args...)
-	l.Logger.Fatalf(msg, args...)
-}
+// Ping sends a ping from src to target.
+func Ping(src, target *tchannel.Channel) error {
+	ctx, cancel := tchannel.NewContext(getTimeout(100 * time.Millisecond))
+	defer cancel()
 
-func (l errorLogger) Errorf(msg string, args ...interface{}) {
-	l.checkErr("[Error] "+msg, args...)
-	l.Logger.Errorf(msg, args...)
-}
-
-func (l errorLogger) Warnf(msg string, args ...interface{}) {
-	l.checkErr("[Warn] "+msg, args...)
-	l.Logger.Warnf(msg, args...)
-}
-
-func (l errorLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {
-	return errorLogger{l.Logger.WithFields(fields...), l.t, l.v, l.s}
+	return src.Ping(ctx, target.PeerInfo().HostPort)
 }

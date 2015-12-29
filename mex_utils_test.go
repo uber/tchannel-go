@@ -29,11 +29,11 @@ import (
 // If there are exchanges, a string with information about leftover exchanges is returned.
 func CheckEmptyExchangesConn(c *ConnectionRuntimeState) string {
 	var errors []string
-	checkExchange := func(e ExchangeRuntimeState) {
+	checkExchange := func(e ExchangeSetRuntimeState) {
 		if e.Count > 0 {
 			errors = append(errors, fmt.Sprintf(" %v leftover %v exchanges", e.Name, e.Count))
 			for _, v := range e.Exchanges {
-				errors = append(errors, fmt.Sprintf("  exchanges: %v", v))
+				errors = append(errors, fmt.Sprintf("  exchanges: %+v", v))
 			}
 		}
 	}
