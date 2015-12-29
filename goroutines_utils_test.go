@@ -148,8 +148,8 @@ func VerifyNoBlockedGoroutines(t *testing.T) {
 		"syscall":  struct{}{},
 	}
 	const maxAttempts = 10
-
 	var leakAttempts int
+
 retry:
 	for i := 0; i < maxAttempts; i++ {
 		// Ignore the first stack which is the current goroutine.
@@ -169,10 +169,12 @@ retry:
 
 		// If there are leaks found, retry 3 times since the goroutine's state
 		// may not yet have updated.
-		for ; len(leakStacks) > 0 && leakAttempts < 3; leakAttempts++ {
+		if len(leakStacks) > 0 && leakAttempts < 3 {
+			leakAttempts++
 			i--
 			continue retry
 		}
+
 		for _, v := range leakStacks {
 			t.Errorf("Found leaked goroutine in state %q Full stack:\n%s\n",
 				v.goState, v.fullStack.String())
