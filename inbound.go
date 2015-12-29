@@ -259,6 +259,11 @@ func (call *InboundCall) ShardKey() string {
 	return call.headers[ShardKey]
 }
 
+// RemotePeer returns the caller's peer info.
+func (call *InboundCall) RemotePeer() PeerInfo {
+	return call.conn.RemotePeerInfo()
+}
+
 // Reads the entire operation name (arg1) from the request stream.
 func (call *InboundCall) readOperation() error {
 	var arg1 []byte

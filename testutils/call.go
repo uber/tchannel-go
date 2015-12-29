@@ -33,6 +33,9 @@ type FakeIncomingCall struct {
 
 	// ShardKeyF is the intended destination for this call.
 	ShardKeyF string
+
+	// RemotePeer is the calling service's peer info.
+	RemotePeerF tchannel.PeerInfo
 }
 
 // CallerName returns the caller name as specified in the fake call.
@@ -43,6 +46,11 @@ func (f *FakeIncomingCall) CallerName() string {
 // ShardKey returns the shard key as specified in the fake call.
 func (f *FakeIncomingCall) ShardKey() string {
 	return f.ShardKeyF
+}
+
+// RemotePeer returns the caller's peer info.
+func (f *FakeIncomingCall) RemotePeer() tchannel.PeerInfo {
+	return f.RemotePeerF
 }
 
 // NewIncomingCall creates an incoming call for tests.
