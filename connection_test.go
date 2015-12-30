@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -318,7 +319,7 @@ func TestTimeout(t *testing.T) {
 		// Verify the server-side receives an error from the context.
 		assert.Equal(t, context.DeadlineExceeded, <-testHandler.blockErr)
 	})
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestLargeOperation(t *testing.T) {
@@ -342,7 +343,7 @@ func TestLargeTimeout(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", testArg2, testArg3)
 		assert.NoError(t, err, "Call failed")
 	})
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestFragmentation(t *testing.T) {
@@ -396,7 +397,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		close(startReading)
 		<-handlerComplete
 	})
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteArg3AfterTimeout(t *testing.T) {
@@ -436,7 +437,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		case <-timedOut:
 		}
 	})
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
@@ -462,7 +463,7 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		close(timedOut)
 		<-done
 	})
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestReadTimeout(t *testing.T) {

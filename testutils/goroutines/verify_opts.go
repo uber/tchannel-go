@@ -18,18 +18,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel_test
+package goroutines
 
-import (
-	"testing"
+import "bytes"
 
-	"github.com/uber/tchannel-go/testutils/goroutines"
-)
+// VerifyOpts contains
+type VerifyOpts struct {
+	// Exclude is a string that will exclude a stack from being considered a leak.
+	Exclude string
+}
 
-// This file is named z_* so that it is the last test file compiled by Go, and so
-// is run after all the other tests.
+// ShouldSkip returns whether the given stack should be skipped when doing verification.
+func (opts *VerifyOpts) ShouldSkip(s Stack) bool {
+	if opts == nil || len(opts.Exclude) == 0 {
+		return false
+	}
 
-// TestNoGoroutinesLeaked verifies that no tests have leaked goroutines.
-func TestNoGoroutinesLeaked(t *testing.T) {
-	goroutines.VerifyNoLeaks(t, nil)
+	return bytes.Contains(s.Full(), []byte(opts.Exclude))
 }
