@@ -467,7 +467,8 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 }
 
 func TestReadTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().AddLogFilter("failed to send error frame", 1)
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -475,7 +476,8 @@ func TestReadTimeout(t *testing.T) {
 				return nil, ErrTimeout
 			}
 			testutils.RegisterFunc(ch, "call", handler)
-			raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
+			_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
+			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
 	})
 }
