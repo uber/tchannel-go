@@ -191,11 +191,11 @@ func (t *closeSemanticsTest) makeServer(name string) (*Channel, chan struct{}) {
 	ch := testutils.NewServer(t.T, &testutils.ChannelOpts{ServiceName: name})
 
 	c := make(chan struct{})
-	testutils.RegisterFunc(t.T, ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		<-c
 		return &raw.Res{}, nil
 	})
-	testutils.RegisterFunc(t.T, ch, "call", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch, "call", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		return &raw.Res{}, nil
 	})
 	return ch, c
@@ -349,7 +349,7 @@ func TestCloseSingleChannel(t *testing.T) {
 	var completed sync.WaitGroup
 	blockCall := make(chan struct{})
 
-	testutils.RegisterFunc(t, ch, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		connected.Done()
 		<-blockCall
 		return &raw.Res{
@@ -393,7 +393,7 @@ func TestCloseOneSide(t *testing.T) {
 	connected := make(chan struct{})
 	completed := make(chan struct{})
 	blockCall := make(chan struct{})
-	testutils.RegisterFunc(t, ch2, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch2, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		connected <- struct{}{}
 		<-blockCall
 		return &raw.Res{
@@ -435,7 +435,7 @@ func TestCloseSendError(t *testing.T) {
 	counter := uint32(0)
 
 	serverCh := testutils.NewServer(t, nil)
-	testutils.RegisterEcho(t, serverCh, func() {
+	testutils.RegisterEcho(serverCh, func() {
 		if atomic.AddUint32(&counter, 1) > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
 			go func() {

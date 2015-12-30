@@ -170,7 +170,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 		addFn(time.Second)
 
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {
-			testutils.RegisterEcho(t, ch, nil)
+			testutils.RegisterEcho(ch, nil)
 
 			clientCh := testutils.NewClient(t, tt.clientOpts)
 			defer clientCh.Close()
@@ -252,7 +252,7 @@ func TestTraceSamplingRate(t *testing.T) {
 
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 			var tracedCalls int
-			testutils.RegisterFunc(t, ch, "t", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			testutils.RegisterFunc(ch, "t", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				if CurrentSpan(ctx).TracingEnabled() {
 					tracedCalls++
 				}
@@ -294,13 +294,13 @@ func TestChildCallsNotSampled(t *testing.T) {
 	s2 := testutils.NewServer(t, nil)
 	defer s2.Close()
 
-	testutils.RegisterFunc(t, s1, "s1", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(s1, "s1", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		_, _, _, err := raw.Call(ctx, s1, s2.PeerInfo().HostPort, s2.ServiceName(), "s2", nil, nil)
 		require.NoError(t, err, "raw.Call from s1 to s2 failed")
 		return &raw.Res{}, nil
 	})
 
-	testutils.RegisterFunc(t, s2, "s2", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(s2, "s2", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		if CurrentSpan(ctx).TracingEnabled() {
 			traceEnabledCalls++
 		}

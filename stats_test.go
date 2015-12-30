@@ -144,7 +144,7 @@ func TestStatsWithRetries(t *testing.T) {
 
 	WithVerifiedServer(t, nil, func(serverCh *Channel, hostPort string) {
 		respErr := make(chan error, 1)
-		testutils.RegisterFunc(t, serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		testutils.RegisterFunc(serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
 		})
 		ch.Peers().Add(serverCh.PeerInfo().HostPort)

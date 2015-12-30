@@ -180,7 +180,7 @@ func TestRemotePeer(t *testing.T) {
 			defer tt.remote.Close()
 
 			gotPeer := make(chan PeerInfo, 1)
-			testutils.RegisterFunc(t, ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				gotPeer <- CurrentCall(ctx).RemotePeer()
 				return &raw.Res{}, nil
 			})
@@ -474,7 +474,7 @@ func TestReadTimeout(t *testing.T) {
 				defer cancel()
 				return nil, ErrTimeout
 			}
-			testutils.RegisterFunc(t, ch, "call", handler)
+			testutils.RegisterFunc(ch, "call", handler)
 			raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
 		}
 	})

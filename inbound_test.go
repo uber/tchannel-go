@@ -48,7 +48,7 @@ func TestActiveCallReq(t *testing.T) {
 		gotCall := make(chan struct{})
 		unblock := make(chan struct{})
 
-		testutils.RegisterFunc(t, ch, "blocked", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		testutils.RegisterFunc(ch, "blocked", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			gotCall <- struct{}{}
 			<-unblock
 			return &raw.Res{}, nil
@@ -90,7 +90,7 @@ func TestInboundConnection(t *testing.T) {
 	defer cancel()
 
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		testutils.RegisterFunc(t, ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			c, _ := InboundConnection(CurrentCall(ctx))
 			assert.Equal(t, hostPort, c.RemotePeerInfo().HostPort, "Unexpected host port")
 			return &raw.Res{}, nil

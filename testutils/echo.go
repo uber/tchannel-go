@@ -21,7 +21,6 @@
 package testutils
 
 import (
-	"testing"
 	"time"
 
 	"golang.org/x/net/context"
@@ -46,8 +45,8 @@ func CallEcho(src, target *tchannel.Channel, args *raw.Args) error {
 
 // RegisterEcho registers an echo endpoint on the given channel. The optional provided
 // function is run before the handler returns.
-func RegisterEcho(t *testing.T, src *tchannel.Channel, f func()) {
-	RegisterFunc(t, src, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+func RegisterEcho(src *tchannel.Channel, f func()) {
+	RegisterFunc(src, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		if f != nil {
 			f()
 		}
