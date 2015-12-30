@@ -140,6 +140,58 @@ func TestDefaultFormat(t *testing.T) {
 	})
 }
 
+func TestRemotePeer(t *testing.T) {
+	tests := []struct {
+		name       string
+		remote     *Channel
+		expectedFn func(state *RuntimeState, serverHP string) PeerInfo
+	}{
+		{
+			name:   "ephemeral client",
+			remote: testutils.NewClient(t, nil),
+			expectedFn: func(state *RuntimeState, serverHP string) PeerInfo {
+				hostPort := state.RootPeers[serverHP].OutboundConnections[0].LocalHostPort
+				return PeerInfo{
+					HostPort:    hostPort,
+					IsEphemeral: true,
+					ProcessName: state.LocalPeer.ProcessName,
+				}
+			},
+		},
+		{
+			name:   "listening server",
+			remote: testutils.NewServer(t, nil),
+			expectedFn: func(state *RuntimeState, _ string) PeerInfo {
+				return PeerInfo{
+					HostPort:    state.LocalPeer.HostPort,
+					IsEphemeral: false,
+					ProcessName: state.LocalPeer.ProcessName,
+				}
+			},
+		},
+	}
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	for _, tt := range tests {
+		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+			defer tt.remote.Close()
+
+			gotPeer := make(chan PeerInfo, 1)
+			testutils.RegisterFunc(t, ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				gotPeer <- CurrentCall(ctx).RemotePeer()
+				return &raw.Res{}, nil
+			})
+
+			_, _, _, err := raw.Call(ctx, tt.remote, hostPort, ch.ServiceName(), "test", nil, nil)
+			assert.NoError(t, err, "%v: Call failed", tt.name)
+			expected := tt.expectedFn(tt.remote.IntrospectState(nil), hostPort)
+			assert.Equal(t, expected, <-gotPeer, "%v: RemotePeer mismatch", tt.name)
+		})
+	}
+}
+
 func TestReuseConnection(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()

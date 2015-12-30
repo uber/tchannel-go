@@ -119,6 +119,10 @@ type PeerRuntimeState struct {
 // IntrospectState returns the RuntimeState for this channel.
 // Note: this is purely for debugging and monitoring, and may slow down your Channel.
 func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
+	if opts == nil {
+		opts = &IntrospectionOptions{}
+	}
+
 	ch.mutable.mut.RLock()
 	conns := len(ch.mutable.conns)
 	ch.mutable.mut.RUnlock()

@@ -480,13 +480,13 @@ func callWithNewClient(t *testing.T, hostPort string) {
 
 func TestNoLeakedState(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		state1 := ch.IntrospectState(&IntrospectionOptions{})
+		state1 := ch.IntrospectState(nil)
 		for i := 0; i < 100; i++ {
 			callWithNewClient(t, hostPort)
 		}
 
 		time.Sleep(time.Millisecond)
-		state2 := ch.IntrospectState(&IntrospectionOptions{})
+		state2 := ch.IntrospectState(nil)
 		assert.Equal(t, state1, state2, "State mismatch")
 	})
 }
