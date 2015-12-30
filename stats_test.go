@@ -62,19 +62,16 @@ func TestStatsCalls(t *testing.T) {
 	defer testutils.SetTimeout(t, time.Second)()
 
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-	nowStub, nowFn := testutils.NowStub(initialTime)
-	// time.Now will be called in this order for each call:
-	// sender records time they started sending
-	// receiver records time the request is sent to application
-	// receiver calculates application handler latency
-	// sender records call latency
-	// so expected inbound latency = incrementor, outbound = 3 * incrementor
+	clientNow, clientNowFn := testutils.NowStub(initialTime)
+	serverNow, serverNowFn := testutils.NowStub(initialTime)
+	clientNowFn(100 * time.Millisecond)
+	serverNowFn(50 * time.Millisecond)
 
 	clientStats := newRecordingStatsReporter()
 	serverStats := newRecordingStatsReporter()
 	serverOpts := testutils.NewOpts().
 		SetStatsReporter(serverStats).
-		SetTimeNow(nowStub)
+		SetTimeNow(serverNow)
 	WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
 		handler := raw.Wrap(newTestHandler(t))
 		serverCh.Register(handler, "echo")
@@ -82,29 +79,25 @@ func TestStatsCalls(t *testing.T) {
 
 		ch := testutils.NewClient(t, testutils.NewOpts().
 			SetStatsReporter(clientStats).
-			SetTimeNow(nowStub))
+			SetTimeNow(clientNow))
 		defer ch.Close()
 
 		ctx, cancel := NewContext(time.Second * 5)
 		defer cancel()
 
-		// Set now incrementor to 50ms, so expected Inbound latency is 50ms, outbound is 150ms.
-		nowFn(50 * time.Millisecond)
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", []byte("Headers"), []byte("Body"))
 		require.NoError(t, err)
 
 		outboundTags := tagsForOutboundCall(serverCh, ch, "echo")
 		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
-		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 300*time.Millisecond)
-		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 300*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 200*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 200*time.Millisecond)
 		inboundTags := tagsForInboundCall(serverCh, ch, "echo")
 		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
 		serverStats.Expected.IncCounter("inbound.calls.success", inboundTags, 1)
 		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 100*time.Millisecond)
 
-		// Expected inbound latency = 70ms, outbound = 210ms.
-		nowFn(70 * time.Millisecond)
 		_, _, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, "app-error", nil, nil)
 		require.NoError(t, err)
 		require.True(t, resp.ApplicationError(), "expected application error")
@@ -113,12 +106,12 @@ func TestStatsCalls(t *testing.T) {
 		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.app-errors", outboundTags, 1)
-		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 420*time.Millisecond)
-		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 420*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 200*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 200*time.Millisecond)
 		inboundTags = tagsForInboundCall(serverCh, ch, "app-error")
 		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
 		serverStats.Expected.IncCounter("inbound.calls.app-errors", inboundTags, 1)
-		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 140*time.Millisecond)
+		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 100*time.Millisecond)
 	})
 
 	clientStats.Validate(t)
