@@ -99,13 +99,10 @@ func TestRequestSubChannel(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	tchan, err := tchannel.NewChannel("svc1", nil)
-	require.NoError(t, err, "server NewChannel failed")
-	require.NoError(t, tchan.ListenAndServe(":0"), "Listen failed")
+	tchan := testutils.NewServer(t, testutils.NewOpts().SetServiceName("svc1"))
 	defer tchan.Close()
 
-	clientCh, err := tchannel.NewChannel("client", nil)
-	require.NoError(t, err, "client NewChannel failed")
+	clientCh := testutils.NewClient(t, nil)
 	defer clientCh.Close()
 	clientCh.Peers().Add(tchan.PeerInfo().HostPort)
 

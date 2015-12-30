@@ -87,6 +87,12 @@ func (o *ChannelOpts) SetTraceReporter(traceReporter tchannel.TraceReporter) *Ch
 	return o
 }
 
+// SetTraceReporterFactory sets TraceReporterFactory in ChannelOptions.
+func (o *ChannelOpts) SetTraceReporterFactory(factory tchannel.TraceReporterFactory) *ChannelOpts {
+	o.TraceReporterFactory = factory
+	return o
+}
+
 // SetFramePool sets FramePool in DefaultConnectionOptions.
 func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	o.DefaultConnectionOptions.FramePool = framePool

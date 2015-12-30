@@ -21,7 +21,6 @@
 package thrift
 
 import (
-	"net"
 	"runtime"
 	"strings"
 	"testing"
@@ -29,8 +28,8 @@ import (
 
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift/gen-go/meta"
 )
 
@@ -101,43 +100,23 @@ func withMetaSetup(t *testing.T, f func(ctx Context, c tchanMeta, server *Server
 	defer cancel()
 
 	// Start server
-	tchan, listener, server, err := setupMetaServer()
-	require.NoError(t, err)
+	tchan, server := setupMetaServer(t)
 	defer tchan.Close()
 
 	// Get client1
-	c, err := getMetaClient(listener.Addr().String())
-	require.NoError(t, err)
+	c := getMetaClient(t, tchan.PeerInfo().HostPort)
 	f(ctx, c, server)
 }
 
-func setupMetaServer() (*tchannel.Channel, net.Listener, *Server, error) {
-	tchan, err := tchannel.NewChannel("meta", &tchannel.ChannelOptions{
-		Logger: tchannel.SimpleLogger,
-	})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+func setupMetaServer(t *testing.T) (*tchannel.Channel, *Server) {
+	tchan := testutils.NewServer(t, testutils.NewOpts().SetServiceName("meta"))
 	server := NewServer(tchan)
-	tchan.Serve(listener)
-	return tchan, listener, server, nil
+	return tchan, server
 }
 
-func getMetaClient(dst string) (tchanMeta, error) {
-	tchan, err := tchannel.NewChannel("client", &tchannel.ChannelOptions{
-		Logger: tchannel.SimpleLogger,
-	})
-	if err != nil {
-		return nil, err
-	}
-
+func getMetaClient(t *testing.T, dst string) tchanMeta {
+	tchan := testutils.NewClient(t, nil)
 	tchan.Peers().Add(dst)
 	thriftClient := NewClient(tchan, "meta", nil)
-	return newTChanMetaClient(thriftClient), nil
+	return newTChanMetaClient(thriftClient)
 }

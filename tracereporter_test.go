@@ -33,7 +33,6 @@ func TestTraceReporterFactory(t *testing.T) {
 		return SimpleTraceReporter
 	}
 	tc, err := NewChannel("client", &ChannelOptions{
-		Logger:               SimpleLogger,
 		TraceReporter:        NullReporter,
 		TraceReporterFactory: testTraceReporterFactory,
 	})
