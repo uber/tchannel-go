@@ -23,7 +23,6 @@ package tchannel_test
 import (
 	"math/rand"
 	"net"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -51,6 +50,14 @@ func makeCall(ch *Channel, hostPort, service string) error {
 
 	_, _, _, err := raw.Call(ctx, ch, hostPort, service, "test", nil, nil)
 	return err
+}
+
+func assertStateChangesTo(t *testing.T, ch *Channel, state ChannelState) {
+	var lastState ChannelState
+	require.True(t, testutils.WaitFor(time.Second, func() bool {
+		lastState = ch.State()
+		return lastState == state
+	}), "Channel state is %v expected %v", lastState, state)
 }
 
 func TestCloseOnlyListening(t *testing.T) {
@@ -87,8 +94,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 
 		// The client channel should also close immediately.
 		clientCh.Close()
-		runtime.Gosched()
-		assert.Equal(t, ChannelClosed, clientCh.State())
+		assertStateChangesTo(t, clientCh, ChannelClosed)
 		assert.True(t, clientCh.Closed(), "Channel should be closed")
 
 		// Unblock the testHandler so that a goroutine isn't leaked.
@@ -301,16 +307,14 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 	// Once the incoming connection is drained, outgoing calls should fail.
 	s1C <- struct{}{}
 	<-call2
-	runtime.Gosched()
-	assert.Equal(t, ChannelInboundClosed, s1.State())
+	assertStateChangesTo(t.T, s1, ChannelInboundClosed)
 	require.Error(t, t.call(s1, s2),
 		"closed channel with no pending incoming calls should not allow outgoing calls")
 
 	// Now the channel should be completely closed as there are no pending connections.
 	s2C <- struct{}{}
 	<-call1
-	runtime.Gosched()
-	assert.Equal(t, ChannelClosed, s1.State())
+	assertStateChangesTo(t.T, s1, ChannelClosed)
 
 	// Close s2 so we don't leave any goroutines running.
 	s2.Close()
@@ -378,8 +382,7 @@ func TestCloseSingleChannel(t *testing.T) {
 	completed.Wait()
 
 	// Once all calls are complete, the channel should be closed.
-	runtime.Gosched()
-	assert.Equal(t, ChannelClosed, ch.State())
+	assertStateChangesTo(t, ch, ChannelClosed)
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
@@ -418,8 +421,7 @@ func TestCloseOneSide(t *testing.T) {
 	<-completed
 
 	// Once the call completes, the channel should be closed.
-	runtime.Gosched()
-	assert.Equal(t, ChannelClosed, ch1.State())
+	assertStateChangesTo(t, ch1, ChannelClosed)
 
 	// We need to close all open TChannels before verifying blocked goroutines.
 	ch2.Close()
