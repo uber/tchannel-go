@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -93,7 +94,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 		// Unblock the testHandler so that a goroutine isn't leaked.
 		<-testHandler.blockErr
 	})
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 // TestCloseStress ensures that once a Channel is closed, it cannot be reached.
@@ -317,7 +318,7 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 
 func TestCloseSemantics(t *testing.T) {
 	// We defer the check as we want it to run after the SetTimeout clears the timeout.
-	defer VerifyNoBlockedGoroutines(t)
+	defer goroutines.VerifyNoLeaks(t, nil)
 	defer testutils.SetTimeout(t, 2*time.Second)()
 
 	ctx, cancel := NewContext(time.Second)
@@ -329,7 +330,7 @@ func TestCloseSemantics(t *testing.T) {
 
 func TestCloseSemanticsIsolated(t *testing.T) {
 	// We defer the check as we want it to run after the SetTimeout clears the timeout.
-	defer VerifyNoBlockedGoroutines(t)
+	defer goroutines.VerifyNoLeaks(t, nil)
 	defer testutils.SetTimeout(t, 2*time.Second)()
 
 	ctx, cancel := NewContext(time.Second)
@@ -379,7 +380,7 @@ func TestCloseSingleChannel(t *testing.T) {
 	// Once all calls are complete, the channel should be closed.
 	runtime.Gosched()
 	assert.Equal(t, ChannelClosed, ch.State())
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestCloseOneSide(t *testing.T) {
@@ -422,7 +423,7 @@ func TestCloseOneSide(t *testing.T) {
 
 	// We need to close all open TChannels before verifying blocked goroutines.
 	ch2.Close()
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 // TestCloseSendError tests that system errors are not attempted to be sent when
@@ -466,7 +467,7 @@ func TestCloseSendError(t *testing.T) {
 	wg.Wait()
 
 	clientCh.Close()
-	VerifyNoBlockedGoroutines(t)
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func callWithNewClient(t *testing.T, hostPort string) {
