@@ -21,6 +21,7 @@
 package testutils
 
 import (
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -43,7 +44,8 @@ func (l errorLogger) checkErr(msg string, args ...interface{}) {
 	allowedCount := l.v.AllowedCount
 
 	if filter := l.v.AllowedFilter; filter != "" {
-		if !strings.Contains(msg, filter) {
+		formatted := fmt.Sprintf(msg, args...)
+		if !strings.Contains(formatted, filter) {
 			l.t.Errorf(msg, args...)
 		}
 	}
