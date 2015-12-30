@@ -23,7 +23,6 @@ package tchannel_test
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -119,19 +118,18 @@ func TestTraceReportingEnabled(t *testing.T) {
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
 
 	var state struct {
-		sync.Mutex
+		signal chan struct{}
 
-		calls []TraceData
-		spans []Span
+		call TraceData
+		span Span
 	}
 	testTraceReporter := TraceReporterFunc(func(data TraceData) {
-		state.Lock()
-		defer state.Unlock()
+		defer close(state.signal)
 
 		span := data.Span
 		data.Span = Span{}
-		state.calls = append(state.calls, data)
-		state.spans = append(state.spans, span)
+		state.call = data
+		state.span = span
 	})
 
 	traceReporterOpts := testutils.NewOpts().SetTraceReporter(testTraceReporter)
@@ -162,7 +160,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		state.calls, state.spans = nil, nil
+		state.signal = make(chan struct{})
 
 		nowStub, addFn := testutils.NowStub(initialTime)
 		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(nowStub)
@@ -196,13 +194,16 @@ func TestTraceReportingEnabled(t *testing.T) {
 				}
 			}
 
-			state.Lock()
-			defer state.Unlock()
+			select {
+			case <-state.signal:
+			case <-time.After(time.Second):
+				t.Fatalf("Did not receive trace report within timeout")
+			}
 
-			expected := []TraceData{{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}}
-			assert.Equal(t, expected, state.calls, "%v: Report args mismatch", tt.name)
+			expected := TraceData{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}
+			assert.Equal(t, expected, state.call, "%v: Report args mismatch", tt.name)
 			curSpan := CurrentSpan(ctx)
-			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), state.spans[0], "Span mismatch")
+			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), state.span, "Span mismatch")
 		})
 	}
 }
