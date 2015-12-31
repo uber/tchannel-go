@@ -488,7 +488,11 @@ func TestNoLeakedState(t *testing.T) {
 			callWithNewClient(t, hostPort)
 		}
 
-		time.Sleep(time.Millisecond)
+		// Wait for all runnable goroutines to end. We expect one extra goroutine for the server.
+		goroutines.VerifyNoLeaks(t, &goroutines.VerifyOpts{
+			Exclude: "(*Channel).Serve",
+		})
+
 		state2 := ch.IntrospectState(nil)
 		assert.Equal(t, state1, state2, "State mismatch")
 	})
