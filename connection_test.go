@@ -461,7 +461,11 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 }
 
 func TestReadTimeout(t *testing.T) {
-	opts := testutils.NewOpts().AddLogFilter("failed to send error frame", 1)
+	// The error frame may fail to send since the connection closes before the handler sends it
+	// or the handler connection may be closed as it sends when the other side closes the conn.
+	opts := testutils.NewOpts().
+		AddLogFilter("failed to send error frame", 1).
+		AddLogFilter("Connection error at read frames", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
