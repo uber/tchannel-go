@@ -43,14 +43,15 @@ func (f HandlerFunc) Handle(ctx context.Context, call *InboundCall) { f(ctx, cal
 
 // Manages handlers
 type handlerMap struct {
-	mut      sync.RWMutex
+	sync.RWMutex
+
 	handlers map[string]map[string]Handler
 }
 
 // Registers a handler
 func (hmap *handlerMap) register(h Handler, serviceName, operation string) {
-	hmap.mut.Lock()
-	defer hmap.mut.Unlock()
+	hmap.Lock()
+	defer hmap.Unlock()
 
 	if hmap.handlers == nil {
 		hmap.handlers = make(map[string]map[string]Handler)
@@ -68,9 +69,9 @@ func (hmap *handlerMap) register(h Handler, serviceName, operation string) {
 // Finds the handler matching the given service and operation.  See https://github.com/golang/go/issues/3512
 // for the reason that operation is []byte instead of a string
 func (hmap *handlerMap) find(serviceName string, operation []byte) Handler {
-	hmap.mut.RLock()
+	hmap.RLock()
 	handler := hmap.handlers[serviceName][string(operation)]
-	hmap.mut.RUnlock()
+	hmap.RUnlock()
 
 	return handler
 }
