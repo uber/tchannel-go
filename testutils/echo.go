@@ -31,7 +31,7 @@ import (
 
 // CallEcho calls the "echo" endpoint from the given src to target.
 func CallEcho(src, target *tchannel.Channel, args *raw.Args) error {
-	ctx, cancel := tchannel.NewContext(getTimeout(100 * time.Millisecond))
+	ctx, cancel := tchannel.NewContext(Timeout(100 * time.Millisecond))
 	defer cancel()
 
 	if args == nil {
@@ -56,7 +56,7 @@ func RegisterEcho(src *tchannel.Channel, f func()) {
 
 // Ping sends a ping from src to target.
 func Ping(src, target *tchannel.Channel) error {
-	ctx, cancel := tchannel.NewContext(getTimeout(100 * time.Millisecond))
+	ctx, cancel := tchannel.NewContext(Timeout(100 * time.Millisecond))
 	defer cancel()
 
 	return src.Ping(ctx, target.PeerInfo().HostPort)
