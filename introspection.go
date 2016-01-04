@@ -123,9 +123,9 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		opts = &IntrospectionOptions{}
 	}
 
-	ch.mutable.mut.RLock()
+	ch.mutable.RLock()
 	conns := len(ch.mutable.conns)
-	ch.mutable.mut.RUnlock()
+	ch.mutable.RUnlock()
 
 	return &RuntimeState{
 		LocalPeer:      ch.PeerInfo(),
