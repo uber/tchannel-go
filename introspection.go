@@ -191,8 +191,8 @@ func getConnectionRuntimeState(conns []*Connection, opts *IntrospectionOptions) 
 
 // IntrospectState returns the runtime state for this peer.
 func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
-	p.mut.RLock()
-	defer p.mut.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	return PeerRuntimeState{
 		HostPort:            p.hostPort,
