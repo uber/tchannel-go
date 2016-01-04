@@ -218,6 +218,8 @@ func newPeerScore(p *Peer, score uint64) *peerScore {
 
 // Peer represents a single autobahn service or client with a unique host:port.
 type Peer struct {
+	sync.RWMutex
+
 	channel      Connectable
 	hostPort     string
 	onConnChange func(*Peer)
@@ -225,7 +227,7 @@ type Peer struct {
 	// scCount is the number of subchannels that this peer is added to.
 	scCount uint32
 
-	mut                 sync.RWMutex // mut protects connections.
+	// connections are mutable, and are protected by the mutex.
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
 	chosenCount         uint64
@@ -293,9 +295,9 @@ func (p *Peer) AddInboundConnection(c *Connection) error {
 		return ErrInvalidConnectionState
 	}
 
-	p.mut.Lock()
+	p.Lock()
 	p.inboundConnections = append(p.inboundConnections, c)
-	p.mut.Unlock()
+	p.Unlock()
 
 	p.connectionStateChanged(c)
 	return nil
@@ -303,16 +305,16 @@ func (p *Peer) AddInboundConnection(c *Connection) error {
 
 // addSC adds a reference to a peer from a subchannel (e.g. peer list).
 func (p *Peer) addSC() {
-	p.mut.Lock()
+	p.Lock()
 	p.scCount++
-	p.mut.Unlock()
+	p.Unlock()
 }
 
 // canRemove returns whether this peer can be safely removed from the root peer list.
 func (p *Peer) canRemove() bool {
-	p.mut.RLock()
+	p.RLock()
 	count := len(p.inboundConnections) + len(p.outboundConnections) + int(p.scCount)
-	p.mut.RUnlock()
+	p.RUnlock()
 	return count == 0
 }
 
@@ -326,9 +328,9 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 		return ErrInvalidConnectionState
 	}
 
-	p.mut.Lock()
+	p.Lock()
 	p.outboundConnections = append(p.outboundConnections, c)
-	p.mut.Unlock()
+	p.Unlock()
 
 	p.connectionStateChanged(c)
 	return nil
@@ -358,9 +360,9 @@ func (p *Peer) checkInboundConnection(changed *Connection) (updated bool, isInbo
 
 // connectionStateChanged is called when one of the peers' connections states changes.
 func (p *Peer) connectionStateChanged(changed *Connection) {
-	p.mut.Lock()
+	p.Lock()
 	updated, _ := p.checkInboundConnection(changed)
-	p.mut.Unlock()
+	p.Unlock()
 
 	if updated {
 		p.onConnChange(p)
@@ -407,17 +409,17 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName string, operationName 
 
 // NumConnections returns the number of inbound and outbound connections for this peer.
 func (p *Peer) NumConnections() (inbound int, outbound int) {
-	p.mut.RLock()
+	p.RLock()
 	inbound = len(p.inboundConnections)
 	outbound = len(p.outboundConnections)
-	p.mut.RUnlock()
+	p.RUnlock()
 	return inbound, outbound
 }
 
 // NumPendingOutbound returns the number of pending outbound calls.
 func (p *Peer) NumPendingOutbound() int {
 	count := 0
-	p.mut.RLock()
+	p.RLock()
 	for _, c := range p.outboundConnections {
 		count += c.outbound.count()
 	}
@@ -425,12 +427,12 @@ func (p *Peer) NumPendingOutbound() int {
 	for _, c := range p.inboundConnections {
 		count += c.outbound.count()
 	}
-	p.mut.RUnlock()
+	p.RUnlock()
 	return count
 }
 
 func (p *Peer) runWithConnections(f func(*Connection)) {
-	p.mut.RLock()
+	p.RLock()
 	for _, c := range p.inboundConnections {
 		f(c)
 	}
@@ -438,13 +440,13 @@ func (p *Peer) runWithConnections(f func(*Connection)) {
 	for _, c := range p.outboundConnections {
 		f(c)
 	}
-	p.mut.RUnlock()
+	p.RUnlock()
 }
 
 func (p *Peer) callOnUpdateComplete() {
-	p.mut.RLock()
+	p.RLock()
 	f := p.onUpdate
-	p.mut.RUnlock()
+	p.RUnlock()
 
 	if f != nil {
 		f(p)

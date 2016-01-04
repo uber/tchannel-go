@@ -119,11 +119,11 @@ type Channel struct {
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
-		mut      sync.RWMutex // protects members of the mutable struct.
-		state    ChannelState
-		peerInfo LocalPeerInfo // May be ephemeral if this is a client only channel
-		l        net.Listener  // May be nil if this is a client only channel
-		conns    map[uint32]*Connection
+		sync.RWMutex // protects members of the mutable struct.
+		state        ChannelState
+		peerInfo     LocalPeerInfo // May be ephemeral if this is a client only channel
+		l            net.Listener  // May be nil if this is a client only channel
+		conns        map[uint32]*Connection
 	}
 }
 
@@ -226,8 +226,8 @@ func (ch *Channel) ConnectionOptions() *ConnectionOptions {
 // a separate goroutine.
 func (ch *Channel) Serve(l net.Listener) error {
 	mutable := &ch.mutable
-	mutable.mut.Lock()
-	defer mutable.mut.Unlock()
+	mutable.Lock()
+	defer mutable.Unlock()
 
 	if mutable.l != nil {
 		return errAlreadyListening
@@ -253,20 +253,20 @@ func (ch *Channel) Serve(l net.Listener) error {
 // This method does not block as the handling of connections is done in a goroutine.
 func (ch *Channel) ListenAndServe(hostPort string) error {
 	mutable := &ch.mutable
-	mutable.mut.RLock()
+	mutable.RLock()
 
 	if mutable.l != nil {
-		mutable.mut.RUnlock()
+		mutable.RUnlock()
 		return errAlreadyListening
 	}
 
 	l, err := net.Listen("tcp", hostPort)
 	if err != nil {
-		mutable.mut.RUnlock()
+		mutable.RUnlock()
 		return err
 	}
 
-	mutable.mut.RUnlock()
+	mutable.RUnlock()
 	return ch.Serve(l)
 }
 
@@ -299,9 +299,9 @@ func (ch *Channel) Register(h Handler, operationName string) {
 
 // PeerInfo returns the current peer info for the channel
 func (ch *Channel) PeerInfo() LocalPeerInfo {
-	ch.mutable.mut.RLock()
+	ch.mutable.RLock()
 	peerInfo := ch.mutable.peerInfo
-	ch.mutable.mut.RUnlock()
+	ch.mutable.RUnlock()
 
 	return peerInfo
 }
@@ -465,10 +465,10 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 		return nil, err
 	}
 
-	ch.mutable.mut.Lock()
+	ch.mutable.Lock()
 	ch.mutable.conns[c.connID] = c
 	chState := ch.mutable.state
-	ch.mutable.mut.Unlock()
+	ch.mutable.Unlock()
 
 	// Any connections added after the channel is in StartClose should also be set to start close.
 	if chState == ChannelStartClose {
@@ -512,9 +512,9 @@ func (ch *Channel) incomingConnectionActive(c *Connection) {
 	p.AddInboundConnection(c)
 	ch.updatePeer(p)
 
-	ch.mutable.mut.Lock()
+	ch.mutable.Lock()
 	ch.mutable.conns[c.connID] = c
-	ch.mutable.mut.Unlock()
+	ch.mutable.Unlock()
 }
 
 // removeClosedConn removes a connection if it's closed.
@@ -523,9 +523,9 @@ func (ch *Channel) removeClosedConn(c *Connection) {
 		return
 	}
 
-	ch.mutable.mut.Lock()
+	ch.mutable.Lock()
 	delete(ch.mutable.conns, c.connID)
-	ch.mutable.mut.Unlock()
+	ch.mutable.Unlock()
 }
 
 // connectionCloseStateChange is called when a connection's close state changes.
@@ -541,14 +541,14 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 		return
 	}
 
-	ch.mutable.mut.RLock()
+	ch.mutable.RLock()
 	minState := connectionClosed
 	for _, c := range ch.mutable.conns {
 		if s := c.readState(); s < minState {
 			minState = s
 		}
 	}
-	ch.mutable.mut.RUnlock()
+	ch.mutable.RUnlock()
 
 	var updateTo ChannelState
 	if minState >= connectionClosed {
@@ -558,9 +558,9 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	}
 
 	if updateTo > 0 {
-		ch.mutable.mut.Lock()
+		ch.mutable.Lock()
 		ch.mutable.state = updateTo
-		ch.mutable.mut.Unlock()
+		ch.mutable.Unlock()
 		chState = updateTo
 	}
 
@@ -575,9 +575,9 @@ func (ch *Channel) Closed() bool {
 
 // State returns the current channel state.
 func (ch *Channel) State() ChannelState {
-	ch.mutable.mut.RLock()
+	ch.mutable.RLock()
 	state := ch.mutable.state
-	ch.mutable.mut.RUnlock()
+	ch.mutable.RUnlock()
 
 	return state
 }
@@ -589,7 +589,7 @@ func (ch *Channel) State() ChannelState {
 func (ch *Channel) Close() {
 	ch.Logger().Infof("Channel.Close called")
 	var connections []*Connection
-	ch.mutable.mut.Lock()
+	ch.mutable.Lock()
 
 	if ch.mutable.l != nil {
 		ch.mutable.l.Close()
@@ -602,7 +602,7 @@ func (ch *Channel) Close() {
 	for _, c := range ch.mutable.conns {
 		connections = append(connections, c)
 	}
-	ch.mutable.mut.Unlock()
+	ch.mutable.Unlock()
 
 	for _, c := range connections {
 		c.Close()

@@ -123,9 +123,9 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		opts = &IntrospectionOptions{}
 	}
 
-	ch.mutable.mut.RLock()
+	ch.mutable.RLock()
 	conns := len(ch.mutable.conns)
-	ch.mutable.mut.RUnlock()
+	ch.mutable.RUnlock()
 
 	return &RuntimeState{
 		LocalPeer:      ch.PeerInfo(),
@@ -164,7 +164,7 @@ func (l *RootPeerList) IntrospectState(opts *IntrospectionOptions) map[string]Pe
 // IntrospectState returns the runtime state of the subchannels.
 func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[string]SubChannelRuntimeState {
 	m := make(map[string]SubChannelRuntimeState)
-	subChMap.mut.RLock()
+	subChMap.RLock()
 	for k, sc := range subChMap.subchannels {
 		state := SubChannelRuntimeState{
 			Service:  k,
@@ -175,7 +175,7 @@ func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[s
 		}
 		m[k] = state
 	}
-	subChMap.mut.RUnlock()
+	subChMap.RUnlock()
 	return m
 }
 
@@ -191,8 +191,8 @@ func getConnectionRuntimeState(conns []*Connection, opts *IntrospectionOptions) 
 
 // IntrospectState returns the runtime state for this peer.
 func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
-	p.mut.RLock()
-	defer p.mut.RUnlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	return PeerRuntimeState{
 		HostPort:            p.hostPort,
@@ -221,7 +221,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 
 // IntrospectState returns the runtime state for this messsage exchange set.
 func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) ExchangeSetRuntimeState {
-	mexset.mut.RLock()
+	mexset.RLock()
 	setState := ExchangeSetRuntimeState{
 		Name:  mexset.name,
 		Count: len(mexset.exchanges),
@@ -238,7 +238,7 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 		}
 	}
 
-	mexset.mut.RUnlock()
+	mexset.RUnlock()
 	return setState
 }
 

@@ -85,23 +85,23 @@ func setupServer(host string, basePort, instanceNum int) error {
 }
 
 type kvHandler struct {
-	mut  sync.RWMutex
+	sync.RWMutex
 	vals map[string]string
 }
 
 func (h *kvHandler) WithLock(write bool, f func()) {
 	if write {
-		h.mut.Lock()
+		h.Lock()
 	} else {
-		h.mut.RLock()
+		h.RLock()
 	}
 
 	f()
 
 	if write {
-		h.mut.Unlock()
+		h.Unlock()
 	} else {
-		h.mut.RUnlock()
+		h.RUnlock()
 	}
 }
 

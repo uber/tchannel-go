@@ -36,9 +36,9 @@ func (ch *Channel) RootPeers() *RootPeerList {
 // SetOnUpdate sets onUpdate for a peer, which is called when the peer's score is
 // updated in all peer lists.
 func (p *Peer) SetOnUpdate(f func(*Peer)) {
-	p.mut.Lock()
+	p.Lock()
 	p.onUpdate = f
-	p.mut.Unlock()
+	p.Unlock()
 }
 
 // OutboundConnection returns the underlying connection for an outbound call.

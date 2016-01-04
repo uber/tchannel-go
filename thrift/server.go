@@ -37,9 +37,9 @@ type handler struct {
 
 // Server handles incoming TChannel calls and forwards them to the matching TChanServer.
 type Server struct {
+	sync.RWMutex
 	ch          tchannel.Registrar
 	log         tchannel.Logger
-	mut         sync.RWMutex
 	handlers    map[string]handler
 	metaHandler *metaHandler
 }
@@ -70,9 +70,9 @@ func (s *Server) Register(svr TChanServer, opts ...RegisterOption) {
 		opt.Apply(handler)
 	}
 
-	s.mut.Lock()
+	s.Lock()
 	s.handlers[service] = *handler
-	s.mut.Unlock()
+	s.Unlock()
 
 	for _, m := range svr.Methods() {
 		s.ch.Register(s, service+"::"+m)
@@ -178,9 +178,9 @@ func (s *Server) Handle(ctx context.Context, call *tchannel.InboundCall) {
 		log.Fatalf("Handle got call for %s which does not match the expected call format", op)
 	}
 
-	s.mut.RLock()
+	s.RLock()
 	handler, ok := s.handlers[service]
-	s.mut.RUnlock()
+	s.RUnlock()
 	if !ok {
 		log.Fatalf("Handle got call for service %v which is not registered", service)
 	}
