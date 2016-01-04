@@ -144,8 +144,8 @@ func TestTraceReportingEnabled(t *testing.T) {
 			name:       "inbound",
 			serverOpts: traceReporterOpts,
 			expected: []Annotation{
-				{Key: "sr", Timestamp: initialTime.Add(3 * time.Second)},
-				{Key: "ss", Timestamp: initialTime.Add(5 * time.Second)},
+				{Key: "sr", Timestamp: initialTime.Add(2 * time.Second)},
+				{Key: "ss", Timestamp: initialTime.Add(4 * time.Second)},
 			},
 			fromServer: true,
 		},
@@ -153,7 +153,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 			name:       "outbound",
 			clientOpts: traceReporterOpts,
 			expected: []Annotation{
-				{Key: "cs", Timestamp: initialTime.Add(1 * time.Second)},
+				{Key: "cs", Timestamp: initialTime.Add(time.Second)},
 				{Key: "cr", Timestamp: initialTime.Add(7 * time.Second)},
 			},
 		},
@@ -162,13 +162,18 @@ func TestTraceReportingEnabled(t *testing.T) {
 	for _, tt := range tests {
 		state.signal = make(chan struct{})
 
-		nowStub, addFn := testutils.NowStub(initialTime)
-		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(nowStub)
-		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(nowStub)
-		addFn(time.Second)
+		serverNow, serverNowFn := testutils.NowStub(initialTime.Add(time.Second))
+		clientNow, clientNowFn := testutils.NowStub(initialTime)
+		serverNowFn(time.Second)
+		clientNowFn(time.Second)
+
+		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(serverNow)
+		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(clientNow)
 
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {
-			testutils.RegisterEcho(ch, nil)
+			testutils.RegisterEcho(ch, func() {
+				clientNowFn(5 * time.Second)
+			})
 
 			clientCh := testutils.NewClient(t, tt.clientOpts)
 			defer clientCh.Close()
