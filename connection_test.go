@@ -304,7 +304,7 @@ func TestTimeout(t *testing.T) {
 		testHandler := onErrorTestHandler{newTestHandler(t), onError}
 		ch.Register(raw.Wrap(testHandler), "block")
 
-		ctx, cancel := NewContext(5 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "block", []byte("Arg2"), []byte("Arg3"))
@@ -382,7 +382,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
 		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
 
-		ctx, cancel := NewContext(10 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
@@ -419,14 +419,14 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(20 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
 		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, nil)
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 
 		// Wait for the write to complete, make sure there's no errors.
 		select {
-		case <-time.After(30 * time.Millisecond):
+		case <-time.After(testutils.Timeout(30 * time.Millisecond)):
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
@@ -450,7 +450,7 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(20 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
 		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, testutils.RandBytes(100000))
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
