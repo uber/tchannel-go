@@ -28,7 +28,8 @@ import (
 )
 
 type RecordingFramePool struct {
-	mut         sync.Mutex
+	sync.Mutex
+
 	allocations map[*Frame]string
 	badRelease  []string
 }
@@ -46,8 +47,9 @@ func recordStack() string {
 }
 
 func (p *RecordingFramePool) Get() *Frame {
-	p.mut.Lock()
-	defer p.mut.Unlock()
+	p.Lock()
+	defer p.Unlock()
+
 	frame := NewFrame(MaxFramePayloadSize)
 	p.allocations[frame] = recordStack()
 	return frame
@@ -69,8 +71,8 @@ func (p *RecordingFramePool) Release(f *Frame) {
 	f.headerBuffer = nil
 	f.Header = FrameHeader{}
 
-	p.mut.Lock()
-	defer p.mut.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	if _, ok := p.allocations[f]; !ok {
 		p.badRelease = append(p.badRelease, "bad Release at "+recordStack())
@@ -81,8 +83,8 @@ func (p *RecordingFramePool) Release(f *Frame) {
 }
 
 func (p *RecordingFramePool) CheckEmpty() (int, string) {
-	p.mut.Lock()
-	defer p.mut.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	var badCalls []string
 	badCalls = append(badCalls, p.badRelease...)
