@@ -50,7 +50,7 @@ func TestContextBuilder(t *testing.T) {
 	testutils.WithServer(t, nil, func(ch *tchannel.Channel, hostPort string) {
 		peerInfo := ch.PeerInfo()
 
-		testutils.RegisterFunc(t, ch, "SecondService::Echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		testutils.RegisterFunc(ch, "SecondService::Echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			call := tchannel.CurrentCall(ctx)
 			assert.Equal(t, peerInfo.ServiceName, call.CallerName(), "unexpected caller name")
 			assert.Equal(t, "shard", call.ShardKey(), "unexpected shard key")

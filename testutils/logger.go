@@ -21,6 +21,7 @@
 package testutils
 
 import (
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -29,7 +30,7 @@ import (
 )
 
 type errorLoggerState struct {
-	matchCount uint32
+	matchCount []uint32
 }
 
 type errorLogger struct {
@@ -40,17 +41,24 @@ type errorLogger struct {
 }
 
 func (l errorLogger) checkErr(msg string, args ...interface{}) {
-	allowedCount := l.v.AllowedCount
+	if len(l.v.Filters) == 0 {
+		l.t.Errorf(msg, args...)
+		return
+	}
 
-	if filter := l.v.AllowedFilter; filter != "" {
-		if !strings.Contains(msg, filter) {
-			l.t.Errorf(msg, args...)
+	formatted := fmt.Sprintf(msg, args...)
+	match := -1
+	for i, filter := range l.v.Filters {
+		if strings.Contains(formatted, filter.Filter) {
+			match = i
 		}
 	}
 
-	matchCount := atomic.AddUint32(&l.s.matchCount, 1)
-	if int(matchCount) <= allowedCount {
-		return
+	if match >= 0 {
+		matchCount := atomic.AddUint32(&l.s.matchCount[match], 1)
+		if uint(matchCount) <= l.v.Filters[match].Count {
+			return
+		}
 	}
 
 	l.t.Errorf(msg, args...)

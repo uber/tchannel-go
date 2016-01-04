@@ -36,15 +36,14 @@ import (
 )
 
 func TestTraceReporterFactory(t *testing.T) {
-	ch, err := tchannel.NewChannel("svc", &tchannel.ChannelOptions{
-		TraceReporterFactory: TCollectorReporterFactory,
-	})
-	assert.NoError(t, err)
+	opts := testutils.NewOpts().
+		SetServiceName("svc").
+		SetTraceReporterFactory(TCollectorReporterFactory)
+	ch := testutils.NewClient(t, opts)
 
 	// Create a TCollector channel, and add it as a peer to ch so Report works.
 	mockServer := new(mocks.TChanTCollector)
-	tcollectorCh, err := setupServer(mockServer)
-	require.NoError(t, err, "setupServer failed")
+	tcollectorCh := setupServer(t, mockServer)
 	ch.Peers().Add(tcollectorCh.PeerInfo().HostPort)
 
 	called := make(chan int)
@@ -312,40 +311,28 @@ func withSetup(t *testing.T, f func(ctx thrift.Context, args testArgs)) {
 	defer cancel()
 
 	// Start server
-	tchan, err := setupServer(args.s)
-	require.NoError(t, err)
+	tchan := setupServer(t, args.s)
 	defer tchan.Close()
 
 	// Get client1
-	args.c, err = getClient(tchan.PeerInfo().HostPort)
-	require.NoError(t, err)
+	args.c = getClient(t, tchan.PeerInfo().HostPort)
 
 	f(ctx, args)
 
 	args.s.AssertExpectations(t)
 }
 
-func setupServer(h *mocks.TChanTCollector) (*tchannel.Channel, error) {
-	tchan, err := testutils.NewServerChannel(&testutils.ChannelOpts{
-		ServiceName: tcollectorServiceName,
-	})
-	if err != nil {
-		return nil, err
-	}
-
+func setupServer(t *testing.T, h *mocks.TChanTCollector) *tchannel.Channel {
+	tchan := testutils.NewServer(t, testutils.NewOpts().SetServiceName(tcollectorServiceName))
 	server := thrift.NewServer(tchan)
 	server.Register(gen.NewTChanTCollectorServer(h))
-	return tchan, nil
+	return tchan
 }
 
-func getClient(dst string) (tchannel.TraceReporter, error) {
-	tchan, err := testutils.NewClientChannel(nil)
-	if err != nil {
-		return nil, err
-	}
-
+func getClient(t *testing.T, dst string) tchannel.TraceReporter {
+	tchan := testutils.NewClient(t, nil)
 	tchan.Peers().Add(dst)
-	return NewTCollectorReporter(tchan), nil
+	return NewTCollectorReporter(tchan)
 }
 
 func BenchmarkBuildThrift(b *testing.B) {

@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -133,8 +134,10 @@ func TestFramesReleased(t *testing.T) {
 		clientExchanges = CheckEmptyExchanges(clientCh)
 	})
 
-	// Wait a few milliseconds for the closing of channels to take effect.
-	time.Sleep(10 * time.Millisecond)
+	// Since the test is still running, the timeout goroutine will be running and can be ignored.
+	goroutines.VerifyNoLeaks(t, &goroutines.VerifyOpts{
+		Exclude: "testutils.SetTimeout",
+	})
 
 	if unreleasedCount, isEmpty := pool.CheckEmpty(); isEmpty != "" || unreleasedCount > 0 {
 		t.Errorf("Frame pool has %v unreleased frames, errors:\n%v", unreleasedCount, isEmpty)

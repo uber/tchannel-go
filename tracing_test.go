@@ -23,7 +23,6 @@ package tchannel_test
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -119,19 +118,18 @@ func TestTraceReportingEnabled(t *testing.T) {
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
 
 	var state struct {
-		sync.Mutex
+		signal chan struct{}
 
-		calls []TraceData
-		spans []Span
+		call TraceData
+		span Span
 	}
 	testTraceReporter := TraceReporterFunc(func(data TraceData) {
-		state.Lock()
-		defer state.Unlock()
+		defer close(state.signal)
 
 		span := data.Span
 		data.Span = Span{}
-		state.calls = append(state.calls, data)
-		state.spans = append(state.spans, span)
+		state.call = data
+		state.span = span
 	})
 
 	traceReporterOpts := testutils.NewOpts().SetTraceReporter(testTraceReporter)
@@ -146,8 +144,8 @@ func TestTraceReportingEnabled(t *testing.T) {
 			name:       "inbound",
 			serverOpts: traceReporterOpts,
 			expected: []Annotation{
-				{Key: "sr", Timestamp: initialTime.Add(3 * time.Second)},
-				{Key: "ss", Timestamp: initialTime.Add(5 * time.Second)},
+				{Key: "sr", Timestamp: initialTime.Add(2 * time.Second)},
+				{Key: "ss", Timestamp: initialTime.Add(4 * time.Second)},
 			},
 			fromServer: true,
 		},
@@ -155,22 +153,27 @@ func TestTraceReportingEnabled(t *testing.T) {
 			name:       "outbound",
 			clientOpts: traceReporterOpts,
 			expected: []Annotation{
-				{Key: "cs", Timestamp: initialTime.Add(1 * time.Second)},
+				{Key: "cs", Timestamp: initialTime.Add(time.Second)},
 				{Key: "cr", Timestamp: initialTime.Add(7 * time.Second)},
 			},
 		},
 	}
 
 	for _, tt := range tests {
-		state.calls, state.spans = nil, nil
+		state.signal = make(chan struct{})
 
-		nowStub, addFn := testutils.NowStub(initialTime)
-		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(nowStub)
-		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(nowStub)
-		addFn(time.Second)
+		serverNow, serverNowFn := testutils.NowStub(initialTime.Add(time.Second))
+		clientNow, clientNowFn := testutils.NowStub(initialTime)
+		serverNowFn(time.Second)
+		clientNowFn(time.Second)
+
+		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(serverNow)
+		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(clientNow)
 
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {
-			testutils.RegisterEcho(t, ch, nil)
+			testutils.RegisterEcho(ch, func() {
+				clientNowFn(5 * time.Second)
+			})
 
 			clientCh := testutils.NewClient(t, tt.clientOpts)
 			defer clientCh.Close()
@@ -196,13 +199,16 @@ func TestTraceReportingEnabled(t *testing.T) {
 				}
 			}
 
-			state.Lock()
-			defer state.Unlock()
+			select {
+			case <-state.signal:
+			case <-time.After(time.Second):
+				t.Fatalf("Did not receive trace report within timeout")
+			}
 
-			expected := []TraceData{{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}}
-			assert.Equal(t, expected, state.calls, "%v: Report args mismatch", tt.name)
+			expected := TraceData{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}
+			assert.Equal(t, expected, state.call, "%v: Report args mismatch", tt.name)
 			curSpan := CurrentSpan(ctx)
-			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), state.spans[0], "Span mismatch")
+			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), state.span, "Span mismatch")
 		})
 	}
 }
@@ -252,7 +258,7 @@ func TestTraceSamplingRate(t *testing.T) {
 
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 			var tracedCalls int
-			testutils.RegisterFunc(t, ch, "t", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			testutils.RegisterFunc(ch, "t", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				if CurrentSpan(ctx).TracingEnabled() {
 					tracedCalls++
 				}
@@ -294,13 +300,13 @@ func TestChildCallsNotSampled(t *testing.T) {
 	s2 := testutils.NewServer(t, nil)
 	defer s2.Close()
 
-	testutils.RegisterFunc(t, s1, "s1", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(s1, "s1", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		_, _, _, err := raw.Call(ctx, s1, s2.PeerInfo().HostPort, s2.ServiceName(), "s2", nil, nil)
 		require.NoError(t, err, "raw.Call from s1 to s2 failed")
 		return &raw.Res{}, nil
 	})
 
-	testutils.RegisterFunc(t, s2, "s2", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(s2, "s2", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		if CurrentSpan(ctx).TracingEnabled() {
 			traceEnabledCalls++
 		}

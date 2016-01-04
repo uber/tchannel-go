@@ -29,9 +29,10 @@ import (
 	"time"
 )
 
-var timeoutMultiplier = flag.Float64("timeoutMultiplier", 1, "All calls to SetTimeout have their timeout multiplied by this value")
+var timeoutMultiplier = flag.Float64("timeoutMultiplier", 1, "All calls to {Get,Set}Timeout have their timeout multiplied by this value")
 
-func getTimeout(timeout time.Duration) time.Duration {
+// Timeout returns the timeout multiplied by any set multiplier.
+func Timeout(timeout time.Duration) time.Duration {
 	return time.Duration(*timeoutMultiplier * float64(timeout))
 }
 
@@ -53,7 +54,7 @@ func getCallerName() string {
 // run once the test is complete. The standard way is to use defer, e.g.
 // defer SetTimeout(t, time.Second)()
 func SetTimeout(t *testing.T, timeout time.Duration) func() {
-	timeout = getTimeout(timeout)
+	timeout = Timeout(timeout)
 
 	caller := getCallerName()
 	c := make(chan struct{})

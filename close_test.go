@@ -23,7 +23,6 @@ package tchannel_test
 import (
 	"math/rand"
 	"net"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -51,6 +50,14 @@ func makeCall(ch *Channel, hostPort, service string) error {
 
 	_, _, _, err := raw.Call(ctx, ch, hostPort, service, "test", nil, nil)
 	return err
+}
+
+func assertStateChangesTo(t *testing.T, ch *Channel, state ChannelState) {
+	var lastState ChannelState
+	require.True(t, testutils.WaitFor(time.Second, func() bool {
+		lastState = ch.State()
+		return lastState == state
+	}), "Channel state is %v expected %v", lastState, state)
 }
 
 func TestCloseOnlyListening(t *testing.T) {
@@ -87,8 +94,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 
 		// The client channel should also close immediately.
 		clientCh.Close()
-		runtime.Gosched()
-		assert.Equal(t, ChannelClosed, clientCh.State())
+		assertStateChangesTo(t, clientCh, ChannelClosed)
 		assert.True(t, clientCh.Closed(), "Channel should be closed")
 
 		// Unblock the testHandler so that a goroutine isn't leaked.
@@ -191,11 +197,11 @@ func (t *closeSemanticsTest) makeServer(name string) (*Channel, chan struct{}) {
 	ch := testutils.NewServer(t.T, &testutils.ChannelOpts{ServiceName: name})
 
 	c := make(chan struct{})
-	testutils.RegisterFunc(t.T, ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch, "stream", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		<-c
 		return &raw.Res{}, nil
 	})
-	testutils.RegisterFunc(t.T, ch, "call", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch, "call", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		return &raw.Res{}, nil
 	})
 	return ch, c
@@ -301,16 +307,14 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 	// Once the incoming connection is drained, outgoing calls should fail.
 	s1C <- struct{}{}
 	<-call2
-	runtime.Gosched()
-	assert.Equal(t, ChannelInboundClosed, s1.State())
+	assertStateChangesTo(t.T, s1, ChannelInboundClosed)
 	require.Error(t, t.call(s1, s2),
 		"closed channel with no pending incoming calls should not allow outgoing calls")
 
 	// Now the channel should be completely closed as there are no pending connections.
 	s2C <- struct{}{}
 	<-call1
-	runtime.Gosched()
-	assert.Equal(t, ChannelClosed, s1.State())
+	assertStateChangesTo(t.T, s1, ChannelClosed)
 
 	// Close s2 so we don't leave any goroutines running.
 	s2.Close()
@@ -349,7 +353,7 @@ func TestCloseSingleChannel(t *testing.T) {
 	var completed sync.WaitGroup
 	blockCall := make(chan struct{})
 
-	testutils.RegisterFunc(t, ch, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		connected.Done()
 		<-blockCall
 		return &raw.Res{
@@ -378,8 +382,7 @@ func TestCloseSingleChannel(t *testing.T) {
 	completed.Wait()
 
 	// Once all calls are complete, the channel should be closed.
-	runtime.Gosched()
-	assert.Equal(t, ChannelClosed, ch.State())
+	assertStateChangesTo(t, ch, ChannelClosed)
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
@@ -393,7 +396,7 @@ func TestCloseOneSide(t *testing.T) {
 	connected := make(chan struct{})
 	completed := make(chan struct{})
 	blockCall := make(chan struct{})
-	testutils.RegisterFunc(t, ch2, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	testutils.RegisterFunc(ch2, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		connected <- struct{}{}
 		<-blockCall
 		return &raw.Res{
@@ -418,8 +421,7 @@ func TestCloseOneSide(t *testing.T) {
 	<-completed
 
 	// Once the call completes, the channel should be closed.
-	runtime.Gosched()
-	assert.Equal(t, ChannelClosed, ch1.State())
+	assertStateChangesTo(t, ch1, ChannelClosed)
 
 	// We need to close all open TChannels before verifying blocked goroutines.
 	ch2.Close()
@@ -435,7 +437,7 @@ func TestCloseSendError(t *testing.T) {
 	counter := uint32(0)
 
 	serverCh := testutils.NewServer(t, nil)
-	testutils.RegisterEcho(t, serverCh, func() {
+	testutils.RegisterEcho(serverCh, func() {
 		if atomic.AddUint32(&counter, 1) > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
 			go func() {
@@ -486,7 +488,11 @@ func TestNoLeakedState(t *testing.T) {
 			callWithNewClient(t, hostPort)
 		}
 
-		time.Sleep(time.Millisecond)
+		// Wait for all runnable goroutines to end. We expect one extra goroutine for the server.
+		goroutines.VerifyNoLeaks(t, &goroutines.VerifyOpts{
+			Exclude: "(*Channel).Serve",
+		})
+
 		state2 := ch.IntrospectState(nil)
 		assert.Equal(t, state1, state2, "State mismatch")
 	})

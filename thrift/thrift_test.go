@@ -99,13 +99,10 @@ func TestRequestSubChannel(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	tchan, err := tchannel.NewChannel("svc1", nil)
-	require.NoError(t, err, "server NewChannel failed")
-	require.NoError(t, tchan.ListenAndServe(":0"), "Listen failed")
+	tchan := testutils.NewServer(t, testutils.NewOpts().SetServiceName("svc1"))
 	defer tchan.Close()
 
-	clientCh, err := tchannel.NewChannel("client", nil)
-	require.NoError(t, err, "client NewChannel failed")
+	clientCh := testutils.NewClient(t, nil)
 	defer clientCh.Close()
 	clientCh.Peers().Add(tchan.PeerInfo().HostPort)
 
@@ -262,25 +259,26 @@ func TestRegisterPostResponseCB(t *testing.T) {
 }
 
 func TestThriftTimeout(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
-
 	withSetup(t, func(ctx Context, args testArgs) {
 		handler := make(chan struct{})
 
 		args.s2.On("Echo", ctxArg(), "asd").Return("asd", nil).Run(func(args mock.Arguments) {
-			time.Sleep(15 * time.Millisecond)
+			time.Sleep(testutils.Timeout(15 * time.Millisecond))
 			close(handler)
-			return
 		})
 
-		ctx, cancel := NewContext(10 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(10 * time.Millisecond))
 		defer cancel()
 
 		_, err := args.c2.Echo(ctx, "asd")
 		assert.Equal(t, err, tchannel.ErrTimeout, "Expect call to time out")
 
 		// Wait for the handler to return, otherwise the test ends before the Server gets an error.
-		<-handler
+		select {
+		case <-handler:
+		case <-time.After(time.Second):
+			t.Errorf("Echo handler did not run")
+		}
 	})
 }
 

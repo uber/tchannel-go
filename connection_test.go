@@ -180,7 +180,7 @@ func TestRemotePeer(t *testing.T) {
 			defer tt.remote.Close()
 
 			gotPeer := make(chan PeerInfo, 1)
-			testutils.RegisterFunc(t, ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				gotPeer <- CurrentCall(ctx).RemotePeer()
 				return &raw.Res{}, nil
 			})
@@ -203,12 +203,6 @@ func TestReuseConnection(t *testing.T) {
 		WithVerifiedServer(t, s2Opts, func(ch2 *Channel, hostPort2 string) {
 			ch1.Register(raw.Wrap(newTestHandler(t)), "echo")
 			ch2.Register(raw.Wrap(newTestHandler(t)), "echo")
-
-			// We need the servers to have their peers set before making outgoing calls
-			// for the outgoing calls to contain the correct peerInfo.
-			require.True(t, testutils.WaitFor(time.Second, func() bool {
-				return !ch1.PeerInfo().IsEphemeral && !ch2.PeerInfo().IsEphemeral
-			}))
 
 			outbound, err := ch1.BeginCall(ctx, hostPort2, "s2", "echo", nil)
 			require.NoError(t, err)
@@ -310,7 +304,7 @@ func TestTimeout(t *testing.T) {
 		testHandler := onErrorTestHandler{newTestHandler(t), onError}
 		ch.Register(raw.Wrap(testHandler), "block")
 
-		ctx, cancel := NewContext(5 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "block", []byte("Arg2"), []byte("Arg3"))
@@ -388,7 +382,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
 		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
 
-		ctx, cancel := NewContext(10 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
@@ -425,14 +419,14 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(20 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
 		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, nil)
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 
 		// Wait for the write to complete, make sure there's no errors.
 		select {
-		case <-time.After(30 * time.Millisecond):
+		case <-time.After(testutils.Timeout(30 * time.Millisecond)):
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
@@ -456,7 +450,7 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(20 * time.Millisecond)
+		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
 		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, testutils.RandBytes(100000))
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
@@ -467,15 +461,21 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 }
 
 func TestReadTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// The error frame may fail to send since the connection closes before the handler sends it
+	// or the handler connection may be closed as it sends when the other side closes the conn.
+	opts := testutils.NewOpts().
+		AddLogFilter("failed to send error frame", 1).
+		AddLogFilter("Connection error at read frames", 1)
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				defer cancel()
 				return nil, ErrTimeout
 			}
-			testutils.RegisterFunc(t, ch, "call", handler)
-			raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
+			testutils.RegisterFunc(ch, "call", handler)
+			_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
+			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
 	})
 }
