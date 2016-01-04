@@ -221,7 +221,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 
 // IntrospectState returns the runtime state for this messsage exchange set.
 func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) ExchangeSetRuntimeState {
-	mexset.mut.RLock()
+	mexset.RLock()
 	setState := ExchangeSetRuntimeState{
 		Name:  mexset.name,
 		Count: len(mexset.exchanges),
@@ -238,7 +238,7 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 		}
 	}
 
-	mexset.mut.RUnlock()
+	mexset.RUnlock()
 	return setState
 }
 

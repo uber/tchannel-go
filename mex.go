@@ -151,14 +151,16 @@ func (mex *messageExchange) inboundTimeout() {
 // ensuring that their message exchanges are properly registered and removed
 // from the corresponding exchange set.
 type messageExchangeSet struct {
-	log       Logger
-	name      string
-	onRemoved func()
-	onAdded   func()
+	sync.RWMutex
 
-	exchanges  map[uint32]*messageExchange
+	log        Logger
+	name       string
+	onRemoved  func()
+	onAdded    func()
 	sendChRefs sync.WaitGroup
-	mut        sync.RWMutex
+
+	// exchanges is mutable, and is protected by the mutex.
+	exchanges map[uint32]*messageExchange
 }
 
 // newExchange creates and adds a new message exchange to this set
@@ -177,7 +179,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		framePool: framePool,
 	}
 
-	mexset.mut.Lock()
+	mexset.Lock()
 	if existingMex := mexset.exchanges[mex.msgID]; existingMex != nil {
 		if existingMex == mex {
 			mexset.log.Warnf("%s mex for %s, %d registered multiple times",
@@ -187,13 +189,13 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 				mex.msgID, existingMex.msgType, mex.msgType)
 		}
 
-		mexset.mut.Unlock()
+		mexset.Unlock()
 		return nil, errDuplicateMex
 	}
 
 	mexset.exchanges[mex.msgID] = mex
 	mexset.sendChRefs.Add(1)
-	mexset.mut.Unlock()
+	mexset.Unlock()
 
 	mexset.onAdded()
 
@@ -209,9 +211,9 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 		mexset.log.Debugf("Removing %s message exchange %d", mexset.name, msgID)
 	}
 
-	mexset.mut.Lock()
+	mexset.Lock()
 	delete(mexset.exchanges, msgID)
-	mexset.mut.Unlock()
+	mexset.Unlock()
 
 	mexset.sendChRefs.Done()
 	mexset.onRemoved()
@@ -222,9 +224,9 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 func (mexset *messageExchangeSet) timeoutExchange(msgID uint32) {
 	mexset.log.Debugf("Removing %s message exchange %d due to timeout", mexset.name, msgID)
 
-	mexset.mut.Lock()
+	mexset.Lock()
 	delete(mexset.exchanges, msgID)
-	mexset.mut.Unlock()
+	mexset.Unlock()
 
 	mexset.onRemoved()
 }
@@ -235,9 +237,9 @@ func (mexset *messageExchangeSet) waitForSendCh() {
 }
 
 func (mexset *messageExchangeSet) count() int {
-	mexset.mut.RLock()
+	mexset.RLock()
 	count := len(mexset.exchanges)
-	mexset.mut.RUnlock()
+	mexset.RUnlock()
 
 	return count
 }
@@ -249,9 +251,9 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 		mexset.log.Debugf("forwarding %s %s", mexset.name, frame.Header)
 	}
 
-	mexset.mut.RLock()
+	mexset.RLock()
 	mex := mexset.exchanges[frame.Header.ID]
-	mexset.mut.RUnlock()
+	mexset.RUnlock()
 
 	if mex == nil {
 		// This is ok since the exchange might have expired or been cancelled
