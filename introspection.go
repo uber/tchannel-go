@@ -164,7 +164,7 @@ func (l *RootPeerList) IntrospectState(opts *IntrospectionOptions) map[string]Pe
 // IntrospectState returns the runtime state of the subchannels.
 func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[string]SubChannelRuntimeState {
 	m := make(map[string]SubChannelRuntimeState)
-	subChMap.mut.RLock()
+	subChMap.RLock()
 	for k, sc := range subChMap.subchannels {
 		state := SubChannelRuntimeState{
 			Service:  k,
@@ -175,7 +175,7 @@ func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[s
 		}
 		m[k] = state
 	}
-	subChMap.mut.RUnlock()
+	subChMap.RUnlock()
 	return m
 }
 

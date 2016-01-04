@@ -53,7 +53,7 @@ type SubChannel struct {
 
 // Map of subchannel and the corresponding service
 type subChannelMap struct {
-	mut         sync.RWMutex
+	sync.RWMutex
 	subchannels map[string]*SubChannel
 }
 
@@ -134,8 +134,8 @@ func (subChMap *subChannelMap) find(serviceName string, operation []byte) Handle
 
 // Register a new subchannel for the given serviceName
 func (subChMap *subChannelMap) registerNewSubChannel(serviceName string, ch *Channel) *SubChannel {
-	subChMap.mut.Lock()
-	defer subChMap.mut.Unlock()
+	subChMap.Lock()
+	defer subChMap.Unlock()
 
 	if subChMap.subchannels == nil {
 		subChMap.subchannels = make(map[string]*SubChannel)
@@ -152,9 +152,9 @@ func (subChMap *subChannelMap) registerNewSubChannel(serviceName string, ch *Cha
 
 // Get subchannel if, we have one
 func (subChMap *subChannelMap) get(serviceName string) (*SubChannel, bool) {
-	subChMap.mut.RLock()
+	subChMap.RLock()
 	sc, ok := subChMap.subchannels[serviceName]
-	subChMap.mut.RUnlock()
+	subChMap.RUnlock()
 	return sc, ok
 }
 
@@ -168,7 +168,7 @@ func (subChMap *subChannelMap) getOrAdd(serviceName string, ch *Channel) *SubCha
 }
 
 func (subChMap *subChannelMap) updatePeer(p *Peer) {
-	subChMap.mut.RLock()
+	subChMap.RLock()
 	for _, subCh := range subChMap.subchannels {
 		if subCh.Isolated() {
 			subCh.RLock()
@@ -176,5 +176,5 @@ func (subChMap *subChannelMap) updatePeer(p *Peer) {
 			subCh.RUnlock()
 		}
 	}
-	subChMap.mut.RUnlock()
+	subChMap.RUnlock()
 }
