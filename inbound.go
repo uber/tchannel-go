@@ -35,6 +35,7 @@ var errInboundRequestAlreadyActive = errors.New("inbound request is already acti
 // exchange to receive further fragments for that call, and dispatching it in
 // another goroutine
 func (c *Connection) handleCallReq(frame *Frame) bool {
+	now := c.timeNow()
 	switch state := c.readState(); state {
 	case connectionActive:
 		break
@@ -77,6 +78,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	}
 
 	response := new(InboundCallResponse)
+	response.calledAt = now
 	response.Annotations = Annotations{
 		reporter: c.traceReporter,
 		timeNow:  c.timeNow,
@@ -95,7 +97,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response.data.Target = response.data.Source
 	response.data.Annotations = response.annotationsBacking[:0]
 	response.data.BinaryAnnotations = response.binaryAnnotationsBacking[:]
-	response.AddAnnotation(AnnotationKeyServerReceive)
+	response.AddAnnotationAt(AnnotationKeyServerReceive, now)
 	response.mex = mex
 	response.conn = c
 	response.cancel = cancel
@@ -177,7 +179,6 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 
 	call.commonStatsTags["endpoint"] = string(call.operation)
 	call.statsReporter.IncCounter("inbound.calls.recvd", call.commonStatsTags, 1)
-	call.response.calledAt = c.timeNow()
 	call.response.SetOperation(string(call.operation))
 
 	// NB(mmihic): Don't cast operation name to string here - this will
@@ -364,10 +365,11 @@ func (response *InboundCallResponse) Arg3Writer() (ArgWriter, error) {
 // For incoming calls, the last message is sending the call response.
 func (response *InboundCallResponse) doneSending() {
 	// TODO(prashant): Move this to when the message is actually being sent.
-	response.AddAnnotation(AnnotationKeyServerSend)
+	now := response.GetTime()
+	response.AddAnnotationAt(AnnotationKeyServerSend, now)
 	response.Report()
 
-	latency := response.GetTime().Sub(response.calledAt)
+	latency := now.Sub(response.calledAt)
 	response.statsReporter.RecordTimer("inbound.calls.latency", response.commonStatsTags, latency)
 
 	if response.systemError {

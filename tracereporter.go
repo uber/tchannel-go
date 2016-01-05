@@ -125,9 +125,9 @@ func (as *Annotations) AddBinaryAnnotation(key string, value interface{}) {
 	as.data.BinaryAnnotations = append(as.data.BinaryAnnotations, binaryAnnotation)
 }
 
-// AddAnnotation adds a standard annotation.
-func (as *Annotations) AddAnnotation(key AnnotationKey) {
-	annotation := Annotation{Key: key, Timestamp: as.timeNow()}
+// AddAnnotationAt adds a standard annotation with the specified time.
+func (as *Annotations) AddAnnotationAt(key AnnotationKey, ts time.Time) {
+	annotation := Annotation{Key: key, Timestamp: ts}
 	as.data.Annotations = append(as.data.Annotations, annotation)
 }
 

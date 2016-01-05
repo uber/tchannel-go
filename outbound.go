@@ -34,6 +34,8 @@ const maxOperationSize = 16 * 1024
 
 // beginCall begins an outbound call on the connection
 func (c *Connection) beginCall(ctx context.Context, serviceName string, callOptions *CallOptions, operation string) (*OutboundCall, error) {
+	now := c.timeNow()
+
 	switch state := c.readState(); state {
 	case connectionActive, connectionStartClose:
 		break
@@ -50,7 +52,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	if !ok {
 		return nil, ErrTimeoutRequired
 	}
-	timeToLive := deadline.Sub(time.Now())
+	timeToLive := deadline.Sub(now)
 	if timeToLive <= 0 {
 		return nil, ErrTimeout
 	}
@@ -108,6 +110,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	call.callReq.Tracing.sampleRootSpan(c.traceSampleRate)
 
 	response := new(OutboundCallResponse)
+	response.startedAt = now
 	response.Annotations = Annotations{
 		reporter: c.traceReporter,
 		timeNow:  c.timeNow,
@@ -130,10 +133,9 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 	}
 	response.data.Annotations = response.annotationsBacking[:0]
 	response.data.BinaryAnnotations = response.binaryAnnotationsBacking[:]
-	response.AddAnnotation(AnnotationKeyClientSend)
+	response.AddAnnotationAt(AnnotationKeyClientSend, now)
 
 	response.requestState = callOptions.RequestState
-	response.startedAt = c.timeNow()
 	response.mex = mex
 	response.log = c.log.WithFields(LogField{"Out-Response", requestID})
 	response.messageForFragment = func(initial bool) message {
@@ -317,13 +319,13 @@ func cloneTags(tags map[string]string) map[string]string {
 // doneReading shuts down the message exchange for this call.
 // For outgoing calls, the last message is reading the call response.
 func (response *OutboundCallResponse) doneReading(unexpected error) {
-	response.AddAnnotation(AnnotationKeyClientReceive)
+	now := response.GetTime()
+	response.AddAnnotationAt(AnnotationKeyClientReceive, now)
 	response.Report()
 
 	isSuccess := unexpected == nil && !response.ApplicationError()
 	lastAttempt := isSuccess || !response.requestState.HasRetries(unexpected)
 
-	now := response.GetTime()
 	latency := now.Sub(response.startedAt)
 	response.statsReporter.RecordTimer("outbound.calls.per-attempt.latency", response.commonStatsTags, latency)
 	if lastAttempt {
