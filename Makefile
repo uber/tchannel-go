@@ -21,7 +21,7 @@ export PATH := $(realpath $(THRIFT_REL)):$(PATH)
 # Separate packages that use testutils and don't, since they can have different flags.
 # This is especially useful for timeoutMultiplier and connectionLog
 TESTUTILS_TEST_PKGS := . hyperbahn testutils http json thrift pprof trace
-NO_TESTUTILS_PKGS := stats thrift/thrift-gen typed
+NO_TESTUTILS_PKGS := stats thrift/thrift-gen tnet typed
 
 # Cross language test args
 TEST_HOST=127.0.0.1

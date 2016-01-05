@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uber/tchannel-go/tnet"
+
 	"golang.org/x/net/context"
 )
 
@@ -232,7 +234,7 @@ func (ch *Channel) Serve(l net.Listener) error {
 	if mutable.l != nil {
 		return errAlreadyListening
 	}
-	mutable.l = l
+	mutable.l = tnet.Wrap(l)
 
 	if mutable.state != ChannelClient {
 		return errInvalidStateForOp
