@@ -58,6 +58,23 @@ const (
 
 const hyperbahnServiceName = "hyperbahn"
 
+func (f *FailStrategy) UnmarshalYAML(unmarshal func(v interface{}) error) error {
+	var strategy string
+	if err := unmarshal(&strategy); err != nil {
+		return err
+	}
+
+	switch strategy {
+	case "fatal":
+		*f = FailStrategyFatal
+	case "ignore":
+		*f = FailStrategyIgnore
+	default:
+		return fmt.Errorf("not a valid fail strategy: %q", strategy)
+	}
+	return nil
+}
+
 // ClientOptions are used to configure this Hyperbahn client.
 type ClientOptions struct {
 	// Timeout defaults to 1 second if it is not set.
