@@ -145,7 +145,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 			serverOpts: traceReporterOpts,
 			expected: []Annotation{
 				{Key: "sr", Timestamp: initialTime.Add(2 * time.Second)},
-				{Key: "ss", Timestamp: initialTime.Add(4 * time.Second)},
+				{Key: "ss", Timestamp: initialTime.Add(3 * time.Second)},
 			},
 			fromServer: true,
 		},
@@ -154,7 +154,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 			clientOpts: traceReporterOpts,
 			expected: []Annotation{
 				{Key: "cs", Timestamp: initialTime.Add(time.Second)},
-				{Key: "cr", Timestamp: initialTime.Add(7 * time.Second)},
+				{Key: "cr", Timestamp: initialTime.Add(6 * time.Second)},
 			},
 		},
 	}

@@ -91,12 +91,12 @@ func TestStatsCalls(t *testing.T) {
 		outboundTags := tagsForOutboundCall(serverCh, ch, "echo")
 		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
-		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 200*time.Millisecond)
-		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 200*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
 		inboundTags := tagsForInboundCall(serverCh, ch, "echo")
 		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
 		serverStats.Expected.IncCounter("inbound.calls.success", inboundTags, 1)
-		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 100*time.Millisecond)
+		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
 
 		_, _, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, "app-error", nil, nil)
 		require.NoError(t, err)
@@ -106,12 +106,12 @@ func TestStatsCalls(t *testing.T) {
 		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
 		clientStats.Expected.IncCounter("outbound.calls.app-errors", outboundTags, 1)
-		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 200*time.Millisecond)
-		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 200*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
+		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
 		inboundTags = tagsForInboundCall(serverCh, ch, "app-error")
 		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
 		serverStats.Expected.IncCounter("inbound.calls.app-errors", inboundTags, 1)
-		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 100*time.Millisecond)
+		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
 	})
 
 	clientStats.Validate(t)
@@ -155,27 +155,27 @@ func TestStatsWithRetries(t *testing.T) {
 			{
 				numFailures:         0,
 				numAttempts:         1,
-				perAttemptLatencies: a(20 * time.Millisecond),
-				overallLatency:      40 * time.Millisecond,
+				perAttemptLatencies: a(10 * time.Millisecond),
+				overallLatency:      20 * time.Millisecond,
 			},
 			{
 				numFailures:         1,
 				numAttempts:         2,
-				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond),
-				overallLatency:      80 * time.Millisecond,
+				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond),
+				overallLatency:      40 * time.Millisecond,
 			},
 			{
 				numFailures:         4,
 				numAttempts:         5,
-				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond),
-				overallLatency:      200 * time.Millisecond,
+				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond),
+				overallLatency:      100 * time.Millisecond,
 			},
 			{
 				numFailures:         5,
 				numAttempts:         5,
 				expectErr:           ErrServerBusy,
-				perAttemptLatencies: a(20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond),
-				overallLatency:      200 * time.Millisecond,
+				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond),
+				overallLatency:      100 * time.Millisecond,
 			},
 		}
 
