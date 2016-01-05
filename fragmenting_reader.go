@@ -214,7 +214,7 @@ func (r *fragmentingReader) Close() error {
 			return r.err
 		}
 
-		r.receiver.doneReading(nil)
+		r.doneReading(nil)
 		r.curFragment.done()
 		r.curChunk = nil
 		r.state = fragmentingReadComplete
@@ -258,7 +258,7 @@ func (r *fragmentingReader) recvAndParseNextFragment(initial bool) error {
 		if err, ok := r.err.(errorMessage); ok {
 			// Serialized system errors are still reported (e.g. latency, trace reporting).
 			r.err = err.AsSystemError()
-			r.receiver.doneReading(r.err)
+			r.doneReading(r.err)
 		}
 		return r.err
 	}
@@ -297,4 +297,11 @@ func (r *fragmentingReader) recvAndParseNextFragment(initial bool) error {
 	// Pull out the first chunk to act as the current chunk
 	r.curChunk, r.remainingChunks = r.remainingChunks[0], r.remainingChunks[1:]
 	return nil
+}
+
+func (r *fragmentingReader) doneReading(err error) {
+	if r.checksum != nil {
+		r.checksum.Release()
+	}
+	r.receiver.doneReading(err)
 }
