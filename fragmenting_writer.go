@@ -60,10 +60,12 @@ type writableFragment struct {
 
 // finish finishes the fragment, updating the final checksum and fragment flags
 func (f *writableFragment) finish(hasMoreFragments bool) {
+	f.checksumRef.Update(f.checksum.Sum())
 	if hasMoreFragments {
 		f.flagsRef.Update(hasMoreFragmentsFlag)
+	} else {
+		f.checksum.Release()
 	}
-	f.checksumRef.Update(f.checksum.Sum())
 }
 
 // A writableChunk is a chunk of data within a fragment, representing the
