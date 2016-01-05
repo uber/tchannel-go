@@ -214,6 +214,11 @@ func TestReuseConnection(t *testing.T) {
 			outbound2Conn, _ := OutboundConnection(outbound)
 			assert.Equal(t, outboundConn, outbound2Conn)
 
+			// Wait for the connection to be marked as active in ch2.
+			assert.True(t, testutils.WaitFor(time.Second, func() bool {
+				return ch2.IntrospectState(nil).NumConnections > 0
+			}), "ch2 does not have any active connections")
+
 			// When ch2 tries to call ch1, it should reuse the inbound connection from ch1.
 			outbound3, err := ch2.BeginCall(ctx, hostPort1, "s1", "echo", nil)
 			require.NoError(t, err)
