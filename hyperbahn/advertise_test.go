@@ -306,7 +306,7 @@ func TestRetryFailure(t *testing.T) {
 	})
 }
 
-func TestCanUnmarshallYAMLFailStrategy(t *testing.T) {
+func TestCanUnmarshalYAMLFailStrategy(t *testing.T) {
 	tests := []struct {
 		strategy string
 		expected FailStrategy
