@@ -297,7 +297,14 @@ func TestRetryFailure(t *testing.T) {
 			<-r.reqCh
 
 			sleptFor := <-r.sleepArgs
-			checkRetryInterval(t, sleptFor, i)
+
+			// Make sure that we cap backoff at some reasonable duration, even
+			// after many retries.
+			if i <= maxAdvertiseFailures {
+				checkRetryInterval(t, sleptFor, i)
+			} else {
+				checkRetryInterval(t, sleptFor, maxAdvertiseFailures)
+			}
 		}
 
 		r.sleepClose()
