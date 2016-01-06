@@ -275,7 +275,7 @@ func TestRetryFailure(t *testing.T) {
 		r.mock.On("OnError", ErrAdvertiseFailed{true, advertiseErr}).Return(nil).Times(maxAdvertiseFailures * 2).Run(func(_ mock.Arguments) {
 			expectationCalled++
 			if expectationCalled >= maxAdvertiseFailures*2 {
-				doneTesting <- struct{}{}
+				close(doneTesting)
 				r.client.Close()
 			}
 		})
