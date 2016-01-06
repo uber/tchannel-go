@@ -53,11 +53,11 @@ func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TC
 	return client
 }
 
-func (c *client) startCall(ctx context.Context, operation string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
+func (c *client) startCall(ctx context.Context, method string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
 	if c.opts.HostPort != "" {
-		return c.ch.BeginCall(ctx, c.opts.HostPort, c.serviceName, operation, callOptions)
+		return c.ch.BeginCall(ctx, c.opts.HostPort, c.serviceName, method, callOptions)
 	}
-	return c.sc.BeginCall(ctx, operation, callOptions)
+	return c.sc.BeginCall(ctx, method, callOptions)
 }
 
 func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrift.TStruct) error {

@@ -72,7 +72,7 @@ func (p LocalPeerInfo) String() string {
 const CurrentProtocolVersion = 0x02
 
 var (
-	// ErrConnectionClosed is returned when a caller performs an operation
+	// ErrConnectionClosed is returned when a caller performs an method
 	// on a closed connection
 	ErrConnectionClosed = errors.New("connection is closed")
 

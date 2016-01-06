@@ -107,7 +107,7 @@ func main() {
 		"pingOther": pingOtherHandler,
 	}, onError)
 
-	// Try to send a message to the Service:Operation pair for the subchannel
+	// Try to send a message to the Service:Method pair for the subchannel
 	if err := json.CallPeer(ctx, peer, "PingServiceOther", "pingOther", &Ping{"Hello Other World"}, &pong); err != nil {
 		log.Fatalf("json.Call failed: %v", err)
 	}

@@ -134,7 +134,7 @@ func (h *kvHandler) Set(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 }
 
 func (h *kvHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-	switch args.Operation {
+	switch args.Method {
 	case "ping":
 		return h.Ping(ctx, args)
 	case "get":
@@ -142,7 +142,7 @@ func (h *kvHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error
 	case "put":
 		return h.Set(ctx, args)
 	default:
-		return nil, errors.New("unknown operation")
+		return nil, errors.New("unknown method")
 	}
 }
 

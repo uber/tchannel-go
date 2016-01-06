@@ -92,8 +92,8 @@ h3. Inbound Tests
 3. Receive continue request fragment for req that expired
 4. Application not pulling request frames quickly enough causes request to die
 5. Proactive remove request channels for expired and waiting calls
-6. readOperation twice
-7. Error reading operation?
+6. readMethod twice
+7. Error reading method?
 8. ReadArg2 twice
 9. ReadArg3 twice
 10. Timeout waiting for request fragment results in call being terminated
