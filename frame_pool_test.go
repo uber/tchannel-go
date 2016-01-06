@@ -25,6 +25,7 @@ package tchannel_test
 
 import (
 	"bytes"
+	"io"
 	"math/rand"
 	"sync"
 	"testing"
@@ -37,6 +38,7 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+	"github.com/uber/tchannel-go/testutils/testreader"
 	"golang.org/x/net/context"
 )
 
@@ -156,9 +158,8 @@ type dirtyFramePool struct{}
 
 func (p dirtyFramePool) Get() *Frame {
 	f := NewFrame(MaxFramePayloadSize)
-	for i := range f.Payload {
-		f.Payload[i] = ^byte(0)
-	}
+	reader := testreader.Looper([]byte{^byte(0)})
+	io.ReadFull(reader, f.Payload)
 	return f
 }
 
