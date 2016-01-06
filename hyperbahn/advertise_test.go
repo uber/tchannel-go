@@ -261,48 +261,49 @@ func TestRetryTemporaryFailure(t *testing.T) {
 
 func TestRetryFailure(t *testing.T) {
 	runRetryTest(t, func(r *retryTest) {
-		r.mock.On("On", SendAdvertise).Return().
-			Times(1 /* initial */ + maxAdvertiseFailures /* fail */)
 		r.mock.On("On", Advertised).Return().Once()
+		r.mock.On("On", SendAdvertise).Return().Times(1 + (maxAdvertiseFailures * 2))
+
+		// Since FailStrategyIgnore will keep retrying forever, we need to
+		// signal when we're done testing.
+		doneTesting := make(chan struct{}, 1)
+		// For all but the last failure, we just need to assert that the
+		// OnError handler was called. The callback for the last failure needs
+		// to signal that we're done testing and close the Hyperbahn client (so
+		// that the Advertise call returns).
+		expectationCalled := 0
+		r.mock.On("OnError", ErrAdvertiseFailed{true, advertiseErr}).Return(nil).Times(maxAdvertiseFailures * 2).Run(func(_ mock.Arguments) {
+			expectationCalled++
+			if expectationCalled >= maxAdvertiseFailures*2 {
+				doneTesting <- struct{}{}
+				r.client.Close()
+			}
+		})
+		// For the last failure, we assert that the handler was called and
+		// signal that the test is done.
 
 		r.setAdvertiseSuccess()
 		require.NoError(t, r.client.Advertise())
 		<-r.reqCh
 
-		s1 := <-r.sleepArgs
-		checkAdvertiseInterval(t, s1)
+		sleptFor := <-r.sleepArgs
+		checkAdvertiseInterval(t, sleptFor)
 
-		// When retries fail maxRegistrationFailures times, we receive:
-		// maxRegistrationFailures - 1 OnError WithRetry=True
-		// 1 OnError WithRetry=False
-		noRetryFail := make(chan struct{})
-		r.mock.On("OnError", ErrAdvertiseFailed{true, advertiseErr}).
-			Return(nil).Times(maxAdvertiseFailures - 1)
-		r.mock.On("OnError", ErrAdvertiseFailed{false, advertiseErr}).
-			Return(nil).Run(func(_ mock.Arguments) {
-			noRetryFail <- struct{}{}
-		}).Once()
-		for i := 0; i < maxAdvertiseFailures-1; i++ {
+		// Even after maxRegistrationFailures failures to register with
+		// Hyperbahn, FailStrategyIgnore should keep retrying.
+		for i := 1; i <= maxAdvertiseFailures*2; i++ {
 			r.sleepBlock <- struct{}{}
 			r.setAdvertiseFailure()
 			<-r.reqCh
 
-			s1 := <-r.sleepArgs
-			checkRetryInterval(t, s1, i+1 /* retryNum */)
+			sleptFor := <-r.sleepArgs
+			checkRetryInterval(t, sleptFor, i)
 		}
 
 		r.sleepClose()
-		r.respCh <- 0
-		<-r.reqCh
 
 		// Wait for the handler to be called and the mock expectation to be recorded.
-		<-noRetryFail
-
-		select {
-		case req := <-r.reqCh:
-			t.Errorf("No Advertise calls should be made after failure, got %+v", req)
-		default:
-		}
+		<-doneTesting
 	})
 }
 
