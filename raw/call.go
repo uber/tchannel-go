@@ -77,10 +77,10 @@ func WriteArgs(call *tchannel.OutboundCall, arg2, arg3 []byte) ([]byte, []byte, 
 }
 
 // Call makes a call to the given hostPort with the given arguments and returns the response args.
-func Call(ctx context.Context, ch *tchannel.Channel, hostPort string, serviceName, operation string,
+func Call(ctx context.Context, ch *tchannel.Channel, hostPort string, serviceName, method string,
 	arg2, arg3 []byte) ([]byte, []byte, *tchannel.OutboundCallResponse, error) {
 
-	call, err := ch.BeginCall(ctx, hostPort, serviceName, operation, nil)
+	call, err := ch.BeginCall(ctx, hostPort, serviceName, method, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -89,10 +89,10 @@ func Call(ctx context.Context, ch *tchannel.Channel, hostPort string, serviceNam
 }
 
 // CallSC makes a call using the given subcahnnel
-func CallSC(ctx context.Context, sc *tchannel.SubChannel, operation string, arg2, arg3 []byte) (
+func CallSC(ctx context.Context, sc *tchannel.SubChannel, method string, arg2, arg3 []byte) (
 	[]byte, []byte, *tchannel.OutboundCallResponse, error) {
 
-	call, err := sc.BeginCall(ctx, operation, nil)
+	call, err := sc.BeginCall(ctx, method, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -102,7 +102,7 @@ func CallSC(ctx context.Context, sc *tchannel.SubChannel, operation string, arg2
 
 // CArgs are the call arguments passed to CallV2.
 type CArgs struct {
-	Operation   string
+	Method   string
 	Arg2        []byte
 	Arg3        []byte
 	CallOptions *tchannel.CallOptions
@@ -117,7 +117,7 @@ type CRes struct {
 
 // CallV2 makes a call and does not attempt any retries.
 func CallV2(ctx context.Context, sc *tchannel.SubChannel, cArgs CArgs) (*CRes, error) {
-	call, err := sc.BeginCall(ctx, cArgs.Operation, cArgs.CallOptions)
+	call, err := sc.BeginCall(ctx, cArgs.Method, cArgs.CallOptions)
 	if err != nil {
 		return nil, err
 	}

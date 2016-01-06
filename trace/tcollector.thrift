@@ -14,7 +14,7 @@ struct Annotation {
     // web frontend expects.
     1: required double timestamp
     2: required string value         // event name - what happened at the timestamp?
-    3: optional i32 duration         // how long did the operation take in ms
+    3: optional i32 duration         // how long did the method take in ms
 }
 
 enum AnnotationType { BOOL, BYTES, I16, I32, I64, DOUBLE, STRING }

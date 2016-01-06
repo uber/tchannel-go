@@ -212,16 +212,16 @@ func (t *closeSemanticsTest) withNewClient(f func(ch *Channel)) {
 	ch.Close()
 }
 
-func (t *closeSemanticsTest) startCall(from *Channel, to *Channel, operation string) (*OutboundCall, error) {
+func (t *closeSemanticsTest) startCall(from *Channel, to *Channel, method string) (*OutboundCall, error) {
 	var call *OutboundCall
 	var err error
 	toPeer := to.PeerInfo()
 	if t.isolated {
 		sc := from.GetSubChannel(toPeer.ServiceName, Isolated)
 		sc.Peers().Add(toPeer.HostPort)
-		call, err = sc.BeginCall(t.ctx, operation, nil)
+		call, err = sc.BeginCall(t.ctx, method, nil)
 	} else {
-		call, err = from.BeginCall(t.ctx, toPeer.HostPort, toPeer.ServiceName, operation, nil)
+		call, err = from.BeginCall(t.ctx, toPeer.HostPort, toPeer.ServiceName, method, nil)
 	}
 	return call, err
 }

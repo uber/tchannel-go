@@ -27,7 +27,7 @@ import (
 )
 
 // A Handler is an object that can be registered with a Channel to process
-// incoming calls for a given service and operation
+// incoming calls for a given service and method
 type Handler interface {
 	// Handles an incoming call for service
 	Handle(ctx context.Context, call *InboundCall)
@@ -49,7 +49,7 @@ type handlerMap struct {
 }
 
 // Registers a handler
-func (hmap *handlerMap) register(h Handler, serviceName, operation string) {
+func (hmap *handlerMap) register(h Handler, serviceName, method string) {
 	hmap.Lock()
 	defer hmap.Unlock()
 
@@ -57,20 +57,20 @@ func (hmap *handlerMap) register(h Handler, serviceName, operation string) {
 		hmap.handlers = make(map[string]map[string]Handler)
 	}
 
-	operations := hmap.handlers[serviceName]
-	if operations == nil {
-		operations = make(map[string]Handler)
-		hmap.handlers[serviceName] = operations
+	methods := hmap.handlers[serviceName]
+	if methods == nil {
+		methods = make(map[string]Handler)
+		hmap.handlers[serviceName] = methods
 	}
 
-	operations[operation] = h
+	methods[method] = h
 }
 
-// Finds the handler matching the given service and operation.  See https://github.com/golang/go/issues/3512
-// for the reason that operation is []byte instead of a string
-func (hmap *handlerMap) find(serviceName string, operation []byte) Handler {
+// Finds the handler matching the given service and method.  See https://github.com/golang/go/issues/3512
+// for the reason that method is []byte instead of a string
+func (hmap *handlerMap) find(serviceName string, method []byte) Handler {
 	hmap.RLock()
-	handler := hmap.handlers[serviceName][string(operation)]
+	handler := hmap.handlers[serviceName][string(method)]
 	hmap.RUnlock()
 
 	return handler

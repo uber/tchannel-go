@@ -86,7 +86,7 @@ func (h rawFuncHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, e
 	return h.f(ctx, args)
 }
 
-// RegisterFunc registers a function as a handler for the given operation name.
+// RegisterFunc registers a function as a handler for the given method name.
 func RegisterFunc(ch *tchannel.Channel, name string,
 	f func(ctx context.Context, args *raw.Args) (*raw.Res, error)) {
 

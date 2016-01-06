@@ -171,33 +171,33 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
 
-	if err := call.readOperation(); err != nil {
-		c.log.Errorf("Could not read operation from %s: %v", c.remotePeerInfo, err)
+	if err := call.readMethod(); err != nil {
+		c.log.Errorf("Could not read method from %s: %v", c.remotePeerInfo, err)
 		releaseFrame()
 		return
 	}
 
-	call.commonStatsTags["endpoint"] = string(call.operation)
+	call.commonStatsTags["endpoint"] = string(call.method)
 	call.statsReporter.IncCounter("inbound.calls.recvd", call.commonStatsTags, 1)
-	call.response.SetOperation(string(call.operation))
+	call.response.SetMethod(string(call.method))
 
-	// NB(mmihic): Don't cast operation name to string here - this will
+	// NB(mmihic): Don't cast method name to string here - this will
 	// create a copy of the byte array, where as aliasing to string in the
 	// map look up can be optimized by the compiler to avoid the copy.  See
 	// https://github.com/golang/go/issues/3512
-	h := c.handlers.find(call.ServiceName(), call.Operation())
+	h := c.handlers.find(call.ServiceName(), call.Method())
 	if h == nil {
 		// Check the subchannel map to see if we find one there
 		if c.log.Enabled(LogLevelDebug) {
-			c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Operation())
+			c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Method())
 		}
 
-		h = c.subChannels.find(call.ServiceName(), call.Operation())
+		h = c.subChannels.find(call.ServiceName(), call.Method())
 	}
 	if h == nil {
-		c.log.Errorf("Could not find handler for %s:%s", call.ServiceName(), call.Operation())
+		c.log.Errorf("Could not find handler for %s:%s", call.ServiceName(), call.Method())
 		call.Response().SendSystemError(
-			NewSystemError(ErrCodeBadRequest, "no handler for service %q and operation %q", call.ServiceName(), call.Operation()))
+			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
 		releaseFrame()
 		return
 	}
@@ -210,7 +210,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	}()
 
 	if c.log.Enabled(LogLevelDebug) {
-		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Operation(), c.remotePeerInfo)
+		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Method(), c.remotePeerInfo)
 	}
 	h.Handle(call.mex.ctx, call)
 }
@@ -222,8 +222,8 @@ type InboundCall struct {
 	conn            *Connection
 	response        *InboundCallResponse
 	serviceName     string
-	operation       []byte
-	operationString string
+	method          []byte
+	methodString    string
 	headers         transportHeaders
 	span            Span
 	statsReporter   StatsReporter
@@ -235,14 +235,14 @@ func (call *InboundCall) ServiceName() string {
 	return call.serviceName
 }
 
-// Operation returns the operation being called
-func (call *InboundCall) Operation() []byte {
-	return call.operation
+// Method returns the method being called
+func (call *InboundCall) Method() []byte {
+	return call.method
 }
 
-// OperationString returns the operation being called as a string.
-func (call *InboundCall) OperationString() string {
-	return call.operationString
+// MethodString returns the method being called as a string.
+func (call *InboundCall) MethodString() string {
+	return call.methodString
 }
 
 // Format the format of the request from the ArgScheme transport header.
@@ -265,15 +265,15 @@ func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }
 
-// Reads the entire operation name (arg1) from the request stream.
-func (call *InboundCall) readOperation() error {
+// Reads the entire method name (arg1) from the request stream.
+func (call *InboundCall) readMethod() error {
 	var arg1 []byte
 	if err := NewArgReader(call.arg1Reader()).Read(&arg1); err != nil {
 		return call.failed(err)
 	}
 
-	call.operation = arg1
-	call.operationString = string(arg1)
+	call.method = arg1
+	call.methodString = string(arg1)
 	return nil
 }
 

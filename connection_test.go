@@ -65,7 +65,7 @@ func (h *testHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, err
 
 	assert.Equal(h.t, args.Caller, CurrentCall(ctx).CallerName())
 
-	switch args.Operation {
+	switch args.Method {
 	case "block":
 		<-ctx.Done()
 		h.blockErr <- ctx.Err()
@@ -86,7 +86,7 @@ func (h *testHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, err
 			IsErr: true,
 		}, nil
 	}
-	return nil, errors.New("unknown operation")
+	return nil, errors.New("unknown method")
 }
 
 func (h *testHandler) OnError(ctx context.Context, err error) {
@@ -316,14 +316,14 @@ func TestTimeout(t *testing.T) {
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
-func TestLargeOperation(t *testing.T) {
+func TestLargeMethod(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		largeOperation := testutils.RandBytes(16*1024 + 1)
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, string(largeOperation), nil, nil)
-		assert.Equal(t, ErrOperationTooLarge, err)
+		largeMethod := testutils.RandBytes(16*1024 + 1)
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, string(largeMethod), nil, nil)
+		assert.Equal(t, ErrMethodTooLarge, err)
 	})
 }
 

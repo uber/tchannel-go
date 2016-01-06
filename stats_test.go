@@ -36,25 +36,25 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 )
 
-func tagsForOutboundCall(serverCh *Channel, clientCh *Channel, operation string) map[string]string {
+func tagsForOutboundCall(serverCh *Channel, clientCh *Channel, method string) map[string]string {
 	host, _ := os.Hostname()
 	return map[string]string{
 		"app":             clientCh.PeerInfo().ProcessName,
 		"host":            host,
 		"service":         clientCh.PeerInfo().ServiceName,
 		"target-service":  serverCh.PeerInfo().ServiceName,
-		"target-endpoint": operation,
+		"target-endpoint": method,
 	}
 }
 
-func tagsForInboundCall(serverCh *Channel, clientCh *Channel, operation string) map[string]string {
+func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map[string]string {
 	host, _ := os.Hostname()
 	return map[string]string{
 		"app":             serverCh.PeerInfo().ProcessName,
 		"host":            host,
 		"service":         serverCh.PeerInfo().ServiceName,
 		"calling-service": clientCh.PeerInfo().ServiceName,
-		"endpoint":        operation,
+		"endpoint":        method,
 	}
 }
 
@@ -190,7 +190,7 @@ func TestStatsWithRetries(t *testing.T) {
 
 				sc := ch.GetSubChannel(serverCh.ServiceName())
 				_, err := raw.CallV2(ctx, sc, raw.CArgs{
-					Operation:   "req",
+					Method:   "req",
 					CallOptions: &CallOptions{RequestState: rs},
 				})
 				return err

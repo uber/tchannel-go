@@ -29,11 +29,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-// maxOperationSize is the maximum size of arg1.
-const maxOperationSize = 16 * 1024
+// maxMethodSize is the maximum size of arg1.
+const maxMethodSize = 16 * 1024
 
 // beginCall begins an outbound call on the connection
-func (c *Connection) beginCall(ctx context.Context, serviceName, operationName string, callOptions *CallOptions) (*OutboundCall, error) {
+func (c *Connection) beginCall(ctx context.Context, serviceName, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
 	now := c.timeNow()
 
 	switch state := c.readState(); state {
@@ -87,7 +87,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, operationName s
 		TimeToLive: timeToLive,
 	}
 	call.statsReporter = c.statsReporter
-	call.createStatsTags(c.commonStatsTags, callOptions, operationName)
+	call.createStatsTags(c.commonStatsTags, callOptions, methodName)
 	call.log = c.log.WithFields(LogField{"Out-Call", requestID})
 
 	// TODO(mmihic): It'd be nice to do this without an fptr
@@ -124,7 +124,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, operationName s
 				HostPort:    c.remotePeerInfo.HostPort,
 				ServiceName: serviceName,
 			},
-			Method: operationName,
+			Method: methodName,
 		},
 		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: call.callReq.Headers[CallerName]},
@@ -151,7 +151,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, operationName s
 
 	call.response = response
 
-	if err := call.writeOperation([]byte(operationName)); err != nil {
+	if err := call.writeMethod([]byte(methodName)); err != nil {
 		return nil, err
 	}
 	return call, nil
@@ -195,7 +195,7 @@ func (call *OutboundCall) Response() *OutboundCallResponse {
 }
 
 // createStatsTags creates the common stats tags, if they are not already created.
-func (call *OutboundCall) createStatsTags(connectionTags map[string]string, callOptions *CallOptions, operation string) {
+func (call *OutboundCall) createStatsTags(connectionTags map[string]string, callOptions *CallOptions, method string) {
 	call.commonStatsTags = map[string]string{
 		"target-service": call.callReq.Service,
 	}
@@ -203,18 +203,18 @@ func (call *OutboundCall) createStatsTags(connectionTags map[string]string, call
 		call.commonStatsTags[k] = v
 	}
 	if callOptions.Format != HTTP {
-		call.commonStatsTags["target-endpoint"] = string(operation)
+		call.commonStatsTags["target-endpoint"] = string(method)
 	}
 }
 
-// writeOperation writes the operation (arg1) to the call
-func (call *OutboundCall) writeOperation(operation []byte) error {
-	if len(operation) > maxOperationSize {
-		return call.failed(ErrOperationTooLarge)
+// writeMethod writes the method (arg1) to the call
+func (call *OutboundCall) writeMethod(method []byte) error {
+	if len(method) > maxMethodSize {
+		return call.failed(ErrMethodTooLarge)
 	}
 
 	call.statsReporter.IncCounter("outbound.calls.send", call.commonStatsTags, 1)
-	return NewArgWriter(call.arg1Writer()).Write(operation)
+	return NewArgWriter(call.arg1Writer()).Write(method)
 }
 
 // Arg2Writer returns a WriteCloser that can be used to write the second argument.
@@ -262,8 +262,8 @@ func (response *OutboundCallResponse) Format() Format {
 // Arg2Reader returns an io.ReadCloser to read the second argument.
 // The ReadCloser must be closed once the argument has been read.
 func (response *OutboundCallResponse) Arg2Reader() (io.ReadCloser, error) {
-	var operation []byte
-	if err := NewArgReader(response.arg1Reader()).Read(&operation); err != nil {
+	var method []byte
+	if err := NewArgReader(response.arg1Reader()).Read(&method); err != nil {
 		return nil, err
 	}
 

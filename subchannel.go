@@ -76,7 +76,7 @@ func (c *SubChannel) ServiceName() string {
 
 // BeginCall starts a new call to a remote peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
-func (c *SubChannel) BeginCall(ctx context.Context, operationName string, callOptions *CallOptions) (*OutboundCall, error) {
+func (c *SubChannel) BeginCall(ctx context.Context, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
 	if callOptions == nil {
 		callOptions = defaultCallOptions
 	}
@@ -86,7 +86,7 @@ func (c *SubChannel) BeginCall(ctx context.Context, operationName string, callOp
 		return nil, err
 	}
 
-	return peer.BeginCall(ctx, c.ServiceName(), operationName, callOptions)
+	return peer.BeginCall(ctx, c.ServiceName(), methodName, callOptions)
 }
 
 // Peers returns the PeerList for this subchannel.
@@ -101,9 +101,9 @@ func (c *SubChannel) Isolated() bool {
 	return c.topChannel.Peers() != c.peers
 }
 
-// Register registers a handler on the subchannel for a service+operation pair
-func (c *SubChannel) Register(h Handler, operationName string) {
-	c.handlers.register(h, c.ServiceName(), operationName)
+// Register registers a handler on the subchannel for a service+method pair
+func (c *SubChannel) Register(h Handler, methodName string) {
+	c.handlers.register(h, c.ServiceName(), methodName)
 }
 
 // Logger returns the logger for this subchannel.
@@ -123,10 +123,10 @@ func (c *SubChannel) StatsTags() map[string]string {
 	return tags
 }
 
-// Find if a handler for the given service+operation pair exists
-func (subChMap *subChannelMap) find(serviceName string, operation []byte) Handler {
+// Find if a handler for the given service+method pair exists
+func (subChMap *subChannelMap) find(serviceName string, method []byte) Handler {
 	if sc, ok := subChMap.get(serviceName); ok {
-		return sc.handlers.find(serviceName, operation)
+		return sc.handlers.find(serviceName, method)
 	}
 
 	return nil

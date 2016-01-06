@@ -36,7 +36,7 @@ import (
 
 var (
 	errAlreadyListening  = errors.New("channel already listening")
-	errInvalidStateForOp = errors.New("channel is in an invalid state for that operation")
+	errInvalidStateForOp = errors.New("channel is in an invalid state for that method")
 
 	// ErrNoServiceName is returned when no service name is provided when
 	// creating a new channel.
@@ -278,8 +278,8 @@ type Registrar interface {
 	// ServiceName returns the service name that this Registrar is for.
 	ServiceName() string
 
-	// Register registers a handler for ServiceName and the given operation.
-	Register(h Handler, operationName string)
+	// Register registers a handler for ServiceName and the given method.
+	Register(h Handler, methodName string)
 
 	// Logger returns the logger for this Registrar.
 	Logger() Logger
@@ -294,9 +294,9 @@ type Registrar interface {
 	Peers() *PeerList
 }
 
-// Register registers a handler for a service+operation pair
-func (ch *Channel) Register(h Handler, operationName string) {
-	ch.handlers.register(h, ch.PeerInfo().ServiceName, operationName)
+// Register registers a handler for a service+method pair
+func (ch *Channel) Register(h Handler, methodName string) {
+	ch.handlers.register(h, ch.PeerInfo().ServiceName, methodName)
 }
 
 // PeerInfo returns the current peer info for the channel
@@ -347,9 +347,9 @@ func (ch *Channel) rootPeers() *RootPeerList {
 
 // BeginCall starts a new call to a remote peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
-func (ch *Channel) BeginCall(ctx context.Context, hostPort, serviceName, operationName string, callOptions *CallOptions) (*OutboundCall, error) {
+func (ch *Channel) BeginCall(ctx context.Context, hostPort, serviceName, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
 	p := ch.rootPeers().GetOrAdd(hostPort)
-	return p.BeginCall(ctx, serviceName, operationName, callOptions)
+	return p.BeginCall(ctx, serviceName, methodName, callOptions)
 }
 
 // serve runs the listener to accept and manage new incoming connections, blocking

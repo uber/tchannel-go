@@ -37,7 +37,7 @@ type Handler interface {
 type Args struct {
 	Caller    string
 	Format    tchannel.Format
-	Operation string
+	Method string
 	Arg2      []byte
 	Arg3      []byte
 }
@@ -56,7 +56,7 @@ func ReadArgs(call *tchannel.InboundCall) (*Args, error) {
 	var args Args
 	args.Caller = call.CallerName()
 	args.Format = call.Format()
-	args.Operation = string(call.Operation())
+	args.Method = string(call.Method())
 	if err := tchannel.NewArgReader(call.Arg2Reader()).Read(&args.Arg2); err != nil {
 		return nil, err
 	}

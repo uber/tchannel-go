@@ -109,9 +109,9 @@ type Annotations struct {
 	binaryAnnotationsBacking [2]BinaryAnnotation
 }
 
-// SetOperation sets the operation being called.
-func (as *Annotations) SetOperation(operation string) {
-	as.data.Method = operation
+// SetMethod sets the method being called.
+func (as *Annotations) SetMethod(method string) {
+	as.data.Method = method
 }
 
 // GetTime returns the time using the timeNow function stored in the annotations.
