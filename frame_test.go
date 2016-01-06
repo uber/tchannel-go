@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/typed"
 )
 
@@ -92,4 +93,28 @@ func TestEmptyPayload(t *testing.T) {
 	// net.Conn returns io.EOF if you try to read 0 bytes at the end.
 	// This is also simulated by the LimitedReader so we use that here.
 	require.NoError(t, f.ReadIn(&io.LimitedReader{R: buf, N: FrameHeaderSize}))
+}
+
+func TestReservedBytes(t *testing.T) {
+	// Set up a frame with non-zero values
+	f := NewFrame(MaxFramePayloadSize)
+	reader := testreader.Looper([]byte{^byte(0)})
+	io.ReadFull(reader, f.Payload)
+	f.Header.read(typed.NewReadBuffer(f.Payload))
+
+	m := &pingRes{id: 1}
+	f.write(m)
+
+	buf := &bytes.Buffer{}
+	f.WriteOut(buf)
+	assert.Equal(t,
+		[]byte{
+			0x0, 0x10, // size
+			0xd1,               // type
+			0x0,                // reserved should always be 0
+			0x0, 0x0, 0x0, 0x1, // id
+			0x0, 0x0, 0x0, 0x0, // reserved should always be 0
+			0x0, 0x0, 0x0, 0x0, // reserved should always be 0
+		},
+		buf.Bytes(), "Unexpected bytes")
 }

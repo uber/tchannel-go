@@ -164,6 +164,7 @@ func (f *Frame) write(msg message) error {
 	}
 
 	f.Header.ID = msg.ID()
+	f.Header.reserved1 = 0
 	f.Header.messageType = msg.messageType()
 	f.Header.SetPayloadSize(uint16(wbuf.BytesWritten()))
 	return nil
