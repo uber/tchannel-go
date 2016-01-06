@@ -79,16 +79,17 @@ func (c *Client) advertiseLoop() {
 
 		if err := c.sendAdvertise(); err != nil {
 			consecutiveFailures++
-			if consecutiveFailures >= maxAdvertiseFailures {
+			if consecutiveFailures >= maxAdvertiseFailures && c.opts.FailStrategy == FailStrategyFatal {
 				c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: false})
-				if c.opts.FailStrategy == FailStrategyFatal {
-					c.tchan.Logger().Fatalf("Hyperbahn client registration failed: %v", err)
-				}
-				return
+				c.tchan.Logger().Fatalf("Hyperbahn client registration failed: %v", err)
 			}
 			c.tchan.Logger().Warnf("Hyperbahn client registration failed (will retry): %v", err)
 			c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: true})
-			sleepFor = fuzzInterval(advertiseRetryInterval * time.Duration(1<<consecutiveFailures))
+
+			// Even after many failures, cap backoff.
+			if consecutiveFailures < maxAdvertiseFailures {
+				sleepFor = fuzzInterval(advertiseRetryInterval * time.Duration(1<<consecutiveFailures))
+			}
 		} else {
 			c.opts.Handler.On(Readvertised)
 			sleepFor = c.fuzzedAdvertiseInterval()

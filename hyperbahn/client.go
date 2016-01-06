@@ -52,7 +52,8 @@ const (
 	// FailStrategyFatal will call Fatalf on the channel's logger after triggering handler.OnError.
 	// This is the default strategy.
 	FailStrategyFatal FailStrategy = iota
-	// FailStrategyIgnore will only call handler.OnError, even on fatal errors.
+	// FailStrategyIgnore will only call handler.OnError, even after many
+	// errors, and will continue to retry forever.
 	FailStrategyIgnore
 )
 
@@ -184,5 +185,7 @@ func (c *Client) IsClosed() bool {
 
 // Close closes the Hyperbahn client, which stops any background re-advertisements.
 func (c *Client) Close() {
-	close(c.quit)
+	if !c.IsClosed() {
+		close(c.quit)
+	}
 }
