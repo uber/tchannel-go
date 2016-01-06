@@ -33,7 +33,7 @@ import (
 const maxOperationSize = 16 * 1024
 
 // beginCall begins an outbound call on the connection
-func (c *Connection) beginCall(ctx context.Context, serviceName string, callOptions *CallOptions, operation string) (*OutboundCall, error) {
+func (c *Connection) beginCall(ctx context.Context, serviceName, operationName string, callOptions *CallOptions) (*OutboundCall, error) {
 	now := c.timeNow()
 
 	switch state := c.readState(); state {
@@ -87,7 +87,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 		TimeToLive: timeToLive,
 	}
 	call.statsReporter = c.statsReporter
-	call.createStatsTags(c.commonStatsTags, callOptions, operation)
+	call.createStatsTags(c.commonStatsTags, callOptions, operationName)
 	call.log = c.log.WithFields(LogField{"Out-Call", requestID})
 
 	// TODO(mmihic): It'd be nice to do this without an fptr
@@ -124,7 +124,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 				HostPort:    c.remotePeerInfo.HostPort,
 				ServiceName: serviceName,
 			},
-			Method: operation,
+			Method: operationName,
 		},
 		binaryAnnotationsBacking: [2]BinaryAnnotation{
 			{Key: "cn", Value: call.callReq.Headers[CallerName]},
@@ -151,7 +151,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName string, callOpti
 
 	call.response = response
 
-	if err := call.writeOperation([]byte(operation)); err != nil {
+	if err := call.writeOperation([]byte(operationName)); err != nil {
 		return nil, err
 	}
 	return call, nil
