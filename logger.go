@@ -39,20 +39,35 @@ type Logger interface {
 	// Enabled returns whether the given level is enabled.
 	Enabled(level LogLevel) bool
 
-	// Fatalf logs a message, then exits with os.Exit(1)
+	// Fatalf logs a message, then exits with os.Exit(1).
 	Fatalf(msg string, args ...interface{})
 
-	// Errorf logs a message at error priority
+	// Fatal logs a message, then exits with os.Exit(1).
+	Fatal(msg string)
+
+	// Errorf logs a message at error priority.
 	Errorf(msg string, args ...interface{})
 
-	// Warnf logs a message at warning priority
+	// Error logs a message at error priority.
+	Error(msg string)
+
+	// Warnf logs a message at warning priority.
 	Warnf(msg string, args ...interface{})
 
-	// Infof logs a message at info priority
+	// Warn logs a message at warning priority.
+	Warn(msg string)
+
+	// Infof logs a message at info priority.
 	Infof(msg string, args ...interface{})
 
-	// Debugf logs a message at debug priority
+	// Info logs a message at info priority.
+	Info(msg string)
+
+	// Debugf logs a message at debug priority.
 	Debugf(msg string, args ...interface{})
+
+	// Debug logs a message at debug priority.
+	Debug(msg string)
 
 	// Fields returns the fields that this logger contains.
 	Fields() LogFields
@@ -77,10 +92,15 @@ type nullLogger struct{}
 
 func (nullLogger) Enabled(_ LogLevel) bool                { return false }
 func (nullLogger) Fatalf(msg string, arg ...interface{})  { os.Exit(1) }
+func (nullLogger) Fatal(msg string)                       { os.Exit(1) }
 func (nullLogger) Errorf(msg string, args ...interface{}) {}
+func (nullLogger) Error(msg string)                       {}
 func (nullLogger) Warnf(msg string, args ...interface{})  {}
+func (nullLogger) Warn(msg string)                        {}
 func (nullLogger) Infof(msg string, args ...interface{})  {}
+func (nullLogger) Info(msg string)                        {}
 func (nullLogger) Debugf(msg string, args ...interface{}) {}
+func (nullLogger) Debug(msg string)                       {}
 func (nullLogger) Fields() LogFields                      { return nil }
 func (l nullLogger) WithFields(_ ...LogField) Logger      { return l }
 
@@ -104,11 +124,20 @@ func (l writerLogger) Fatalf(msg string, args ...interface{}) {
 	os.Exit(1)
 }
 
+func (l writerLogger) Fatal(msg string) {
+	l.printfn("F", msg)
+	os.Exit(1)
+}
+
 func (l writerLogger) Enabled(_ LogLevel) bool                { return true }
 func (l writerLogger) Errorf(msg string, args ...interface{}) { l.printfn("E", msg, args...) }
+func (l writerLogger) Error(msg string)                       { l.printfn("E", msg) }
 func (l writerLogger) Warnf(msg string, args ...interface{})  { l.printfn("W", msg, args...) }
+func (l writerLogger) Warn(msg string)                        { l.printfn("W", msg) }
 func (l writerLogger) Infof(msg string, args ...interface{})  { l.printfn("I", msg, args...) }
+func (l writerLogger) Info(msg string)                        { l.printfn("I", msg) }
 func (l writerLogger) Debugf(msg string, args ...interface{}) { l.printfn("D", msg, args...) }
+func (l writerLogger) Debug(msg string)                       { l.printfn("D", msg) }
 func (l writerLogger) printfn(prefix, msg string, args ...interface{}) {
 	fmt.Fprintf(l.writer, "%s [%s] %s tags: %v\n", time.Now().Format(writerLoggerStamp), prefix, fmt.Sprintf(msg, args...), l.fields)
 }
@@ -158,9 +187,21 @@ func (l levelLogger) Fatalf(msg string, args ...interface{}) {
 	}
 }
 
+func (l levelLogger) Fatal(msg string) {
+	if l.level <= LogLevelFatal {
+		l.logger.Fatal(msg)
+	}
+}
+
 func (l levelLogger) Errorf(msg string, args ...interface{}) {
 	if l.level <= LogLevelError {
 		l.logger.Errorf(msg, args...)
+	}
+}
+
+func (l levelLogger) Error(msg string) {
+	if l.level <= LogLevelError {
+		l.logger.Error(msg)
 	}
 }
 
@@ -170,15 +211,33 @@ func (l levelLogger) Warnf(msg string, args ...interface{}) {
 	}
 }
 
+func (l levelLogger) Warn(msg string) {
+	if l.level <= LogLevelWarn {
+		l.logger.Warn(msg)
+	}
+}
+
 func (l levelLogger) Infof(msg string, args ...interface{}) {
 	if l.level <= LogLevelInfo {
 		l.logger.Infof(msg, args...)
 	}
 }
 
+func (l levelLogger) Info(msg string) {
+	if l.level <= LogLevelInfo {
+		l.logger.Info(msg)
+	}
+}
+
 func (l levelLogger) Debugf(msg string, args ...interface{}) {
 	if l.level <= LogLevelDebug {
 		l.logger.Debugf(msg, args...)
+	}
+}
+
+func (l levelLogger) Debug(msg string) {
+	if l.level <= LogLevelDebug {
+		l.logger.Debug(msg)
 	}
 }
 

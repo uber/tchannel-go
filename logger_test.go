@@ -75,6 +75,52 @@ func TestWriterLogger(t *testing.T) {
 	}
 }
 
+func TestWriterLoggerNoSubstitution(t *testing.T) {
+	var buf bytes.Buffer
+	var bufLogger = NewLogger(&buf)
+
+	logDebug := func(logger Logger, msg string) { logger.Debug(msg) }
+	logInfo := func(logger Logger, msg string) { logger.Info(msg) }
+	logWarn := func(logger Logger, msg string) { logger.Warn(msg) }
+	logError := func(logger Logger, msg string) { logger.Error(msg) }
+
+	levels := []struct {
+		levelFunc   func(logger Logger, msg string)
+		levelPrefix string
+	}{
+		{logDebug, "D"},
+		{logInfo, "I"},
+		{logWarn, "W"},
+		{logError, "E"},
+	}
+
+	for _, level := range levels {
+		tagLogger1 := bufLogger.WithFields(LogField{"key1", "value1"})
+		tagLogger2 := bufLogger.WithFields(LogField{"key2", "value2"}, LogField{"key3", "value3"})
+
+		verifyMsgAndPrefix := func(logger Logger) {
+			buf.Reset()
+			level.levelFunc(logger, "test-msg")
+
+			out := buf.String()
+			assert.Contains(t, out, "test-msg")
+			assert.Contains(t, out, "["+level.levelPrefix+"]")
+		}
+
+		verifyMsgAndPrefix(bufLogger)
+
+		verifyMsgAndPrefix(tagLogger1)
+		assert.Contains(t, buf.String(), "{key1 value1}")
+		assert.NotContains(t, buf.String(), "{key2 value2}")
+		assert.NotContains(t, buf.String(), "{key3 value3}")
+
+		verifyMsgAndPrefix(tagLogger2)
+		assert.Contains(t, buf.String(), "{key2 value2}")
+		assert.Contains(t, buf.String(), "{key3 value3}")
+		assert.NotContains(t, buf.String(), "{key1 value1}")
+	}
+}
+
 func TestLevelLogger(t *testing.T) {
 	var buf bytes.Buffer
 	var bufLogger = NewLogger(&buf)
@@ -88,14 +134,18 @@ func TestLevelLogger(t *testing.T) {
 			assert.Equal(t, level <= l, levelLogger.Enabled(l), "levelLogger.Enabled(%v) at %v", l, level)
 		}
 
-		levelLogger.Debugf("debug")
-		levelLogger.Infof("info")
-		levelLogger.Warnf("warn")
-		levelLogger.Errorf("error")
+		levelLogger.Debug("debug")
+		levelLogger.Debugf("debu%v", "g")
+		levelLogger.Info("info")
+		levelLogger.Infof("inf%v", "o")
+		levelLogger.Warn("warn")
+		levelLogger.Warnf("war%v", "n")
+		levelLogger.Error("error")
+		levelLogger.Errorf("erro%v", "r")
 
 		assert.Equal(t, expectedLines, bytes.Count(buf.Bytes(), []byte{'\n'}))
-		if expectedLines < 4 {
-			expectedLines++
+		if expectedLines < 8 {
+			expectedLines = expectedLines + 2
 		}
 	}
 }
