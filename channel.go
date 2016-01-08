@@ -370,7 +370,10 @@ func (ch *Channel) serve() {
 				if max := 1 * time.Second; acceptBackoff > max {
 					acceptBackoff = max
 				}
-				ch.log.Warnf("accept error: %v; retrying in %v", err, acceptBackoff)
+				ch.log.WithFields(
+					LogField{"error", err.Error()},
+					LogField{"backoff", acceptBackoff},
+				).Warn("Accept error, will wait and retry.")
 				time.Sleep(acceptBackoff)
 				continue
 			} else {
@@ -378,7 +381,9 @@ func (ch *Channel) serve() {
 				if ch.State() >= ChannelStartClose {
 					return
 				}
-				ch.log.Fatalf("unrecoverable accept error: %v; closing server", err)
+				ch.log.WithFields(
+					LogField{"error", err.Error()},
+				).Fatal("Unrecoverable accept error, closing server.")
 				return
 			}
 		}
@@ -393,7 +398,9 @@ func (ch *Channel) serve() {
 		}
 		if _, err := ch.newInboundConnection(netConn, events); err != nil {
 			// Server is getting overloaded - begin rejecting new connections
-			ch.log.Errorf("could not create new TChannelConnection for incoming conn: %v", err)
+			ch.log.WithFields(
+				LogField{"error", err.Error()},
+			).Error("Couldn't create new TChannelConnection for incoming conn.")
 			netConn.Close()
 			continue
 		}
