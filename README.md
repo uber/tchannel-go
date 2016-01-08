@@ -121,4 +121,7 @@ change in the future.
  - mmihic
  - prashantv
 
-## MIT Licenced
+<hr>
+
+This project is released under the [MIT
+License](https://github.com/uber/tchannel-go/blob/master/LICENSE.md).
