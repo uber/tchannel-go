@@ -429,7 +429,7 @@ func (c *Connection) ping(ctx context.Context) error {
 // handlePingRes calls registered ping handlers.
 func (c *Connection) handlePingRes(frame *Frame) bool {
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.log.Warnf("Got unexpected ping response: %+v", frame.Header)
+		c.log.WithFields(LogField{"response", frame.Header}).Warn("Unexpected ping response.")
 		return true
 	}
 	// ping req is waiting for this frame, and will release it.
@@ -568,8 +568,11 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 	}); err != nil {
 
 		// This shouldn't happen - it means writing the errorMessage is broken.
-		c.log.Warnf("Could not create outbound frame to %s for %d: %v",
-			c.remotePeerInfo, id, err)
+		c.log.WithFields(
+			LogField{"remotePeer", c.remotePeerInfo},
+			LogField{"id", id},
+			ErrField(err),
+		).Warn("Couldn't create outbound frame.")
 		return fmt.Errorf("failed to create outbound error frame")
 	}
 
@@ -588,8 +591,11 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 			return nil
 		default: // If the send buffer is full, log and return an error.
 		}
-		c.log.Warnf("Could not send error frame to %s for %d : %v",
-			c.remotePeerInfo, id, err)
+		c.log.WithFields(
+			LogField{"remotePeer", c.remotePeerInfo},
+			LogField{"id", id},
+			ErrField(err),
+		).Warn("Couldn't send outbound frame.")
 		return fmt.Errorf("failed to send error frame, buffer full")
 	})
 }
@@ -599,10 +605,14 @@ func (c *Connection) connectionError(site string, err error) error {
 	if err == io.EOF {
 		c.log.Debugf("Connection got EOF")
 	} else {
+		logger := c.log.WithFields(
+			LogField{"site", site},
+			ErrField(err),
+		)
 		if se, ok := err.(SystemError); ok && se.Code() != ErrCodeNetwork {
-			c.log.Errorf("Connection error at %v: %v", site, err)
+			logger.Error("Connection error.")
 		} else {
-			c.log.Warnf("Connection error at %v: %v", site, err)
+			logger.Warn("Connection error.")
 		}
 	}
 	c.Close()
@@ -610,7 +620,7 @@ func (c *Connection) connectionError(site string, err error) error {
 }
 
 func (c *Connection) protocolError(id uint32, err error) error {
-	c.log.Warnf("Protocol error: %v", err)
+	c.log.WithFields(ErrField(err)).Warn("Protocol error.")
 	sysErr := NewWrappedSystemError(ErrCodeProtocol, err)
 	c.SendSystemError(id, nil, sysErr)
 	// Don't close the connection until the error has been sent.
@@ -684,7 +694,10 @@ func (c *Connection) readFrames(_ uint32) {
 			releaseFrame = c.handleError(frame)
 		default:
 			// TODO(mmihic): Log and close connection with protocol error
-			c.log.Errorf("Received unexpected frame %s from %s", frame.Header, c.remotePeerInfo)
+			c.log.WithFields(
+				LogField{"header", frame.Header},
+				LogField{"remotePeer", c.remotePeerInfo},
+			).Error("Received unexpected frame.")
 		}
 
 		if releaseFrame {
@@ -804,6 +817,9 @@ func (c *Connection) closeNetwork() {
 	c.log.Debugf("Closing underlying network connection")
 	atomic.AddInt32(&c.closeNetworkCalled, 1)
 	if err := c.conn.Close(); err != nil {
-		c.log.Warnf("could not close connection to peer %s: %v", c.remotePeerInfo, err)
+		c.log.WithFields(
+			LogField{"remotePeer", c.remotePeerInfo},
+			ErrField(err),
+		).Warn("Couldn't close connection to peer.")
 	}
 }

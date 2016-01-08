@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"testing"
 	"testing/iotest"
@@ -31,6 +32,22 @@ import (
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/typed"
 )
+
+func TestFrameHeaderJSON(t *testing.T) {
+	fh := FrameHeader{
+		size:        uint16(0xFF34),
+		messageType: messageTypeCallReq,
+		ID:          0xDEADBEEF,
+	}
+	logged, err := json.Marshal(fh)
+	assert.NoError(t, err, "FrameHeader can't be marshalled to JSON")
+	assert.Equal(
+		t,
+		string(logged),
+		`{"ID":3735928559,"MsgType":3,"Size":65332}`,
+		"FrameHeader didn't marshal to JSON as expected",
+	)
+}
 
 func TestFraming(t *testing.T) {
 	fh := FrameHeader{

@@ -288,13 +288,19 @@ func (c *Connection) handleError(frame *Frame) bool {
 	}
 	rbuf := typed.NewReadBuffer(frame.SizedPayload())
 	if err := errMsg.read(rbuf); err != nil {
-		c.log.Warnf("Unable to read Error frame from %s: %v", c.remotePeerInfo, err)
+		c.log.WithFields(
+			LogField{"remotePeer", c.remotePeerInfo},
+			ErrField(err),
+		).Warn("Unable to read error frame.")
 		c.connectionError("parsing error frame", err)
 		return true
 	}
 
 	if errMsg.errCode == ErrCodeProtocol {
-		c.log.Warnf("Peer %s reported protocol error: %s", c.remotePeerInfo, errMsg.message)
+		c.log.WithFields(
+			LogField{"remotePeer", c.remotePeerInfo},
+			LogField{"error", errMsg.message},
+		).Warn("Peer reported protocol error.")
 		c.connectionError("received protocol error", errMsg.AsSystemError())
 		return true
 	}

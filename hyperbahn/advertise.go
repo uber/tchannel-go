@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"github.com/uber/tchannel-go"
 )
 
 const (
@@ -79,11 +81,12 @@ func (c *Client) advertiseLoop() {
 
 		if err := c.sendAdvertise(); err != nil {
 			consecutiveFailures++
+			errLogger := c.tchan.Logger().WithFields(tchannel.ErrField(err))
 			if consecutiveFailures >= maxAdvertiseFailures && c.opts.FailStrategy == FailStrategyFatal {
 				c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: false})
-				c.tchan.Logger().Fatalf("Hyperbahn client registration failed: %v", err)
+				errLogger.Fatal("Hyperbahn client registration failed.")
 			}
-			c.tchan.Logger().Warnf("Hyperbahn client registration failed (will retry): %v", err)
+			errLogger.Warn("Hyperbahn client registration failed, will retry.")
 			c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: true})
 
 			// Even after many failures, cap backoff.

@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	. "github.com/uber/tchannel-go"
@@ -29,14 +30,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestErrField(t *testing.T) {
+	assert.Equal(t, LogField{"error", "foo"}, ErrField(errors.New("foo")))
+}
+
 func TestWriterLogger(t *testing.T) {
 	var buf bytes.Buffer
 	var bufLogger = NewLogger(&buf)
 
 	debugf := func(logger Logger, msg string, args ...interface{}) { logger.Debugf(msg, args...) }
 	infof := func(logger Logger, msg string, args ...interface{}) { logger.Infof(msg, args...) }
-	warnf := func(logger Logger, msg string, args ...interface{}) { logger.Warnf(msg, args...) }
-	errorf := func(logger Logger, msg string, args ...interface{}) { logger.Errorf(msg, args...) }
 
 	levels := []struct {
 		levelFunc   func(logger Logger, msg string, args ...interface{})
@@ -44,8 +47,6 @@ func TestWriterLogger(t *testing.T) {
 	}{
 		{debugf, "D"},
 		{infof, "I"},
-		{warnf, "W"},
-		{errorf, "E"},
 	}
 
 	for _, level := range levels {
@@ -125,7 +126,14 @@ func TestLevelLogger(t *testing.T) {
 	var buf bytes.Buffer
 	var bufLogger = NewLogger(&buf)
 
-	expectedLines := 0
+	expectedLines := map[LogLevel]int{
+		LogLevelAll:   6,
+		LogLevelDebug: 6,
+		LogLevelInfo:  4,
+		LogLevelWarn:  2,
+		LogLevelError: 1,
+		LogLevelFatal: 0,
+	}
 	for level := LogLevelFatal; level >= LogLevelAll; level-- {
 		buf.Reset()
 		levelLogger := NewLevelLogger(bufLogger, level)
@@ -139,13 +147,8 @@ func TestLevelLogger(t *testing.T) {
 		levelLogger.Info("info")
 		levelLogger.Infof("inf%v", "o")
 		levelLogger.Warn("warn")
-		levelLogger.Warnf("war%v", "n")
 		levelLogger.Error("error")
-		levelLogger.Errorf("erro%v", "r")
 
-		assert.Equal(t, expectedLines, bytes.Count(buf.Bytes(), []byte{'\n'}))
-		if expectedLines < 8 {
-			expectedLines = expectedLines + 2
-		}
+		assert.Equal(t, expectedLines[level], bytes.Count(buf.Bytes(), []byte{'\n'}))
 	}
 }

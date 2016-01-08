@@ -66,17 +66,17 @@ func (l errorLogger) checkErr(msg string, args ...interface{}) {
 
 func (l errorLogger) Fatalf(msg string, args ...interface{}) {
 	l.checkErr("[Fatal] "+msg, args...)
-	l.Logger.Fatalf(msg, args...)
+	l.Logger.Fatal(fmt.Sprintf(msg, args...))
 }
 
 func (l errorLogger) Errorf(msg string, args ...interface{}) {
 	l.checkErr("[Error] "+msg, args...)
-	l.Logger.Errorf(msg, args...)
+	l.Logger.Error(fmt.Sprintf(msg, args...))
 }
 
 func (l errorLogger) Warnf(msg string, args ...interface{}) {
 	l.checkErr("[Warn] "+msg, args...)
-	l.Logger.Warnf(msg, args...)
+	l.Logger.Warn(fmt.Sprintf(msg, args...))
 }
 
 func (l errorLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {

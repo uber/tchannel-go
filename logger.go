@@ -39,20 +39,11 @@ type Logger interface {
 	// Enabled returns whether the given level is enabled.
 	Enabled(level LogLevel) bool
 
-	// Fatalf logs a message, then exits with os.Exit(1).
-	Fatalf(msg string, args ...interface{})
-
 	// Fatal logs a message, then exits with os.Exit(1).
 	Fatal(msg string)
 
-	// Errorf logs a message at error priority.
-	Errorf(msg string, args ...interface{})
-
 	// Error logs a message at error priority.
 	Error(msg string)
-
-	// Warnf logs a message at warning priority.
-	Warnf(msg string, args ...interface{})
 
 	// Warn logs a message at warning priority.
 	Warn(msg string)
@@ -82,6 +73,10 @@ type LogField struct {
 	Value interface{}
 }
 
+func ErrField(err error) LogField {
+	return LogField{"error", err.Error()}
+}
+
 // LogFields is a list of LogFields used to pass additional information to the logger.
 type LogFields []LogField
 
@@ -91,11 +86,8 @@ var NullLogger Logger = nullLogger{}
 type nullLogger struct{}
 
 func (nullLogger) Enabled(_ LogLevel) bool                { return false }
-func (nullLogger) Fatalf(msg string, arg ...interface{})  { os.Exit(1) }
 func (nullLogger) Fatal(msg string)                       { os.Exit(1) }
-func (nullLogger) Errorf(msg string, args ...interface{}) {}
 func (nullLogger) Error(msg string)                       {}
-func (nullLogger) Warnf(msg string, args ...interface{})  {}
 func (nullLogger) Warn(msg string)                        {}
 func (nullLogger) Infof(msg string, args ...interface{})  {}
 func (nullLogger) Info(msg string)                        {}
@@ -119,20 +111,13 @@ func NewLogger(writer io.Writer, fields ...LogField) Logger {
 	return &writerLogger{writer, fields}
 }
 
-func (l writerLogger) Fatalf(msg string, args ...interface{}) {
-	l.printfn("F", msg, args...)
-	os.Exit(1)
-}
-
 func (l writerLogger) Fatal(msg string) {
 	l.printfn("F", msg)
 	os.Exit(1)
 }
 
 func (l writerLogger) Enabled(_ LogLevel) bool                { return true }
-func (l writerLogger) Errorf(msg string, args ...interface{}) { l.printfn("E", msg, args...) }
 func (l writerLogger) Error(msg string)                       { l.printfn("E", msg) }
-func (l writerLogger) Warnf(msg string, args ...interface{})  { l.printfn("W", msg, args...) }
 func (l writerLogger) Warn(msg string)                        { l.printfn("W", msg) }
 func (l writerLogger) Infof(msg string, args ...interface{})  { l.printfn("I", msg, args...) }
 func (l writerLogger) Info(msg string)                        { l.printfn("I", msg) }
@@ -181,33 +166,15 @@ func (l levelLogger) Enabled(level LogLevel) bool {
 	return l.level <= level
 }
 
-func (l levelLogger) Fatalf(msg string, args ...interface{}) {
-	if l.level <= LogLevelFatal {
-		l.logger.Fatalf(msg, args...)
-	}
-}
-
 func (l levelLogger) Fatal(msg string) {
 	if l.level <= LogLevelFatal {
 		l.logger.Fatal(msg)
 	}
 }
 
-func (l levelLogger) Errorf(msg string, args ...interface{}) {
-	if l.level <= LogLevelError {
-		l.logger.Errorf(msg, args...)
-	}
-}
-
 func (l levelLogger) Error(msg string) {
 	if l.level <= LogLevelError {
 		l.logger.Error(msg)
-	}
-}
-
-func (l levelLogger) Warnf(msg string, args ...interface{}) {
-	if l.level <= LogLevelWarn {
-		l.logger.Warnf(msg, args...)
 	}
 }
 

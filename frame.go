@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -73,6 +74,15 @@ func (fh FrameHeader) FrameSize() uint16 {
 }
 
 func (fh FrameHeader) String() string { return fmt.Sprintf("%v[%d]", fh.messageType, fh.ID) }
+
+func (fh FrameHeader) MarshalJSON() ([]byte, error) {
+	s := struct {
+		ID      uint32
+		MsgType messageType
+		Size    uint16
+	}{fh.ID, fh.messageType, fh.size}
+	return json.Marshal(s)
+}
 
 func (fh *FrameHeader) read(r *typed.ReadBuffer) error {
 	fh.size = r.ReadUint16()

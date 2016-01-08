@@ -79,7 +79,10 @@ type rawFuncHandler struct {
 }
 
 func (h rawFuncHandler) OnError(ctx context.Context, err error) {
-	h.ch.Logger().Errorf("simpleHandler OnError: %v %v", ctx, err)
+	h.ch.Logger().WithFields(
+		tchannel.LogField{"context", ctx},
+		tchannel.ErrField(err),
+	).Error("simpleHandler OnError.")
 }
 
 func (h rawFuncHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {

@@ -53,7 +53,10 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	initialFragment, err := parseInboundFragment(c.framePool, frame, callReq)
 	if err != nil {
 		// TODO(mmihic): Probably want to treat this as a protocol error
-		c.log.Errorf("could not decode %s: %v", frame.Header, err)
+		c.log.WithFields(
+			LogField{"header", frame.Header},
+			ErrField(err),
+		).Error("Couldn't decode initial fragment.")
 		return true
 	}
 
@@ -66,7 +69,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		if err == errDuplicateMex {
 			err = errInboundRequestAlreadyActive
 		}
-		c.log.Errorf("could not register exchange for %s", frame.Header)
+		c.log.WithFields(LogField{"header", frame.Header}).Error("Couldn't register exchange.")
 		c.protocolError(frame.Header.ID, errInboundRequestAlreadyActive)
 		return true
 	}
@@ -172,7 +175,10 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	}
 
 	if err := call.readMethod(); err != nil {
-		c.log.Errorf("Could not read method from %s: %v", c.remotePeerInfo, err)
+		c.log.WithFields(
+			LogField{"remotePeer", c.remotePeerInfo},
+			ErrField(err),
+		).Error("Couldn't read method.")
 		releaseFrame()
 		return
 	}
@@ -195,7 +201,10 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		h = c.subChannels.find(call.ServiceName(), call.Method())
 	}
 	if h == nil {
-		c.log.Errorf("Could not find handler for %s:%s", call.ServiceName(), call.Method())
+		c.log.WithFields(
+			LogField{"serviceName", call.ServiceName()},
+			LogField{"method", call.Method()},
+		).Error("Couldn't find handler.")
 		call.Response().SendSystemError(
 			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
 		releaseFrame()

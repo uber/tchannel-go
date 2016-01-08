@@ -81,7 +81,10 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 	select {
 	case frame := <-mex.recvCh:
 		if frame.Header.ID != mex.msgID {
-			mex.mexset.log.Errorf("recvPeerFrame mex %v received message with unexpected ID: %v", mex.msgID, frame.Header)
+			mex.mexset.log.WithFields(
+				LogField{"msgId", mex.msgID},
+				LogField{"header", frame.Header},
+			).Error("recvPeerFrame received msg with unexpected ID.")
 			return nil, errUnexpectedFrameType
 		}
 		return frame, nil
@@ -119,9 +122,11 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 
 	default:
 		// TODO(mmihic): Should be treated as a protocol error
-		mex.mexset.log.Warnf("Received unexpected frame: %v expected %v[%v]",
-			frame.Header, msgType, mex.msgID)
-
+		mex.mexset.log.WithFields(
+			LogField{"header", frame.Header},
+			LogField{"expectedType", msgType},
+			LogField{"expectedID", mex.msgID},
+		).Warn("Received unexpected frame.")
 		return nil, errUnexpectedFrameType
 	}
 }
@@ -182,11 +187,17 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 	mexset.Lock()
 	if existingMex := mexset.exchanges[mex.msgID]; existingMex != nil {
 		if existingMex == mex {
-			mexset.log.Warnf("%s mex for %s, %d registered multiple times",
-				mexset.name, mex.msgType, mex.msgID)
+			mexset.log.WithFields(
+				LogField{"name", mexset.name},
+				LogField{"msgType", mex.msgType},
+				LogField{"msgID", mex.msgID},
+			).Warn("mex registered multiple times.")
 		} else {
-			mexset.log.Warnf("msg id %d used for both active mex %s and new mex %s",
-				mex.msgID, existingMex.msgType, mex.msgType)
+			mexset.log.WithFields(
+				LogField{"msgID", mex.msgID},
+				LogField{"existingType", existingMex.msgType},
+				LogField{"newType", mex.msgType},
+			).Warn("Duplicate msg ID for active and new mex.")
 		}
 
 		mexset.Unlock()
