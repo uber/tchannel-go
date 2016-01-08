@@ -55,9 +55,7 @@ func NewTCollectorReporter(ch *tc.Channel) *TCollectorReporter {
 
 	curHostIP, err := tc.ListenIP()
 	if err != nil {
-		ch.Logger().WithFields(
-			tc.LogField{"error", err.Error()},
-		).Warn("TCollector TraceReporter failed to get IP.")
+		ch.Logger().WithFields(tc.ErrField(err)).Warn("TCollector TraceReporter failed to get IP.")
 		curHostIP = net.IPv4(0, 0, 0, 0)
 	}
 

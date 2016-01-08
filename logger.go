@@ -73,6 +73,10 @@ type LogField struct {
 	Value interface{}
 }
 
+func ErrField(err error) LogField {
+	return LogField{"error", err.Error()}
+}
+
 // LogFields is a list of LogFields used to pass additional information to the logger.
 type LogFields []LogField
 

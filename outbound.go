@@ -290,7 +290,7 @@ func (c *Connection) handleError(frame *Frame) bool {
 	if err := errMsg.read(rbuf); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		).Warn("Unable to read error frame.")
 		c.connectionError("parsing error frame", err)
 		return true

@@ -55,7 +55,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		// TODO(mmihic): Probably want to treat this as a protocol error
 		c.log.WithFields(
 			LogField{"header", frame.Header},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		).Error("Couldn't decode initial fragment.")
 		return true
 	}
@@ -177,7 +177,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	if err := call.readMethod(); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		).Error("Couldn't read method.")
 		releaseFrame()
 		return

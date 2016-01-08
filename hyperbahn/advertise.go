@@ -81,7 +81,7 @@ func (c *Client) advertiseLoop() {
 
 		if err := c.sendAdvertise(); err != nil {
 			consecutiveFailures++
-			errLogger := c.tchan.Logger().WithFields(tchannel.LogField{"error", err.Error()})
+			errLogger := c.tchan.Logger().WithFields(tchannel.ErrField(err))
 			if consecutiveFailures >= maxAdvertiseFailures && c.opts.FailStrategy == FailStrategyFatal {
 				c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: false})
 				errLogger.Fatal("Hyperbahn client registration failed.")

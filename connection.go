@@ -571,7 +571,7 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
 			LogField{"id", id},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		).Warn("Couldn't create outbound frame.")
 		return fmt.Errorf("failed to create outbound error frame")
 	}
@@ -594,7 +594,7 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
 			LogField{"id", id},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		).Warn("Couldn't send outbound frame.")
 		return fmt.Errorf("failed to send error frame, buffer full")
 	})
@@ -607,7 +607,7 @@ func (c *Connection) connectionError(site string, err error) error {
 	} else {
 		logger := c.log.WithFields(
 			LogField{"site", site},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		)
 		if se, ok := err.(SystemError); ok && se.Code() != ErrCodeNetwork {
 			logger.Error("Connection error.")
@@ -620,7 +620,7 @@ func (c *Connection) connectionError(site string, err error) error {
 }
 
 func (c *Connection) protocolError(id uint32, err error) error {
-	c.log.WithFields(LogField{"error", err.Error()}).Warn("Protocol error.")
+	c.log.WithFields(ErrField(err)).Warn("Protocol error.")
 	sysErr := NewWrappedSystemError(ErrCodeProtocol, err)
 	c.SendSystemError(id, nil, sysErr)
 	// Don't close the connection until the error has been sent.
@@ -819,7 +819,7 @@ func (c *Connection) closeNetwork() {
 	if err := c.conn.Close(); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
-			LogField{"error", err.Error()},
+			ErrField(err),
 		).Warn("Couldn't close connection to peer.")
 	}
 }

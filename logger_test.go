@@ -22,12 +22,17 @@ package tchannel_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestErrField(t *testing.T) {
+	assert.Equal(t, LogField{"error", "foo"}, ErrField(errors.New("foo")))
+}
 
 func TestWriterLogger(t *testing.T) {
 	var buf bytes.Buffer

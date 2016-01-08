@@ -90,7 +90,7 @@ func (s *Server) onError(err error) {
 	if tchannel.GetSystemErrorCode(err) == tchannel.ErrCodeTimeout {
 		s.log.Debugf("thrift Server timeout: %v", err)
 	} else {
-		s.log.WithFields(tchannel.LogField{"error", err.Error()}).Error("Thrift server error.")
+		s.log.WithFields(tchannel.ErrField(err)).Error("Thrift server error.")
 	}
 }
 

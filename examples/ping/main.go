@@ -53,7 +53,7 @@ func pingOtherHandler(ctx json.Context, ping *Ping) (*Pong, error) {
 }
 
 func onError(ctx context.Context, err error) {
-	log.WithFields(tchannel.LogField{"error", err.Error()}).Fatal("onError handler triggered.")
+	log.WithFields(tchannel.ErrField(err)).Fatal("onError handler triggered.")
 }
 
 func listenAndHandle(s *tchannel.Channel, hostPort string) {
@@ -63,7 +63,7 @@ func listenAndHandle(s *tchannel.Channel, hostPort string) {
 	if err := s.ListenAndServe(hostPort); err != nil {
 		log.WithFields(
 			tchannel.LogField{"hostPort", hostPort},
-			tchannel.LogField{"error", err.Error()},
+			tchannel.ErrField(err),
 		).Fatal("Couldn't listen.")
 	}
 }
@@ -72,7 +72,7 @@ func main() {
 	// Create a new TChannel for handling requests
 	ch, err := tchannel.NewChannel("PingService", &tchannel.ChannelOptions{Logger: tchannel.SimpleLogger})
 	if err != nil {
-		log.WithFields(tchannel.LogField{"error", err.Error()}).Fatal("Couldn't create new channel.")
+		log.WithFields(tchannel.ErrField(err)).Fatal("Couldn't create new channel.")
 	}
 
 	// Register a handler for the ping message on the PingService
@@ -86,7 +86,7 @@ func main() {
 	// Create a new TChannel for sending requests.
 	client, err := tchannel.NewChannel("ping-client", nil)
 	if err != nil {
-		log.WithFields(tchannel.LogField{"error", err.Error()}).Fatal("Couldn't create new client channel.")
+		log.WithFields(tchannel.ErrField(err)).Fatal("Couldn't create new client channel.")
 	}
 
 	// Make a call to ourselves, with a timeout of 10s
@@ -97,7 +97,7 @@ func main() {
 
 	var pong Pong
 	if err := json.CallPeer(ctx, peer, "PingService", "ping", &Ping{"Hello World"}, &pong); err != nil {
-		log.WithFields(tchannel.LogField{"error", err.Error()}).Fatal("json.Call failed.")
+		log.WithFields(tchannel.ErrField(err)).Fatal("json.Call failed.")
 	}
 
 	log.Infof("Received pong: %s", pong.Message)
@@ -112,7 +112,7 @@ func main() {
 
 	// Try to send a message to the Service:Method pair for the subchannel
 	if err := json.CallPeer(ctx, peer, "PingServiceOther", "pingOther", &Ping{"Hello Other World"}, &pong); err != nil {
-		log.WithFields(tchannel.LogField{"error", err.Error()}).Fatal("json.Call failed.")
+		log.WithFields(tchannel.ErrField(err)).Fatal("json.Call failed.")
 	}
 
 	log.Infof("Received pong: %s", pong.Message)
