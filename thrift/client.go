@@ -65,7 +65,7 @@ func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrif
 	if err != nil {
 		return err
 	}
-	if err := writeHeaders(writer, headers); err != nil {
+	if err := WriteHeaders(writer, headers); err != nil {
 		return err
 	}
 	if err := writer.Close(); err != nil {
@@ -94,7 +94,7 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 		return nil, false, err
 	}
 
-	headers, err := readHeaders(reader)
+	headers, err := ReadHeaders(reader)
 	if err != nil {
 		return nil, false, err
 	}

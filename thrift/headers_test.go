@@ -43,18 +43,19 @@ var headers = map[string]string{
 
 func BenchmarkWriteHeaders(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		writeHeaders(ioutil.Discard, headers)
+		WriteHeaders(ioutil.Discard, headers)
 	}
 }
 
 func BenchmarkReadHeaders(b *testing.B) {
 	buf := &bytes.Buffer{}
-	assert.NoError(b, writeHeaders(buf, headers))
+	assert.NoError(b, WriteHeaders(buf, headers))
 	bs := buf.Bytes()
+	reader := bytes.NewReader(bs)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		reader := bytes.NewReader(bs)
-		readHeaders(reader)
+		reader.Seek(0, 0)
+		ReadHeaders(reader)
 	}
 }

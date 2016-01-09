@@ -28,8 +28,13 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
-// TODO(prashant): Use a small buffer and then flush it when it's full.
-func writeHeaders(w io.Writer, headers map[string]string) error {
+// WriteHeaders writes the given key-value pairs using the following encoding:
+// len~2 (k~4 v~4)~len
+func WriteHeaders(w io.Writer, headers map[string]string) error {
+	// TODO(prashant): Since we are not writing length-prefixed data here,
+	// we can write out to the buffer, and if it fills up, flush it.
+	// Right now, we calculate the size of the required buffer and write it out.
+
 	// Calculate the size of the buffer that we need.
 	size := 2
 	for k, v := range headers {
@@ -59,8 +64,9 @@ func writeHeaders(w io.Writer, headers map[string]string) error {
 	return err
 }
 
-// TODO(prashant): Allow typed.ReadBuffer to read directly from the reader.
-func readHeaders(r io.Reader) (map[string]string, error) {
+// ReadHeaders reads key-value pairs encoded using WriteHeaders.
+func ReadHeaders(r io.Reader) (map[string]string, error) {
+	// TODO(prashant): Allow typed.ReadBuffer to read directly from the reader.
 	bs, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
