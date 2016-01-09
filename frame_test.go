@@ -44,7 +44,7 @@ func TestFrameHeaderJSON(t *testing.T) {
 	assert.Equal(
 		t,
 		string(logged),
-		`{"ID":3735928559,"MsgType":3,"Size":65332}`,
+		`{"id":3735928559,"msgType":3,"size":65332}`,
 		"FrameHeader didn't marshal to JSON as expected",
 	)
 }

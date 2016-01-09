@@ -77,9 +77,9 @@ func (fh FrameHeader) String() string { return fmt.Sprintf("%v[%d]", fh.messageT
 
 func (fh FrameHeader) MarshalJSON() ([]byte, error) {
 	s := struct {
-		ID      uint32
-		MsgType messageType
-		Size    uint16
+		ID      uint32      `json:"id"`
+		MsgType messageType `json:"msgType"`
+		Size    uint16      `json:"size"`
 	}{fh.ID, fh.messageType, fh.size}
 	return json.Marshal(s)
 }
