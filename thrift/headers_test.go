@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"testing"
+	"testing/iotest"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -39,6 +40,118 @@ var headers = map[string]string{
 	"header8": "value2",
 	"header9": "value1",
 	"header0": "value2",
+}
+
+var headerTests = []struct {
+	m         map[string]string
+	encoding  []byte
+	encoding2 []byte
+}{
+	{
+		m:        nil,
+		encoding: []byte{0, 0},
+	},
+	{
+		m:        make(map[string]string),
+		encoding: []byte{0, 0},
+	},
+	{
+		m: map[string]string{
+			"k": "v",
+		},
+		encoding: []byte{
+			0, 1, /* number of headers */
+			0, 1, /* length of key */
+			'k',
+			0, 1, /* length of value */
+			'v',
+		},
+	},
+	{
+		m: map[string]string{
+			"": "",
+		},
+		encoding: []byte{
+			0, 1, /* number of headers */
+			0, 0,
+			0, 0,
+		},
+	},
+	{
+		m: map[string]string{
+			"k1": "v12",
+			"k2": "v34",
+		},
+		encoding: []byte{
+			0, 2, /* number of headers */
+			0, 2, /* length of key */
+			'k', '2',
+			0, 3, /* length of value */
+			'v', '3', '4',
+			0, 2, /* length of key */
+			'k', '1',
+			0, 3, /* length of value */
+			'v', '1', '2',
+		},
+		encoding2: []byte{
+			0, 2, /* number of headers */
+			0, 2, /* length of key */
+			'k', '1',
+			0, 3, /* length of value */
+			'v', '1', '2',
+			0, 2, /* length of key */
+			'k', '2',
+			0, 3, /* length of value */
+			'v', '3', '4',
+		},
+	},
+}
+
+func TestWriteHeadersSuccessful(t *testing.T) {
+	for _, tt := range headerTests {
+		buf := &bytes.Buffer{}
+		err := WriteHeaders(buf, tt.m)
+		assert.NoError(t, err, "WriteHeaders failed")
+
+		// Writes iterate over the map in an undefined order, so we might get
+		// encoding or encoding2. If it's not encoding, assert that it's encoding2.
+		if !bytes.Equal(tt.encoding, buf.Bytes()) {
+			assert.Equal(t, tt.encoding2, buf.Bytes(), "Unexpected bytes")
+		}
+	}
+}
+
+func TestReadHeadersSuccessful(t *testing.T) {
+	for _, tt := range headerTests {
+		// when the bytes are {0, 0}, we always return nil.
+		if tt.m != nil && len(tt.m) == 0 {
+			continue
+		}
+
+		reader := iotest.OneByteReader(bytes.NewReader(tt.encoding))
+		got, err := ReadHeaders(reader)
+		assert.NoError(t, err, "ReadHeaders failed")
+		assert.Equal(t, tt.m, got, "Map mismatch")
+
+		if tt.encoding2 != nil {
+			reader := iotest.OneByteReader(bytes.NewReader(tt.encoding2))
+			got, err := ReadHeaders(reader)
+			assert.NoError(t, err, "ReadHeaders failed")
+			assert.Equal(t, tt.m, got, "Map mismatch")
+		}
+	}
+}
+
+func TestReadHeadersLeftoverBytes(t *testing.T) {
+	buf := []byte{0, 0, 1, 2, 3}
+	r := bytes.NewReader(buf)
+	headers, err := ReadHeaders(r)
+	assert.NoError(t, err, "ReadHeaders failed")
+	assert.Equal(t, map[string]string(nil), headers, "Headers mismatch")
+
+	leftover, err := ioutil.ReadAll(r)
+	assert.NoError(t, err, "ReadAll failed")
+	assert.Equal(t, []byte{1, 2, 3}, leftover, "Reader consumed leftover bytes")
 }
 
 func BenchmarkWriteHeaders(b *testing.B) {
