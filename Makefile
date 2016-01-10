@@ -46,6 +46,7 @@ install:
 	GOPATH=$(GODEPS) godep restore
 
 install_ci: get_thrift install
+	go get -u github.com/mattn/goveralls
 
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
@@ -78,11 +79,16 @@ benchmark: clean setup
 	echo Running benchmarks:
 	go test $(PKGS) -bench=. -parallel=4
 
-cover: clean setup
-	echo Testing packages:
+cover_profile: clean setup
+	@echo Testing packages:
 	mkdir -p $(BUILD)
-	go test ./ $(TEST_ARG)  -coverprofile=$(BUILD)/coverage.out
+	go test ./ $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
+
+cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
+
+cover_ci: cover_profile
+	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci
 
 vet:
 	echo Vetting packages for potential issues...
