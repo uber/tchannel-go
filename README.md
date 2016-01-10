@@ -1,4 +1,4 @@
-# TChannel [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci]
+# TChannel [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov]
 
 [TChannel][tchan-spec] is a multiplexing and framing protocol for RPC calls.
 tchannel-go is a Go implementation of the protocol, including client libraries
@@ -60,6 +60,8 @@ This project is released under the [MIT License](LICENSE.md).
 [doc]: https://godoc.org/github.com/uber/tchannel-go
 [ci-img]: https://travis-ci.org/uber/tchannel-go.svg?branch=master
 [ci]: https://travis-ci.org/uber/tchannel-go
+[cov-img]: https://coveralls.io/repos/uber/tchannel-go/badge.svg?branch=master&service=github
+[cov]: https://coveralls.io/github/uber/tchannel-go?branch=master
 [tchan-spec]: http://tchannel.readthedocs.org/en/latest/
 [tchan-proto-spec]: http://tchannel.readthedocs.org/en/latest/protocol/
 [hyperbahn]: https://github.com/uber/hyperbahn

@@ -3,4 +3,5 @@ go:
   - 1.4
   - 1.5
 install: make install_ci
-
+script: make test_ci
+after_success: make cover_ci
