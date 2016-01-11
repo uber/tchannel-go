@@ -313,10 +313,11 @@ func (call *InboundCall) WithArg23(f func(arg2, arg3 []byte) error) error {
 // to write back to the calling peer
 func (call *InboundCall) Response() *InboundCallResponse {
 	if call.err != nil {
-		// While reading Thrift, we cannot distinguish between malformed Thrift and other errors,
-		// and so we may try to respond with a bad request. We should ensure that the response
-		// is marked as failed if the request has failed so that we don't try to shutdown the exchange
-		// a second time.
+		// While reading Thrift, we cannot distinguish between malformed Thrift
+		// and other errors, and so we may try to respond with a bad request.
+		// We should ensure that the response is marked as failed if the
+		// request has failed so that we don't try to shutdown the exchange a
+		// second time.
 		call.response.err = call.err
 	}
 	return call.response
