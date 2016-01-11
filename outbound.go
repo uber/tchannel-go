@@ -275,6 +275,27 @@ func (response *OutboundCallResponse) Arg3Reader() (ArgReader, error) {
 	return response.arg3Reader()
 }
 
+// WithArg2 calls the provided function with all of arg2 as a byte buffer and
+// an arg3 reader
+func (response *OutboundCallResponse) WithArg2(f func(arg2 []byte, arg3 io.ReadCloser) error) error {
+	var method []byte
+	if err := NewArgReader(response.arg1Reader()).Read(&method); err != nil {
+		return err
+	}
+
+	return response.withArg2(f)
+}
+
+// WithArg23 calls the provided function with all of arg2 and arg3 byte buffers.
+func (response *OutboundCallResponse) WithArg23(f func(arg2, arg3 []byte) error) error {
+	var method []byte
+	if err := NewArgReader(response.arg1Reader()).Read(&method); err != nil {
+		return err
+	}
+
+	return response.withArg23(f)
+}
+
 // handleError handles an error coming back from the peer. If the error is a
 // protocol level error, the entire connection will be closed.  If the error is
 // a request specific error, it will be written to the request's response

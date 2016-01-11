@@ -143,3 +143,50 @@ func (w ArgWriteHelper) WriteJSON(data interface{}) error {
 		return e.Encode(data)
 	})
 }
+
+type ArgReaderProvider interface {
+	Arg2Reader() (ArgReader, error)
+	Arg3Reader() (ArgReader, error)
+}
+
+// withArg2 calls the provided function with all of arg2 as a byte buffer and
+// an arg3 reader
+func WithArg2(p ArgReaderProvider, f func(arg2 []byte, arg3 ArgReader) error) error {
+	arg2Reader, err := p.Arg2Reader()
+	if err != nil {
+		return err
+	}
+
+	arg2, err := ioutil.ReadAll(arg2Reader)
+	if err != nil {
+		return err
+	}
+
+	if err := arg2Reader.Close(); err != nil {
+		return err
+	}
+
+	arg3Reader, err := p.Arg3Reader()
+	if err != nil {
+		return err
+	}
+
+	return f(arg2, arg3Reader)
+}
+
+// withArg23 calls the provided function with all of arg2 and arg3 as byte
+// buffers.
+func WithArg23(p ArgReaderProvider, f func(arg2, arg3 []byte) error) error {
+	return WithArg2(p, func(arg2 []byte, arg3Reader ArgReader) error {
+		arg3, err := ioutil.ReadAll(arg3Reader)
+		if err != nil {
+			return err
+		}
+
+		if err := arg3Reader.Close(); err != nil {
+			return err
+		}
+
+		return f(arg2, arg3)
+	})
+}
