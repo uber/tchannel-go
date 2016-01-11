@@ -21,6 +21,8 @@
 package tchannel
 
 import (
+	"reflect"
+	"runtime"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -40,6 +42,33 @@ type HandlerFunc func(ctx context.Context, call *InboundCall)
 
 // Handle calls f(ctx, call)
 func (f HandlerFunc) Handle(ctx context.Context, call *InboundCall) { f(ctx, call) }
+
+// An ErrorHandlerFunc is an adapter to allow the use of ordinary functions as
+// Channel handlers, with error handling convenience.  If f is a function with
+// the appropriate signature, then ErrorHandlerFunc(f) is a Handler object that
+// calls f.
+type ErrorHandlerFunc func(ctx context.Context, call *InboundCall) error
+
+// Handle calls f(ctx, call)
+func (f ErrorHandlerFunc) Handle(ctx context.Context, call *InboundCall) {
+	if err := f(ctx, call); err != nil {
+		if GetSystemErrorCode(err) == ErrCodeUnexpected {
+			call.log.WithFields(f.getLogFields()...).WithFields(ErrField(err)).Error("Unexpected handler error")
+		}
+		call.Response().SendSystemError(err)
+	}
+}
+
+func (f ErrorHandlerFunc) getLogFields() LogFields {
+	ptr := reflect.ValueOf(f).Pointer()
+	handlerFunc := runtime.FuncForPC(ptr) // can't be nil
+	fileName, fileLine := handlerFunc.FileLine(ptr)
+	return LogFields{
+		{"handlerFuncName", handlerFunc.Name()},
+		{"handlerFuncFileName", fileName},
+		{"handlerFuncFileLine", fileLine},
+	}
+}
 
 // Manages handlers
 type handlerMap struct {
