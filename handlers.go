@@ -33,9 +33,9 @@ type Handler interface {
 	Handle(ctx context.Context, call *InboundCall)
 }
 
-// A HandlerFunc is an adapter to allow the use of ordering functions as
-// Channel handlers.  If f is a function with the appropriate signature,
-// HandlerFunc(f) is a Hander object that calls f
+// A HandlerFunc is an adapter to allow the use of ordinary functions as
+// Channel handlers.  If f is a function with the appropriate signature, then
+// HandlerFunc(f) is a Handler object that calls f.
 type HandlerFunc func(ctx context.Context, call *InboundCall)
 
 // Handle calls f(ctx, call)
