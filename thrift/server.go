@@ -99,7 +99,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	if err != nil {
 		return err
 	}
-	headers, err := readHeaders(reader)
+	headers, err := ReadHeaders(reader)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
-	if err := writeHeaders(writer, ctx.ResponseHeaders()); err != nil {
+	if err := WriteHeaders(writer, ctx.ResponseHeaders()); err != nil {
 		return err
 	}
 	if err := writer.Close(); err != nil {
