@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# 1.0.1
+
+* Expose thrift.ReadHeaders and thrift.WriteHEaders
+
 # 1.0.0
 
 * First stable release.
