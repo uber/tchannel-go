@@ -3,7 +3,8 @@ Changelog
 
 # 1.0.1
 
-* Expose thrift.ReadHeaders and thrift.WriteHEaders
+* Expose thrift encoding functions
+  (ReadHeaders, WriteHeaders, ReadStruct, WriteStruct)
 
 # 1.0.0
 
