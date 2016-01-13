@@ -41,6 +41,20 @@ type ArgWriter interface {
 	Flush() error
 }
 
+// ArgWritable is an interface for providing arg2 and arg3 writer streams;
+// implemented by reqResWriter e.g. OutboundCall and InboundCallResponse
+type ArgWritable interface {
+	Arg2Writer() (ArgWriter, error)
+	Arg3Writer() (ArgWriter, error)
+}
+
+// ArgReadable is an interface for providing arg2 and arg3 reader streams;
+// implemented by reqResReader e.g. InboundCall and OutboundCallResponse.
+type ArgReadable interface {
+	Arg2Reader() (ArgReader, error)
+	Arg3Reader() (ArgReader, error)
+}
+
 // ArgReadHelper providers a simpler interface to reading arguments.
 type ArgReadHelper struct {
 	reader ArgReader
