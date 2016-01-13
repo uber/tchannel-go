@@ -30,14 +30,8 @@ import (
 // ErrAppError is returned if the application sets an error response.
 var ErrAppError = errors.New("application error")
 
-// Readable is the interface for something that can be read.
-type Readable interface {
-	Arg2Reader() (tchannel.ArgReader, error)
-	Arg3Reader() (tchannel.ArgReader, error)
-}
-
 // ReadArgsV2 reads arg2 and arg3 from a reader.
-func ReadArgsV2(r Readable) ([]byte, []byte, error) {
+func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
 	var arg2, arg3 []byte
 
 	if err := tchannel.NewArgReader(r.Arg2Reader()).Read(&arg2); err != nil {
