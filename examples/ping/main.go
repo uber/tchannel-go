@@ -62,7 +62,7 @@ func listenAndHandle(s *tchannel.Channel, hostPort string) {
 	// If no error is returned, the listen was successful. Serving happens in the background.
 	if err := s.ListenAndServe(hostPort); err != nil {
 		log.WithFields(
-			tchannel.LogField{"hostPort", hostPort},
+			tchannel.LogField{Key: "hostPort", Value: hostPort},
 			tchannel.ErrField(err),
 		).Fatal("Couldn't listen.")
 	}

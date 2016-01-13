@@ -80,7 +80,7 @@ type rawFuncHandler struct {
 
 func (h rawFuncHandler) OnError(ctx context.Context, err error) {
 	h.ch.Logger().WithFields(
-		tchannel.LogField{"context", ctx},
+		tchannel.LogField{Key: "context", Value: ctx},
 		tchannel.ErrField(err),
 	).Error("simpleHandler OnError.")
 }
