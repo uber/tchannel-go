@@ -1,11 +1,6 @@
 Changelog
 =========
 
-# 1.0.1
-
-* Expose thrift encoding functions
-  (ReadHeaders, WriteHeaders, ReadStruct, WriteStruct)
-
 # 1.0.0
 
 * First stable release.
