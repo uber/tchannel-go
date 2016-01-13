@@ -73,6 +73,7 @@ type LogField struct {
 	Value interface{}
 }
 
+// ErrField wraps an error string as a LogField named "error"
 func ErrField(err error) LogField {
 	return LogField{"error", err.Error()}
 }
