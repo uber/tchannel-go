@@ -20,11 +20,8 @@
 
 package http
 
-import (
-	"io"
+import "github.com/uber/tchannel-go"
 
-	"github.com/uber/tchannel-go"
-)
 
 type argWriter interface {
 	Arg2Writer() (tchannel.ArgWriter, error)
@@ -32,6 +29,6 @@ type argWriter interface {
 }
 
 type argReader interface {
-	Arg2Reader() (io.ReadCloser, error)
-	Arg3Reader() (io.ReadCloser, error)
+	Arg2Reader() (tchannel.ArgReader, error)
+	Arg3Reader() (tchannel.ArgReader, error)
 }

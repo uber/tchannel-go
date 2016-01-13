@@ -22,7 +22,6 @@ package tchannel
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/uber/tchannel-go/typed"
@@ -259,9 +258,9 @@ func (response *OutboundCallResponse) Format() Format {
 	return Format(response.callRes.Headers[ArgScheme])
 }
 
-// Arg2Reader returns an io.ReadCloser to read the second argument.
+// Arg2Reader returns an ArgReader to read the second argument.
 // The ReadCloser must be closed once the argument has been read.
-func (response *OutboundCallResponse) Arg2Reader() (io.ReadCloser, error) {
+func (response *OutboundCallResponse) Arg2Reader() (ArgReader, error) {
 	var method []byte
 	if err := NewArgReader(response.arg1Reader()).Read(&method); err != nil {
 		return nil, err
@@ -270,9 +269,9 @@ func (response *OutboundCallResponse) Arg2Reader() (io.ReadCloser, error) {
 	return response.arg2Reader()
 }
 
-// Arg3Reader returns an io.ReadCloser to read the last argument.
+// Arg3Reader returns an ArgReader to read the last argument.
 // The ReadCloser must be closed once the argument has been read.
-func (response *OutboundCallResponse) Arg3Reader() (io.ReadCloser, error) {
+func (response *OutboundCallResponse) Arg3Reader() (ArgReader, error) {
 	return response.arg3Reader()
 }
 

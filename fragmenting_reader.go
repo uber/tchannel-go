@@ -91,9 +91,9 @@ func newFragmentingReader(logger Logger, receiver fragmentReceiver) *fragmenting
 	}
 }
 
-// ArgReader returns an io.ReadCloser to read an argument. The ReadCloser will handle
-// fragmentation as needed. Once the argument has been read, the ReadCloser must be closed.
-func (r *fragmentingReader) ArgReader(last bool) (io.ReadCloser, error) {
+// The ArgReader will handle fragmentation as needed. Once the argument has
+// been read, the ArgReader must be closed.
+func (r *fragmentingReader) ArgReader(last bool) (ArgReader, error) {
 	if err := r.BeginArgument(last); err != nil {
 		return nil, err
 	}

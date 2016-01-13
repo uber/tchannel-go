@@ -22,7 +22,6 @@ package raw
 
 import (
 	"errors"
-	"io"
 
 	"github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
@@ -33,8 +32,8 @@ var ErrAppError = errors.New("application error")
 
 // Readable is the interface for something that can be read.
 type Readable interface {
-	Arg2Reader() (io.ReadCloser, error)
-	Arg3Reader() (io.ReadCloser, error)
+	Arg2Reader() (tchannel.ArgReader, error)
+	Arg3Reader() (tchannel.ArgReader, error)
 }
 
 // ReadArgsV2 reads arg2 and arg3 from a reader.
@@ -102,7 +101,7 @@ func CallSC(ctx context.Context, sc *tchannel.SubChannel, method string, arg2, a
 
 // CArgs are the call arguments passed to CallV2.
 type CArgs struct {
-	Method   string
+	Method      string
 	Arg2        []byte
 	Arg3        []byte
 	CallOptions *tchannel.CallOptions
