@@ -23,7 +23,6 @@ package tchannel
 import (
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/uber/tchannel-go/typed"
 )
@@ -38,14 +37,6 @@ const (
 	chunkHeaderSize      = 2    // each chunk is a uint16
 	hasMoreFragmentsFlag = 0x01 // flags indicating there are more fragments coming
 )
-
-// ArgWriter is the interface returned by ArgXWriter.
-type ArgWriter interface {
-	io.WriteCloser
-
-	// Flush flushes the currently written bytes without waiting for the frame to be filled.
-	Flush() error
-}
 
 // A writableFragment is a fragment that can be written to, containing a buffer
 // for contents, a running checksum, and placeholders for the fragment flags

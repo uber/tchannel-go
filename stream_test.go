@@ -137,7 +137,7 @@ func streamPartialHandler(t *testing.T) HandlerFunc {
 	}
 }
 
-func testStreamArg(t *testing.T, f func(argWriter ArgWriter, argReader io.ReadCloser)) {
+func testStreamArg(t *testing.T, f func(argWriter ArgWriter, argReader ArgReader)) {
 	defer testutils.SetTimeout(t, 2*time.Second)()
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -187,7 +187,7 @@ func testStreamArg(t *testing.T, f func(argWriter ArgWriter, argReader io.ReadCl
 }
 
 func TestStreamPartialArg(t *testing.T) {
-	testStreamArg(t, func(argWriter ArgWriter, argReader io.ReadCloser) {
+	testStreamArg(t, func(argWriter ArgWriter, argReader ArgReader) {
 		require.NoError(t, argWriter.Close(), "arg3 close failed")
 
 		// Once closed, we expect the reader to return EOF
@@ -199,7 +199,7 @@ func TestStreamPartialArg(t *testing.T) {
 }
 
 func TestStreamSendError(t *testing.T) {
-	testStreamArg(t, func(argWriter ArgWriter, argReader io.ReadCloser) {
+	testStreamArg(t, func(argWriter ArgWriter, argReader ArgReader) {
 		// Send the magic number to request an error.
 		_, err := argWriter.Write([]byte{streamRequestError})
 		require.NoError(t, err, "arg3 write failed")

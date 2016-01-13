@@ -23,7 +23,6 @@ package tchannel
 import (
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -286,15 +285,15 @@ func (call *InboundCall) readMethod() error {
 	return nil
 }
 
-// Arg2Reader returns an io.ReadCloser to read the second argument.
+// Arg2Reader returns an ArgReader to read the second argument.
 // The ReadCloser must be closed once the argument has been read.
-func (call *InboundCall) Arg2Reader() (io.ReadCloser, error) {
+func (call *InboundCall) Arg2Reader() (ArgReader, error) {
 	return call.arg2Reader()
 }
 
-// Arg3Reader returns an io.ReadCloser to read the last argument.
+// Arg3Reader returns an ArgReader to read the last argument.
 // The ReadCloser must be closed once the argument has been read.
-func (call *InboundCall) Arg3Reader() (io.ReadCloser, error) {
+func (call *InboundCall) Arg3Reader() (ArgReader, error) {
 	return call.arg3Reader()
 }
 
