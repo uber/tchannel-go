@@ -158,8 +158,7 @@ func TestHandleInitReqNewVersion(t *testing.T) {
 // TestHandleInitRes ensures that a Connection is ready to handle messages immediately
 // after receiving an InitRes.
 func TestHandleInitRes(t *testing.T) {
-	l, err := net.Listen("tcp", ":0")
-	require.NoError(t, err, "net.Listen failed")
+	l := newListener(t)
 	listenerComplete := make(chan struct{})
 
 	go func() {
@@ -199,8 +198,7 @@ func TestHandleInitRes(t *testing.T) {
 }
 
 func TestInitReqGetsError(t *testing.T) {
-	l, err := net.Listen("tcp", ":0")
-	require.NoError(t, err, "net.Listen failed")
+	l := newListener(t)
 	listenerComplete := make(chan struct{})
 	connectionComplete := make(chan struct{})
 	go func() {
@@ -244,4 +242,10 @@ func TestInitReqGetsError(t *testing.T) {
 	close(connectionComplete)
 
 	<-listenerComplete
+}
+
+func newListener(t *testing.T) net.Listener {
+	l, err := net.Listen("tcp", ":0")
+	require.NoError(t, err, "Listen failed")
+	return l
 }
