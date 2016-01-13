@@ -75,6 +75,7 @@ func (fh FrameHeader) FrameSize() uint16 {
 
 func (fh FrameHeader) String() string { return fmt.Sprintf("%v[%d]", fh.messageType, fh.ID) }
 
+// MarshalJSON returns a `{"id":NNN, "msgType":MMM, "size":SSS}` representation
 func (fh FrameHeader) MarshalJSON() ([]byte, error) {
 	s := struct {
 		ID      uint32      `json:"id"`

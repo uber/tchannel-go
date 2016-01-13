@@ -201,10 +201,10 @@ func (rs *RequestState) RetryCount() int {
 
 // RunWithRetry will take a function that makes the TChannel call, and will
 // rerun it as specifed in the RetryOptions in the Context.
-func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
+func (ch *Channel) RunWithRetry(runCtx context.Context, f RetriableFunc) error {
 	var err error
 
-	opts := getRetryOptions(ctx)
+	opts := getRetryOptions(runCtx)
 	rs := ch.getRequestState(opts)
 	defer requestStatePool.Put(rs)
 
@@ -212,10 +212,10 @@ func (ch *Channel) RunWithRetry(ctx context.Context, f RetriableFunc) error {
 		rs.Attempt++
 
 		if opts.TimeoutPerAttempt == 0 {
-			err = f(ctx, rs)
+			err = f(runCtx, rs)
 		} else {
-			ctx, cancel := context.WithTimeout(ctx, opts.TimeoutPerAttempt)
-			err = f(ctx, rs)
+			attemptCtx, cancel := context.WithTimeout(runCtx, opts.TimeoutPerAttempt)
+			err = f(attemptCtx, rs)
 			cancel()
 		}
 
