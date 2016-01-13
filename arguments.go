@@ -31,6 +31,16 @@ import (
 // OutboundCallResponse and an InboundCall
 type ArgReader io.ReadCloser
 
+// ArgWriter is the interface for the arg2 and arg3 streams on an OutboundCall
+// and an InboundCallResponse
+type ArgWriter interface {
+	io.WriteCloser
+
+	// Flush flushes the currently written bytes without waiting for the frame
+	// to be filled.
+	Flush() error
+}
+
 // ArgReadHelper providers a simpler interface to reading arguments.
 type ArgReadHelper struct {
 	reader ArgReader
