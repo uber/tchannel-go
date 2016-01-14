@@ -265,7 +265,7 @@ func (ch *Channel) handleIntrospection(arg3 []byte) interface{} {
 func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []SubPeerScore {
 	var peers []SubPeerScore
 	l.RLock()
-	for _, ps := range l.peerHeap.PeerScores {
+	for _, ps := range l.peerHeap.peerScores {
 		peers = append(peers, SubPeerScore{
 			HostPort: ps.Peer.hostPort,
 			Score:    ps.score,

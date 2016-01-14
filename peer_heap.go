@@ -27,67 +27,67 @@ import (
 	"time"
 )
 
-// PeerHeap maintains a MIN heap of peers based on the peers' score.
-type PeerHeap struct {
-	PeerScores []*peerScore
+// peerHeap maintains a min-heap of peers based on the peers' score.
+type peerHeap struct {
+	peerScores []*peerScore
 	rng        *rand.Rand
 	order      uint64 // atomic
 }
 
-func newPeerHeap() *PeerHeap {
-	return &PeerHeap{rng: NewRand(time.Now().UnixNano())}
+func newPeerHeap() *peerHeap {
+	return &peerHeap{rng: NewRand(time.Now().UnixNano())}
 }
 
-func (ph PeerHeap) Len() int { return len(ph.PeerScores) }
+func (ph peerHeap) Len() int { return len(ph.peerScores) }
 
-func (ph *PeerHeap) Less(i, j int) bool {
-	if ph.PeerScores[i].score == ph.PeerScores[j].score {
-		return ph.PeerScores[i].order < ph.PeerScores[j].order
+func (ph *peerHeap) Less(i, j int) bool {
+	if ph.peerScores[i].score == ph.peerScores[j].score {
+		return ph.peerScores[i].order < ph.peerScores[j].order
 	}
-	return ph.PeerScores[i].score < ph.PeerScores[j].score
+	return ph.peerScores[i].score < ph.peerScores[j].score
 }
 
-func (ph PeerHeap) Swap(i, j int) {
-	ph.PeerScores[i], ph.PeerScores[j] = ph.PeerScores[j], ph.PeerScores[i]
-	ph.PeerScores[i].index = i
-	ph.PeerScores[j].index = j
+func (ph peerHeap) Swap(i, j int) {
+	ph.peerScores[i], ph.peerScores[j] = ph.peerScores[j], ph.peerScores[i]
+	ph.peerScores[i].index = i
+	ph.peerScores[j].index = j
 }
 
 // Push implements heap Push interface
-func (ph *PeerHeap) Push(x interface{}) {
-	n := len(ph.PeerScores)
+func (ph *peerHeap) Push(x interface{}) {
+	n := len(ph.peerScores)
 	item := x.(*peerScore)
 	item.index = n
-	ph.PeerScores = append(ph.PeerScores, item)
+	ph.peerScores = append(ph.peerScores, item)
 }
 
 // Pop implements heap Pop interface
-func (ph *PeerHeap) Pop() interface{} {
+func (ph *peerHeap) Pop() interface{} {
 	old := *ph
-	n := len(old.PeerScores)
-	item := old.PeerScores[n-1]
+	n := len(old.peerScores)
+	item := old.peerScores[n-1]
 	item.index = -1 // for safety
-	ph.PeerScores = old.PeerScores[:n-1]
+	ph.peerScores = old.peerScores[:n-1]
 	return item
 }
 
-// UpdatePeer updates the score for the given peer.
-func (ph *PeerHeap) UpdatePeer(peerScore *peerScore) {
+// updatePeer updates the score for the given peer.
+func (ph *peerHeap) updatePeer(peerScore *peerScore) {
 	heap.Fix(ph, peerScore.index)
 }
 
 // RemovePeer remove peer at specific index.
-func (ph *PeerHeap) RemovePeer(peerScore *peerScore) {
+func (ph *peerHeap) RemovePeer(peerScore *peerScore) {
 	heap.Remove(ph, peerScore.index)
 }
 
-// PopPeer pops the top peer of the heap.
-func (ph *PeerHeap) PopPeer() *peerScore {
+// popPeer pops the top peer of the heap.
+func (ph *peerHeap) popPeer() *peerScore {
 	return heap.Pop(ph).(*peerScore)
 }
 
-// PushPeer pushes the new peer into the heap.
-func (ph *PeerHeap) PushPeer(peerScore *peerScore) {
+// pushPeer pushes the new peer into the heap.
+func (ph *peerHeap) pushPeer(peerScore *peerScore) {
 	newOrder := atomic.AddUint64(&ph.order, 1)
 	// randRange will affect the deviation of peer's chosenCount
 	randRange := ph.Len()/2 + 1
@@ -95,19 +95,19 @@ func (ph *PeerHeap) PushPeer(peerScore *peerScore) {
 	heap.Push(ph, peerScore)
 }
 
-func (ph *PeerHeap) swapOrder(i, j int) {
+func (ph *peerHeap) swapOrder(i, j int) {
 	if i == j {
 		return
 	}
 
-	ph.PeerScores[i].order, ph.PeerScores[j].order = ph.PeerScores[j].order, ph.PeerScores[i].order
+	ph.peerScores[i].order, ph.peerScores[j].order = ph.peerScores[j].order, ph.peerScores[i].order
 	heap.Fix(ph, i)
 	heap.Fix(ph, j)
 }
 
 // AddPeer adds a peer to the peer heap.
-func (ph *PeerHeap) addPeer(peerScore *peerScore) {
-	ph.PushPeer(peerScore)
+func (ph *peerHeap) addPeer(peerScore *peerScore) {
+	ph.pushPeer(peerScore)
 
 	// Pick a random element, and swap the order with that peerScore.
 	r := ph.rng.Intn(ph.Len())
@@ -115,6 +115,6 @@ func (ph *PeerHeap) addPeer(peerScore *peerScore) {
 }
 
 // Exposed for testing purposes.
-func (ph *PeerHeap) peek() *peerScore {
-	return ph.PeerScores[0]
+func (ph *peerHeap) peek() *peerScore {
+	return ph.peerScores[0]
 }

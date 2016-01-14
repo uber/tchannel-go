@@ -54,7 +54,7 @@ type PeerList struct {
 
 	parent          *RootPeerList
 	peersByHostPort map[string]*peerScore
-	peerHeap        *PeerHeap
+	peerHeap        *peerHeap
 	scoreCalculator ScoreCalculator
 	lastSelected    uint64
 }
@@ -125,7 +125,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 
 	size := l.peerHeap.Len()
 	for i := 0; i < size; i++ {
-		ps = l.peerHeap.PopPeer()
+		ps = l.peerHeap.popPeer()
 		if _, ok := prevSelected[ps.Peer.HostPort()]; !ok {
 			break
 		}
@@ -140,7 +140,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
 		return nil
 	}
 
-	l.peerHeap.PushPeer(ps)
+	l.peerHeap.pushPeer(ps)
 	atomic.AddUint64(&ps.chosenCount, 1)
 	return ps.Peer
 }
@@ -179,9 +179,9 @@ func (l *PeerList) exists(hostPort string) (*peerScore, uint64, bool) {
 	return ps, score, ok
 }
 
-// UpdatePeer is called when there is a change that may cause the peer's score to change.
+// updatePeer is called when there is a change that may cause the peer's score to change.
 // The new score is calculated, and the peer heap is updated with the new score if the score changes.
-func (l *PeerList) UpdatePeer(p *Peer) {
+func (l *PeerList) updatePeer(p *Peer) {
 	ps, psScore, ok := l.exists(p.hostPort)
 	if !ok {
 		return
@@ -194,7 +194,7 @@ func (l *PeerList) UpdatePeer(p *Peer) {
 
 	l.Lock()
 	ps.score = newScore
-	l.peerHeap.UpdatePeer(ps)
+	l.peerHeap.updatePeer(ps)
 	l.Unlock()
 }
 
