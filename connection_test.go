@@ -279,7 +279,12 @@ func TestNoTimeout(t *testing.T) {
 
 func TestServerBusy(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(raw.Wrap(newTestHandler(t)), "busy")
+		ch.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
+			if _, err := raw.ReadArgs(call); err != nil {
+				return err
+			}
+			return ErrServerBusy
+		}), "busy")
 
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
