@@ -97,7 +97,7 @@ func (l *PeerList) Add(hostPort string) *Peer {
 	ps := newPeerScore(p, l.scoreCalculator.GetScore(p))
 
 	l.peersByHostPort[hostPort] = ps
-	l.peerHeap.PushPeer(ps)
+	l.peerHeap.addPeer(ps)
 	return p
 }
 

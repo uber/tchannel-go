@@ -95,6 +95,25 @@ func (ph *PeerHeap) PushPeer(peerScore *peerScore) {
 	heap.Push(ph, peerScore)
 }
 
+func (ph *PeerHeap) swapOrder(i, j int) {
+	if i == j {
+		return
+	}
+
+	ph.PeerScores[i].order, ph.PeerScores[j].order = ph.PeerScores[j].order, ph.PeerScores[i].order
+	heap.Fix(ph, i)
+	heap.Fix(ph, j)
+}
+
+// AddPeer adds a peer to the peer heap.
+func (ph *PeerHeap) addPeer(peerScore *peerScore) {
+	ph.PushPeer(peerScore)
+
+	// Pick a random element, and swap the order with that peerScore.
+	r := ph.rng.Intn(ph.Len())
+	ph.swapOrder(peerScore.index, r)
+}
+
 // Exposed for testing purposes.
 func (ph *PeerHeap) peek() *peerScore {
 	return ph.PeerScores[0]
