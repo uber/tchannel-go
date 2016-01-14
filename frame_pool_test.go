@@ -104,7 +104,7 @@ func TestFramesReleased(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetServiceName("swap-server").
 		SetFramePool(pool).
-		AddLogFilter("Could not find handler", numGoroutines*requestsPerGoroutine)
+		AddLogFilter("Couldn't find handler.", numGoroutines*requestsPerGoroutine)
 	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
 

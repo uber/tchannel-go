@@ -255,7 +255,7 @@ func TestPing(t *testing.T) {
 
 func TestBadRequest(t *testing.T) {
 	// ch will log an error when it receives a request for an unknown handler.
-	opts := testutils.NewOpts().AddLogFilter("Could not find handler", 1)
+	opts := testutils.NewOpts().AddLogFilter("Couldn't find handler.", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
@@ -469,8 +469,9 @@ func TestReadTimeout(t *testing.T) {
 	// The error frame may fail to send since the connection closes before the handler sends it
 	// or the handler connection may be closed as it sends when the other side closes the conn.
 	opts := testutils.NewOpts().
-		AddLogFilter("failed to send error frame", 1).
-		AddLogFilter("Connection error at read frames", 1)
+		AddLogFilter("Couldn't send outbound error frame", 1).
+		// TODO: Make the log message more specific by checking that the site is "read frames".
+		AddLogFilter("Connection error", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
