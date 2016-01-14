@@ -31,6 +31,7 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -396,6 +397,36 @@ func TestIsolatedPeerHeap(t *testing.T) {
 	}
 }
 
+func TestPeerSelectionRanking(t *testing.T) {
+	const numPeers = 10
+	const numIterations = 1000
+
+	// Selected is a map from rank -> [peer, count]
+	// It tracks how often a peer gets selected at a specific rank.
+	selected := make([]map[string]int, numPeers)
+	for i := 0; i < numPeers; i++ {
+		selected[i] = make(map[string]int)
+	}
+
+	for i := 0; i < numIterations; i++ {
+		ch := testutils.NewClient(t, nil)
+		for i := 0; i < numPeers; i++ {
+			hp := fmt.Sprintf("127.0.0.1:60%v", i)
+			ch.Peers().Add(hp)
+		}
+
+		for i := 0; i < numPeers; i++ {
+			peer, err := ch.Peers().Get(nil)
+			require.NoError(t, err, "Peers.Get failed")
+			selected[i][peer.HostPort()]++
+		}
+	}
+
+	for _, m := range selected {
+		testDistribution(t, m, 50, 180)
+	}
+}
+
 func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, count *int64) {
 	var score uint64
 	count = new(int64)
@@ -729,5 +760,15 @@ func TestPeerSelectionAfterClosed(t *testing.T) {
 		peer, err := pt.client.Peers().Get(nil)
 		assert.NoError(t, err, "Client failed to select a peer")
 		assert.NotEqual(pt.t, closedHP, peer.HostPort(), "Closed peer shouldn't be chosen")
+	}
+}
+
+func BenchmarkAddPeers(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		ch := testutils.NewClient(b, nil)
+		for i := 0; i < 1000; i++ {
+			hp := fmt.Sprintf("127.0.0.1:%v", i)
+			ch.Peers().Add(hp)
+		}
 	}
 }
