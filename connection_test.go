@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"testing"
@@ -279,7 +280,12 @@ func TestNoTimeout(t *testing.T) {
 
 func TestServerBusy(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(raw.Wrap(newTestHandler(t)), "busy")
+		ch.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
+			if _, err := raw.ReadArgs(call); err != nil {
+				return err
+			}
+			return ErrServerBusy
+		}), "busy")
 
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
@@ -287,6 +293,27 @@ func TestServerBusy(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "busy", []byte("Arg2"), []byte("Arg3"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeBusy, GetSystemErrorCode(err), "err: %v", err)
+	})
+}
+
+func TestUnexpectedHandlerError(t *testing.T) {
+	opts := testutils.NewOpts().
+		AddLogFilter("Unexpected handler error", 1)
+
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+		ch.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
+			if _, err := raw.ReadArgs(call); err != nil {
+				return err
+			}
+			return fmt.Errorf("nope")
+		}), "nope")
+
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "nope", []byte("Arg2"), []byte("Arg3"))
+		require.NotNil(t, err)
+		assert.Equal(t, ErrCodeUnexpected, GetSystemErrorCode(err), "err: %v", err)
 	})
 }
 
