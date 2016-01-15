@@ -57,38 +57,57 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 		peer1 = "1.1.1.1:1"
 		peer2 = "2.2.2.2:2"
 		peer3 = "3.3.3.3:3"
+		peer4 = "3.3.3.3:4"
 	)
 
 	ch := testutils.NewClient(t, nil)
 	a, m := testutils.StrArray, testutils.StrMap
 	tests := []struct {
+		msg          string
 		peers        []string
-		prevSelected map[string]struct{}
+		prevSelected []string
 		expected     map[string]struct{}
 	}{
 		{
+			msg:      "no prevSelected",
 			peers:    a(peer1),
 			expected: m(peer1),
 		},
 		{
+			msg:          "ignore single hostPort in prevSelected",
 			peers:        a(peer1, peer2),
-			prevSelected: m(peer1),
+			prevSelected: a(peer1),
 			expected:     m(peer2),
 		},
 		{
+			msg:          "ignore multiple hostPorts in prevSelected",
 			peers:        a(peer1, peer2, peer3),
-			prevSelected: m(peer1, peer2),
+			prevSelected: a(peer1, peer2),
 			expected:     m(peer3),
 		},
 		{
+			msg:          "only peer is in prevSelected",
 			peers:        a(peer1),
-			prevSelected: m(peer1),
+			prevSelected: a(peer1),
 			expected:     m(peer1),
 		},
 		{
+			msg:          "all peers are in prevSelected",
 			peers:        a(peer1, peer2, peer3),
-			prevSelected: m(peer1, peer2, peer3),
+			prevSelected: a(peer1, peer2, peer3),
 			expected:     m(peer1, peer2, peer3),
+		},
+		{
+			msg:          "prevSelected host should be ignored",
+			peers:        a(peer1, peer3, peer4),
+			prevSelected: a(peer3),
+			expected:     m(peer1),
+		},
+		{
+			msg:          "prevSelected only has single host",
+			peers:        a(peer3, peer4),
+			prevSelected: a(peer3),
+			expected:     m(peer4),
 		},
 	}
 
@@ -98,7 +117,12 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 			peers.Add(p)
 		}
 
-		gotPeer, err := peers.Get(tt.prevSelected)
+		rs := &RequestState{}
+		for _, selected := range tt.prevSelected {
+			rs.AddSelectedPeer(selected)
+		}
+
+		gotPeer, err := peers.Get(rs.PrevSelectedPeers())
 		if err != nil {
 			t.Errorf("Got unexpected error selecting peer: %v", err)
 			continue
@@ -106,8 +130,8 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 
 		got := gotPeer.HostPort()
 		if _, ok := tt.expected[got]; !ok {
-			t.Errorf("Got unexpected peer, expected one of %v got %v\n  Peers = %v PrevSelected = %v",
-				tt.expected, got, tt.peers, tt.prevSelected)
+			t.Errorf("%s: got unexpected peer, expected one of %v got %v\n  Peers = %v PrevSelected = %v",
+				tt.msg, tt.expected, got, tt.peers, tt.prevSelected)
 		}
 	}
 }

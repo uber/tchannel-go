@@ -111,25 +111,42 @@ func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 
 	// Select a peer, avoiding previously selected peers. If all peers have been previously
 	// selected, then it's OK to repick them.
-	peer := l.choosePeer(prevSelected)
+	peer := l.choosePeer(prevSelected, true /* avoidHost */)
 	if peer == nil {
-		peer = l.choosePeer(nil)
+		peer = l.choosePeer(prevSelected, false /* avoidHost */)
+	}
+	if peer == nil {
+		peer = l.choosePeer(nil, false /* avoidHost */)
 	}
 	l.Unlock()
 	return peer, nil
 }
 
-func (l *PeerList) choosePeer(prevSelected map[string]struct{}) *Peer {
+func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) *Peer {
 	var psPopList []*peerScore
 	var ps *peerScore
 
+	canChoosePeer := func(hostPort string) bool {
+		if _, ok := prevSelected[hostPort]; ok {
+			return false
+		}
+		if avoidHost {
+			if _, ok := prevSelected[getHost(hostPort)]; ok {
+				return false
+			}
+		}
+		return true
+	}
+
 	size := l.peerHeap.Len()
 	for i := 0; i < size; i++ {
-		ps = l.peerHeap.popPeer()
-		if _, ok := prevSelected[ps.Peer.HostPort()]; !ok {
+		popped := l.peerHeap.popPeer()
+
+		if canChoosePeer(popped.HostPort()) {
+			ps = popped
 			break
 		}
-		psPopList = append(psPopList, ps)
+		psPopList = append(psPopList, popped)
 	}
 
 	for _, p := range psPopList {

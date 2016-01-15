@@ -182,12 +182,15 @@ func (rs *RequestState) AddSelectedPeer(hostPort string) {
 		return
 	}
 
+	host := getHost(hostPort)
 	if rs.SelectedPeers == nil {
 		rs.SelectedPeers = map[string]struct{}{
 			hostPort: struct{}{},
+			host:     struct{}{},
 		}
 	} else {
 		rs.SelectedPeers[hostPort] = struct{}{}
+		rs.SelectedPeers[host] = struct{}{}
 	}
 }
 
@@ -240,4 +243,15 @@ func (ch *Channel) getRequestState(retryOpts *RetryOptions) *RequestState {
 		retryOpts: retryOpts,
 	}
 	return rs
+}
+
+// getHost returns the host part of a host:port. If no ':' is found, it returns the
+// original string. Note: This hand-rolled loop is faster than using strings.IndexByte.
+func getHost(hostPort string) string {
+	for i := 0; i < len(hostPort); i++ {
+		if hostPort[i] == ':' {
+			return hostPort[:i]
+		}
+	}
+	return hostPort
 }
