@@ -57,7 +57,7 @@ func TestRequestStateRetry(t *testing.T) {
 		}
 
 		_, err := raw.CallV2(ctx, sc, raw.CArgs{
-			Method:   "echo",
+			Method:      "echo",
 			CallOptions: &CallOptions{RequestState: rs},
 		})
 		return err

@@ -43,7 +43,7 @@ func Register(registrar tchannel.Registrar) {
 		req, err := thttp.ReadRequest(call)
 		if err != nil {
 			registrar.Logger().WithFields(
-				tchannel.LogField{"err", err.Error()},
+				tchannel.LogField{Key: "err", Value: err.Error()},
 			).Warn("Failed to read HTTP request.")
 			return
 		}

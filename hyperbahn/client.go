@@ -59,6 +59,8 @@ const (
 
 const hyperbahnServiceName = "hyperbahn"
 
+// UnmarshalYAML implements the yaml.UnmarshalYAML interface. This allows FailStrategy
+// to be specified as a string (e.g. "fatal") in configuration files.
 func (f *FailStrategy) UnmarshalYAML(unmarshal func(v interface{}) error) error {
 	var strategy string
 	if err := unmarshal(&strategy); err != nil {

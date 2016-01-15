@@ -90,10 +90,16 @@ cover: cover_profile
 cover_ci: cover_profile
 	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci
 
-vet:
-	echo Vetting packages for potential issues...
-	go tool vet $(PKGS)
-	echo
+
+FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/'
+lint:
+	@echo "Running golint"
+	-golint ./... | $(FILTER) | tee lint.log
+	@echo "Running go vet"
+	-go tool vet $(PKGS) | tee -a lint.log
+	@echo "Checking gofmt"
+	-gofmt -d . | tee -a lint.log
+	@[ ! -s lint.log ]
 
 thrift_example: thrift_gen
 	go build -o $(BUILD)/examples/thrift       ./examples/thrift/main.go
@@ -125,5 +131,5 @@ release_thrift_gen: clean setup
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 
-.PHONY: all help clean fmt format get_thrift install install_ci release_thrift_gen packages_test test test_ci vet
-.SILENT: all help clean fmt format test vet
+.PHONY: all help clean fmt format get_thrift install install_ci release_thrift_gen packages_test test test_ci lint
+.SILENT: all help clean fmt format test lint
