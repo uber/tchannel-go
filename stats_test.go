@@ -190,7 +190,7 @@ func TestStatsWithRetries(t *testing.T) {
 
 				sc := ch.GetSubChannel(serverCh.ServiceName())
 				_, err := raw.CallV2(ctx, sc, raw.CArgs{
-					Method:   "req",
+					Method:      "req",
 					CallOptions: &CallOptions{RequestState: rs},
 				})
 				return err

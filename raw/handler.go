@@ -35,11 +35,11 @@ type Handler interface {
 
 // Args parses the arguments from an incoming call req.
 type Args struct {
-	Caller    string
-	Format    tchannel.Format
+	Caller string
+	Format tchannel.Format
 	Method string
-	Arg2      []byte
-	Arg3      []byte
+	Arg2   []byte
+	Arg3   []byte
 }
 
 // Res represents the response to an incoming call req.
