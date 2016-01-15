@@ -48,7 +48,13 @@ func TestRequestStateRetry(t *testing.T) {
 	err := client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
 		defer func() { counter++ }()
 
-		assert.Equal(t, counter, len(rs.SelectedPeers), "SelectedPeers should not be reused")
+		expectedPeers := counter
+		if expectedPeers > 0 {
+			// An entry is also added for each host.
+			expectedPeers++
+		}
+
+		assert.Equal(t, expectedPeers, len(rs.SelectedPeers), "SelectedPeers should not be reused")
 
 		if counter < 4 {
 			client.Peers().Add(testutils.GetClosedHostPort(t))
@@ -57,7 +63,7 @@ func TestRequestStateRetry(t *testing.T) {
 		}
 
 		_, err := raw.CallV2(ctx, sc, raw.CArgs{
-			Method:   "echo",
+			Method:      "echo",
 			CallOptions: &CallOptions{RequestState: rs},
 		})
 		return err
