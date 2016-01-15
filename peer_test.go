@@ -375,6 +375,33 @@ func TestPeerSelection(t *testing.T) {
 	})
 }
 
+func getAllPeers(t *testing.T, pl *PeerList) []string {
+	prevSelected := make(map[string]struct{})
+	var got []string
+
+	for {
+		peer, err := pl.Get(prevSelected)
+		require.NoError(t, err, "Peer.Get failed")
+
+		hp := peer.HostPort()
+		if _, ok := prevSelected[hp]; ok {
+			break
+		}
+
+		prevSelected[hp] = struct{}{}
+		got = append(got, hp)
+	}
+
+	return got
+}
+
+func reverse(s []string) {
+	for i := 0; i < len(s)/2; i++ {
+		j := len(s) - i - 1
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 func TestIsolatedPeerHeap(t *testing.T) {
 	const numPeers = 10
 	ch := testutils.NewClient(t, nil)
@@ -385,16 +412,16 @@ func TestIsolatedPeerHeap(t *testing.T) {
 	hostports := make([]string, numPeers)
 	for i := 0; i < numPeers; i++ {
 		hostports[i] = fmt.Sprintf("127.0.0.1:%d", i)
-		ps1.UpdatePeer(ps1.GetOrAdd(hostports[i]))
-		ps2.UpdatePeer(ps2.GetOrAdd(hostports[i]))
+		ps1.Add(hostports[i])
+		ps2.Add(hostports[i])
 	}
 
-	ph1 := ps1.GetHeap()
-	ph2 := ps2.GetHeap()
-	for i := 0; i < numPeers; i++ {
-		assert.Equal(t, hostports[i], ph1.PopPeer().HostPort())
-		assert.Equal(t, hostports[numPeers-i-1], ph2.PopPeer().HostPort())
-	}
+	ps1Expected := append([]string(nil), hostports...)
+	assert.Equal(t, ps1Expected, getAllPeers(t, ps1), "Unexpected peer order")
+
+	ps2Expected := append([]string(nil), hostports...)
+	reverse(ps2Expected)
+	assert.Equal(t, ps2Expected, getAllPeers(t, ps2), "Unexpected peer order")
 }
 
 func TestPeerSelectionRanking(t *testing.T) {

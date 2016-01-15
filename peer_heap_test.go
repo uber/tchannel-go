@@ -38,24 +38,24 @@ func TestPeerHeap(t *testing.T) {
 	peerScores := make([]*peerScore, numPeers)
 	minScore := uint64(math.MaxInt64)
 	for i := 0; i < numPeers; i++ {
-		peerScore := newPeerScore(&Peer{}, uint64(r.Intn(numPeers*5)))
-		peerScores[i] = peerScore
-		if peerScore.score < minScore {
-			minScore = peerScore.score
+		ps := newPeerScore(&Peer{}, uint64(r.Intn(numPeers*5)))
+		peerScores[i] = ps
+		if ps.score < minScore {
+			minScore = ps.score
 		}
 	}
 
 	for i := 0; i < numPeers; i++ {
-		peerHeap.PushPeer(peerScores[i])
+		peerHeap.pushPeer(peerScores[i])
 	}
 
 	assert.Equal(t, numPeers, peerHeap.Len(), "Incorrect peer heap numPeers")
-	assert.Equal(t, minScore, peerHeap.peek().score, "PeerHeap top peer is not minimum")
+	assert.Equal(t, minScore, peerHeap.peek().score, "peerHeap top peer is not minimum")
 
-	lastScore := peerHeap.PopPeer().score
+	lastScore := peerHeap.popPeer().score
 	for i := 1; i < numPeers; i++ {
 		assert.Equal(t, numPeers-i, peerHeap.Len(), "Incorrect peer heap numPeers")
-		score := peerHeap.PopPeer().score
+		score := peerHeap.popPeer().score
 		assert.True(t, score >= lastScore, "The order of the heap is invalid")
 		lastScore = score
 	}
