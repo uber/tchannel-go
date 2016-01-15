@@ -172,7 +172,7 @@ func (subChMap *subChannelMap) updatePeer(p *Peer) {
 	for _, subCh := range subChMap.subchannels {
 		if subCh.Isolated() {
 			subCh.RLock()
-			subCh.Peers().UpdatePeer(p)
+			subCh.Peers().updatePeer(p)
 			subCh.RUnlock()
 		}
 	}
