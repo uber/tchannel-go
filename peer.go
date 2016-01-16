@@ -37,6 +37,9 @@ var (
 	// ErrNoPeers indicates that there are no peers.
 	ErrNoPeers = errors.New("no peers available")
 
+	// ErrPeerNotFound indicates that the specified peer was not found.
+	ErrPeerNotFound = errors.New("peer not found")
+
 	peerRng = NewRand(time.Now().UnixNano())
 )
 
@@ -122,6 +125,23 @@ func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 	return peer, nil
 }
 
+// Remove removes a peer from the peer list. It returns an error if the peer cannot be found.
+// Remove does not affect connections to the peer in any way.
+func (l *PeerList) Remove(hostPort string) error {
+	l.Lock()
+	defer l.Unlock()
+
+	p, ok := l.peersByHostPort[hostPort]
+	if !ok {
+		return ErrPeerNotFound
+	}
+
+	p.delSC()
+	delete(l.peersByHostPort, hostPort)
+	l.peerHeap.removePeer(p)
+
+	return nil
+}
 func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) *Peer {
 	var psPopList []*peerScore
 	var ps *peerScore
@@ -324,6 +344,13 @@ func (p *Peer) AddInboundConnection(c *Connection) error {
 func (p *Peer) addSC() {
 	p.Lock()
 	p.scCount++
+	p.Unlock()
+}
+
+// delSC removes a reference to a peer from a subchannel (e.g. peer list).
+func (p *Peer) delSC() {
+	p.Lock()
+	p.scCount--
 	p.Unlock()
 }
 
