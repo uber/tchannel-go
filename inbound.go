@@ -202,7 +202,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	if h == nil {
 		c.log.WithFields(
 			LogField{"serviceName", call.ServiceName()},
-			LogField{"method", call.Method()},
+			LogField{"method", call.MethodString()},
 		).Error("Couldn't find handler.")
 		call.Response().SendSystemError(
 			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
