@@ -60,7 +60,7 @@ func (l errorLogger) checkErr(prefix, msg string) {
 		return
 	}
 
-	l.t.Errorf("%v: %s", prefix, msg)
+	l.t.Errorf("%v: %s %v", prefix, msg, l.Fields())
 }
 
 func (l errorLogger) Fatal(msg string) {
