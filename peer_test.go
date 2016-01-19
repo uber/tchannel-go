@@ -180,13 +180,32 @@ func TestOutboundPeerNotAdded(t *testing.T) {
 	})
 }
 
+func TestRemovePeerNotFound(t *testing.T) {
+	peers := testutils.NewClient(t, nil).Peers()
+	peers.Add("1.1.1.1:1")
+	assert.Error(t, peers.Remove("not-found"), "Remove should fa")
+	assert.NoError(t, peers.Remove("1.1.1.1:1"), "Remove shouldn't fail for existing peer")
+}
+
 func TestPeerRemovedFromRootPeers(t *testing.T) {
 	tests := []struct {
-		addHostPort bool
-		expectFound bool
+		addHostPort    bool
+		removeHostPort bool
+		expectFound    bool
 	}{
-		{true, true},
-		{false, false},
+		{
+			addHostPort: true,
+			expectFound: true,
+		},
+		{
+			addHostPort:    true,
+			removeHostPort: true,
+			expectFound:    false,
+		},
+		{
+			addHostPort: false,
+			expectFound: false,
+		},
 	}
 
 	ctx, cancel := NewContext(time.Second)
@@ -202,6 +221,10 @@ func TestPeerRemovedFromRootPeers(t *testing.T) {
 			}
 
 			assert.NoError(t, ch.Ping(ctx, hostPort), "Ping failed")
+
+			if tt.removeHostPort {
+				require.NoError(t, server.Peers().Remove(clientHP), "Failed to remove peer")
+			}
 
 			waitTillInboundEmpty(t, server, clientHP, func() {
 				ch.Close()

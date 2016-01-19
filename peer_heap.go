@@ -76,8 +76,8 @@ func (ph *peerHeap) updatePeer(peerScore *peerScore) {
 	heap.Fix(ph, peerScore.index)
 }
 
-// RemovePeer remove peer at specific index.
-func (ph *peerHeap) RemovePeer(peerScore *peerScore) {
+// removePeer remove peer at specific index.
+func (ph *peerHeap) removePeer(peerScore *peerScore) {
 	heap.Remove(ph, peerScore.index)
 }
 
