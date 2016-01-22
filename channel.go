@@ -444,6 +444,15 @@ func (ch *Channel) ServiceName() string {
 	return ch.PeerInfo().ServiceName
 }
 
+func getTimeout(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return DefaultConnectTimeout
+	}
+
+	return deadline.Sub(time.Now())
+}
+
 // Connect connects the channel.
 func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, error) {
 	switch state := ch.State(); state {
@@ -461,7 +470,8 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 		OnCloseStateChange: ch.connectionCloseStateChange,
 		OnExchangeUpdated:  ch.exchangeUpdated,
 	}
-	c, err := ch.newOutboundConnection(hostPort, events)
+
+	c, err := ch.newOutboundConnection(getTimeout(ctx), hostPort, events)
 	if err != nil {
 		return nil, err
 	}

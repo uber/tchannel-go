@@ -524,3 +524,18 @@ func TestGracefulClose(t *testing.T) {
 		})
 	})
 }
+
+func TestNetDialTimeout(t *testing.T) {
+	// timeoutHostPort uses a blackholed address (RFC 6890) with a port
+	// reserved for documentation. This address should always cause a timeout.
+	const timeoutHostPort = "192.18.0.254:44444"
+
+	client := testutils.NewClient(t, nil)
+	defer client.Close()
+
+	ctx, cancel := NewContext(50 * time.Millisecond)
+	defer cancel()
+
+	err := client.Ping(ctx, timeoutHostPort)
+	assert.Equal(t, ErrTimeout, err, "Ping expected to fail with timeout")
+}
