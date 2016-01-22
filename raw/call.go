@@ -56,17 +56,8 @@ func WriteArgs(call *tchannel.OutboundCall, arg2, arg3 []byte) ([]byte, []byte, 
 	}
 
 	resp := call.Response()
-	var respArg2 []byte
-	if err := tchannel.NewArgReader(resp.Arg2Reader()).Read(&respArg2); err != nil {
-		return nil, nil, nil, err
-	}
-
-	var respArg3 []byte
-	if err := tchannel.NewArgReader(resp.Arg3Reader()).Read(&respArg3); err != nil {
-		return nil, nil, nil, err
-	}
-
-	return respArg2, respArg3, resp, nil
+	respArg2, respArg3, err := ReadArgsV2(resp)
+	return respArg2, respArg3, resp, err
 }
 
 // Call makes a call to the given hostPort with the given arguments and returns the response args.
