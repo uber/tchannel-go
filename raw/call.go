@@ -22,6 +22,7 @@ package raw
 
 import (
 	"errors"
+	"io/ioutil"
 
 	"github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
@@ -32,13 +33,31 @@ var ErrAppError = errors.New("application error")
 
 // ReadArgsV2 reads arg2 and arg3 from an ArgReadable.
 func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
-	var arg2, arg3 []byte
-
-	if err := tchannel.NewArgReader(r.Arg2Reader()).Read(&arg2); err != nil {
+	arg2Reader, err := r.Arg2Reader()
+	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := tchannel.NewArgReader(r.Arg3Reader()).Read(&arg3); err != nil {
+	arg2, err := ioutil.ReadAll(arg2Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := arg2Reader.Close(); err != nil {
+		return nil, nil, err
+	}
+
+	arg3Reader, err := r.Arg3Reader()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	arg3, err := ioutil.ReadAll(arg3Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := arg3Reader.Close(); err != nil {
 		return nil, nil, err
 	}
 
