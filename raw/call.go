@@ -40,25 +40,25 @@ func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
 
 	arg2, err := ioutil.ReadAll(arg2Reader)
 	if err != nil {
-		return nil, nil, err
+		return arg2, nil, err
 	}
 
 	if err := arg2Reader.Close(); err != nil {
-		return nil, nil, err
+		return arg2, nil, err
 	}
 
 	arg3Reader, err := r.Arg3Reader()
 	if err != nil {
-		return nil, nil, err
+		return arg2, nil, err
 	}
 
 	arg3, err := ioutil.ReadAll(arg3Reader)
 	if err != nil {
-		return nil, nil, err
+		return arg2, arg3, err
 	}
 
 	if err := arg3Reader.Close(); err != nil {
-		return nil, nil, err
+		return arg2, arg3, err
 	}
 
 	return arg2, arg3, nil
