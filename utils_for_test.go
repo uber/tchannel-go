@@ -41,6 +41,16 @@ func (p *Peer) SetOnUpdate(f func(*Peer)) {
 	p.Unlock()
 }
 
+// SetRandomSeed seeds all the random number generators in the channel so that
+// tests will be deterministic for a given seed.
+func (ch *Channel) SetRandomSeed(seed int64) {
+	ch.Peers().peerHeap.rng.Seed(seed)
+	peerRng.Seed(seed)
+	for _, sc := range ch.subChannels.subchannels {
+		sc.peers.peerHeap.rng.Seed(seed + int64(len(sc.peers.peersByHostPort)))
+	}
+}
+
 // OutboundConnection returns the underlying connection for an outbound call.
 func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	conn := call.conn

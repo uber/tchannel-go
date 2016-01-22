@@ -484,6 +484,8 @@ func TestPeerSelectionRanking(t *testing.T) {
 
 	for i := 0; i < numIterations; i++ {
 		ch := testutils.NewClient(t, nil)
+		ch.SetRandomSeed(int64(i * 100))
+
 		for i := 0; i < numPeers; i++ {
 			hp := fmt.Sprintf("127.0.0.1:60%v", i)
 			ch.Peers().Add(hp)
@@ -497,7 +499,7 @@ func TestPeerSelectionRanking(t *testing.T) {
 	}
 
 	for _, m := range selected {
-		testDistribution(t, m, 50, 180)
+		testDistribution(t, m, 50, 150)
 	}
 }
 
@@ -523,7 +525,7 @@ func createSubChannelWNewStrategy(ch *Channel, name string, initial, delta int64
 func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
 	for k, v := range counts {
 		if float64(v) < min || float64(v) > max {
-			t.Errorf("Key %v has value %v which is out of range %v%v", k, v, min, max)
+			t.Errorf("Key %v has value %v which is out of range %v-%v", k, v, min, max)
 		}
 	}
 }
