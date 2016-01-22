@@ -30,7 +30,7 @@ import (
 // ErrAppError is returned if the application sets an error response.
 var ErrAppError = errors.New("application error")
 
-// ReadArgsV2 reads arg2 and arg3 from a reader.
+// ReadArgsV2 reads arg2 and arg3 from an ArgReadable.
 func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
 	var arg2, arg3 []byte
 
