@@ -31,8 +31,9 @@ import (
 // ErrAppError is returned if the application sets an error response.
 var ErrAppError = errors.New("application error")
 
-// ReadArgsV2 reads arg2 and arg3 from an ArgReadable.
-func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
+// ReadJustArg2 reads all of arg2 into a byte buffer, and returns the arg3
+// reader (as a convenience so that caller can decide how to read it).
+func ReadJustArg2(r tchannel.ArgReadable) ([]byte, tchannel.ArgReader, error) {
 	arg2Reader, err := r.Arg2Reader()
 	if err != nil {
 		return nil, nil, err
@@ -48,6 +49,16 @@ func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
 	}
 
 	arg3Reader, err := r.Arg3Reader()
+	if err != nil {
+		return arg2, nil, err
+	}
+
+	return arg2, arg3Reader, nil
+}
+
+// ReadArgsV2 reads arg2 and arg3 from an ArgReadable.
+func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
+	arg2, arg3Reader, err := ReadJustArg2(r)
 	if err != nil {
 		return arg2, nil, err
 	}
