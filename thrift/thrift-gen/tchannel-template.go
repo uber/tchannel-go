@@ -8,15 +8,20 @@ package {{ .Package }}
 
 import (
 "fmt"
+"io"
 
-athrift "{{ .Imports.Thrift }}"
+athrift "{{ .Imports.ApacheThrift }}"
 "{{ .Imports.TChannel }}"
+"{{ .Imports.TChannelThrift }}"
 
 {{ range .Includes }}
 	"{{ .Import }}"
 {{ end }}
 )
 
+// Used to avoid unused warnings for non-streaming services.
+var _ = tchannel.NewChannel
+var _ = io.Reader(nil)
 
 {{ range .Includes }}
 	var _ = {{ .Package }}.GoUnusedProtection__
@@ -36,6 +41,35 @@ type {{ .Interface }} interface {
 		{{ .Name }}({{ .ArgList }}) {{ .RetType }}
 	{{ end }}
 }
+
+// {{ .ServerInterface }} is the interface that must be implemented by a handler.
+type {{ .ServerInterface }} interface {
+  {{ if .HasExtends }}
+    {{ .ExtendsServicePrefix }}{{ .ExtendsService.ServerInterface }}
+  {{ end }}
+
+	{{ range .Methods }}
+		{{ .Name }}({{ .ArgList }}) {{ .RetType }}
+	{{ end }}
+	{{ range .StreamingMethods }}
+		{{ .Name }}({{ .StreamingServerArgList }}) {{ .StreamingServerRetType }}
+	{{ end }}
+}
+
+// {{ .ClientInterface}} is the interface is used to make remote calls.
+type {{ .ClientInterface}} interface {
+	{{ if .HasExtends }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.ClientInterface }}
+	{{ end }}
+
+	{{ range .Methods }}
+		{{ .Name }}({{ .ArgList }}) {{ .RetType }}
+	{{ end }}
+	{{ range .StreamingMethods }}
+    {{ .Name }}({{ .StreamingClientArgList }}) {{ .StreamingClientRetType }}
+  {{ end }}
+}
+
 {{ end }}
 
 // Implementation of a client and service handler.
@@ -44,15 +78,15 @@ type {{ .Interface }} interface {
 {{ range $svc := .Services }}
 type {{ .ClientStruct }} struct {
 	{{ if .HasExtends }}
-		{{ .ExtendsServicePrefix }}{{ .ExtendsService.Interface }}
+		{{ .ExtendsServicePrefix }}{{ .ExtendsService.ClientInterface }}
 
 	{{ end }}
 	thriftService string
-	client        thrift.TChanClient
+	client        thrift.TChanStreamingClient
 }
 
 
-func {{ .InheritedClientConstructor }}(thriftService string, client thrift.TChanClient) *{{ .ClientStruct }} {
+func {{ .InheritedClientConstructor }}(thriftService string, client thrift.TChanStreamingClient) *{{ .ClientStruct }} {
 	return &{{ .ClientStruct }}{
 		{{ if .HasExtends }}
 			{{ .ExtendsServicePrefix }}{{ .ExtendsService.InheritedClientConstructor }}(thriftService, client),
@@ -63,7 +97,7 @@ func {{ .InheritedClientConstructor }}(thriftService string, client thrift.TChan
 }
 
 // {{ .ClientConstructor }} creates a client that can be used to make remote calls.
-func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
+func {{ .ClientConstructor }}(client thrift.TChanStreamingClient) {{ .ClientInterface }} {
 	return {{ .InheritedClientConstructor }}("{{ .ThriftName }}", client)
 }
 
@@ -92,17 +126,54 @@ func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
 	}
 {{ end }}
 
-type {{ .ServerStruct }} struct {
-	{{ if .HasExtends }}
-		thrift.TChanServer
+{{ range .StreamingMethods }}
 
-	{{ end }}
-	handler {{ .Interface }}
+func (c *{{ $svc.ClientStruct }}) {{ .Name }}({{ .StreamingClientArgList }}) {{ .StreamingClientRetType }} {
+  call, writer, err := c.client.StartCall(ctx, "{{ $svc.ThriftName }}::{{ .ThriftName }}")
+  if err != nil {
+    return nil, err
+  }
+
+  outCall := &{{ .OutCallImplementation }}{
+    call: call,
+  }
+
+  {{ if not .StreamingArg }}
+  args := {{ .ArgsType }}{
+    {{ range .Arguments }}
+      {{ .ArgStructName }}: {{ .Name }},
+    {{ end }}
+  }
+  if err := thrift.WriteStruct(writer, &args); err != nil {
+    return nil, err
+  }
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+  {{ else }}
+  outCall.writer = writer
+  {{ end }}
+
+  return outCall, nil
 }
 
-// {{ .ServerConstructor }} wraps a handler for {{ .Interface }} so it can be
+{{ end }}
+
+
+
+type {{ .ServerStruct }} struct {
+	{{ if .HasExtends }}
+		thrift.TChanStreamingServer
+
+	{{ end }}
+	handler {{ .ServerInterface }}
+}
+
+// {{ .ServerConstructor }} wraps a handler for {{ .ServerInterface }} so it can be
 // registered with a thrift.Server.
-func {{ .ServerConstructor }}(handler {{ .Interface }}) thrift.TChanServer {
+func {{ .ServerConstructor }}(handler {{ .ServerInterface }}) thrift.TChanStreamingServer {
 	return &{{ .ServerStruct }}{
 		{{ if .HasExtends }}
 			{{ .ExtendsServicePrefix }}{{ .ExtendsService.ServerConstructor }}(handler),
@@ -134,7 +205,7 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 		{{ end }}
 		{{ range .InheritedMethods }}
 			case "{{ . }}":
-				return s.TChanServer.Handle(ctx, methodName, protocol)
+				return s.TChanStreamingServer.Handle(ctx, methodName, protocol)
 		{{ end }}
 		default:
 			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
@@ -183,6 +254,351 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 	}
 
 {{ end }}
+
+func (s *{{ .ServerStruct}}) StreamingMethods() []string {
+	return []string{
+		{{ range .StreamingMethods }}
+			"{{ .ThriftName }}",
+		{{ end }}
+		{{ if .HasExtends }}
+			{{ range .ExtendsService.StreamingMethods }}
+				"{{ .ThriftName }}",
+			{{ end }}
+		{{ end }}
+	}
+}
+
+func (s *{{ .ServerStruct }}) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	{{ if .HasStreamingMethods }}
+  arg3Reader, err := call.Arg3Reader()
+  if err != nil {
+    return err
+  }
+  switch methodName {
+	{{ range .StreamingMethods }}
+  case "{{ $svc.ThriftName }}::{{ .ThriftName }}":
+			return s.{{ .HandleFunc }}(ctx, call, arg3Reader)
+	{{ end }}
+	}
+	{{ end }}
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+}
+
+
+{{ range .StreamingMethods }}
+
+func (s *{{ $svc.ServerStruct }}) handle{{ .Name }}(ctx thrift.Context, tcall *tchannel.InboundCall, arg3Reader io.ReadCloser) error {
+  call := &{{ .InCallImplementation }}{
+    call: tcall,
+    ctx:  ctx,
+  }
+
+  {{ if .StreamingArg }}
+  call.reader = arg3Reader
+  {{ else }}
+  var req {{ .ArgsType }}
+  if err := thrift.ReadStruct(arg3Reader, &req); err != nil {
+    return err
+  }
+  {{ end }}
+
+
+  {{ if .StreamingServerHasResult }}
+  res, err :=
+  {{ else }}
+  err :=
+  {{ end }}
+    s.handler.{{ .Name }}({{ .StreamingCallList "req" "call"}})
+  if err != nil {
+    // TODO: encode any Thrift exceptions here.
+    return err
+  }
+
+  if err := call.checkWriter(); err != nil {
+    return err
+  }
+
+  {{ if .StreamingServerHasResult }}
+  if err := thrift.WriteStruct(call.writer, res); err != nil {
+    return err
+  }
+
+	if err := writer.Close(); err != nil {
+		return err
+	}
+  {{ end }}
+
+  // TODO: we may want to Close the writer if it's not already closed.
+
+  return nil
+}
+
+{{ end }}
+
+
+{{ range .StreamingMethods }}
+	// {{ .InCallName }} is the object used to stream arguments and write
+	// response headers for incoming calls.
+	type {{ .InCallName }} interface {
+		{{ if .StreamingArg }}
+			// Read returns the next argument, if any is available. If there are no more arguments left,
+			// it will return io.EOF.
+			Read() (*{{ .StreamingArgType }}, error)
+		{{ end }}
+
+		// SetResponseHeaders sets the response headers. This must be called before any
+	  // streaming responses are sent.
+		SetResponseHeaders(headers map[string]string) error
+
+		{{ if .StreamingRes }}
+		  // Write writes a result to the response stream. The written items may not
+		  // be sent till Flush or Done is called.
+			Write(arg *{{ .StreamingResType }}) error
+
+			// Flush flushes headers (if they have not yet been sent) and any written results.
+			Flush() error
+
+		  // Done closes the response stream and should be called after all results have been written.
+			Done() error
+		{{ end }}
+	}
+
+  // {{ .InCallImplementation }} is the implementation for {{ .InCallName }}.
+  type {{ .InCallImplementation }} struct {
+		call   *tchannel.InboundCall
+    ctx    thrift.Context
+
+		{{ if .StreamingArg }}
+		reader io.ReadCloser
+		{{ end }}
+
+		writer tchannel.ArgWriter
+	}
+
+	{{ if .StreamingArg }}
+
+	func (c *{{ .InCallImplementation }}) Read() (*{{ .StreamingArgType }}, error) {
+		var req {{ .StreamingArgType }}
+		if err := thrift.ReadStreamStruct(c.reader, func(protocol athrift.TProtocol) error {
+			return req.Read(protocol)
+		}); err != nil {
+			return nil, err
+		}
+
+		return &req, nil
+	}
+
+  {{ end }}
+
+	func (c *{{ .InCallImplementation }}) SetResponseHeaders(headers map[string]string) error {
+		if c.writer != nil {
+			// arg3 is already being written, headers must be set first
+			return fmt.Errorf("cannot set headers after writing streaming responses")
+		}
+
+    c.ctx.SetResponseHeaders(headers)
+    return nil
+	}
+
+  func (c *{{ .InCallImplementation }}) writeResponseHeaders() error {
+		if c.writer != nil {
+			// arg3 is already being written, headers must be set first
+			return fmt.Errorf("cannot set headers after writing streaming responses")
+		}
+
+		// arg2 writer should be used to write headers
+		arg2Writer, err := c.call.Response().Arg2Writer()
+		if err != nil {
+			return err
+		}
+
+    headers := c.ctx.ResponseHeaders()
+		if err := thrift.WriteHeaders(arg2Writer, headers); err != nil {
+      return err
+    }
+
+    return arg2Writer.Close()
+	}
+
+  // checkWriter creates the arg3 writer if it has not been created.
+  // Before the arg3 writer is created, response headers are sent.
+	func (c *{{ .InCallImplementation }}) checkWriter() error {
+		if c.writer == nil {
+      if err := c.writeResponseHeaders(); err != nil {
+        return err
+      }
+
+			writer, err := c.call.Response().Arg3Writer()
+			if err != nil {
+				return err
+			}
+			c.writer = writer
+		}
+		return nil
+	}
+
+	{{ if .StreamingRes }}
+
+	func (c *{{ .InCallImplementation }}) Write(arg *{{ .StreamingResType }}) error {
+		if err := c.checkWriter(); err != nil {
+			return err
+		}
+		return thrift.WriteStreamStruct(c.writer, arg)
+	}
+
+  // Flush flushes headers (if they have not yet been sent) and any written results.
+	func (c *{{ .InCallImplementation }}) Flush() error {
+		if err := c.checkWriter(); err != nil {
+			return err
+		}
+		return c.writer.Flush()
+	}
+
+  // Done closes the response stream and should be called after all results have been written.
+	func (c *{{ .InCallImplementation }}) Done() error {
+		if err := c.checkWriter(); err != nil {
+			return err
+		}
+		return c.writer.Close()
+	}
+
+	{{ end }}
+
+
+  // {{ .OutCallName }} is the object used to stream arguments/results and
+  // read response headers for outgoing calls.
+	type {{ .OutCallName }} interface {
+		{{ if .StreamingArg }}
+		  // Write writes an argument to the request stream. The written items may not
+		  // be sent till Flush or Done is called.
+			Write(arg *{{ .StreamingArgType }}) error
+
+		  // Flush flushes all written arguments.
+			Flush() error
+
+		  // Done closes the request stream and should be called after all arguments have been written.
+		  {{ if .OutDoneHasReturn }}
+		  // Done also returns the non-streaming response
+		  {{ end }}
+			Done() {{ .OutDoneRetType }}
+		{{ end }}
+
+		{{ if .StreamingRes}}
+		  // Read returns the next result, if any is available. If there are no more
+		  // results left, it will return io.EOF.
+			Read() (*{{ .StreamingResType }}, error)
+
+			// ResponseHeaders returns the response headers sent from the server. This will
+		  // block until server headers have been received.
+			ResponseHeaders() (map[string]string, error)
+		{{ end }}
+	}
+
+  // {{ .OutCallImplementation }} is the implementation for {{ .OutCallName }}.
+	type {{ .OutCallImplementation }} struct {
+		call *tchannel.OutboundCall
+		responseHeaders map[string]string
+		reader io.ReadCloser
+		{{ if .StreamingArg }}
+		writer tchannel.ArgWriter
+		{{ end }}
+	}
+
+	{{ if .StreamingArg }}
+  // Write writes an argument to the request stream. The written items may not
+  // be sent till Flush or Done is called.
+	func (c *{{ .OutCallImplementation }}) Write(arg *{{ .StreamingArgType }}) error {
+		return thrift.WriteStreamStruct(c.writer, arg)
+	}
+
+  // Flush flushes all written arguments.
+	func (c *{{ .OutCallImplementation }}) Flush() error {
+		return c.writer.Flush()
+	}
+
+
+  // Done closes the request stream and should be called after all arguments have been written.
+  {{ if .OutDoneHasReturn }}
+  // Done also returns the non-streaming response
+  {{ end }}
+	func (c *{{ .OutCallImplementation }}) Done() {{ .OutDoneRetType }} {
+		if err := c.writer.Close(); err != nil {
+      return {{ .OutDoneWrapErr "err" }}
+		}
+
+		{{ if .StreamingRes }}
+			return nil
+		{{ else }}
+      if err := c.checkReader(); err != nil {
+        return {{ .OutDoneWrapErr "err" }}
+      }
+			{{ if not .HasReturn }}
+        return {{ .OutDoneWrapErr "c.reader.Close()" }}
+      {{ else }}
+
+      var resp {{ .ResultType }}
+      if err := thrift.ReadStruct(c.reader, &resp); err != nil {
+        return nil, err
+      }
+      return resp.GetSuccess(), nil
+      {{ end }}
+      {{ end }}
+	}
+	{{ end }}
+
+  func (c *{{ .OutCallImplementation }}) checkReader() error {
+		if c.reader == nil {
+			arg2Reader, err := c.call.Response().Arg2Reader()
+			if err != nil {
+				return err
+			}
+
+			c.responseHeaders, err = thrift.ReadHeaders(arg2Reader)
+			if err != nil {
+				return err
+			}
+			if err := arg2Reader.Close(); err != nil {
+				return err
+			}
+
+			reader, err := c.call.Response().Arg3Reader()
+			if err != nil {
+				return err
+			}
+
+			c.reader = reader
+		}
+		return nil
+	}
+
+	{{ if .StreamingRes}}
+	func (c *{{ .OutCallImplementation }}) Read() (*{{ .StreamingResType }}, error) {
+    if err := c.checkReader(); err != nil {
+      return nil, err
+    }
+    var res {{ .StreamingResType }}
+    if err := thrift.ReadStreamStruct(c.reader, func(protocol athrift.TProtocol) error {
+  		return res.Read(protocol)
+  	}); err != nil {
+  		return nil, err
+  	}
+
+  	return &res, nil
+	}
+	{{ end }}
+
+  func (c *{{ .OutCallImplementation }}) ResponseHeaders() (map[string]string, error) {
+		if err := c.checkReader(); err != nil {
+			return nil, err
+		}
+		return c.responseHeaders, nil
+	}
+
+{{ end }}
+
+
+
 
 {{ end }}
 `

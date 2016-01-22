@@ -37,7 +37,7 @@ import (
 	"github.com/samuel/go-thrift/parser"
 )
 
-const tchannelThriftImport = "github.com/uber/tchannel-go/thrift"
+const tchannelThriftImport = "github.com/uber/tchannel-go"
 
 var (
 	generateThrift = flag.Bool("generateThrift", false, "Whether to generate all Thrift go code")
@@ -63,8 +63,9 @@ type TemplateData struct {
 }
 
 type imports struct {
-	Thrift   string
-	TChannel string
+	ApacheThrift   string
+	TChannel       string
+	TChannelThrift string
 }
 
 func main() {
@@ -126,6 +127,14 @@ func processFile(opts processOptions) error {
 	}
 
 	return nil
+}
+func hasStreamingMethods(services []*Service) bool {
+	for _, s := range services {
+		if len(s.StreamingMethods()) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 type parseState struct {
@@ -191,8 +200,9 @@ func generateCode(outputFile string, template *Template, pkg string, state parse
 		Services: state.services,
 		global:   state.global,
 		Imports: imports{
-			Thrift:   *apacheThriftImport,
-			TChannel: tchannelThriftImport,
+			ApacheThrift:   *apacheThriftImport,
+			TChannel:       tchannelThriftImport,
+			TChannelThrift: tchannelThriftImport + "/thrift",
 		},
 	}
 	return template.execute(outputFile, td)

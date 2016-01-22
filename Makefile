@@ -138,6 +138,8 @@ examples: clean setup thrift_example
 	go build -o $(BUILD)/examples/bench/client ./examples/bench/client
 	go build -o $(BUILD)/examples/bench/runner ./examples/bench/runner.go
 	go build -o $(BUILD)/examples/test_server ./examples/test_server
+	go build -o $(BUILD)/examples/thrift-stream1 ./examples/thrift-stream1
+	go build -o $(BUILD)/examples/thrift-stream2 ./examples/thrift-stream2
 
 thrift_gen:
 	go build -o $(BUILD)/thrift-gen ./thrift/thrift-gen
@@ -145,6 +147,8 @@ thrift_gen:
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift --outputDir examples/keyvalue/gen-go
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/test.thrift --outputDir examples/thrift/gen-go
 	$(BUILD)/thrift-gen --generateThrift --inputFile hyperbahn/hyperbahn.thrift --outputDir hyperbahn/gen-go
+	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift-stream1/stream.thrift --outputDir examples/thrift-stream1/gen-go
+	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift-stream2/stream.thrift --outputDir examples/thrift-stream2/gen-go
 	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift --outputDir trace/thrift/gen-go/
 
 release_thrift_gen: clean setup
