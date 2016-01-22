@@ -5,10 +5,16 @@ package tcollector
 
 import (
 	"fmt"
+	"io"
 
 	athrift "github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )
+
+// Used to avoid unused warnings for non-streaming services.
+var _ = tchannel.NewChannel
+var _ = io.Reader(nil)
 
 // Interfaces for the service and client for the services defined in the IDL.
 
@@ -19,14 +25,28 @@ type TChanTCollector interface {
 	SubmitBatch(ctx thrift.Context, spans []*Span) ([]*Response, error)
 }
 
+// TChanTCollectorServer is the interface that must be implemented by a handler.
+type TChanTCollectorServer interface {
+	GetSamplingStrategy(ctx thrift.Context, serviceName string) (*SamplingStrategyResponse, error)
+	Submit(ctx thrift.Context, span *Span) (*Response, error)
+	SubmitBatch(ctx thrift.Context, spans []*Span) ([]*Response, error)
+}
+
+// TChanTCollectorClient is the interface is used to make remote calls.
+type TChanTCollectorClient interface {
+	GetSamplingStrategy(ctx thrift.Context, serviceName string) (*SamplingStrategyResponse, error)
+	Submit(ctx thrift.Context, span *Span) (*Response, error)
+	SubmitBatch(ctx thrift.Context, spans []*Span) ([]*Response, error)
+}
+
 // Implementation of a client and service handler.
 
 type tchanTCollectorClient struct {
 	thriftService string
-	client        thrift.TChanClient
+	client        thrift.TChanStreamingClient
 }
 
-func NewTChanTCollectorInheritedClient(thriftService string, client thrift.TChanClient) *tchanTCollectorClient {
+func NewTChanTCollectorInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanTCollectorClient {
 	return &tchanTCollectorClient{
 		thriftService,
 		client,
@@ -34,7 +54,7 @@ func NewTChanTCollectorInheritedClient(thriftService string, client thrift.TChan
 }
 
 // NewTChanTCollectorClient creates a client that can be used to make remote calls.
-func NewTChanTCollectorClient(client thrift.TChanClient) TChanTCollector {
+func NewTChanTCollectorClient(client thrift.TChanStreamingClient) TChanTCollectorClient {
 	return NewTChanTCollectorInheritedClient("TCollector", client)
 }
 
@@ -75,12 +95,12 @@ func (c *tchanTCollectorClient) SubmitBatch(ctx thrift.Context, spans []*Span) (
 }
 
 type tchanTCollectorServer struct {
-	handler TChanTCollector
+	handler TChanTCollectorServer
 }
 
-// NewTChanTCollectorServer wraps a handler for TChanTCollector so it can be
+// NewTChanTCollectorServer wraps a handler for TChanTCollectorServer so it can be
 // registered with a thrift.Server.
-func NewTChanTCollectorServer(handler TChanTCollector) thrift.TChanServer {
+func NewTChanTCollectorServer(handler TChanTCollectorServer) thrift.TChanStreamingServer {
 	return &tchanTCollectorServer{
 		handler,
 	}
@@ -170,4 +190,13 @@ func (s *tchanTCollectorServer) handleSubmitBatch(ctx thrift.Context, protocol a
 	}
 
 	return err == nil, &res, nil
+}
+
+func (s *tchanTCollectorServer) StreamingMethods() []string {
+	return []string{}
+}
+
+func (s *tchanTCollectorServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 }

@@ -5,16 +5,36 @@ package keyvalue
 
 import (
 	"fmt"
+	"io"
 
 	athrift "github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )
+
+// Used to avoid unused warnings for non-streaming services.
+var _ = tchannel.NewChannel
+var _ = io.Reader(nil)
 
 // Interfaces for the service and client for the services defined in the IDL.
 
 // TChanAdmin is the interface that defines the server handler and client interface.
 type TChanAdmin interface {
 	TChanBaseService
+
+	ClearAll(ctx thrift.Context) error
+}
+
+// TChanAdminServer is the interface that must be implemented by a handler.
+type TChanAdminServer interface {
+	TChanBaseServiceServer
+
+	ClearAll(ctx thrift.Context) error
+}
+
+// TChanAdminClient is the interface is used to make remote calls.
+type TChanAdminClient interface {
+	TChanBaseServiceClient
 
 	ClearAll(ctx thrift.Context) error
 }
@@ -27,21 +47,47 @@ type TChanKeyValue interface {
 	Set(ctx thrift.Context, key string, value string) error
 }
 
+// TChanKeyValueServer is the interface that must be implemented by a handler.
+type TChanKeyValueServer interface {
+	TChanBaseServiceServer
+
+	Get(ctx thrift.Context, key string) (string, error)
+	Set(ctx thrift.Context, key string, value string) error
+}
+
+// TChanKeyValueClient is the interface is used to make remote calls.
+type TChanKeyValueClient interface {
+	TChanBaseServiceClient
+
+	Get(ctx thrift.Context, key string) (string, error)
+	Set(ctx thrift.Context, key string, value string) error
+}
+
 // TChanBaseService is the interface that defines the server handler and client interface.
 type TChanBaseService interface {
+	HealthCheck(ctx thrift.Context) (string, error)
+}
+
+// TChanBaseServiceServer is the interface that must be implemented by a handler.
+type TChanBaseServiceServer interface {
+	HealthCheck(ctx thrift.Context) (string, error)
+}
+
+// TChanBaseServiceClient is the interface is used to make remote calls.
+type TChanBaseServiceClient interface {
 	HealthCheck(ctx thrift.Context) (string, error)
 }
 
 // Implementation of a client and service handler.
 
 type tchanAdminClient struct {
-	TChanBaseService
+	TChanBaseServiceClient
 
 	thriftService string
-	client        thrift.TChanClient
+	client        thrift.TChanStreamingClient
 }
 
-func NewTChanAdminInheritedClient(thriftService string, client thrift.TChanClient) *tchanAdminClient {
+func NewTChanAdminInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanAdminClient {
 	return &tchanAdminClient{
 		NewTChanBaseServiceInheritedClient(thriftService, client),
 		thriftService,
@@ -50,7 +96,7 @@ func NewTChanAdminInheritedClient(thriftService string, client thrift.TChanClien
 }
 
 // NewTChanAdminClient creates a client that can be used to make remote calls.
-func NewTChanAdminClient(client thrift.TChanClient) TChanAdmin {
+func NewTChanAdminClient(client thrift.TChanStreamingClient) TChanAdminClient {
 	return NewTChanAdminInheritedClient("Admin", client)
 }
 
@@ -68,14 +114,14 @@ func (c *tchanAdminClient) ClearAll(ctx thrift.Context) error {
 }
 
 type tchanAdminServer struct {
-	thrift.TChanServer
+	thrift.TChanStreamingServer
 
-	handler TChanAdmin
+	handler TChanAdminServer
 }
 
-// NewTChanAdminServer wraps a handler for TChanAdmin so it can be
+// NewTChanAdminServer wraps a handler for TChanAdminServer so it can be
 // registered with a thrift.Server.
-func NewTChanAdminServer(handler TChanAdmin) thrift.TChanServer {
+func NewTChanAdminServer(handler TChanAdminServer) thrift.TChanStreamingServer {
 	return &tchanAdminServer{
 		NewTChanBaseServiceServer(handler),
 		handler,
@@ -100,7 +146,7 @@ func (s *tchanAdminServer) Handle(ctx thrift.Context, methodName string, protoco
 		return s.handleClearAll(ctx, protocol)
 
 	case "HealthCheck":
-		return s.TChanServer.Handle(ctx, methodName, protocol)
+		return s.TChanStreamingServer.Handle(ctx, methodName, protocol)
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
@@ -133,14 +179,23 @@ func (s *tchanAdminServer) handleClearAll(ctx thrift.Context, protocol athrift.T
 	return err == nil, &res, nil
 }
 
-type tchanKeyValueClient struct {
-	TChanBaseService
-
-	thriftService string
-	client        thrift.TChanClient
+func (s *tchanAdminServer) StreamingMethods() []string {
+	return []string{}
 }
 
-func NewTChanKeyValueInheritedClient(thriftService string, client thrift.TChanClient) *tchanKeyValueClient {
+func (s *tchanAdminServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+}
+
+type tchanKeyValueClient struct {
+	TChanBaseServiceClient
+
+	thriftService string
+	client        thrift.TChanStreamingClient
+}
+
+func NewTChanKeyValueInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanKeyValueClient {
 	return &tchanKeyValueClient{
 		NewTChanBaseServiceInheritedClient(thriftService, client),
 		thriftService,
@@ -149,7 +204,7 @@ func NewTChanKeyValueInheritedClient(thriftService string, client thrift.TChanCl
 }
 
 // NewTChanKeyValueClient creates a client that can be used to make remote calls.
-func NewTChanKeyValueClient(client thrift.TChanClient) TChanKeyValue {
+func NewTChanKeyValueClient(client thrift.TChanStreamingClient) TChanKeyValueClient {
 	return NewTChanKeyValueInheritedClient("KeyValue", client)
 }
 
@@ -188,14 +243,14 @@ func (c *tchanKeyValueClient) Set(ctx thrift.Context, key string, value string) 
 }
 
 type tchanKeyValueServer struct {
-	thrift.TChanServer
+	thrift.TChanStreamingServer
 
-	handler TChanKeyValue
+	handler TChanKeyValueServer
 }
 
-// NewTChanKeyValueServer wraps a handler for TChanKeyValue so it can be
+// NewTChanKeyValueServer wraps a handler for TChanKeyValueServer so it can be
 // registered with a thrift.Server.
-func NewTChanKeyValueServer(handler TChanKeyValue) thrift.TChanServer {
+func NewTChanKeyValueServer(handler TChanKeyValueServer) thrift.TChanStreamingServer {
 	return &tchanKeyValueServer{
 		NewTChanBaseServiceServer(handler),
 		handler,
@@ -223,7 +278,7 @@ func (s *tchanKeyValueServer) Handle(ctx thrift.Context, methodName string, prot
 		return s.handleSet(ctx, protocol)
 
 	case "HealthCheck":
-		return s.TChanServer.Handle(ctx, methodName, protocol)
+		return s.TChanStreamingServer.Handle(ctx, methodName, protocol)
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
@@ -289,12 +344,21 @@ func (s *tchanKeyValueServer) handleSet(ctx thrift.Context, protocol athrift.TPr
 	return err == nil, &res, nil
 }
 
-type tchanBaseServiceClient struct {
-	thriftService string
-	client        thrift.TChanClient
+func (s *tchanKeyValueServer) StreamingMethods() []string {
+	return []string{}
 }
 
-func NewTChanBaseServiceInheritedClient(thriftService string, client thrift.TChanClient) *tchanBaseServiceClient {
+func (s *tchanKeyValueServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+}
+
+type tchanBaseServiceClient struct {
+	thriftService string
+	client        thrift.TChanStreamingClient
+}
+
+func NewTChanBaseServiceInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanBaseServiceClient {
 	return &tchanBaseServiceClient{
 		thriftService,
 		client,
@@ -302,7 +366,7 @@ func NewTChanBaseServiceInheritedClient(thriftService string, client thrift.TCha
 }
 
 // NewTChanBaseServiceClient creates a client that can be used to make remote calls.
-func NewTChanBaseServiceClient(client thrift.TChanClient) TChanBaseService {
+func NewTChanBaseServiceClient(client thrift.TChanStreamingClient) TChanBaseServiceClient {
 	return NewTChanBaseServiceInheritedClient("baseService", client)
 }
 
@@ -317,12 +381,12 @@ func (c *tchanBaseServiceClient) HealthCheck(ctx thrift.Context) (string, error)
 }
 
 type tchanBaseServiceServer struct {
-	handler TChanBaseService
+	handler TChanBaseServiceServer
 }
 
-// NewTChanBaseServiceServer wraps a handler for TChanBaseService so it can be
+// NewTChanBaseServiceServer wraps a handler for TChanBaseServiceServer so it can be
 // registered with a thrift.Server.
-func NewTChanBaseServiceServer(handler TChanBaseService) thrift.TChanServer {
+func NewTChanBaseServiceServer(handler TChanBaseServiceServer) thrift.TChanStreamingServer {
 	return &tchanBaseServiceServer{
 		handler,
 	}
@@ -366,4 +430,13 @@ func (s *tchanBaseServiceServer) handleHealthCheck(ctx thrift.Context, protocol 
 	}
 
 	return err == nil, &res, nil
+}
+
+func (s *tchanBaseServiceServer) StreamingMethods() []string {
+	return []string{}
+}
+
+func (s *tchanBaseServiceServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 }

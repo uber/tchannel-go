@@ -5,10 +5,16 @@ package hyperbahn
 
 import (
 	"fmt"
+	"io"
 
 	athrift "github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )
+
+// Used to avoid unused warnings for non-streaming services.
+var _ = tchannel.NewChannel
+var _ = io.Reader(nil)
 
 // Interfaces for the service and client for the services defined in the IDL.
 
@@ -17,14 +23,24 @@ type TChanHyperbahn interface {
 	Discover(ctx thrift.Context, query *DiscoveryQuery) (*DiscoveryResult_, error)
 }
 
+// TChanHyperbahnServer is the interface that must be implemented by a handler.
+type TChanHyperbahnServer interface {
+	Discover(ctx thrift.Context, query *DiscoveryQuery) (*DiscoveryResult_, error)
+}
+
+// TChanHyperbahnClient is the interface is used to make remote calls.
+type TChanHyperbahnClient interface {
+	Discover(ctx thrift.Context, query *DiscoveryQuery) (*DiscoveryResult_, error)
+}
+
 // Implementation of a client and service handler.
 
 type tchanHyperbahnClient struct {
 	thriftService string
-	client        thrift.TChanClient
+	client        thrift.TChanStreamingClient
 }
 
-func NewTChanHyperbahnInheritedClient(thriftService string, client thrift.TChanClient) *tchanHyperbahnClient {
+func NewTChanHyperbahnInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanHyperbahnClient {
 	return &tchanHyperbahnClient{
 		thriftService,
 		client,
@@ -32,7 +48,7 @@ func NewTChanHyperbahnInheritedClient(thriftService string, client thrift.TChanC
 }
 
 // NewTChanHyperbahnClient creates a client that can be used to make remote calls.
-func NewTChanHyperbahnClient(client thrift.TChanClient) TChanHyperbahn {
+func NewTChanHyperbahnClient(client thrift.TChanStreamingClient) TChanHyperbahnClient {
 	return NewTChanHyperbahnInheritedClient("Hyperbahn", client)
 }
 
@@ -55,12 +71,12 @@ func (c *tchanHyperbahnClient) Discover(ctx thrift.Context, query *DiscoveryQuer
 }
 
 type tchanHyperbahnServer struct {
-	handler TChanHyperbahn
+	handler TChanHyperbahnServer
 }
 
-// NewTChanHyperbahnServer wraps a handler for TChanHyperbahn so it can be
+// NewTChanHyperbahnServer wraps a handler for TChanHyperbahnServer so it can be
 // registered with a thrift.Server.
-func NewTChanHyperbahnServer(handler TChanHyperbahn) thrift.TChanServer {
+func NewTChanHyperbahnServer(handler TChanHyperbahnServer) thrift.TChanStreamingServer {
 	return &tchanHyperbahnServer{
 		handler,
 	}
@@ -117,4 +133,13 @@ func (s *tchanHyperbahnServer) handleDiscover(ctx thrift.Context, protocol athri
 	}
 
 	return err == nil, &res, nil
+}
+
+func (s *tchanHyperbahnServer) StreamingMethods() []string {
+	return []string{}
+}
+
+func (s *tchanHyperbahnServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 }

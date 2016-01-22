@@ -5,15 +5,31 @@ package test
 
 import (
 	"fmt"
+	"io"
 
 	athrift "github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 )
+
+// Used to avoid unused warnings for non-streaming services.
+var _ = tchannel.NewChannel
+var _ = io.Reader(nil)
 
 // Interfaces for the service and client for the services defined in the IDL.
 
 // TChanSecondService is the interface that defines the server handler and client interface.
 type TChanSecondService interface {
+	Echo(ctx thrift.Context, arg string) (string, error)
+}
+
+// TChanSecondServiceServer is the interface that must be implemented by a handler.
+type TChanSecondServiceServer interface {
+	Echo(ctx thrift.Context, arg string) (string, error)
+}
+
+// TChanSecondServiceClient is the interface is used to make remote calls.
+type TChanSecondServiceClient interface {
 	Echo(ctx thrift.Context, arg string) (string, error)
 }
 
@@ -23,14 +39,26 @@ type TChanSimpleService interface {
 	Simple(ctx thrift.Context) error
 }
 
+// TChanSimpleServiceServer is the interface that must be implemented by a handler.
+type TChanSimpleServiceServer interface {
+	Call(ctx thrift.Context, arg *Data) (*Data, error)
+	Simple(ctx thrift.Context) error
+}
+
+// TChanSimpleServiceClient is the interface is used to make remote calls.
+type TChanSimpleServiceClient interface {
+	Call(ctx thrift.Context, arg *Data) (*Data, error)
+	Simple(ctx thrift.Context) error
+}
+
 // Implementation of a client and service handler.
 
 type tchanSecondServiceClient struct {
 	thriftService string
-	client        thrift.TChanClient
+	client        thrift.TChanStreamingClient
 }
 
-func NewTChanSecondServiceInheritedClient(thriftService string, client thrift.TChanClient) *tchanSecondServiceClient {
+func NewTChanSecondServiceInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanSecondServiceClient {
 	return &tchanSecondServiceClient{
 		thriftService,
 		client,
@@ -38,7 +66,7 @@ func NewTChanSecondServiceInheritedClient(thriftService string, client thrift.TC
 }
 
 // NewTChanSecondServiceClient creates a client that can be used to make remote calls.
-func NewTChanSecondServiceClient(client thrift.TChanClient) TChanSecondService {
+func NewTChanSecondServiceClient(client thrift.TChanStreamingClient) TChanSecondServiceClient {
 	return NewTChanSecondServiceInheritedClient("SecondService", client)
 }
 
@@ -55,12 +83,12 @@ func (c *tchanSecondServiceClient) Echo(ctx thrift.Context, arg string) (string,
 }
 
 type tchanSecondServiceServer struct {
-	handler TChanSecondService
+	handler TChanSecondServiceServer
 }
 
-// NewTChanSecondServiceServer wraps a handler for TChanSecondService so it can be
+// NewTChanSecondServiceServer wraps a handler for TChanSecondServiceServer so it can be
 // registered with a thrift.Server.
-func NewTChanSecondServiceServer(handler TChanSecondService) thrift.TChanServer {
+func NewTChanSecondServiceServer(handler TChanSecondServiceServer) thrift.TChanStreamingServer {
 	return &tchanSecondServiceServer{
 		handler,
 	}
@@ -106,12 +134,21 @@ func (s *tchanSecondServiceServer) handleEcho(ctx thrift.Context, protocol athri
 	return err == nil, &res, nil
 }
 
-type tchanSimpleServiceClient struct {
-	thriftService string
-	client        thrift.TChanClient
+func (s *tchanSecondServiceServer) StreamingMethods() []string {
+	return []string{}
 }
 
-func NewTChanSimpleServiceInheritedClient(thriftService string, client thrift.TChanClient) *tchanSimpleServiceClient {
+func (s *tchanSecondServiceServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+}
+
+type tchanSimpleServiceClient struct {
+	thriftService string
+	client        thrift.TChanStreamingClient
+}
+
+func NewTChanSimpleServiceInheritedClient(thriftService string, client thrift.TChanStreamingClient) *tchanSimpleServiceClient {
 	return &tchanSimpleServiceClient{
 		thriftService,
 		client,
@@ -119,7 +156,7 @@ func NewTChanSimpleServiceInheritedClient(thriftService string, client thrift.TC
 }
 
 // NewTChanSimpleServiceClient creates a client that can be used to make remote calls.
-func NewTChanSimpleServiceClient(client thrift.TChanClient) TChanSimpleService {
+func NewTChanSimpleServiceClient(client thrift.TChanStreamingClient) TChanSimpleServiceClient {
 	return NewTChanSimpleServiceInheritedClient("SimpleService", client)
 }
 
@@ -149,12 +186,12 @@ func (c *tchanSimpleServiceClient) Simple(ctx thrift.Context) error {
 }
 
 type tchanSimpleServiceServer struct {
-	handler TChanSimpleService
+	handler TChanSimpleServiceServer
 }
 
-// NewTChanSimpleServiceServer wraps a handler for TChanSimpleService so it can be
+// NewTChanSimpleServiceServer wraps a handler for TChanSimpleServiceServer so it can be
 // registered with a thrift.Server.
-func NewTChanSimpleServiceServer(handler TChanSimpleService) thrift.TChanServer {
+func NewTChanSimpleServiceServer(handler TChanSimpleServiceServer) thrift.TChanStreamingServer {
 	return &tchanSimpleServiceServer{
 		handler,
 	}
@@ -228,4 +265,13 @@ func (s *tchanSimpleServiceServer) handleSimple(ctx thrift.Context, protocol ath
 	}
 
 	return err == nil, &res, nil
+}
+
+func (s *tchanSimpleServiceServer) StreamingMethods() []string {
+	return []string{}
+}
+
+func (s *tchanSimpleServiceServer) HandleStreaming(ctx thrift.Context, call *tchannel.InboundCall) error {
+	methodName := call.MethodString()
+	return fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 }
