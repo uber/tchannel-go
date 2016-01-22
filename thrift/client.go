@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// client implements TChanClient and makes outgoing Thrift calls.
+// client implements TChanStreamingClient and makes outgoing Thrift calls.
 type client struct {
 	ch          *tchannel.Channel
 	sc          *tchannel.SubChannel
@@ -41,7 +41,7 @@ type ClientOptions struct {
 }
 
 // NewClient returns a Client that makes calls over the given tchannel to the given Hyperbahn service.
-func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TChanClient {
+func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TChanStreamingClient {
 	client := &client{
 		ch:          ch,
 		sc:          ch.GetSubChannel(serviceName),
@@ -53,35 +53,43 @@ func NewClient(ch *tchannel.Channel, serviceName string, opts *ClientOptions) TC
 	return client
 }
 
-func (c *client) startCall(ctx context.Context, method string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
+func (c *client) beginCall(ctx context.Context, method string, callOptions *tchannel.CallOptions) (*tchannel.OutboundCall, error) {
 	if c.opts.HostPort != "" {
 		return c.ch.BeginCall(ctx, c.opts.HostPort, c.serviceName, method, callOptions)
 	}
 	return c.sc.BeginCall(ctx, method, callOptions)
 }
 
+func (c *client) StartCall(ctx Context, fullMethod string) (*tchannel.OutboundCall, tchannel.ArgWriter, error) {
+	call, err := c.beginCall(ctx, fullMethod, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := writeHelper(call.Arg2Writer, func(w tchannel.ArgWriter) error {
+		return WriteHeaders(w, ctx.Headers())
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	writer, err := call.Arg3Writer()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return call, writer, nil
+}
+
 func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrift.TStruct) error {
-	writer, err := call.Arg2Writer()
-	if err != nil {
-		return err
-	}
-	if err := WriteHeaders(writer, headers); err != nil {
-		return err
-	}
-	if err := writer.Close(); err != nil {
+	if err := writeHelper(call.Arg2Writer, func(w tchannel.ArgWriter) error {
+		return WriteHeaders(w, headers)
+	}); err != nil {
 		return err
 	}
 
-	writer, err = call.Arg3Writer()
-	if err != nil {
-		return err
-	}
-
-	if err := WriteStruct(writer, req); err != nil {
-		return err
-	}
-
-	return writer.Close()
+	return writeHelper(call.Arg3Writer, func(w tchannel.ArgWriter) error {
+		return WriteStruct(w, req)
+	})
 }
 
 // readResponse reads the response struct into resp, and returns:
@@ -125,7 +133,7 @@ func (c *client) Call(ctx Context, thriftService, methodName string, req, resp t
 	err := c.ch.RunWithRetry(ctx, func(ctx context.Context, rs *tchannel.RequestState) error {
 		respHeaders, isOK = nil, false
 
-		call, err := c.startCall(ctx, thriftService+"::"+methodName, &tchannel.CallOptions{
+		call, err := c.beginCall(ctx, thriftService+"::"+methodName, &tchannel.CallOptions{
 			Format:       tchannel.Thrift,
 			RequestState: rs,
 		})
@@ -146,4 +154,28 @@ func (c *client) Call(ctx Context, thriftService, methodName string, req, resp t
 
 	ctx.SetResponseHeaders(respHeaders)
 	return isOK, nil
+}
+
+func readHelper(readerFn func() (tchannel.ArgReader, error), f func(tchannel.ArgReader) error) error {
+	reader, err := readerFn()
+	if err != nil {
+		return err
+	}
+
+	if err := f(reader); err != nil {
+		return err
+	}
+	return reader.Close()
+}
+
+func writeHelper(writerFn func() (tchannel.ArgWriter, error), f func(tchannel.ArgWriter) error) error {
+	writer, err := writerFn()
+	if err != nil {
+		return err
+	}
+
+	if err := f(writer); err != nil {
+		return err
+	}
+	return writer.Close()
 }

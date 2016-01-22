@@ -20,7 +20,10 @@
 
 package thrift
 
-import athrift "github.com/apache/thrift/lib/go/thrift"
+import (
+	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go"
+)
 
 // This file defines interfaces that are used or exposed by thrift-gen generated code.
 // TChanClient is used by the generated code to make outgoing requests.
@@ -29,18 +32,37 @@ import athrift "github.com/apache/thrift/lib/go/thrift"
 // TChanClient abstracts calling a Thrift endpoint, and is used by the generated client code.
 type TChanClient interface {
 	// Call should be passed the method to call and the request/response Thrift structs.
-	Call(ctx Context, serviceName, methodName string, req, resp athrift.TStruct) (success bool, err error)
+	Call(ctx Context, serviceName, methodName string, req, resp thrift.TStruct) (success bool, err error)
 }
 
 // TChanServer abstracts handling of an RPC that is implemented by the generated server code.
 type TChanServer interface {
-	// Handle should read the request from the given reqReader, and return the response struct.
-	// The arguments returned are success, result struct, unexpected error
-	Handle(ctx Context, methodName string, protocol athrift.TProtocol) (success bool, resp athrift.TStruct, err error)
-
 	// Service returns the service name.
 	Service() string
 
 	// Methods returns the method names handled by this server.
 	Methods() []string
+
+	// Handle should read the request from the given reqReader, and return the response struct.
+	// The arguments returned are success, result struct, unexpected error
+	Handle(ctx Context, methodName string, protocol thrift.TProtocol) (success bool, resp thrift.TStruct, err error)
+}
+
+// TChanStreamingServer abstracts handling of an RPC that is implemented by the generated code.
+type TChanStreamingServer interface {
+	TChanServer
+
+	// StreamingMethods returns the method names handled by this server.
+	StreamingMethods() []string
+
+	// Handle handles a call (arg2 and arg3 whould already be read??)
+	HandleStreaming(ctx Context, call *tchannel.InboundCall) error
+}
+
+// TChanStreamingClient is abstracts calling Thrift endpoints which require streaming.
+type TChanStreamingClient interface {
+	TChanClient
+
+	// StartCall starts starts the call to the given endpoint, and returns
+	StartCall(ctx Context, name string) (*tchannel.OutboundCall, tchannel.ArgWriter, error)
 }
