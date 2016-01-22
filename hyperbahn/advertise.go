@@ -124,6 +124,9 @@ func (c *Client) initialAdvertise() error {
 			break
 		}
 
+		c.tchan.Logger().WithFields(tchannel.ErrField(err)).Info(
+			"Hyperbahn client initial registration failure, will retry")
+
 		// Back off for a while.
 		sleepFor := fuzzInterval(advertiseRetryInterval * time.Duration(1<<attempt))
 		timeSleep(sleepFor)
