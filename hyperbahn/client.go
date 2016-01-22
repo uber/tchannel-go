@@ -172,9 +172,10 @@ func (c *Client) getServiceNames(otherServices []tchannel.Registrar) {
 func (c *Client) Advertise(otherServices ...tchannel.Registrar) error {
 	c.getServiceNames(otherServices)
 
-	if err := c.sendAdvertise(); err != nil {
+	if err := c.initialAdvertise(); err != nil {
 		return err
 	}
+
 	c.opts.Handler.On(Advertised)
 	go c.advertiseLoop()
 	return nil
