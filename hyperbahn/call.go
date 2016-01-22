@@ -63,9 +63,13 @@ func (c *Client) sendAdvertise() error {
 		return errEphemeralPeer
 	}
 
+	retryOpts := &tchannel.RetryOptions{
+		RetryOn:           tchannel.RetryIdempotent,
+		TimeoutPerAttempt: c.opts.TimeoutPerAttempt,
+	}
+
 	ctx, cancel := tchannel.NewContextBuilder(c.opts.Timeout).
-		SetRetryOptions(&tchannel.RetryOptions{RetryOn: tchannel.RetryIdempotent}).
-		Build()
+		SetRetryOptions(retryOpts).Build()
 	defer cancel()
 
 	// Disable tracing on Hyperbahn advertise messages to avoid cascading failures (see #790).

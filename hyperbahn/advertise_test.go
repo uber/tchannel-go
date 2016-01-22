@@ -50,9 +50,17 @@ func TestAdvertiseFailed(t *testing.T) {
 
 func TestInitialAdvertiseFailedRetry(t *testing.T) {
 	withSetup(t, func(hypCh *tchannel.Channel, hyperbahnHostPort string) {
+		started := time.Now()
 		count := 0
 		adHandler := func(ctx json.Context, req *AdRequest) (*AdResponse, error) {
 			count++
+
+			deadline, ok := ctx.Deadline()
+			if assert.True(t, ok, "context is missing Deadline") {
+				assert.True(t, deadline.Sub(started) <= 2*time.Second,
+					"Timeout per attempt should be 1 second. Started: %v Deadline: %v", started, deadline)
+			}
+
 			return nil, tchannel.NewSystemError(tchannel.ErrCodeUnexpected, "unexpected")
 		}
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
