@@ -80,10 +80,12 @@ func (f *FailStrategy) UnmarshalYAML(unmarshal func(v interface{}) error) error 
 
 // ClientOptions are used to configure this Hyperbahn client.
 type ClientOptions struct {
-	// Timeout defaults to 1 second if it is not set.
-	Timeout      time.Duration
-	Handler      Handler
-	FailStrategy FailStrategy
+	// Timeout defaults to 3 seconds if it is not set.
+	Timeout time.Duration
+	// TimeoutPerAttempt defaults to 1 second if it is not set.
+	TimeoutPerAttempt time.Duration
+	Handler           Handler
+	FailStrategy      FailStrategy
 }
 
 // NewClient creates a new Hyperbahn client using the given channel.
@@ -95,7 +97,10 @@ func NewClient(ch *tchannel.Channel, config Configuration, opts *ClientOptions) 
 		client.opts = *opts
 	}
 	if client.opts.Timeout == 0 {
-		client.opts.Timeout = time.Second
+		client.opts.Timeout = 3 * time.Second
+	}
+	if client.opts.TimeoutPerAttempt == 0 {
+		client.opts.TimeoutPerAttempt = time.Second
 	}
 	if client.opts.Handler == nil {
 		client.opts.Handler = nullHandler{}
@@ -167,9 +172,10 @@ func (c *Client) getServiceNames(otherServices []tchannel.Registrar) {
 func (c *Client) Advertise(otherServices ...tchannel.Registrar) error {
 	c.getServiceNames(otherServices)
 
-	if err := c.sendAdvertise(); err != nil {
+	if err := c.initialAdvertise(); err != nil {
 		return err
 	}
+
 	c.opts.Handler.On(Advertised)
 	go c.advertiseLoop()
 	return nil

@@ -100,3 +100,21 @@ func (c *Client) advertiseLoop() {
 		}
 	}
 }
+
+// initialAdvertise will do the initial Advertise call to Hyperbahn with additional
+// retries on top of the built-in TChannel retries. It will use exponential backoff
+// between each of the call attempts.
+func (c *Client) initialAdvertise() error {
+	var err error
+	for attempt := uint(0); attempt < maxAdvertiseFailures; attempt++ {
+		err = c.sendAdvertise()
+		if err == nil || err == errEphemeralPeer {
+			break
+		}
+
+		// Back off for a while.
+		sleepFor := fuzzInterval(advertiseRetryInterval * time.Duration(1<<attempt))
+		timeSleep(sleepFor)
+	}
+	return err
+}
