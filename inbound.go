@@ -34,9 +34,9 @@ var (
 	errNotReady                    = NewSystemError(ErrCodeDeclined, "connection not ready")
 )
 
-// handleCallReq handles an incoming call request, registering a message
-// exchange to receive further fragments for that call, and dispatching it in
-// another goroutine
+// handleCallReq handles an incoming call request frame; currently the only
+// path is to call handleInboundCall directly to dispatch an InboundCall; TODO:
+// add relaying path here
 func (c *Connection) handleCallReq(frame *Frame) bool {
 	now := c.timeNow()
 	switch state := c.readState(); state {
@@ -52,6 +52,13 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		panic(fmt.Errorf("unknown connection state for call req: %v", state))
 	}
 
+	return c.handleInboundCall(frame)
+}
+
+// handleInboundCall handles an incoming call request, registering a message
+// exchange to receive further fragments for that call, and dispatching it in
+// another goroutine
+func (c *Connection) handleInboundCall(frame *Frame) bool {
 	callReq := new(callReq)
 	initialFragment, err := parseInboundFragment(c.framePool, frame, callReq)
 	if err != nil {
