@@ -28,7 +28,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-var errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
+var (
+	// errInboundParseFailed = errors.New("failed to parse inbound frame")
+	errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
+	errNotReady                    = NewSystemError(ErrCodeDeclined, "connection not ready")
+)
 
 // handleCallReq handles an incoming call request, registering a message
 // exchange to receive further fragments for that call, and dispatching it in
@@ -42,7 +46,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		c.SendSystemError(frame.Header.ID, nil, ErrChannelClosed)
 		return true
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
-		c.SendSystemError(frame.Header.ID, nil, NewSystemError(ErrCodeDeclined, "connection not ready"))
+		c.SendSystemError(frame.Header.ID, nil, errNotReady)
 		return true
 	default:
 		panic(fmt.Errorf("unknown connection state for call req: %v", state))
