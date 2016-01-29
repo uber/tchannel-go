@@ -34,8 +34,11 @@ type FakeIncomingCall struct {
 	// ShardKeyF is the intended destination for this call.
 	ShardKeyF string
 
-	// RemotePeer is the calling service's peer info.
+	// RemotePeerF is the calling service's peer info.
 	RemotePeerF tchannel.PeerInfo
+
+	// RoutingDelegateF is the routing delegate.
+	RoutingDelegateF string
 }
 
 // CallerName returns the caller name as specified in the fake call.
@@ -46,6 +49,11 @@ func (f *FakeIncomingCall) CallerName() string {
 // ShardKey returns the shard key as specified in the fake call.
 func (f *FakeIncomingCall) ShardKey() string {
 	return f.ShardKeyF
+}
+
+// RoutingDelegate returns the routing delegate as specified in the fake call.
+func (f *FakeIncomingCall) RoutingDelegate() string {
+	return f.RoutingDelegateF
 }
 
 // RemotePeer returns the caller's peer info.
