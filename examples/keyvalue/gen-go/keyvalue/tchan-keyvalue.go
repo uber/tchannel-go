@@ -155,6 +155,29 @@ func (s *tchanAdminServer) handleClearAll(ctx thrift.Context, req AdminClearAllA
 	return err == nil, &res, nil
 }
 
+func (s *tchanAdminServer) readHealthCheck(protocol athrift.TProtocol) (interface{}, error) {
+	var req BaseServiceHealthCheckArgs
+
+	if err := req.Read(protocol); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func (s *tchanAdminServer) handleHealthCheck(ctx thrift.Context, req BaseServiceHealthCheckArgs) (bool, athrift.TStruct, error) {
+	var res BaseServiceHealthCheckResult
+	r, err :=
+		s.handler.HealthCheck(ctx)
+
+	if err != nil {
+		return false, nil, err
+	} else {
+		res.Success = &r
+	}
+
+	return err == nil, &res, nil
+}
+
 type tchanKeyValueClient struct {
 	TChanBaseService
 
@@ -333,6 +356,29 @@ func (s *tchanKeyValueServer) handleSet(ctx thrift.Context, req KeyValueSetArgs)
 			return false, nil, err
 		}
 	} else {
+	}
+
+	return err == nil, &res, nil
+}
+
+func (s *tchanKeyValueServer) readHealthCheck(protocol athrift.TProtocol) (interface{}, error) {
+	var req BaseServiceHealthCheckArgs
+
+	if err := req.Read(protocol); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func (s *tchanKeyValueServer) handleHealthCheck(ctx thrift.Context, req BaseServiceHealthCheckArgs) (bool, athrift.TStruct, error) {
+	var res BaseServiceHealthCheckResult
+	r, err :=
+		s.handler.HealthCheck(ctx)
+
+	if err != nil {
+		return false, nil, err
+	} else {
+		res.Success = &r
 	}
 
 	return err == nil, &res, nil

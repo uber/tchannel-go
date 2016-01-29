@@ -157,7 +157,7 @@ func (s *{{ .ServerStruct }}) HandleArgs(ctx {{ contextType }}, methodName strin
 	}
 }
 
-{{ range .Methods }}
+{{ range .AllMethods }}
 	func (s *{{ $svc.ServerStruct }}) {{ .ReadFunc }}(protocol athrift.TProtocol) (interface{}, error) {
 		var req {{ .ArgsType }}
 

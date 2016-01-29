@@ -319,6 +319,28 @@ func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, req FirstHealth
 	return err == nil, &res, nil
 }
 
+func (s *tchanFirstServer) readBaseCall(protocol athrift.TProtocol) (interface{}, error) {
+	var req BaseBaseCallArgs
+
+	if err := req.Read(protocol); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func (s *tchanFirstServer) handleBaseCall(ctx thrift.Context, req BaseBaseCallArgs) (bool, athrift.TStruct, error) {
+	var res BaseBaseCallResult
+	err :=
+		s.handler.BaseCall(ctx)
+
+	if err != nil {
+		return false, nil, err
+	} else {
+	}
+
+	return err == nil, &res, nil
+}
+
 type tchanSecondClient struct {
 	thriftService string
 	client        thrift.TChanClient
