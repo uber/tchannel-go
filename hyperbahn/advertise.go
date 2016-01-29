@@ -67,10 +67,21 @@ func (c *Client) fuzzedAdvertiseInterval() time.Duration {
 	return advertiseInterval + fuzzInterval(advertiseFuzzInterval)
 }
 
+// logFailedRegistrationRetry logs either a warning or info depending on the number of
+// consecutiveFailures. If consecutiveFailures > maxAdvertiseFailures, then we log a warning.
+func (c *Client) logFailedRegistrationRetry(errLogger tchannel.Logger, consecutiveFailures uint) {
+	logFn := errLogger.Info
+	if consecutiveFailures > maxAdvertiseFailures {
+		logFn = errLogger.Warn
+	}
+
+	logFn("Hyperbahn client registration failed, will retry.")
+}
+
 // advertiseLoop readvertises the service approximately every minute (with some fuzzing).
 func (c *Client) advertiseLoop() {
 	sleepFor := c.fuzzedAdvertiseInterval()
-	consecutiveFailures := uint8(0)
+	consecutiveFailures := uint(0)
 
 	for {
 		timeSleep(sleepFor)
@@ -86,7 +97,8 @@ func (c *Client) advertiseLoop() {
 				c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: false})
 				errLogger.Fatal("Hyperbahn client registration failed.")
 			}
-			errLogger.Warn("Hyperbahn client registration failed, will retry.")
+
+			c.logFailedRegistrationRetry(errLogger, consecutiveFailures)
 			c.opts.Handler.OnError(ErrAdvertiseFailed{Cause: err, WillRetry: true})
 
 			// Even after many failures, cap backoff.
@@ -99,4 +111,25 @@ func (c *Client) advertiseLoop() {
 			consecutiveFailures = 0
 		}
 	}
+}
+
+// initialAdvertise will do the initial Advertise call to Hyperbahn with additional
+// retries on top of the built-in TChannel retries. It will use exponential backoff
+// between each of the call attempts.
+func (c *Client) initialAdvertise() error {
+	var err error
+	for attempt := uint(0); attempt < maxAdvertiseFailures; attempt++ {
+		err = c.sendAdvertise()
+		if err == nil || err == errEphemeralPeer {
+			break
+		}
+
+		c.tchan.Logger().WithFields(tchannel.ErrField(err)).Info(
+			"Hyperbahn client initial registration failure, will retry")
+
+		// Back off for a while.
+		sleepFor := fuzzInterval(advertiseRetryInterval * time.Duration(1<<attempt))
+		timeSleep(sleepFor)
+	}
+	return err
 }

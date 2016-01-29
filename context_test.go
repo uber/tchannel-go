@@ -66,6 +66,29 @@ func TestNewContextTimeoutZero(t *testing.T) {
 	assert.True(t, deadline.Sub(time.Now()) <= 0, "Deadline should be Now or earlier")
 }
 
+func TestRoutingDelegatePropagates(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		peerInfo := ch.PeerInfo()
+		testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{
+				Arg3: []byte(CurrentCall(ctx).RoutingDelegate()),
+			}, nil
+		})
+
+		ctx, cancel := NewContextBuilder(time.Second).Build()
+		defer cancel()
+		_, arg3, _, err := raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, "", string(arg3), "Expected no routing delegate header")
+
+		ctx, cancel = NewContextBuilder(time.Second).SetRoutingDelegate("xpr").Build()
+		defer cancel()
+		_, arg3, _, err = raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, "xpr", string(arg3), "Expected routing delegate header to be set")
+	})
+}
+
 func TestShardKeyPropagates(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		peerInfo := ch.PeerInfo()

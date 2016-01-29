@@ -43,7 +43,8 @@ get_thrift:
 
 install:
 	GOPATH=$(GODEPS) go get github.com/tools/godep
-	GOPATH=$(GODEPS) godep restore
+	GOPATH=$(GODEPS) go get github.com/golang/lint
+	GOPATH=$(GODEPS) godep restore -v
 
 install_ci: get_thrift install
 	go get -u github.com/mattn/goveralls

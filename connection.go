@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/uber/tchannel-go/typed"
 	"golang.org/x/net/context"
@@ -70,6 +71,10 @@ func (p LocalPeerInfo) String() string {
 // CurrentProtocolVersion is the current version of the TChannel protocol
 // supported by this stack
 const CurrentProtocolVersion = 0x02
+
+// DefaultConnectTimeout is the default timeout used by net.Dial, if no timeout
+// is specified in the context.
+const DefaultConnectTimeout = 5 * time.Second
 
 var (
 	// ErrConnectionClosed is returned when a caller performs an method
@@ -187,9 +192,12 @@ const (
 //go:generate stringer -type=connectionState
 
 // Creates a new Connection around an outbound connection initiated to a peer
-func (ch *Channel) newOutboundConnection(hostPort string, events connectionEvents) (*Connection, error) {
-	conn, err := net.Dial("tcp", hostPort)
+func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string, events connectionEvents) (*Connection, error) {
+	conn, err := net.DialTimeout("tcp", hostPort, timeout)
 	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			err = ErrTimeout
+		}
 		return nil, err
 	}
 

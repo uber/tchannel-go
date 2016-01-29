@@ -36,7 +36,24 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func TestAdvertiseFailed(t *testing.T) {
+func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
+	defer testutils.SetTimeout(t, time.Second)()
+
+	sleepArgs, sleepBlock, sleepClose := testutils.SleepStub(&timeSleep)
+	defer testutils.ResetSleepStub(&timeSleep)
+
+	// We expect to retry 5 times,
+	go func() {
+		for attempt := uint(0); attempt < 5; attempt++ {
+			maxSleepFor := advertiseRetryInterval * time.Duration(1<<attempt)
+			got := <-sleepArgs
+			assert.True(t, got <= maxSleepFor,
+				"Initial advertise attempt %v expected sleep %v < %v", attempt, got, maxSleepFor)
+			sleepBlock <- struct{}{}
+		}
+		sleepClose()
+	}()
+
 	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
 		serverCh := testutils.NewServer(t, nil)
 		defer serverCh.Close()
@@ -48,11 +65,22 @@ func TestAdvertiseFailed(t *testing.T) {
 	})
 }
 
-func TestInitialAdvertiseFailedRetry(t *testing.T) {
+func TestInitialAdvertiseFailedRetryTimeout(t *testing.T) {
+	timeSleep = func(d time.Duration) {}
+	defer testutils.ResetSleepStub(&timeSleep)
+
 	withSetup(t, func(hypCh *tchannel.Channel, hyperbahnHostPort string) {
+		started := time.Now()
 		count := 0
 		adHandler := func(ctx json.Context, req *AdRequest) (*AdResponse, error) {
 			count++
+
+			deadline, ok := ctx.Deadline()
+			if assert.True(t, ok, "context is missing Deadline") {
+				assert.True(t, deadline.Sub(started) <= 2*time.Second,
+					"Timeout per attempt should be 1 second. Started: %v Deadline: %v", started, deadline)
+			}
+
 			return nil, tchannel.NewSystemError(tchannel.ErrCodeUnexpected, "unexpected")
 		}
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
@@ -63,7 +91,8 @@ func TestInitialAdvertiseFailedRetry(t *testing.T) {
 		defer client.Close()
 
 		assert.Error(t, client.Advertise(), "Advertise should not succeed")
-		assert.Equal(t, 5, count, "adHandler not retried correct number of times")
+		// We expect 5 retries by TChannel and we attempt 5 to advertise 5 times.
+		assert.Equal(t, 5*5, count, "adHandler not retried correct number of times")
 	})
 }
 
