@@ -79,7 +79,7 @@ func TestRoutingDelegatePropagates(t *testing.T) {
 		defer cancel()
 		_, arg3, _, err := raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
 		assert.NoError(t, err, "Call failed")
-		assert.Equal(t, []byte(""), arg3, "Expected no routing delegate header")
+		assert.Equal(t, "", string(arg3), "Expected no routing delegate header")
 
 		ctx, cancel = NewContextBuilder(time.Second).SetRoutingDelegate("xpr").Build()
 		defer cancel()
