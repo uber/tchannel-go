@@ -29,6 +29,7 @@ import (
 func TestSetHeaders(t *testing.T) {
 	tests := []struct {
 		format          Format
+		routingDelegate string
 		expectedHeaders transportHeaders
 	}{
 		{
@@ -40,11 +41,20 @@ func TestSetHeaders(t *testing.T) {
 			format:          Thrift,
 			expectedHeaders: transportHeaders{ArgScheme: Thrift.String()},
 		},
+		{
+			format:          JSON,
+			routingDelegate: "xpr",
+			expectedHeaders: transportHeaders{
+				ArgScheme:       JSON.String(),
+				RoutingDelegate: "xpr",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		callOpts := &CallOptions{
-			Format: tt.format,
+			Format:          tt.format,
+			RoutingDelegate: tt.routingDelegate,
 		}
 		headers := make(transportHeaders)
 		callOpts.setHeaders(headers)

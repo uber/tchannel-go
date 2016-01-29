@@ -268,6 +268,11 @@ func (call *InboundCall) ShardKey() string {
 	return call.headers[ShardKey]
 }
 
+// RoutingDelegate returns the routing delegate from the RoutingDelegate transport header.
+func (call *InboundCall) RoutingDelegate() string {
+	return call.headers[RoutingDelegate]
+}
+
 // RemotePeer returns the caller's peer info.
 func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
