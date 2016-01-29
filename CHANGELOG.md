@@ -5,6 +5,10 @@ Changelog
 
 * Extend the `ContextBuilder` API to support setting the transport-level
   routing delegate header.
+* Set a timeout when making new outbound connections to avoid hanging.
+* Fix for #196: Make the initial Hyperbahn advertise more tolerant of transient
+  timeouts.
+* Assorted logging and test improvements.
 
 # 1.0.1
 
