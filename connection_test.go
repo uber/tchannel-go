@@ -497,7 +497,9 @@ func TestReadTimeout(t *testing.T) {
 	// or the handler connection may be closed as it sends when the other side closes the conn.
 	opts := testutils.NewOpts().
 		AddLogFilter("Couldn't send outbound error frame", 1).
-		AddLogFilter("Connection error", 1, "site", "read frames")
+		AddLogFilter("Connection error", 1, "site", "read frames").
+		AddLogFilter("simpleHandler OnError", 1,
+		"error", "failed to send error frame, connection state connectionClosed")
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
