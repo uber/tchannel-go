@@ -136,9 +136,13 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 
 func (s *{{ .ServerStruct }}) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
-		{{ range .AllMethods }}
+		{{ range .Methods }}
 			case "{{ .ThriftName }}":
 				args, err = s.{{ .ReadFunc }}(protocol)
+		{{ end }}
+		{{ if .HasExtends }}
+			case {{ range $index, $method :=  .InheritedMethods }}{{ if $index }}, {{ end }}"{{ . }}"{{ end }}:
+				return s.TChanServer.GetArgs(methodName, protocol)
 		{{ end }}
 		default:
 			err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
@@ -148,16 +152,20 @@ func (s *{{ .ServerStruct }}) GetArgs(methodName string, protocol athrift.TProto
 
 func (s *{{ .ServerStruct }}) HandleArgs(ctx {{ contextType }}, methodName string, args interface{ }) (bool, athrift.TStruct, error) {
 	switch methodName {
-		{{ range .AllMethods }}
+		{{ range .Methods }}
 			case "{{ .ThriftName }}":
 				return s.{{ .HandleFunc }}(ctx, args.({{ .ArgsType }}))
+		{{ end }}
+		{{ if .HasExtends }}
+			case {{ range $index, $method := .InheritedMethods }}{{ if $index }}, {{ end }}"{{ . }}"{{ end }}:
+				return s.TChanServer.HandleArgs(ctx, methodName, args)
 		{{ end }}
 		default:
 			return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-{{ range .AllMethods }}
+{{ range .Methods }}
 	func (s *{{ $svc.ServerStruct }}) {{ .ReadFunc }}(protocol athrift.TProtocol) (interface{}, error) {
 		var req {{ .ArgsType }}
 
