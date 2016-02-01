@@ -32,7 +32,7 @@ import (
 
 func waitForChannelClose(t *testing.T, ch *Channel) bool {
 	var state ChannelState
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if state = ch.State(); state == ChannelClosed {
 			return true
 		}
