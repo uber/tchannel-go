@@ -400,8 +400,8 @@ func TestFragmentation(t *testing.T) {
 func TestFragmentationSlowReader(t *testing.T) {
 	startReading, handlerComplete := make(chan struct{}), make(chan struct{})
 	handler := func(ctx context.Context, call *InboundCall) {
-		<-ctx.Done()
 		<-startReading
+		<-ctx.Done()
 		_, err := raw.ReadArgs(call)
 		assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
 		close(handlerComplete)
@@ -422,7 +422,11 @@ func TestFragmentationSlowReader(t *testing.T) {
 		assert.Error(t, err, "Call should timeout due to slow reader")
 
 		close(startReading)
-		<-handlerComplete
+		select {
+		case <-handlerComplete:
+		case <-time.After(testutils.Timeout(50 * time.Millisecond)):
+			t.Errorf("Handler not called, context timeout may be too low")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
