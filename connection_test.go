@@ -23,6 +23,7 @@ package tchannel_test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"strings"
 	"sync"
@@ -36,6 +37,7 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+	"github.com/uber/tchannel-go/testutils/testreader"
 	"golang.org/x/net/context"
 )
 
@@ -400,8 +402,8 @@ func TestFragmentation(t *testing.T) {
 func TestFragmentationSlowReader(t *testing.T) {
 	startReading, handlerComplete := make(chan struct{}), make(chan struct{})
 	handler := func(ctx context.Context, call *InboundCall) {
-		<-ctx.Done()
 		<-startReading
+		<-ctx.Done()
 		_, err := raw.ReadArgs(call)
 		assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
 		close(handlerComplete)
@@ -422,7 +424,11 @@ func TestFragmentationSlowReader(t *testing.T) {
 		assert.Error(t, err, "Call should timeout due to slow reader")
 
 		close(startReading)
-		<-handlerComplete
+		select {
+		case <-handlerComplete:
+		case <-time.After(testutils.Timeout(50 * time.Millisecond)):
+			t.Errorf("Handler not called, context timeout may be too low")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
@@ -512,6 +518,27 @@ func TestReadTimeout(t *testing.T) {
 			_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
 			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
+	})
+	goroutines.VerifyNoLeaks(t, nil)
+}
+
+func TestWriteTimeout(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
+		defer cancel()
+
+		call, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "call", nil)
+		require.NoError(t, err, "Call failed")
+
+		writer, err := call.Arg2Writer()
+		require.NoError(t, err, "Arg2Writer failed")
+
+		_, err = writer.Write([]byte{1})
+		require.NoError(t, err, "Write initial bytes failed")
+		<-ctx.Done()
+
+		_, err = io.Copy(writer, testreader.Looper([]byte{1}))
+		assert.Equal(t, ErrTimeout, err, "Write should fail with timeout")
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
