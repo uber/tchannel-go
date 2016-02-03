@@ -197,19 +197,11 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 
 	mexset.Lock()
 	if existingMex := mexset.exchanges[mex.msgID]; existingMex != nil {
-		if existingMex == mex {
-			mexset.log.WithFields(
-				LogField{"name", mexset.name},
-				LogField{"msgType", mex.msgType},
-				LogField{"msgID", mex.msgID},
-			).Warn("mex registered multiple times.")
-		} else {
-			mexset.log.WithFields(
-				LogField{"msgID", mex.msgID},
-				LogField{"existingType", existingMex.msgType},
-				LogField{"newType", mex.msgType},
-			).Warn("Duplicate msg ID for active and new mex.")
-		}
+		mexset.log.WithFields(
+			LogField{"msgID", mex.msgID},
+			LogField{"existingType", existingMex.msgType},
+			LogField{"newType", mex.msgType},
+		).Warn("Duplicate msg ID for active and new mex.")
 
 		mexset.Unlock()
 		return nil, errDuplicateMex
