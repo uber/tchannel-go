@@ -232,9 +232,21 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 	}
 
 	mexset.Lock()
-	delete(mexset.exchanges, msgID)
+	_, found := mexset.exchanges[msgID]
+	if found {
+		delete(mexset.exchanges, msgID)
+	}
 	mexset.Unlock()
 
+	if !found {
+		mexset.log.WithFields(
+			LogField{"msgID", msgID},
+		).Error("Tried to remove exchange multiple times")
+		return
+	}
+
+	// If the message exchange was found, then we perform clean up actions.
+	// These clean up actions can only be run once per exchange.
 	mexset.sendChRefs.Done()
 	mexset.onRemoved()
 }
