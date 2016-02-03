@@ -273,9 +273,16 @@ func (mexset *messageExchangeSet) timeoutExchange(msgID uint32) {
 	mexset.log.Debugf("Removing %s message exchange %d due to timeout", mexset.name, msgID)
 
 	mexset.Lock()
-	delete(mexset.exchanges, msgID)
-	mexset.timeoutExchanges[msgID] = struct{}{}
+	found, timedOut := mexset.deleteExchange(msgID)
+	if found || timedOut {
+		// Record in timeoutExchange if we deleted the exchange.
+		mexset.timeoutExchanges[msgID] = struct{}{}
+	}
 	mexset.Unlock()
+
+	if timedOut {
+		mexset.log.WithFields(LogField{"msgID", msgID}).Error("Exchange timed out already")
+	}
 
 	mexset.onRemoved()
 }
