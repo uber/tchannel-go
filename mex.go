@@ -168,6 +168,15 @@ type messageExchangeSet struct {
 	exchanges map[uint32]*messageExchange
 }
 
+// newMessageExchangeSet creates a new messageExchangeSet with a given name.
+func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
+	return &messageExchangeSet{
+		name:      name,
+		log:       log.WithFields(LogField{"exchange", name}),
+		exchanges: make(map[uint32]*messageExchange),
+	}
+}
+
 // newExchange creates and adds a new message exchange to this set
 func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool FramePool,
 	msgType messageType, msgID uint32, bufferSize int) (*messageExchange, error) {
