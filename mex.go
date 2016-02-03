@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go/typed"
 	"golang.org/x/net/context"
@@ -53,6 +54,9 @@ type messageExchange struct {
 	msgType   messageType
 	mexset    *messageExchangeSet
 	framePool FramePool
+
+	// shutdownAtomic is an atomically updated uint32.
+	shutdownAtomic uint32
 }
 
 // forwardPeerFrame forwards a frame from a peer to the message exchange, where
@@ -136,7 +140,11 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
 func (mex *messageExchange) shutdown() {
-	mex.mexset.removeExchange(mex.msgID)
+	// The reader and writer side can both hit errors and try to shutdown the mex,
+	// so we ensure that it's only shut down once.
+	if atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+		mex.mexset.removeExchange(mex.msgID)
+	}
 }
 
 // inboundTimeout is called when an exchange times out, but a handler may still be
