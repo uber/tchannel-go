@@ -36,6 +36,44 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 )
 
+func fakePeer(t *testing.T, ch *Channel, hostPort string) *Peer {
+	ch.Peers().Add(hostPort)
+
+	peer, err := ch.Peers().Get(nil)
+	require.NoError(t, err, "Unexpected error getting peer from heap.")
+	require.Equal(t, hostPort, peer.HostPort(), "Got unexpected peer.")
+
+	in, out := peer.NumConnections()
+	require.Equal(t, 0, in, "Expected new peer to have no incoming connections.")
+	require.Equal(t, 0, out, "Expected new peer to have no outgoing connections.")
+
+	return peer
+}
+
+func assertNumConnections(t *testing.T, peer *Peer, in, out int) {
+	actualIn, actualOut := peer.NumConnections()
+	assert.Equal(t, actualIn, in, "Expected %v incoming connection.", in)
+	assert.Equal(t, actualOut, out, "Expected %v outgoing connection.", out)
+}
+
+func TestPeerRelayConnection(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		peer := fakePeer(t, ch, hostPort)
+
+		// Should create connections.
+		conn, err := peer.GetRelayConnection()
+		assert.NoError(t, err)
+		assert.NotNil(t, conn)
+		assertNumConnections(t, peer, 1, 1)
+
+		// Should reuse the connections we've already created.
+		conn, err = peer.GetRelayConnection()
+		assert.NoError(t, err)
+		assert.NotNil(t, conn)
+		assertNumConnections(t, peer, 1, 1)
+	})
+}
+
 func TestGetPeerNoPeer(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
 	peer, err := ch.Peers().Get(nil)
