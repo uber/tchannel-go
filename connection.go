@@ -146,8 +146,8 @@ type Connection struct {
 	sendCh          chan *Frame
 	state           connectionState
 	stateMut        sync.RWMutex
-	inbound         messageExchangeSet
-	outbound        messageExchangeSet
+	inbound         *messageExchangeSet
+	outbound        *messageExchangeSet
 	handlers        *handlerMap
 	nextMessageID   uint32
 	events          connectionEvents
@@ -245,23 +245,15 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
-		connID:        connID,
-		conn:          conn,
-		framePool:     framePool,
-		state:         initialState,
-		sendCh:        make(chan *Frame, sendBufferSize),
-		localPeerInfo: peerInfo,
-		checksumType:  checksumType,
-		inbound: messageExchangeSet{
-			name:      messageExchangeSetInbound,
-			log:       log.WithFields(LogField{"exchange", messageExchangeSetInbound}),
-			exchanges: make(map[uint32]*messageExchange),
-		},
-		outbound: messageExchangeSet{
-			name:      messageExchangeSetOutbound,
-			log:       log.WithFields(LogField{"exchange", messageExchangeSetOutbound}),
-			exchanges: make(map[uint32]*messageExchange),
-		},
+		connID:          connID,
+		conn:            conn,
+		framePool:       framePool,
+		state:           initialState,
+		sendCh:          make(chan *Frame, sendBufferSize),
+		localPeerInfo:   peerInfo,
+		checksumType:    checksumType,
+		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
+		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
 		handlers:        ch.handlers,
 		events:          events,
 		commonStatsTags: ch.commonStatsTags,

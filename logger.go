@@ -97,7 +97,13 @@ func (nullLogger) Info(msg string)                        {}
 func (nullLogger) Debugf(msg string, args ...interface{}) {}
 func (nullLogger) Debug(msg string)                       {}
 func (l nullLogger) Fields() LogFields                    { return l.fields }
-func (l nullLogger) WithFields(fields ...LogField) Logger { return nullLogger{fields} }
+
+func (l nullLogger) WithFields(fields ...LogField) Logger {
+	newFields := make([]LogField, len(l.Fields())+len(fields))
+	n := copy(newFields, l.Fields())
+	copy(newFields[n:], fields)
+	return nullLogger{newFields}
+}
 
 // SimpleLogger prints logging information to standard out.
 var SimpleLogger = NewLogger(os.Stdout)
