@@ -167,6 +167,20 @@ func (f *Frame) SizedPayload() []byte {
 	return f.Payload[:f.Header.PayloadSize()]
 }
 
+// messageType returns the message type.
+func (f *Frame) messageType() messageType {
+	return f.Header.messageType
+}
+
+// Service returns the name of the destination service.
+func (f *Frame) Service() string {
+	// We can ignore the first 30 bytes of callReq:
+	// flags:1 ttl:4 tracing:25
+	// service~1
+	serviceLen := f.Payload[30]
+	return string(f.Payload[31 : 31+serviceLen])
+}
+
 func (f *Frame) write(msg message) error {
 	var wbuf typed.WriteBuffer
 	wbuf.Wrap(f.Payload[:])
