@@ -505,6 +505,7 @@ func TestReadTimeout(t *testing.T) {
 	opts := testutils.NewOpts().
 		AddLogFilter("Couldn't send outbound error frame", 1).
 		AddLogFilter("Connection error", 1, "site", "read frames").
+		AddLogFilter("Connection error", 1, "site", "write frames").
 		AddLogFilter("simpleHandler OnError", 1,
 		"error", "failed to send error frame, connection state connectionClosed")
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
