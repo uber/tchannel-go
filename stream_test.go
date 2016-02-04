@@ -230,7 +230,7 @@ func TestStreamCancelled(t *testing.T) {
 	server := testutils.NewServer(t, nil)
 	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
-	ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
+	ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
 	defer cancel()
 
 	helper := streamHelper{t}
