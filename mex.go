@@ -40,7 +40,7 @@ const (
 	messageExchangeSetOutbound = "outbound"
 
 	// mexChannelBufferSize is the size of the message exchange channel buffer.
-	mexChannelBufferSize = 2
+	mexChannelBufferSize = 10
 )
 
 // A messageExchange tracks this Connections's side of a message exchange with a
