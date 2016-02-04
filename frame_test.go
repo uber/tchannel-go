@@ -33,12 +33,16 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
-func TestFrameHeaderJSON(t *testing.T) {
-	fh := FrameHeader{
+func fakeHeader() FrameHeader {
+	return FrameHeader{
 		size:        uint16(0xFF34),
 		messageType: messageTypeCallReq,
 		ID:          0xDEADBEEF,
 	}
+}
+
+func TestFrameHeaderJSON(t *testing.T) {
+	fh := fakeHeader()
 	logged, err := json.Marshal(fh)
 	assert.NoError(t, err, "FrameHeader can't be marshalled to JSON")
 	assert.Equal(
@@ -50,12 +54,7 @@ func TestFrameHeaderJSON(t *testing.T) {
 }
 
 func TestFraming(t *testing.T) {
-	fh := FrameHeader{
-		size:        uint16(0xFF34),
-		messageType: messageTypeCallReq,
-		ID:          0xDEADBEEF,
-	}
-
+	fh := fakeHeader()
 	wbuf := typed.NewWriteBufferWithSize(1024)
 	require.Nil(t, fh.write(wbuf))
 
@@ -134,4 +133,28 @@ func TestReservedBytes(t *testing.T) {
 			0x0, 0x0, 0x0, 0x0, // reserved should always be 0
 		},
 		buf.Bytes(), "Unexpected bytes")
+}
+
+func TestService(t *testing.T) {
+	f := NewFrame(100)
+	fh := fakeHeader()
+	f.Header = fh
+	fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+	payload := typed.NewWriteBuffer(f.Payload)
+	payload.WriteSingleByte(0)
+	payload.WriteUint32(42)
+	payload.WriteBytes(make([]byte, 25))
+	payload.WriteLen8String("bankmoji")
+
+	assert.Equal(t, "bankmoji", f.Service(), "Failed to read service name from frame.")
+}
+
+func TestMessageType(t *testing.T) {
+	f := NewFrame(100)
+	fh := fakeHeader()
+	f.Header = fh
+	fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+	assert.Equal(t, messageTypeCallReq, f.messageType(), "Failed to read message type from frame.")
 }
