@@ -48,6 +48,35 @@ func makeRepeatedBytes(n byte) []byte {
 	return data
 }
 
+type streamHelper struct {
+	t *testing.T
+}
+
+// startCall starts a call to echoStream and returns the arg3 reader and writer.
+func (h streamHelper) startCall(ctx context.Context, ch *Channel, hostPort, serviceName string) (ArgWriter, ArgReader) {
+	call, err := ch.BeginCall(ctx, hostPort, serviceName, "echoStream", nil)
+	require.NoError(h.t, err, "BeginCall to echoStream failed")
+
+	// Write empty headers
+	require.NoError(h.t, NewArgWriter(call.Arg2Writer()).Write(nil), "Write empty headers failed")
+
+	// Flush arg3 to force the call to start without any arg3.
+	writer, err := call.Arg3Writer()
+	require.NoError(h.t, err, "Arg3Writer failed")
+	require.NoError(h.t, writer.Flush(), "Arg3Writer flush failed")
+
+	// Read empty Headers
+	response := call.Response()
+	var arg2 []byte
+	require.NoError(h.t, NewArgReader(response.Arg2Reader()).Read(&arg2), "Read headers failed")
+	require.False(h.t, response.ApplicationError(), "echoStream failed due to application error")
+
+	reader, err := response.Arg3Reader()
+	require.NoError(h.t, err, "Arg3Reader failed")
+
+	return writer, reader
+}
+
 // streamPartialHandler returns a streaming handler that has the following contract:
 // read a byte, write N bytes where N = the byte that was read.
 // The results are be written as soon as the byte is read.
@@ -145,29 +174,11 @@ func testStreamArg(t *testing.T, f func(argWriter ArgWriter, argReader ArgReader
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
+	helper := streamHelper{t}
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		ch.Register(streamPartialHandler(t, true /* report errors */), "echoStream")
 
-		call, err := ch.BeginCall(ctx, hostPort, ch.PeerInfo().ServiceName, "echoStream", nil)
-		require.NoError(t, err, "BeginCall failed")
-		require.Nil(t, NewArgWriter(call.Arg2Writer()).Write(nil))
-
-		argWriter, err := call.Arg3Writer()
-		require.NoError(t, err, "Arg3Writer failed")
-
-		// Flush arg3 to force the call to start without any arg3.
-		require.NoError(t, argWriter.Flush(), "Arg3Writer flush failed")
-
-		// Write out to the stream, and expect to get data
-		response := call.Response()
-
-		var arg2 []byte
-		require.NoError(t, NewArgReader(response.Arg2Reader()).Read(&arg2), "Arg2Reader failed")
-		require.False(t, response.ApplicationError(), "call failed")
-
-		argReader, err := response.Arg3Reader()
-		require.NoError(t, err, "Arg3Reader failed")
-
+		argWriter, argReader := helper.startCall(ctx, ch, hostPort, ch.ServiceName())
 		verifyBytes := func(n byte) {
 			_, err := argWriter.Write([]byte{n})
 			require.NoError(t, err, "arg3 write failed")
@@ -222,17 +233,12 @@ func TestStreamCancelled(t *testing.T) {
 	ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
 	defer cancel()
 
+	helper := streamHelper{t}
 	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
 		callCtx, callCancel := context.WithCancel(ctx)
 		cancelContext := make(chan struct{})
 
-		call, err := ch.BeginCall(callCtx, server.PeerInfo().HostPort, server.ServiceName(), "echoStream", nil)
-		require.NoError(t, err, "BeginCall to echoStream failed")
-
-		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "Write arg2 failed")
-		arg3Writer, err := call.Arg3Writer()
-		require.NoError(t, err, "Arg3 writer failed")
-
+		arg3Writer, arg3Reader := helper.startCall(callCtx, ch, server.PeerInfo().HostPort, server.ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
 				_, err := arg3Writer.Write([]byte{1})
@@ -250,14 +256,6 @@ func TestStreamCancelled(t *testing.T) {
 			assert.Error(t, arg3Writer.Flush(), "writer.Flush should fail after cancel")
 			assert.Error(t, arg3Writer.Close(), "writer.Close should fail after cancel")
 		}()
-
-		response := call.Response()
-
-		var data []byte
-		require.NoError(t, NewArgReader(response.Arg2Reader()).Read(&data), "Read arg2 failed")
-
-		arg3Reader, err := response.Arg3Reader()
-		require.NoError(t, err, "Arg3Reader failed")
 
 		for i := 0; i < 10; i++ {
 			arg3 := make([]byte, 1)
