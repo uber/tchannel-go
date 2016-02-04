@@ -64,6 +64,9 @@ type ChannelOptions struct {
 	// The logger to use for this channel
 	Logger Logger
 
+	// The host:port selection implementation to use for relaying.
+	RelayHosts RelayHosts
+
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
@@ -119,6 +122,7 @@ type Channel struct {
 	connectionOptions ConnectionOptions
 	handlers          *handlerMap
 	peers             *PeerList
+	relayHosts        RelayHosts
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -191,6 +195,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 		connectionOptions: opts.DefaultConnectionOptions,
 		handlers:          &handlerMap{},
+		relayHosts:        opts.RelayHosts,
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
@@ -626,4 +631,9 @@ func (ch *Channel) Close() {
 		c.Close()
 	}
 	removeClosedChannel(ch)
+}
+
+// RelayHosts returns the channel's relay hosts, if any.
+func (ch *Channel) RelayHosts() RelayHosts {
+	return ch.relayHosts
 }
