@@ -150,6 +150,12 @@ func (o *ChannelOpts) addPostFn(f func()) {
 	o.postFns = append(o.postFns, f)
 }
 
+// SetRelayHosts sets the channel's relay hosts, which enables relaying.
+func (o *ChannelOpts) SetRelayHosts(rh tchannel.RelayHosts) *ChannelOpts {
+	o.ChannelOptions.RelayHosts = rh
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue
