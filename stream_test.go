@@ -33,6 +33,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
@@ -280,4 +281,59 @@ func TestStreamCancelled(t *testing.T) {
 	server.Close()
 	waitForChannelClose(t, server)
 	goroutines.VerifyNoLeaks(t, nil)
+}
+
+func TestStreamWithUnary(t *testing.T) {
+	const framesBlocked = 10
+
+	server := testutils.NewServer(t, nil)
+	defer server.Close()
+
+	serverHP := server.PeerInfo().HostPort
+	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
+	testutils.RegisterFunc(server, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		return &raw.Res{
+			Arg2: args.Arg2,
+			Arg3: args.Arg3,
+		}, nil
+	})
+
+	helper := streamHelper{t}
+	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		arg3Writer, arg3Reader := helper.startCall(ctx, ch, serverHP, server.ServiceName())
+		go func() {
+			for i := 0; i < 10+framesBlocked; i++ {
+				_, err := arg3Writer.Write([]byte{1})
+				assert.NoError(t, err, "Write failed")
+				assert.NoError(t, arg3Writer.Flush(), "Flush failed")
+			}
+			assert.NoError(t, arg3Writer.Close(), "writer.Close failed")
+		}()
+
+		for i := 0; i < 10+framesBlocked; i++ {
+			arg3 := make([]byte, 1)
+			n, err := arg3Reader.Read(arg3)
+			assert.Equal(t, 1, n, "Read did not correct number of bytes")
+			assert.NoError(t, err, "Read failed")
+
+			if i == 10 {
+				arg2 := []byte("arg2")
+				arg3 := []byte("arg3")
+				rArg2, rArg3, _, err := raw.Call(ctx, ch, serverHP, server.ServiceName(), "echo", arg2, arg3)
+				if assert.NoError(t, err, "Call failed") {
+					assert.Equal(t, arg2, rArg2, "Call result arg2 mismatch")
+					assert.Equal(t, arg3, rArg3, "Call result arg3 mismatch")
+				}
+			}
+		}
+
+		readBytes, err := io.Copy(ioutil.Discard, arg3Reader)
+		assert.NoError(t, err, "Reader failed")
+		assert.EqualValues(t, 0, readBytes, "Expected no more bytes read")
+		assert.NoError(t, arg3Reader.Close())
+	})
+
 }
