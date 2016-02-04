@@ -35,7 +35,7 @@ func TestRelay(t *testing.T) {
 
 	defer func(c *Channel) {
 		sc := client.GetSubChannel("test")
-		ctx, cancel := NewContext(10 * time.Millisecond)
+		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
 		arg2, arg3, _, err := raw.CallSC(ctx, sc, "echo", []byte("fake-header"), data)
