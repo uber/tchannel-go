@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -50,11 +51,13 @@ func makeRepeatedBytes(n byte) []byte {
 // streamPartialHandler returns a streaming handler that has the following contract:
 // read a byte, write N bytes where N = the byte that was read.
 // The results are be written as soon as the byte is read.
-func streamPartialHandler(t *testing.T) HandlerFunc {
+func streamPartialHandler(t *testing.T, reportErrors bool) HandlerFunc {
 	return func(ctx context.Context, call *InboundCall) {
 		response := call.Response()
 		onError := func(err error) {
-			t.Errorf("Handler error: %v", err)
+			if reportErrors {
+				t.Errorf("Handler error: %v", err)
+			}
 			response.SendSystemError(fmt.Errorf("failed to read arg2"))
 		}
 
@@ -143,7 +146,7 @@ func testStreamArg(t *testing.T, f func(argWriter ArgWriter, argReader ArgReader
 	defer cancel()
 
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(streamPartialHandler(t), "echoStream")
+		ch.Register(streamPartialHandler(t, true /* report errors */), "echoStream")
 
 		call, err := ch.BeginCall(ctx, hostPort, ch.PeerInfo().ServiceName, "echoStream", nil)
 		require.NoError(t, err, "BeginCall failed")
@@ -210,4 +213,73 @@ func TestStreamSendError(t *testing.T) {
 		assert.Error(t, err, "ReadAll should fail")
 		assert.True(t, strings.Contains(err.Error(), "intentional failure"), "err %v unexpected", err)
 	})
+}
+
+func TestStreamCancelled(t *testing.T) {
+	server := testutils.NewServer(t, nil)
+	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
+
+	ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
+		callCtx, callCancel := context.WithCancel(ctx)
+		cancelContext := make(chan struct{})
+
+		call, err := ch.BeginCall(callCtx, server.PeerInfo().HostPort, server.ServiceName(), "echoStream", nil)
+		require.NoError(t, err, "BeginCall to echoStream failed")
+
+		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "Write arg2 failed")
+		arg3Writer, err := call.Arg3Writer()
+		require.NoError(t, err, "Arg3 writer failed")
+
+		go func() {
+			for i := 0; i < 10; i++ {
+				_, err := arg3Writer.Write([]byte{1})
+				assert.NoError(t, err, "Write failed")
+				assert.NoError(t, arg3Writer.Flush(), "Flush failed")
+			}
+
+			// Our reads and writes should fail now.
+			<-cancelContext
+			callCancel()
+
+			_, err := arg3Writer.Write([]byte{1})
+			// The write will succeed since it's buffered.
+			assert.NoError(t, err, "Write after fail should be buffered")
+			assert.Error(t, arg3Writer.Flush(), "writer.Flush should fail after cancel")
+			assert.Error(t, arg3Writer.Close(), "writer.Close should fail after cancel")
+		}()
+
+		response := call.Response()
+
+		var data []byte
+		require.NoError(t, NewArgReader(response.Arg2Reader()).Read(&data), "Read arg2 failed")
+
+		arg3Reader, err := response.Arg3Reader()
+		require.NoError(t, err, "Arg3Reader failed")
+
+		for i := 0; i < 10; i++ {
+			arg3 := make([]byte, 1)
+			n, err := arg3Reader.Read(arg3)
+			assert.Equal(t, 1, n, "Read did not correct number of bytes")
+			assert.NoError(t, err, "Read failed")
+		}
+
+		close(cancelContext)
+
+		n, err := io.Copy(ioutil.Discard, arg3Reader)
+		assert.EqualValues(t, 0, n, "Read should not read any bytes after cancel")
+		assert.Error(t, err, "Read should fail after cancel")
+		assert.Error(t, arg3Reader.Close(), "reader.Close should fail after cancel")
+	})
+
+	// TODO(prashant): Once calls are cancelled when the connection is closed, this
+	// can be removed, since the calls should fail.
+
+	<-ctx.Done()
+
+	server.Close()
+	waitForChannelClose(t, server)
+	goroutines.VerifyNoLeaks(t, nil)
 }
