@@ -62,15 +62,14 @@ func main() {
 	// Advertising registers this service instance with Hyperbahn so
 	// that Hyperbahn can route requests for "keyvalue" to us.
 	config := hyperbahn.Configuration{InitialNodes: os.Args[1:]}
-	if len(config.InitialNodes) == 0 {
-		log.Fatalf("No Autobahn nodes to advertise with")
-	}
-	client, err := hyperbahn.NewClient(ch, config, nil)
-	if err != nil {
-		log.Fatalf("hyperbahn.NewClient failed: %v", err)
-	}
-	if err := client.Advertise(); err != nil {
-		log.Fatalf("Hyperbahn advertise failed: %v", err)
+	if len(config.InitialNodes) > 0 {
+		client, err := hyperbahn.NewClient(ch, config, nil)
+		if err != nil {
+			log.Fatalf("hyperbahn.NewClient failed: %v", err)
+		}
+		if err := client.Advertise(); err != nil {
+			log.Fatalf("Hyperbahn advertise failed: %v", err)
+		}
 	}
 
 	// The service is now started up, run it till we receive a ctrl-c.
