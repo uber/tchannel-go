@@ -22,11 +22,11 @@ func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 	}
 }
 
-func (rh *SimpleRelayHosts) Get(group string) string {
+func (rh *SimpleRelayHosts) Get(service string) string {
 	rh.RLock()
 	defer rh.RUnlock()
 
-	available, ok := rh.peers[group]
+	available, ok := rh.peers[service]
 	if !ok || len(available) == 0 {
 		return ""
 	}
@@ -34,9 +34,9 @@ func (rh *SimpleRelayHosts) Get(group string) string {
 	return available[i]
 }
 
-func (rh *SimpleRelayHosts) Add(group, hostPort string) {
+func (rh *SimpleRelayHosts) Add(service, hostPort string) {
 	rh.Lock()
-	rh.peers[group] = append(rh.peers[group], hostPort)
+	rh.peers[service] = append(rh.peers[service], hostPort)
 	rh.Unlock()
 }
 
