@@ -729,9 +729,9 @@ func (c *Connection) readFrames(_ uint32) {
 
 		var releaseFrame bool
 		if c.relay == nil {
-			releaseFrame = c.readFrameNoRelay(frame)
+			releaseFrame = c.handleFrameNoRelay(frame)
 		} else {
-			releaseFrame = c.readFrameRelay(frame)
+			releaseFrame = c.handleFrameRelay(frame)
 		}
 		if releaseFrame {
 			c.framePool.Release(frame)
@@ -739,10 +739,7 @@ func (c *Connection) readFrames(_ uint32) {
 	}
 }
 
-func (c *Connection) readFrameRelay(frame *Frame) bool {
-	releaseFrame := true
-
-	// call req and call res messages may not want the frame released immediately.
+func (c *Connection) handleFrameRelay(frame *Frame) bool {
 	switch frame.Header.messageType {
 	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue:
 		if err := c.relay.Relay(frame); err != nil {
@@ -751,29 +748,13 @@ func (c *Connection) readFrameRelay(frame *Frame) bool {
 				LogField{"remotePeer", c.remotePeerInfo},
 			).Error("Failed to relay frame.")
 		}
-		releaseFrame = false
-	case messageTypeInitReq:
-		c.handleInitReq(frame)
-	case messageTypeInitRes:
-		releaseFrame = c.handleInitRes(frame)
-	case messageTypePingReq:
-		c.handlePingReq(frame)
-	case messageTypePingRes:
-		releaseFrame = c.handlePingRes(frame)
-	case messageTypeError:
-		c.handleError(frame)
+		return false
 	default:
-		// TODO(mmihic): Log and close connection with protocol error
-		c.log.WithFields(
-			LogField{"header", frame.Header},
-			LogField{"remotePeer", c.remotePeerInfo},
-		).Error("Received unexpected frame.")
+		return c.handleFrameNoRelay(frame)
 	}
-
-	return releaseFrame
 }
 
-func (c *Connection) readFrameNoRelay(frame *Frame) bool {
+func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 	releaseFrame := true
 
 	// call req and call res messages may not want the frame released immediately.
