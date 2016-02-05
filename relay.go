@@ -9,7 +9,7 @@ import (
 // relaying.
 type RelayHosts interface {
 	// Get returns the host:port of the best peer for the group.
-	Get(group string) string
+	Get(service string) string
 	// TODO: add MarkFailed and MarkOK to for feedback loop into peer selection.
 }
 
@@ -21,14 +21,13 @@ type relayItem struct {
 // A Relayer forwards frames.
 type Relayer struct {
 	sync.RWMutex
+
 	metrics StatsReporter
 	hosts   RelayHosts
 	items   map[uint32]relayItem
-
-	// Immutable
-	peers  *PeerList
-	conn   *Connection
-	logger Logger
+	peers   *PeerList
+	conn    *Connection
+	logger  Logger
 }
 
 // NewRelayer constructs a Relayer.
@@ -50,6 +49,10 @@ func (r *Relayer) Hosts() RelayHosts {
 
 // Relay forwards a frame.
 func (r *Relayer) Relay(f *Frame) error {
+	// TODO: remove relay items when we get a call req continue or call res
+	// continue frame without a continuation bit.
+	//
+	// TODO: remove relay items on timeout.
 	if f.messageType() != messageTypeCallReq {
 		r.RLock()
 		item, ok := r.items[f.Header.ID]
