@@ -38,6 +38,9 @@ const (
 
 	// MaxFramePayloadSize is the maximum size of the payload for a single frame
 	MaxFramePayloadSize = MaxFrameSize - FrameHeaderSize
+
+	_serviceLenIndex  = 1 /* flags */ + 4 /* ttl */ + 25 /* tracing */
+	_serviceNameIndex = _serviceLenIndex + 1
 )
 
 // FrameHeader is the header for a frame, containing the MessageType and size
@@ -172,13 +175,14 @@ func (f *Frame) messageType() messageType {
 	return f.Header.messageType
 }
 
-// Service returns the name of the destination service.
+// Service returns the name of the destination service. It panics if called for
+// a non-callReq frame.
 func (f *Frame) Service() string {
-	// We can ignore the first 30 bytes of callReq:
-	// flags:1 ttl:4 tracing:25
-	// service~1
-	serviceLen := f.Payload[30]
-	return string(f.Payload[31 : 31+serviceLen])
+	if f.messageType() != messageTypeCallReq {
+		panic("Shouldn't need to inspect the service name for a non-callReq frame.")
+	}
+	l := f.Payload[_serviceLenIndex]
+	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
 }
 
 func (f *Frame) write(msg message) error {
