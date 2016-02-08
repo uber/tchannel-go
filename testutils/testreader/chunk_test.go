@@ -21,11 +21,34 @@
 package testreader
 
 import (
+	"io"
 	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestChunkReader0ByteRead(t *testing.T) {
+	writer, reader := ChunkReader()
+
+	writer <- []byte{}
+	writer <- []byte{'a'}
+	close(writer)
+
+	buf := make([]byte, 1)
+	n, err := reader.Read(buf)
+	assert.NoError(t, err, "Read should not fail")
+	assert.Equal(t, 0, n, "Read should not read any bytes")
+
+	n, err = reader.Read(buf)
+	assert.NoError(t, err, "Read should not fail")
+	assert.Equal(t, 1, n, "Read should read one byte")
+	assert.EqualValues(t, 'a', buf[0], "Read did not read correct byte")
+
+	n, err = reader.Read(buf)
+	assert.Equal(t, io.EOF, err, "Read should EOF")
+	assert.Equal(t, 0, n, "Read should not read any bytes")
+}
 
 func TestChunkReader(t *testing.T) {
 	writer, reader := ChunkReader()
