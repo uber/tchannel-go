@@ -177,3 +177,24 @@ func TestParallelReadWrites(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func BenchmarkWriteStruct(b *testing.B) {
+	buf := &bytes.Buffer{}
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		WriteStruct(buf, structTest.s)
+	}
+}
+
+func BenchmarkReadStruct(b *testing.B) {
+	buf := bytes.NewReader(structTest.encoded)
+	var d test.Data
+
+	buf.Seek(0, 0)
+	assert.NoError(b, ReadStruct(buf, &d))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf.Seek(0, 0)
+		ReadStruct(buf, &d)
+	}
+}

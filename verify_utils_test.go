@@ -31,21 +31,26 @@ import (
 )
 
 func waitForChannelClose(t *testing.T, ch *Channel) bool {
+	started := time.Now()
+
 	var state ChannelState
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if state = ch.State(); state == ChannelClosed {
 			return true
 		}
 
-		if i > 5 {
-			time.Sleep(time.Millisecond)
-		} else {
-			runtime.Gosched()
+		runtime.Gosched()
+		if i < 5 {
+			continue
 		}
+
+		sleepFor := time.Duration(i) * 100 * time.Microsecond
+		time.Sleep(testutils.Timeout(sleepFor))
 	}
 
 	// Channel is not closing, fail the test.
-	t.Errorf("Channel did not close, last state: %v", state)
+	sinceStart := time.Since(started)
+	t.Errorf("Channel did not close after %v, last state: %v", sinceStart, state)
 	return false
 }
 
