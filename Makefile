@@ -97,7 +97,7 @@ lint:
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) | tee -a lint.log
+	-go tool vet $(PKGS) 2>&1 | tee -a lint.log
 	@echo "Checking gofmt"
 	-gofmt -d . | tee -a lint.log
 	@[ ! -s lint.log ]
