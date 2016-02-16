@@ -23,7 +23,9 @@ package tchannel_test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +37,7 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+	"github.com/uber/tchannel-go/testutils/testreader"
 	"golang.org/x/net/context"
 )
 
@@ -399,8 +402,8 @@ func TestFragmentation(t *testing.T) {
 func TestFragmentationSlowReader(t *testing.T) {
 	startReading, handlerComplete := make(chan struct{}), make(chan struct{})
 	handler := func(ctx context.Context, call *InboundCall) {
-		<-ctx.Done()
 		<-startReading
+		<-ctx.Done()
 		_, err := raw.ReadArgs(call)
 		assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
 		close(handlerComplete)
@@ -421,7 +424,11 @@ func TestFragmentationSlowReader(t *testing.T) {
 		assert.Error(t, err, "Call should timeout due to slow reader")
 
 		close(startReading)
-		<-handlerComplete
+		select {
+		case <-handlerComplete:
+		case <-time.After(testutils.Timeout(50 * time.Millisecond)):
+			t.Errorf("Handler not called, context timeout may be too low")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
@@ -497,8 +504,10 @@ func TestReadTimeout(t *testing.T) {
 	// or the handler connection may be closed as it sends when the other side closes the conn.
 	opts := testutils.NewOpts().
 		AddLogFilter("Couldn't send outbound error frame", 1).
-		// TODO: Make the log message more specific by checking that the site is "read frames".
-		AddLogFilter("Connection error", 1)
+		AddLogFilter("Connection error", 1, "site", "read frames").
+		AddLogFilter("Connection error", 1, "site", "write frames").
+		AddLogFilter("simpleHandler OnError", 1,
+		"error", "failed to send error frame, connection state connectionClosed")
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
@@ -511,6 +520,28 @@ func TestReadTimeout(t *testing.T) {
 			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
 	})
+	goroutines.VerifyNoLeaks(t, nil)
+}
+
+func TestWriteTimeout(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
+		defer cancel()
+
+		call, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "call", nil)
+		require.NoError(t, err, "Call failed")
+
+		writer, err := call.Arg2Writer()
+		require.NoError(t, err, "Arg2Writer failed")
+
+		_, err = writer.Write([]byte{1})
+		require.NoError(t, err, "Write initial bytes failed")
+		<-ctx.Done()
+
+		_, err = io.Copy(writer, testreader.Looper([]byte{1}))
+		assert.Equal(t, ErrTimeout, err, "Write should fail with timeout")
+	})
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestGracefulClose(t *testing.T) {
@@ -529,13 +560,25 @@ func TestNetDialTimeout(t *testing.T) {
 	// timeoutHostPort uses a blackholed address (RFC 6890) with a port
 	// reserved for documentation. This address should always cause a timeout.
 	const timeoutHostPort = "192.18.0.254:44444"
+	timeoutPeriod := testutils.Timeout(50 * time.Millisecond)
 
 	client := testutils.NewClient(t, nil)
 	defer client.Close()
 
-	ctx, cancel := NewContext(50 * time.Millisecond)
+	started := time.Now()
+	ctx, cancel := NewContext(timeoutPeriod)
 	defer cancel()
 
 	err := client.Ping(ctx, timeoutHostPort)
+	if !assert.Error(t, err, "Ping to blackhole address should fail") {
+		return
+	}
+
+	if strings.Contains(err.Error(), "network is unreachable") {
+		t.Skipf("Skipping test, as network interface may not be available")
+	}
+
+	d := time.Since(started)
 	assert.Equal(t, ErrTimeout, err, "Ping expected to fail with timeout")
+	assert.True(t, d >= timeoutPeriod, "Timeout should take more than %v, took %v", timeoutPeriod, d)
 }
