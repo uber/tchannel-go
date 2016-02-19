@@ -39,8 +39,8 @@ import (
 func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
 	defer testutils.SetTimeout(t, time.Second)()
 
-	sleepArgs, sleepBlock, sleepClose := testutils.SleepStub(&timeSleep)
-	defer testutils.ResetSleepStub(&timeSleep)
+	clientOpts := stubbedSleep()
+	sleepArgs, sleepBlock, sleepClose := testutils.SleepStub(&clientOpts.TimeSleep)
 
 	// We expect to retry 5 times,
 	go func() {
@@ -58,7 +58,7 @@ func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
 		serverCh := testutils.NewServer(t, nil)
 		defer serverCh.Close()
 
-		client, err := NewClient(serverCh, configFor(hostPort), nil)
+		client, err := NewClient(serverCh, configFor(hostPort), clientOpts)
 		require.NoError(t, err, "NewClient")
 		defer client.Close()
 		assert.Error(t, client.Advertise(), "Advertise without handler should fail")
@@ -66,9 +66,6 @@ func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
 }
 
 func TestInitialAdvertiseFailedRetryTimeout(t *testing.T) {
-	timeSleep = func(d time.Duration) {}
-	defer testutils.ResetSleepStub(&timeSleep)
-
 	withSetup(t, func(hypCh *tchannel.Channel, hyperbahnHostPort string) {
 		started := time.Now()
 		count := 0
@@ -86,7 +83,7 @@ func TestInitialAdvertiseFailedRetryTimeout(t *testing.T) {
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
 		ch := testutils.NewServer(t, nil)
-		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
+		client, err := NewClient(ch, configFor(hyperbahnHostPort), stubbedSleep())
 		assert.NoError(t, err, "hyperbahn NewClient failed")
 		defer client.Close()
 
@@ -104,7 +101,7 @@ func TestNotListeningChannel(t *testing.T) {
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
 		ch := testutils.NewClient(t, nil)
-		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
+		client, err := NewClient(ch, configFor(hyperbahnHostPort), stubbedSleep())
 		assert.NoError(t, err, "hyperbahn NewClient failed")
 		defer client.Close()
 
@@ -122,6 +119,7 @@ type retryTest struct {
 	sleepArgs  <-chan time.Duration
 	sleepBlock chan<- struct{}
 	sleepClose func()
+	timeSleep  func(time.Duration)
 
 	ch     *tchannel.Channel
 	client *Client
@@ -147,7 +145,7 @@ func (r *retryTest) adHandler(ctx json.Context, req *AdRequest) (*AdResponse, er
 func (r *retryTest) setup() {
 	r.respCh = make(chan int, 1)
 	r.reqCh = make(chan *AdRequest, 1)
-	r.sleepArgs, r.sleepBlock, r.sleepClose = testutils.SleepStub(&timeSleep)
+	r.sleepArgs, r.sleepBlock, r.sleepClose = testutils.SleepStub(&r.timeSleep)
 }
 
 func (r *retryTest) setAdvertiseSuccess() {
@@ -162,7 +160,6 @@ func runRetryTest(t *testing.T, f func(r *retryTest)) {
 	r := &retryTest{}
 	defer testutils.SetTimeout(t, time.Second)()
 	r.setup()
-	defer testutils.ResetSleepStub(&timeSleep)
 
 	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
 		json.Register(hypCh, json.Handlers{"ad": r.adHandler}, nil)
@@ -179,6 +176,7 @@ func runRetryTest(t *testing.T, f func(r *retryTest)) {
 		r.client, err = NewClient(serverCh, configFor(hostPort), &ClientOptions{
 			Handler:      r,
 			FailStrategy: FailStrategyIgnore,
+			TimeSleep:    r.timeSleep,
 		})
 		require.NoError(t, err, "NewClient")
 		defer r.client.Close()
@@ -399,6 +397,12 @@ func checkRetryInterval(t *testing.T, sleptFor time.Duration, retryNum int) {
 func configFor(node string) Configuration {
 	return Configuration{
 		InitialNodes: []string{node},
+	}
+}
+
+func stubbedSleep() *ClientOptions {
+	return &ClientOptions{
+		TimeSleep: func(_ time.Duration) {},
 	}
 }
 
