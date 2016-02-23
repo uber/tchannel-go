@@ -6,7 +6,7 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 	"strconv"
 
-	"github.com/uber/tchannel-go/gen-go/server"
+	"github.com/uber/tchannel-go/examples/server_crash/gen-go/server"
 	"io"
 	"time"
 )

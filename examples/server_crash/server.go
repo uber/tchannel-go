@@ -5,7 +5,7 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/thrift"
 
-	"github.com/uber/tchannel-go/gen-go/server"
+	"github.com/uber/tchannel-go/examples/server_crash/gen-go/server"
 	"io"
 )
 
