@@ -70,7 +70,9 @@ func (Server) OpenPublisherStream(ctx thrift.Context, call server.BInOpenPublish
 			ack.Id = msg.Id
 			ack.Status = server.Status_OK
 
+			fmt.Println("Writing to ack channel")
 			ackChannel <- ack
+			fmt.Println("Wrote to ack channel")
 		}
 	}()
 	// Start the pump to send Acks back to the client
@@ -97,6 +99,9 @@ func (Server) OpenPublisherStream(ctx thrift.Context, call server.BInOpenPublish
 				if err := call.Write(ack); err != nil {
 					fmt.Printf("Server: Unable to Write Ack back to client for Id: %v, error: %v\n", ack.Id, err)
 				}
+			} else {
+				// AckChannel is closed
+				quit = true
 			}
 		}
 	}
