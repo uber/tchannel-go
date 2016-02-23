@@ -162,9 +162,9 @@ func (mex *messageExchange) inboundTimeout() {
 	mex.mexset.timeoutExchange(mex.msgID)
 }
 
-// stopReader is called when we get a connection error and  want to unblock the application
+// stopExchanges is called when we get a connection error and  want to unblock the application
 // reader.
-func (mex *messageExchange) stopReader(err error) {
+func (mex *messageExchange) stopExchanges(err error) {
 	mex.errCh <- err
 }
 
@@ -184,7 +184,6 @@ type messageExchangeSet struct {
 	onRemoved  func()
 	onAdded    func()
 	sendChRefs sync.WaitGroup
-	errCh      chan error
 
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
@@ -195,7 +194,6 @@ type messageExchangeSet struct {
 func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
 	return &messageExchangeSet{
 		name:             name,
-		errCh:            make(chan error),
 		log:              log.WithFields(LogField{"exchange", name}),
 		exchanges:        make(map[uint32]*messageExchange),
 		timeoutExchanges: make(map[uint32]struct{}),
@@ -343,11 +341,11 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	return nil
 }
 
-// stopReader goes through all the exhanges and makes sure nobody is waiting
+// stopExchanges goes through all the exhanges and makes sure nobody is waiting
 // because the connection is already being run down
-func (mexset *messageExchangeSet) stopReader(err error) error {
+func (mexset *messageExchangeSet) stopExchanges(err error) error {
 	if mexset.log.Enabled(LogLevelDebug) {
-		mexset.log.Debugf("stopping reader %s", mexset.name)
+		mexset.log.Debugf("stopping exchange set %s", mexset.name)
 	}
 
 	// We need to stop all exchanges on this set

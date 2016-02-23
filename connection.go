@@ -509,6 +509,15 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 	return false
 }
 
+// handleConnectionError handles a connection error coming back from the peer.
+func (c *Connection) handleConnectionError(err error) {
+	// stop all outbound exchanges
+	c.outbound.stopExchanges(err)
+
+	// stop all inbound exchanges
+	c.inbound.stopExchanges(err)
+}
+
 // sendMessage sends a standalone message (typically a control message)
 func (c *Connection) sendMessage(msg message) error {
 	frame := c.framePool.Get()

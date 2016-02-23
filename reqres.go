@@ -244,7 +244,6 @@ func (r *reqResReader) recvNextFragment(initial bool) (*readableFragment, error)
 			return nil, err
 		}
 
-		r.log.Debugf("recvNextFragment failed with error: %v; cleaning up..", err)
 		return nil, r.failed(err)
 	}
 
