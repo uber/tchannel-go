@@ -184,6 +184,7 @@ type messageExchangeSet struct {
 	onRemoved  func()
 	onAdded    func()
 	sendChRefs sync.WaitGroup
+	errCh      chan error
 
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
@@ -194,6 +195,7 @@ type messageExchangeSet struct {
 func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
 	return &messageExchangeSet{
 		name:             name,
+		errCh:            make(chan error),
 		log:              log.WithFields(LogField{"exchange", name}),
 		exchanges:        make(map[uint32]*messageExchange),
 		timeoutExchanges: make(map[uint32]struct{}),
@@ -212,7 +214,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgID:     msgID,
 		ctx:       ctx,
 		recvCh:    make(chan *Frame, bufferSize),
-		errCh:     make(chan error),
+		errCh:     make(chan error, 1),
 		mexset:    mexset,
 		framePool: framePool,
 	}
@@ -341,24 +343,22 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	return nil
 }
 
-// stopReader stops the reader on the appropriate message exchange
-func (mexset *messageExchangeSet) stopReader(frame *Frame, err error) error {
+// stopReader goes through all the exhanges and makes sure nobody is waiting
+// because the connection is already being run down
+func (mexset *messageExchangeSet) stopReader(err error) error {
 	if mexset.log.Enabled(LogLevelDebug) {
-		mexset.log.Debugf("stopping reader %s %s", mexset.name, frame.Header)
+		mexset.log.Debugf("stopping reader %s", mexset.name)
 	}
 
+	// We need to stop all exchanges on this set
 	mexset.RLock()
-	mex := mexset.exchanges[frame.Header.ID]
-	mexset.RUnlock()
-
-	if mex == nil {
-		// This is ok since the exchange might have expired or been cancelled
-		mexset.log.Infof("received frame %s for %s message exchange that no longer exists",
-			frame.Header, mexset.name)
-		return nil
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping num exchanges: %v", len(mexset.exchanges))
 	}
-
-	mex.stopReader(err)
+	for _, mex := range mexset.exchanges {
+		mex.errCh <- err
+	}
+	mexset.RUnlock()
 
 	return nil
 }
