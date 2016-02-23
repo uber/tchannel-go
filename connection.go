@@ -509,6 +509,15 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 	return false
 }
 
+// handleConnectionError handles a connection error coming back from the peer.
+func (c *Connection) handleConnectionError(err error) {
+	// stop all outbound exchanges
+	c.outbound.stopExchanges(err)
+
+	// stop all inbound outbound exchanges
+	c.inbound.stopExchanges(err)
+}
+
 // sendMessage sends a standalone message (typically a control message)
 func (c *Connection) sendMessage(msg message) error {
 	frame := c.framePool.Get()
@@ -664,6 +673,8 @@ func (c *Connection) readFrames(_ uint32) {
 		if err := frame.ReadIn(c.conn); err != nil {
 			if atomic.LoadInt32(&c.closeNetworkCalled) == 0 {
 				c.connectionError("read frames", err)
+				// @aravindv: call handleConnectionError to unblock all application callers
+				c.handleConnectionError(err)
 			} else {
 				c.log.Debugf("Ignoring error after connection was closed: %v", err)
 			}

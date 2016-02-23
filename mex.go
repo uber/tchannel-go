@@ -49,6 +49,7 @@ const (
 // timed out or been cancelled.
 type messageExchange struct {
 	recvCh    chan *Frame
+	errCh     chan error
 	ctx       context.Context
 	msgID     uint32
 	msgType   messageType
@@ -72,6 +73,9 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
+	case connErr := <-mex.errCh:
+		// @aravindv: This is to unblock read because we saw a connection error
+		return connErr
 	}
 }
 
@@ -94,6 +98,9 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
+	case connErr := <-mex.errCh:
+		// @aravindv: This is to unblock read because we saw a connection error
+		return nil, connErr
 	}
 }
 
@@ -155,6 +162,12 @@ func (mex *messageExchange) inboundTimeout() {
 	mex.mexset.timeoutExchange(mex.msgID)
 }
 
+// stopExchanges is called when we get a connection error and  want to unblock the application
+// reader.
+func (mex *messageExchange) stopExchanges(err error) {
+	mex.errCh <- err
+}
+
 // A messageExchangeSet manages a set of active message exchanges.  It is
 // mainly used to route frames from a peer to the appropriate messageExchange,
 // or to cancel or mark a messageExchange as being in error.  Each Connection
@@ -199,6 +212,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgID:     msgID,
 		ctx:       ctx,
 		recvCh:    make(chan *Frame, bufferSize),
+		errCh:     make(chan error, 1),
 		mexset:    mexset,
 		framePool: framePool,
 	}
@@ -323,6 +337,26 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 			frame.Header, frame.Header.FrameSize(), mexset.name, err)
 		return err
 	}
+
+	return nil
+}
+
+// stopExchanges goes through all the exhanges and makes sure nobody is waiting
+// because the connection is already being run down
+func (mexset *messageExchangeSet) stopExchanges(err error) error {
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping exchangeset %s", mexset.name)
+	}
+
+	// We need to stop all exchanges on this set
+	mexset.RLock()
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping num exchanges: %v", len(mexset.exchanges))
+	}
+	for _, mex := range mexset.exchanges {
+		mex.errCh <- err
+	}
+	mexset.RUnlock()
 
 	return nil
 }

@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go/typed"
 )
@@ -143,6 +144,11 @@ func (w *reqResWriter) flushFragment(fragment *writableFragment) error {
 
 	if err := w.mex.ctx.Err(); err != nil {
 		return w.failed(GetContextError(err))
+	}
+
+	// if the connection is already closed, no need to send
+	if atomic.LoadInt32(&w.conn.closeNetworkCalled) > 0 {
+		return w.failed(ErrChannelClosed)
 	}
 
 	frame := fragment.frame.(*Frame)
