@@ -414,7 +414,6 @@ func TestCloseOneSide(t *testing.T) {
 // TestCloseSendError tests that system errors are not attempted to be sent when
 // a connection is closed, and ensures there's no race conditions such as the error
 // frame being added to the channel just as it is closed.
-// TODO(prashant): This test is waiting for timeout, but socket close shouldn't wait for timeout.
 func TestCloseSendError(t *testing.T) {
 	closed := uint32(0)
 	counter := uint32(0)
@@ -433,14 +432,16 @@ func TestCloseSendError(t *testing.T) {
 	clientCh := testutils.NewClient(t, nil)
 
 	// Create a connection that will be shared.
-	require.NoError(t, testutils.Ping(clientCh, serverCh), "Ping from client to server failed")
+	// Use PingLong here so that we have a context with a bigger timeout
+	require.NoError(t, testutils.PingLong(clientCh, serverCh), "Ping from client to server failed")
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Microsecond)
-			err := testutils.CallEcho(clientCh, serverCh, nil)
+			// Use CallEchoLong here so that we have a context with a bigger timeout
+			err := testutils.CallEchoLong(clientCh, serverCh, nil)
 			if err != nil && atomic.LoadUint32(&closed) == 0 {
 				t.Errorf("Call failed: %v", err)
 			}

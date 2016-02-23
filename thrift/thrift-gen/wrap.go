@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/samuel/go-thrift/parser"
 )
@@ -21,10 +22,7 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 			return nil, err
 		}
 
-		services = append(services, &Service{
-			Service: s,
-			state:   state,
-		})
+		services = append(services, makeService(s, state))
 	}
 
 	// Have a stable ordering for services so code generation is consistent.
@@ -32,16 +30,46 @@ func wrapServices(v *parser.Thrift, state *State) ([]*Service, error) {
 	return services, nil
 }
 
+func makeService(service *parser.Service, state *State) *Service {
+	wrapped := &Service{
+		Service: service,
+		state:   state,
+	}
+
+	var methods []*Method
+	var streamingMethods []*Method
+	for _, m := range service.Methods {
+		m := &Method{m, wrapped, state}
+		if m.Streaming() {
+			streamingMethods = append(streamingMethods, m)
+		} else {
+			methods = append(methods, m)
+		}
+	}
+	sort.Sort(byMethodName(methods))
+	sort.Sort(byMethodName(streamingMethods))
+
+	wrapped.methods = methods
+	wrapped.streamingMethods = streamingMethods
+	wrapped.allMethods = append(methods, streamingMethods...)
+	return wrapped
+}
+
 // Service is a wrapper for parser.Service.
 type Service struct {
+	sync.Mutex
 	*parser.Service
 	state *State
 
 	// ExtendsService is not set in wrap, but in setExtends.
 	ExtendsService *Service
 
-	// methods is a cache of all methods.
+	// allMethods is a cache of all methods.
+	allMethods []*Method
+	// methods is a cache of all non-streaming methods.
 	methods []*Method
+	// streamingMethods is a cache of all streaming methods.
+	streamingMethods []*Method
 	// inheritedMethods is a list of inherited method names.
 	inheritedMethods []string
 }
@@ -83,6 +111,11 @@ func (s *Service) ServerConstructor() string {
 	return "NewTChan" + goPublicName(s.Name) + "Server"
 }
 
+// HasStreamingMethods returns whether this service has any streaming methods.
+func (s *Service) HasStreamingMethods() bool {
+	return len(s.StreamingMethods()) > 0
+}
+
 // HasExtends returns whether this service extends another service.
 func (s *Service) HasExtends() bool {
 	return s.ExtendsService != nil
@@ -104,14 +137,6 @@ func (l byMethodName) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
 // Methods returns the methods on this service, not including methods from inherited services.
 func (s *Service) Methods() []*Method {
-	if s.methods != nil {
-		return s.methods
-	}
-
-	for _, m := range s.Service.Methods {
-		s.methods = append(s.methods, &Method{m, s, s.state})
-	}
-	sort.Sort(byMethodName(s.methods))
 	return s.methods
 }
 
@@ -129,6 +154,16 @@ func (s *Service) InheritedMethods() []string {
 	sort.Strings(s.inheritedMethods)
 
 	return s.inheritedMethods
+}
+
+// StreamingMethods returns the streaming methods defined on this service.
+func (s *Service) StreamingMethods() []*Method {
+	return s.streamingMethods
+}
+
+// AllMethods returns the normal and streaming methods defined on this service.
+func (s *Service) AllMethods() []*Method {
+	return s.allMethods
 }
 
 // Method is a wrapper for parser.Method.
@@ -196,22 +231,31 @@ func (m *Method) ResultType() string {
 	return m.argResPrefix() + "Result"
 }
 
-// ArgList returns the argument list for the function.
-func (m *Method) ArgList() string {
+// args returns the arguments for the method as a list.
+func (m *Method) args() []string {
 	args := []string{"ctx " + contextType()}
 	for _, arg := range m.Arguments() {
 		args = append(args, arg.Declaration())
 	}
-	return strings.Join(args, ", ")
+	return args
 }
 
-// CallList creates the call to a function satisfying Interface from an Args struct.
-func (m *Method) CallList(reqStruct string) string {
+// ArgList returns the argument list for the function.
+func (m *Method) ArgList() string {
+	return strings.Join(m.args(), ", ")
+}
+
+func (m *Method) callList(reqStruct string) []string {
 	args := []string{"ctx"}
 	for _, arg := range m.Arguments() {
 		args = append(args, reqStruct+"."+arg.ArgStructName())
 	}
-	return strings.Join(args, ", ")
+	return args
+}
+
+// CallList creates the call to a function satisfying Interface from an Args struct.
+func (m *Method) CallList(reqStruct string) string {
+	return strings.Join(m.callList(reqStruct), ", ")
 }
 
 // RetType returns the go return type of the method.
