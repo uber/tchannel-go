@@ -49,6 +49,7 @@ const (
 // timed out or been cancelled.
 type messageExchange struct {
 	recvCh    chan *Frame
+	errCh     chan error
 	ctx       context.Context
 	msgID     uint32
 	msgType   messageType
@@ -72,6 +73,9 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
+	case connErr := <-mex.errCh:
+		// @aravindv: This is to unblock read because we saw a connection error
+		return connErr
 	}
 }
 
@@ -94,6 +98,9 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
+	case connErr := <-mex.errCh:
+		// @aravindv: This is to unblock read because we saw a connection error
+		return nil, connErr
 	}
 }
 
@@ -155,6 +162,12 @@ func (mex *messageExchange) inboundTimeout() {
 	mex.mexset.timeoutExchange(mex.msgID)
 }
 
+// stopReader is called when we get a connection error and  want to unblock the application
+// reader.
+func (mex *messageExchange) stopReader(err error) {
+	mex.errCh <- err
+}
+
 // A messageExchangeSet manages a set of active message exchanges.  It is
 // mainly used to route frames from a peer to the appropriate messageExchange,
 // or to cancel or mark a messageExchange as being in error.  Each Connection
@@ -199,6 +212,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgID:     msgID,
 		ctx:       ctx,
 		recvCh:    make(chan *Frame, bufferSize),
+		errCh:     make(chan error),
 		mexset:    mexset,
 		framePool: framePool,
 	}
@@ -323,6 +337,28 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 			frame.Header, frame.Header.FrameSize(), mexset.name, err)
 		return err
 	}
+
+	return nil
+}
+
+// stopReader stops the reader on the appropriate message exchange
+func (mexset *messageExchangeSet) stopReader(frame *Frame, err error) error {
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping reader %s %s", mexset.name, frame.Header)
+	}
+
+	mexset.RLock()
+	mex := mexset.exchanges[frame.Header.ID]
+	mexset.RUnlock()
+
+	if mex == nil {
+		// This is ok since the exchange might have expired or been cancelled
+		mexset.log.Infof("received frame %s for %s message exchange that no longer exists",
+			frame.Header, mexset.name)
+		return nil
+	}
+
+	mex.stopReader(err)
 
 	return nil
 }

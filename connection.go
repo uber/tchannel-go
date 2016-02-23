@@ -662,12 +662,17 @@ func (c *Connection) readFrames(_ uint32) {
 	for {
 		frame := c.framePool.Get()
 		if err := frame.ReadIn(c.conn); err != nil {
+			releaseFrame := true
 			if atomic.LoadInt32(&c.closeNetworkCalled) == 0 {
 				c.connectionError("read frames", err)
+				// @aravindv: call handleConnectionError to unblock any readers
+				releaseFrame = c.handleConnectionError(frame, err)
 			} else {
 				c.log.Debugf("Ignoring error after connection was closed: %v", err)
 			}
-			c.framePool.Release(frame)
+			if releaseFrame {
+				c.framePool.Release(frame)
+			}
 			return
 		}
 

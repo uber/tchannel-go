@@ -313,6 +313,13 @@ func (c *Connection) handleError(frame *Frame) bool {
 	return false
 }
 
+// handleConnectionError handles a connection error coming back from the peer.
+func (c *Connection) handleConnectionError(frame *Frame, err error) bool {
+	c.outbound.stopReader(frame, err)
+
+	return false
+}
+
 func cloneTags(tags map[string]string) map[string]string {
 	newTags := make(map[string]string, len(tags))
 	for k, v := range tags {
