@@ -114,7 +114,9 @@ func (r *recordingStatsReporter) RecordTimer(name string, tags map[string]string
 }
 
 func (r *recordingStatsReporter) Reset() {
-	*r = *newRecordingStatsReporter()
+	newReporter := newRecordingStatsReporter()
+	r.Values = newReporter.Values
+	r.Expected = newReporter.Expected
 }
 
 func (r *recordingStatsReporter) Validate(t *testing.T) {
