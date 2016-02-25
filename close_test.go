@@ -432,16 +432,14 @@ func TestCloseSendError(t *testing.T) {
 	clientCh := testutils.NewClient(t, nil)
 
 	// Create a connection that will be shared.
-	// Use PingLong here so that we have a context with a bigger timeout
-	require.NoError(t, testutils.PingLong(clientCh, serverCh), "Ping from client to server failed")
+	require.NoError(t, testutils.Ping(clientCh, serverCh), "Ping from client to server failed")
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Microsecond)
-			// Use CallEchoLong here so that we have a context with a bigger timeout
-			err := testutils.CallEchoLong(clientCh, serverCh, nil)
+			err := testutils.CallEcho(clientCh, serverCh, nil)
 			if err != nil && atomic.LoadUint32(&closed) == 0 {
 				t.Errorf("Call failed: %v", err)
 			}

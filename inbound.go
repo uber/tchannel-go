@@ -75,7 +75,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 
 	// Close may have been called between the time we checked the state and us creating the exchange.
 	if c.readState() != connectionActive {
-		mex.shutdown()
+		mex.shutdown(nil)
 		return true
 	}
 
@@ -219,10 +219,9 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		// If we see an error on the exchange, then we should exit immediately
 		case connErr := <-call.mex.errCh:
 			if c.log.Enabled(LogLevelDebug) {
-				c.log.Debugf("Got an error on the exchange: %v (unblock the application)", connErr)
+				c.log.Debugf("Wait for timeout/cancellation interrupted by error: %v", connErr)
 			}
-			call.Response().SendSystemError(connErr)
-			releaseFrame()
+			return
 		}
 	}()
 
@@ -408,6 +407,6 @@ func (response *InboundCallResponse) doneSending() {
 
 	// The message exchange is still open if there are no errors, call shutdown.
 	if response.err == nil {
-		response.mex.shutdown()
+		response.mex.shutdown(nil)
 	}
 }

@@ -29,23 +29,9 @@ import (
 	"github.com/uber/tchannel-go/raw"
 )
 
-// CallEchoLong calls the "echo" endpoint from the given src to target.
-func CallEchoLong(src, target *tchannel.Channel, args *raw.Args) error {
-	ctx, cancel := tchannel.NewContext(Timeout(30 * time.Second))
-	defer cancel()
-
-	if args == nil {
-		args = &raw.Args{}
-	}
-
-	peerInfo := target.PeerInfo()
-	_, _, _, err := raw.Call(ctx, src, peerInfo.HostPort, peerInfo.ServiceName, "echo", args.Arg2, args.Arg3)
-	return err
-}
-
 // CallEcho calls the "echo" endpoint from the given src to target.
 func CallEcho(src, target *tchannel.Channel, args *raw.Args) error {
-	ctx, cancel := tchannel.NewContext(Timeout(100 * time.Millisecond))
+	ctx, cancel := tchannel.NewContext(Timeout(10 * time.Second))
 	defer cancel()
 
 	if args == nil {
@@ -66,14 +52,6 @@ func RegisterEcho(src *tchannel.Channel, f func()) {
 		}
 		return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
 	})
-}
-
-// PingLong sends a ping from src to target.
-func PingLong(src, target *tchannel.Channel) error {
-	ctx, cancel := tchannel.NewContext(Timeout(30 * time.Second))
-	defer cancel()
-
-	return src.Ping(ctx, target.PeerInfo().HostPort)
 }
 
 // Ping sends a ping from src to target.

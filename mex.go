@@ -74,7 +74,7 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
 	case connErr := <-mex.errCh:
-		// @aravindv: This is to unblock read because we saw a connection error
+		// Unblock on connection error and forward the error.
 		return connErr
 	}
 }
@@ -99,7 +99,7 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
 	case connErr := <-mex.errCh:
-		// @aravindv: This is to unblock read because we saw a connection error
+		// Unblock on connection error and forward the error.
 		return nil, connErr
 	}
 }
@@ -146,10 +146,12 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown() {
+func (mex *messageExchange) shutdown(err error) {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+		// first unblock all applications
+		mex.errCh <- err
 		mex.mexset.removeExchange(mex.msgID)
 	}
 }
@@ -160,12 +162,6 @@ func (mex *messageExchange) shutdown() {
 // exchange list.
 func (mex *messageExchange) inboundTimeout() {
 	mex.mexset.timeoutExchange(mex.msgID)
-}
-
-// stopExchanges is called when we get a connection error and  want to unblock the application
-// reader.
-func (mex *messageExchange) stopExchanges(err error) {
-	mex.errCh <- err
 }
 
 // A messageExchangeSet manages a set of active message exchanges.  It is
@@ -345,18 +341,24 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 // because the connection is already being run down
 func (mexset *messageExchangeSet) stopExchanges(err error) error {
 	if mexset.log.Enabled(LogLevelDebug) {
-		mexset.log.Debugf("stopping exchangeset %s", mexset.name)
+		mexset.log.Debugf("stopping %v exchanges due to error: %v", mexset.count(), err)
 	}
 
-	// We need to stop all exchanges on this set
+	// local map to maintain the all the exchanges to be shutdown,
+	// since we can't hold the lock during shutdown
+	localExchanges := make(map[uint32]*messageExchange)
+
+	// We need to shutdown all exchanges on this set
+	// TODO: fix this? Can we get a new exchange before we shutdown
 	mexset.RLock()
-	if mexset.log.Enabled(LogLevelDebug) {
-		mexset.log.Debugf("stopping num exchanges: %v", len(mexset.exchanges))
-	}
-	for _, mex := range mexset.exchanges {
-		mex.errCh <- err
+	for k, mex := range mexset.exchanges {
+		localExchanges[k] = mex
 	}
 	mexset.RUnlock()
+
+	for _, mex := range localExchanges {
+		mex.shutdown(err)
+	}
 
 	return nil
 }

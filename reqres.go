@@ -168,7 +168,7 @@ func (w *reqResWriter) failed(err error) error {
 		return w.err
 	}
 
-	w.mex.shutdown()
+	w.mex.shutdown(nil)
 	w.err = err
 	return w.err
 }
@@ -263,7 +263,7 @@ func (r *reqResReader) failed(err error) error {
 		return r.err
 	}
 
-	r.mex.shutdown()
+	r.mex.shutdown(nil)
 	r.err = err
 	return r.err
 }
