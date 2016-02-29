@@ -600,8 +600,7 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 	})
 }
 
-// connectionError handles a connection level error
-func (c *Connection) connectionError(site string, err error) error {
+func (c *Connection) logConnectionError(site string, err error) error {
 	if err == io.EOF {
 		c.log.Debugf("Connection got EOF")
 	} else {
@@ -615,8 +614,14 @@ func (c *Connection) connectionError(site string, err error) error {
 			logger.Warn("Connection error.")
 		}
 	}
-	c.Close()
 	return NewWrappedSystemError(ErrCodeNetwork, err)
+}
+
+// connectionError handles a connection level error
+func (c *Connection) connectionError(site string, err error) error {
+	err = c.logConnectionError(site, err)
+	c.Close()
+	return err
 }
 
 func (c *Connection) protocolError(id uint32, err error) error {
