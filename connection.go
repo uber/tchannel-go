@@ -623,6 +623,10 @@ func (c *Connection) logConnectionError(site string, err error) error {
 func (c *Connection) connectionError(site string, err error) error {
 	err = c.logConnectionError(site, err)
 	c.Close()
+
+	// On any connection error, notify the exchanges of this error.
+	c.outbound.stopExchanges(err)
+	c.inbound.stopExchanges(err)
 	return err
 }
 
