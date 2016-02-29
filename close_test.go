@@ -414,7 +414,6 @@ func TestCloseOneSide(t *testing.T) {
 // TestCloseSendError tests that system errors are not attempted to be sent when
 // a connection is closed, and ensures there's no race conditions such as the error
 // frame being added to the channel just as it is closed.
-// TODO(prashant): This test is waiting for timeout, but socket close shouldn't wait for timeout.
 func TestCloseSendError(t *testing.T) {
 	closed := uint32(0)
 	counter := uint32(0)
