@@ -48,6 +48,13 @@ func makeRepeatedBytes(n byte) []byte {
 	return data
 }
 
+func writeFlushBytes(w ArgWriter, bs []byte) error {
+	if _, err := w.Write(bs); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
 type streamHelper struct {
 	t *testing.T
 }
@@ -180,12 +187,10 @@ func testStreamArg(t *testing.T, f func(argWriter ArgWriter, argReader ArgReader
 
 		argWriter, argReader := helper.startCall(ctx, ch, hostPort, ch.ServiceName())
 		verifyBytes := func(n byte) {
-			_, err := argWriter.Write([]byte{n})
-			require.NoError(t, err, "arg3 write failed")
-			require.NoError(t, argWriter.Flush(), "arg3 flush failed")
+			require.NoError(t, writeFlushBytes(argWriter, []byte{n}), "arg3 write failed")
 
 			arg3 := make([]byte, int(n))
-			_, err = io.ReadFull(argReader, arg3)
+			_, err := io.ReadFull(argReader, arg3)
 			require.NoError(t, err, "arg3 read failed")
 
 			assert.Equal(t, makeRepeatedBytes(n), arg3, "arg3 result mismatch")
@@ -241,9 +246,7 @@ func TestStreamCancelled(t *testing.T) {
 		arg3Writer, arg3Reader := helper.startCall(callCtx, ch, server.PeerInfo().HostPort, server.ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
-				_, err := arg3Writer.Write([]byte{1})
-				assert.NoError(t, err, "Write failed")
-				assert.NoError(t, arg3Writer.Flush(), "Flush failed")
+				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
 			}
 
 			// Our reads and writes should fail now.
