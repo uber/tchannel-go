@@ -80,6 +80,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	}
 
 	response := new(InboundCallResponse)
+	response.call = call
 	response.calledAt = now
 	response.Annotations = Annotations{
 		reporter: c.traceReporter,
@@ -205,7 +206,6 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		).Error("Couldn't find handler.")
 		call.Response().SendSystemError(
 			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
-		releaseFrame()
 		return
 	}
 
@@ -321,6 +321,7 @@ type InboundCallResponse struct {
 	reqResWriter
 	Annotations
 
+	call   *InboundCall
 	cancel context.CancelFunc
 	// calledAt is the time the inbound call was routed to the application.
 	calledAt         time.Time
@@ -342,6 +343,7 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	response.state = reqResWriterComplete
 	response.systemError = true
 	response.doneSending()
+	response.call.releasePreviousFragment()
 	return response.conn.SendSystemError(response.mex.msgID, CurrentSpan(response.mex.ctx), err)
 }
 
