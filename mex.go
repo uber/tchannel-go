@@ -96,8 +96,9 @@ type messageExchange struct {
 	mexset    *messageExchangeSet
 	framePool FramePool
 
-	// shutdownAtomic is an atomically updated uint32.
+	// The following are atomically updated uint32.
 	shutdownAtomic uint32
+	errChNotified  uint32
 }
 
 // checkError is called before waiting on the mex channels.
@@ -238,11 +239,8 @@ func (mex *messageExchange) shutdown(err error) {
 		return
 	}
 
-	// Notify all calls blocked on the mex that it's shut down.
-	if err == nil {
+	if atomic.CompareAndSwapUint32(&mex.errChNotified, 0, 1) {
 		mex.errCh.Notify(errMexShutdown)
-	} else {
-		mex.errCh.Notify(err)
 	}
 
 	mex.mexset.removeExchange(mex.msgID)
@@ -482,6 +480,14 @@ func (mexset *messageExchangeSet) stopExchanges(err error) {
 	}
 
 	for _, mex := range exchanges {
-		mex.shutdown(err)
+		// When there's a connection failure, we want to notify blocked callers that the
+		// call will fail, but we don't want to shutdown the exchange as only the
+		// arg reader/writer should shutdown the exchange. Otherwise, our guarantee
+		// on sendChRefs that there's no references to sendCh is violated since
+		// readers/writers could still have a reference to sendCh even though
+		// we shutdown the exchange and called Done on sendChRefs.
+		if atomic.CompareAndSwapUint32(&mex.errChNotified, 0, 1) {
+			mex.errCh.Notify(err)
+		}
 	}
 }
