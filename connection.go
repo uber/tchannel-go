@@ -156,6 +156,8 @@ type Connection struct {
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
 	closeNetworkCalled int32
+	// stoppedExchanges is atomically set when exchanges are stopped due to error.
+	stoppedExchanges uint32
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -625,8 +627,10 @@ func (c *Connection) connectionError(site string, err error) error {
 	c.Close()
 
 	// On any connection error, notify the exchanges of this error.
-	c.outbound.stopExchanges(err)
-	c.inbound.stopExchanges(err)
+	if atomic.CompareAndSwapUint32(&c.stoppedExchanges, 0, 1) {
+		c.outbound.stopExchanges(err)
+		c.inbound.stopExchanges(err)
+	}
 	return err
 }
 

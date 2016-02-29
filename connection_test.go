@@ -99,6 +99,13 @@ func (h *testHandler) OnError(ctx context.Context, err error) {
 	h.t.Errorf("testHandler got error: %v stack:\n%s", err, stack)
 }
 
+func writeFlushStr(w ArgWriter, d string) error {
+	if _, err := io.WriteString(w, d); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
 func TestRoundTrip(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		handler := newTestHandler(t)
@@ -497,6 +504,40 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		<-done
 	})
 	goroutines.VerifyNoLeaks(t, nil)
+}
+
+func TestWriteAfterConnectionError(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	// Closing network connections can lead to warnings in many places.
+	opts := testutils.NewOpts().DisableLogVerification()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+		testutils.RegisterEcho(ch, nil)
+
+		call, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "echo", nil)
+		require.NoError(t, err, "Call failed")
+
+		w, err := call.Arg2Writer()
+		require.NoError(t, err, "Arg2Writer failed")
+		require.NoError(t, writeFlushStr(w, "initial"), "write initial failed")
+
+		// Now close the underlying network connection, writes should fail.
+		_, conn := OutboundConnection(call)
+		conn.Close()
+
+		// Writes should start failing pretty soon.
+		var writeErr error
+		for i := 0; i < 100; i++ {
+			if writeErr = writeFlushStr(w, "f"); writeErr != nil {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if assert.Error(t, writeErr, "Writes should fail after a connection is closed") {
+			assert.Equal(t, ErrCodeNetwork, GetSystemErrorCode(writeErr), "write should fail due to network error")
+		}
+	})
 }
 
 func TestReadTimeout(t *testing.T) {

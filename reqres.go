@@ -109,8 +109,8 @@ func (w *reqResWriter) arg3Writer() (ArgWriter, error) {
 
 // newFragment creates a new fragment for marshaling into
 func (w *reqResWriter) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
-	if err := w.mex.ctx.Err(); err != nil {
-		return nil, w.failed(GetContextError(err))
+	if err := w.mex.checkError(); err != nil {
+		return nil, w.failed(err)
 	}
 
 	message := w.messageForFragment(initial)
@@ -141,15 +141,17 @@ func (w *reqResWriter) flushFragment(fragment *writableFragment) error {
 		return w.err
 	}
 
-	if err := w.mex.ctx.Err(); err != nil {
-		return w.failed(GetContextError(err))
-	}
-
 	frame := fragment.frame.(*Frame)
 	frame.Header.SetPayloadSize(uint16(fragment.contents.BytesWritten()))
+
+	if err := w.mex.checkError(); err != nil {
+		return w.failed(err)
+	}
 	select {
 	case <-w.mex.ctx.Done():
 		return w.failed(GetContextError(w.mex.ctx.Err()))
+	case <-w.mex.errCh.c:
+		return w.failed(w.mex.errCh.err)
 	case w.conn.sendCh <- frame:
 		return nil
 	}

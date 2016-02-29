@@ -73,6 +73,16 @@ func (e *errNotifier) Notify(err error) error {
 	return nil
 }
 
+// checkErr returns previously notified errors (if any).
+func (e *errNotifier) checkErr() error {
+	select {
+	case <-e.c:
+		return e.err
+	default:
+		return nil
+	}
+}
+
 // A messageExchange tracks this Connections's side of a message exchange with a
 // peer.  Each message exchange has a channel that can be used to receive
 // frames from the peer, and a Context that can controls when the exchange has
@@ -90,12 +100,23 @@ type messageExchange struct {
 	shutdownAtomic uint32
 }
 
-// forwardPeerFrame forwards a frame from a peer to the message exchange, where
-// it can be pulled by whatever application thread is handling the exchange
-func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
+// checkError is called before waiting on the mex channels.
+// It returns any existing errors (timeout, cancellation, connection errors).
+func (mex *messageExchange) checkError() error {
 	if err := mex.ctx.Err(); err != nil {
 		return GetContextError(err)
 	}
+
+	return mex.errCh.checkErr()
+}
+
+// forwardPeerFrame forwards a frame from a peer to the message exchange, where
+// it can be pulled by whatever application thread is handling the exchange
+func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
+	if err := mex.checkError(); err != nil {
+		return err
+	}
+
 	select {
 	case mex.recvCh <- frame:
 		return nil
@@ -111,8 +132,8 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 // recvPeerFrame waits for a new frame from the peer, or until the context
 // expires or is cancelled
 func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
-	if err := mex.ctx.Err(); err != nil {
-		return nil, GetContextError(err)
+	if err := mex.checkError(); err != nil {
+		return nil, err
 	}
 
 	select {
