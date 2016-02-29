@@ -274,7 +274,7 @@ func parseInboundFragment(framePool FramePool, frame *Frame, message message) (*
 	fragment.checksumType = ChecksumType(rbuf.ReadSingleByte())
 	fragment.checksum = rbuf.ReadBytes(fragment.checksumType.ChecksumSize())
 	fragment.contents = rbuf
-	fragment.done = func() {
+	fragment.onDone = func() {
 		framePool.Release(frame)
 	}
 	return fragment, rbuf.Err()
