@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -31,6 +32,8 @@ import (
 
 var (
 	errDuplicateMex        = errors.New("multiple attempts to use the message id")
+	errMexShutdown         = errors.New("mex has been shutdown")
+	errMexSetShutdown      = errors.New("mexset has been shutdown")
 	errMexChannelFull      = NewSystemError(ErrCodeBusy, "cannot send frame to message exchange channel")
 	errUnexpectedFrameType = errors.New("unexpected frame received")
 )
@@ -43,12 +46,40 @@ const (
 	mexChannelBufferSize = 2
 )
 
+type errNotifier struct {
+	c        chan struct{}
+	err      error
+	notified int32
+}
+
+func newErrNotifier() errNotifier {
+	return errNotifier{c: make(chan struct{})}
+}
+
+// Notify will store the error and notify all waiters on c that there's an error.
+func (e *errNotifier) Notify(err error) error {
+	// The code should never try to Notify(nil).
+	if err == nil {
+		panic("cannot Notify with no error")
+	}
+
+	// There may be some sort of race where we try to notify the mex twice.
+	if !atomic.CompareAndSwapInt32(&e.notified, 0, 1) {
+		return fmt.Errorf("cannot broadcast error: %v, already have: %v", err, e.err)
+	}
+
+	e.err = err
+	close(e.c)
+	return nil
+}
+
 // A messageExchange tracks this Connections's side of a message exchange with a
 // peer.  Each message exchange has a channel that can be used to receive
 // frames from the peer, and a Context that can controls when the exchange has
 // timed out or been cancelled.
 type messageExchange struct {
 	recvCh    chan *Frame
+	errCh     errNotifier
 	ctx       context.Context
 	msgID     uint32
 	msgType   messageType
@@ -72,6 +103,8 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
+	case <-mex.errCh.c:
+		return mex.errCh.err
 	}
 }
 
@@ -94,6 +127,8 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
+	case <-mex.errCh.c:
+		return nil, mex.errCh.err
 	}
 }
 
@@ -139,10 +174,17 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown() {
+func (mex *messageExchange) shutdown(err error) {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+		// Notify all calls blocked on the mex that it's shut down.
+		if err == nil {
+			mex.errCh.Notify(errMexShutdown)
+		} else {
+			mex.errCh.Notify(err)
+		}
+
 		mex.mexset.removeExchange(mex.msgID)
 	}
 }
@@ -175,6 +217,7 @@ type messageExchangeSet struct {
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
 	timeoutExchanges map[uint32]struct{}
+	shutdown         bool
 }
 
 // newMessageExchangeSet creates a new messageExchangeSet with a given name.
@@ -185,6 +228,21 @@ func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
 		exchanges:        make(map[uint32]*messageExchange),
 		timeoutExchanges: make(map[uint32]struct{}),
 	}
+}
+
+// addExchange adds an exchange, it must be called with the mexset locked.
+func (mexset *messageExchangeSet) addExchange(mex *messageExchange) error {
+	if mexset.shutdown {
+		return errMexSetShutdown
+	}
+
+	if _, ok := mexset.exchanges[mex.msgID]; ok {
+		return errDuplicateMex
+	}
+
+	mexset.exchanges[mex.msgID] = mex
+	mexset.sendChRefs.Add(1)
+	return nil
 }
 
 // newExchange creates and adds a new message exchange to this set
@@ -199,25 +257,30 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgID:     msgID,
 		ctx:       ctx,
 		recvCh:    make(chan *Frame, bufferSize),
+		errCh:     newErrNotifier(),
 		mexset:    mexset,
 		framePool: framePool,
 	}
 
 	mexset.Lock()
-	if existingMex := mexset.exchanges[mex.msgID]; existingMex != nil {
-		mexset.log.WithFields(
-			LogField{"msgID", mex.msgID},
-			LogField{"existingType", existingMex.msgType},
-			LogField{"newType", mex.msgType},
-		).Warn("Duplicate msg ID for active and new mex.")
-
-		mexset.Unlock()
-		return nil, errDuplicateMex
-	}
-
-	mexset.exchanges[mex.msgID] = mex
-	mexset.sendChRefs.Add(1)
+	addErr := mexset.addExchange(mex)
 	mexset.Unlock()
+
+	if addErr != nil {
+		if addErr == errMexSetShutdown {
+			mexset.log.WithFields(
+				LogField{"msgID", mex.msgID},
+				LogField{"msgType", mex.msgType},
+			).Warn("Attempted to create new mex after mexset shutdown")
+		} else if addErr == errDuplicateMex {
+			mexset.log.WithFields(
+				LogField{"msgID", mex.msgID},
+				LogField{"newType", mex.msgType},
+			).Warn("Duplicate msg ID for active and new mex.")
+		}
+
+		return nil, addErr
+	}
 
 	mexset.onAdded()
 
@@ -325,4 +388,41 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	}
 
 	return nil
+}
+
+// copyExchanges returns a copy of the exchanges if the exchange is active.
+// The caller must lock the mexset.
+func (mexset *messageExchangeSet) copyExchanges() (shutdown bool, exchanges map[uint32]*messageExchange) {
+	if mexset.shutdown {
+		return true, nil
+	}
+
+	exchangesCopy := make(map[uint32]*messageExchange, len(mexset.exchanges))
+	for k, mex := range mexset.exchanges {
+		exchangesCopy[k] = mex
+	}
+
+	return false, exchangesCopy
+}
+
+// stopExchanges stops all message exchanges to unblock all waiters on the mex.
+// This should only be called on connection failures.
+func (mexset *messageExchangeSet) stopExchanges(err error) {
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping %v exchanges due to error: %v", mexset.count(), err)
+	}
+
+	mexset.Lock()
+	shutdown, exchanges := mexset.copyExchanges()
+	mexset.shutdown = true
+	mexset.Unlock()
+
+	if shutdown {
+		mexset.log.Debugf("mexset has already been shutdown")
+		return
+	}
+
+	for _, mex := range exchanges {
+		mex.shutdown(err)
+	}
 }
