@@ -113,8 +113,14 @@ func (mex *messageExchange) checkError() error {
 // forwardPeerFrame forwards a frame from a peer to the message exchange, where
 // it can be pulled by whatever application thread is handling the exchange
 func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
-	if err := mex.checkError(); err != nil {
-		return err
+	// We want a very specific priority here:
+	// 1. Timeouts/cancellation (mex.ctx errors)
+	// 2. Whether recvCh has buffer space (non-blocking select over mex.recvCh)
+	// 3. Other mex errors (mex.errCh)
+	// Which is why we check the context error only (instead of mex.checkError).
+	// In the mex.errCh case, we do a non-blocking write to recvCh to prioritize it.
+	if err := mex.ctx.Err(); err != nil {
+		return GetContextError(err)
 	}
 
 	select {
@@ -125,30 +131,60 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
 	case <-mex.errCh.c:
+		// Select will randomly choose a case, but we want to prioritize
+		// sending a frame over the errCh. Try a non-blocking write.
+		select {
+		case mex.recvCh <- frame:
+			return nil
+		default:
+		}
 		return mex.errCh.err
 	}
+}
+
+func (mex *messageExchange) checkFrame(frame *Frame) error {
+	if frame.Header.ID != mex.msgID {
+		mex.mexset.log.WithFields(
+			LogField{"msgId", mex.msgID},
+			LogField{"header", frame.Header},
+		).Error("recvPeerFrame received msg with unexpected ID.")
+		return errUnexpectedFrameType
+	}
+	return nil
 }
 
 // recvPeerFrame waits for a new frame from the peer, or until the context
 // expires or is cancelled
 func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
-	if err := mex.checkError(); err != nil {
-		return nil, err
+	// We have to check frames/errors in a very specific order here:
+	// 1. Timeouts/cancellation (mex.ctx errors)
+	// 2. Any pending frames (non-blocking select over mex.recvCh)
+	// 3. Other mex errors (mex.errCh)
+	// Which is why we check the context error only (instead of mex.checkError)e
+	// In the mex.errCh case, we do a non-blocking read from recvCh to prioritize it.
+	if err := mex.ctx.Err(); err != nil {
+		return nil, GetContextError(err)
 	}
 
 	select {
 	case frame := <-mex.recvCh:
-		if frame.Header.ID != mex.msgID {
-			mex.mexset.log.WithFields(
-				LogField{"msgId", mex.msgID},
-				LogField{"header", frame.Header},
-			).Error("recvPeerFrame received msg with unexpected ID.")
-			return nil, errUnexpectedFrameType
+		if err := mex.checkFrame(frame); err != nil {
+			return nil, err
 		}
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
 	case <-mex.errCh.c:
+		// Select will randomly choose a case, but we want to prioritize
+		// receiving a frame over errCh. Try a non-blocking read.
+		select {
+		case frame := <-mex.recvCh:
+			if err := mex.checkFrame(frame); err != nil {
+				return nil, err
+			}
+			return frame, nil
+		default:
+		}
 		return nil, mex.errCh.err
 	}
 }
