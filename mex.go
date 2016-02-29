@@ -234,16 +234,18 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 func (mex *messageExchange) shutdown(err error) {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
-	if atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
-		// Notify all calls blocked on the mex that it's shut down.
-		if err == nil {
-			mex.errCh.Notify(errMexShutdown)
-		} else {
-			mex.errCh.Notify(err)
-		}
-
-		mex.mexset.removeExchange(mex.msgID)
+	if !atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+		return
 	}
+
+	// Notify all calls blocked on the mex that it's shut down.
+	if err == nil {
+		mex.errCh.Notify(errMexShutdown)
+	} else {
+		mex.errCh.Notify(err)
+	}
+
+	mex.mexset.removeExchange(mex.msgID)
 }
 
 // inboundTimeout is called when an exchange times out, but a handler may still be
