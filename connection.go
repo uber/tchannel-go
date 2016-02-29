@@ -148,7 +148,7 @@ type Connection struct {
 	stateMut        sync.RWMutex
 	inbound         *messageExchangeSet
 	outbound        *messageExchangeSet
-	handlers        *handlerMap
+	handler         Handler
 	nextMessageID   uint32
 	events          connectionEvents
 	commonStatsTags map[string]string
@@ -254,7 +254,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		checksumType:    checksumType,
 		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
 		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handlers:        ch.handlers,
+		handler:         channelHandler{ch},
 		events:          events,
 		commonStatsTags: ch.commonStatsTags,
 	}

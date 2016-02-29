@@ -165,10 +165,6 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, frame *Frame) {
-	releaseFrame := func() {
-		c.framePool.Release(frame)
-	}
-
 	if c.log.Enabled(LogLevelDebug) {
 		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
@@ -178,36 +174,13 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 			LogField{"remotePeer", c.remotePeerInfo},
 			ErrField(err),
 		).Error("Couldn't read method.")
-		releaseFrame()
+		c.framePool.Release(frame)
 		return
 	}
 
 	call.commonStatsTags["endpoint"] = string(call.method)
 	call.statsReporter.IncCounter("inbound.calls.recvd", call.commonStatsTags, 1)
 	call.response.SetMethod(string(call.method))
-
-	// NB(mmihic): Don't cast method name to string here - this will
-	// create a copy of the byte array, where as aliasing to string in the
-	// map look up can be optimized by the compiler to avoid the copy.  See
-	// https://github.com/golang/go/issues/3512
-	h := c.handlers.find(call.ServiceName(), call.Method())
-	if h == nil {
-		// Check the subchannel map to see if we find one there
-		if c.log.Enabled(LogLevelDebug) {
-			c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Method())
-		}
-
-		h = c.subChannels.find(call.ServiceName(), call.Method())
-	}
-	if h == nil {
-		c.log.WithFields(
-			LogField{"serviceName", call.ServiceName()},
-			LogField{"method", call.MethodString()},
-		).Error("Couldn't find handler.")
-		call.Response().SendSystemError(
-			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
-		return
-	}
 
 	// TODO(prashant): This is an expensive way to check for cancellation. Use a heap for timeouts.
 	go func() {
@@ -216,10 +189,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		}
 	}()
 
-	if c.log.Enabled(LogLevelDebug) {
-		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Method(), c.remotePeerInfo)
-	}
-	h.Handle(call.mex.ctx, call)
+	c.handler.Handle(call.mex.ctx, call)
 }
 
 // An InboundCall is an incoming call from a peer

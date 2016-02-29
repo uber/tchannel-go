@@ -117,7 +117,6 @@ type Channel struct {
 	createdStack      string
 	commonStatsTags   map[string]string
 	connectionOptions ConnectionOptions
-	handlers          *handlerMap
 	peers             *PeerList
 
 	// mutable contains all the members of Channel which are mutable.
@@ -190,7 +189,6 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,
-		handlers:          &handlerMap{},
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
@@ -297,9 +295,9 @@ type Registrar interface {
 	Peers() *PeerList
 }
 
-// Register registers a handler for a service+method pair
+// Register registers a handler for a method.
 func (ch *Channel) Register(h Handler, methodName string) {
-	ch.handlers.register(h, ch.PeerInfo().ServiceName, methodName)
+	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
 }
 
 // PeerInfo returns the current peer info for the channel
