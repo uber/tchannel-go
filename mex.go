@@ -232,7 +232,7 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown(err error) {
+func (mex *messageExchange) shutdown() {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if !atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {

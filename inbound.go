@@ -75,7 +75,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 
 	// Close may have been called between the time we checked the state and us creating the exchange.
 	if c.readState() != connectionActive {
-		mex.shutdown(nil)
+		mex.shutdown()
 		return true
 	}
 
@@ -377,6 +377,6 @@ func (response *InboundCallResponse) doneSending() {
 
 	// The message exchange is still open if there are no errors, call shutdown.
 	if response.err == nil {
-		response.mex.shutdown(nil)
+		response.mex.shutdown()
 	}
 }
