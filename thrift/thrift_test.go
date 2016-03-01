@@ -151,6 +151,17 @@ func TestThriftError(t *testing.T) {
 	})
 }
 
+func TestThriftNilErr(t *testing.T) {
+	var thriftErr *gen.SimpleErr
+	withSetup(t, func(ctx Context, args testArgs) {
+		args.s1.On("Simple", ctxArg()).Return(thriftErr)
+		got := args.c1.Simple(ctx)
+		require.Error(t, got)
+		require.Contains(t, got.Error(), "non-nil error type")
+		require.Contains(t, got.Error(), "nil value")
+	})
+}
+
 func TestUnknownError(t *testing.T) {
 	withSetup(t, func(ctx Context, args testArgs) {
 		args.s1.On("Simple", ctxArg()).Return(errors.New("unexpected err"))
