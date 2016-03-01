@@ -184,8 +184,15 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 
 	// TODO(prashant): This is an expensive way to check for cancellation. Use a heap for timeouts.
 	go func() {
-		if <-call.mex.ctx.Done(); call.mex.ctx.Err() == context.DeadlineExceeded {
-			call.mex.inboundTimeout()
+		select {
+		case <-call.mex.ctx.Done():
+			if call.mex.ctx.Err() == context.DeadlineExceeded {
+				call.mex.inboundTimeout()
+			}
+		case <-call.mex.errCh.c:
+			if c.log.Enabled(LogLevelDebug) {
+				c.log.Debugf("Wait for timeout/cancellation interrupted by error: %v", call.mex.errCh.err)
+			}
 		}
 	}()
 

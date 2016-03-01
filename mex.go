@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -31,6 +32,8 @@ import (
 
 var (
 	errDuplicateMex        = errors.New("multiple attempts to use the message id")
+	errMexShutdown         = errors.New("mex has been shutdown")
+	errMexSetShutdown      = errors.New("mexset has been shutdown")
 	errMexChannelFull      = NewSystemError(ErrCodeBusy, "cannot send frame to message exchange channel")
 	errUnexpectedFrameType = errors.New("unexpected frame received")
 )
@@ -43,28 +46,84 @@ const (
 	mexChannelBufferSize = 2
 )
 
+type errNotifier struct {
+	c        chan struct{}
+	err      error
+	notified int32
+}
+
+func newErrNotifier() errNotifier {
+	return errNotifier{c: make(chan struct{})}
+}
+
+// Notify will store the error and notify all waiters on c that there's an error.
+func (e *errNotifier) Notify(err error) error {
+	// The code should never try to Notify(nil).
+	if err == nil {
+		panic("cannot Notify with no error")
+	}
+
+	// There may be some sort of race where we try to notify the mex twice.
+	if !atomic.CompareAndSwapInt32(&e.notified, 0, 1) {
+		return fmt.Errorf("cannot broadcast error: %v, already have: %v", err, e.err)
+	}
+
+	e.err = err
+	close(e.c)
+	return nil
+}
+
+// checkErr returns previously notified errors (if any).
+func (e *errNotifier) checkErr() error {
+	select {
+	case <-e.c:
+		return e.err
+	default:
+		return nil
+	}
+}
+
 // A messageExchange tracks this Connections's side of a message exchange with a
 // peer.  Each message exchange has a channel that can be used to receive
 // frames from the peer, and a Context that can controls when the exchange has
 // timed out or been cancelled.
 type messageExchange struct {
 	recvCh    chan *Frame
+	errCh     errNotifier
 	ctx       context.Context
 	msgID     uint32
 	msgType   messageType
 	mexset    *messageExchangeSet
 	framePool FramePool
 
-	// shutdownAtomic is an atomically updated uint32.
+	// The following are atomically updated uint32.
 	shutdownAtomic uint32
+	errChNotified  uint32
+}
+
+// checkError is called before waiting on the mex channels.
+// It returns any existing errors (timeout, cancellation, connection errors).
+func (mex *messageExchange) checkError() error {
+	if err := mex.ctx.Err(); err != nil {
+		return GetContextError(err)
+	}
+
+	return mex.errCh.checkErr()
 }
 
 // forwardPeerFrame forwards a frame from a peer to the message exchange, where
 // it can be pulled by whatever application thread is handling the exchange
 func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
+	// We want a very specific priority here:
+	// 1. Timeouts/cancellation (mex.ctx errors)
+	// 2. Whether recvCh has buffer space (non-blocking select over mex.recvCh)
+	// 3. Other mex errors (mex.errCh)
+	// Which is why we check the context error only (instead of mex.checkError).
+	// In the mex.errCh case, we do a non-blocking write to recvCh to prioritize it.
 	if err := mex.ctx.Err(); err != nil {
 		return GetContextError(err)
 	}
+
 	select {
 	case mex.recvCh <- frame:
 		return nil
@@ -72,28 +131,62 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
+	case <-mex.errCh.c:
+		// Select will randomly choose a case, but we want to prioritize
+		// sending a frame over the errCh. Try a non-blocking write.
+		select {
+		case mex.recvCh <- frame:
+			return nil
+		default:
+		}
+		return mex.errCh.err
 	}
+}
+
+func (mex *messageExchange) checkFrame(frame *Frame) error {
+	if frame.Header.ID != mex.msgID {
+		mex.mexset.log.WithFields(
+			LogField{"msgId", mex.msgID},
+			LogField{"header", frame.Header},
+		).Error("recvPeerFrame received msg with unexpected ID.")
+		return errUnexpectedFrameType
+	}
+	return nil
 }
 
 // recvPeerFrame waits for a new frame from the peer, or until the context
 // expires or is cancelled
 func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
+	// We have to check frames/errors in a very specific order here:
+	// 1. Timeouts/cancellation (mex.ctx errors)
+	// 2. Any pending frames (non-blocking select over mex.recvCh)
+	// 3. Other mex errors (mex.errCh)
+	// Which is why we check the context error only (instead of mex.checkError)e
+	// In the mex.errCh case, we do a non-blocking read from recvCh to prioritize it.
 	if err := mex.ctx.Err(); err != nil {
 		return nil, GetContextError(err)
 	}
 
 	select {
 	case frame := <-mex.recvCh:
-		if frame.Header.ID != mex.msgID {
-			mex.mexset.log.WithFields(
-				LogField{"msgId", mex.msgID},
-				LogField{"header", frame.Header},
-			).Error("recvPeerFrame received msg with unexpected ID.")
-			return nil, errUnexpectedFrameType
+		if err := mex.checkFrame(frame); err != nil {
+			return nil, err
 		}
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
+	case <-mex.errCh.c:
+		// Select will randomly choose a case, but we want to prioritize
+		// receiving a frame over errCh. Try a non-blocking read.
+		select {
+		case frame := <-mex.recvCh:
+			if err := mex.checkFrame(frame); err != nil {
+				return nil, err
+			}
+			return frame, nil
+		default:
+		}
+		return nil, mex.errCh.err
 	}
 }
 
@@ -142,9 +235,15 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 func (mex *messageExchange) shutdown() {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
-	if atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
-		mex.mexset.removeExchange(mex.msgID)
+	if !atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+		return
 	}
+
+	if atomic.CompareAndSwapUint32(&mex.errChNotified, 0, 1) {
+		mex.errCh.Notify(errMexShutdown)
+	}
+
+	mex.mexset.removeExchange(mex.msgID)
 }
 
 // inboundTimeout is called when an exchange times out, but a handler may still be
@@ -175,6 +274,7 @@ type messageExchangeSet struct {
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
 	timeoutExchanges map[uint32]struct{}
+	shutdown         bool
 }
 
 // newMessageExchangeSet creates a new messageExchangeSet with a given name.
@@ -185,6 +285,21 @@ func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
 		exchanges:        make(map[uint32]*messageExchange),
 		timeoutExchanges: make(map[uint32]struct{}),
 	}
+}
+
+// addExchange adds an exchange, it must be called with the mexset locked.
+func (mexset *messageExchangeSet) addExchange(mex *messageExchange) error {
+	if mexset.shutdown {
+		return errMexSetShutdown
+	}
+
+	if _, ok := mexset.exchanges[mex.msgID]; ok {
+		return errDuplicateMex
+	}
+
+	mexset.exchanges[mex.msgID] = mex
+	mexset.sendChRefs.Add(1)
+	return nil
 }
 
 // newExchange creates and adds a new message exchange to this set
@@ -199,25 +314,30 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgID:     msgID,
 		ctx:       ctx,
 		recvCh:    make(chan *Frame, bufferSize),
+		errCh:     newErrNotifier(),
 		mexset:    mexset,
 		framePool: framePool,
 	}
 
 	mexset.Lock()
-	if existingMex := mexset.exchanges[mex.msgID]; existingMex != nil {
-		mexset.log.WithFields(
-			LogField{"msgID", mex.msgID},
-			LogField{"existingType", existingMex.msgType},
-			LogField{"newType", mex.msgType},
-		).Warn("Duplicate msg ID for active and new mex.")
-
-		mexset.Unlock()
-		return nil, errDuplicateMex
-	}
-
-	mexset.exchanges[mex.msgID] = mex
-	mexset.sendChRefs.Add(1)
+	addErr := mexset.addExchange(mex)
 	mexset.Unlock()
+
+	if addErr != nil {
+		if addErr == errMexSetShutdown {
+			mexset.log.WithFields(
+				LogField{"msgID", mex.msgID},
+				LogField{"msgType", mex.msgType},
+			).Warn("Attempted to create new mex after mexset shutdown")
+		} else if addErr == errDuplicateMex {
+			mexset.log.WithFields(
+				LogField{"msgID", mex.msgID},
+				LogField{"newType", mex.msgType},
+			).Warn("Duplicate msg ID for active and new mex.")
+		}
+
+		return nil, addErr
+	}
 
 	mexset.onAdded()
 
@@ -325,4 +445,49 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	}
 
 	return nil
+}
+
+// copyExchanges returns a copy of the exchanges if the exchange is active.
+// The caller must lock the mexset.
+func (mexset *messageExchangeSet) copyExchanges() (shutdown bool, exchanges map[uint32]*messageExchange) {
+	if mexset.shutdown {
+		return true, nil
+	}
+
+	exchangesCopy := make(map[uint32]*messageExchange, len(mexset.exchanges))
+	for k, mex := range mexset.exchanges {
+		exchangesCopy[k] = mex
+	}
+
+	return false, exchangesCopy
+}
+
+// stopExchanges stops all message exchanges to unblock all waiters on the mex.
+// This should only be called on connection failures.
+func (mexset *messageExchangeSet) stopExchanges(err error) {
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping %v exchanges due to error: %v", mexset.count(), err)
+	}
+
+	mexset.Lock()
+	shutdown, exchanges := mexset.copyExchanges()
+	mexset.shutdown = true
+	mexset.Unlock()
+
+	if shutdown {
+		mexset.log.Debugf("mexset has already been shutdown")
+		return
+	}
+
+	for _, mex := range exchanges {
+		// When there's a connection failure, we want to notify blocked callers that the
+		// call will fail, but we don't want to shutdown the exchange as only the
+		// arg reader/writer should shutdown the exchange. Otherwise, our guarantee
+		// on sendChRefs that there's no references to sendCh is violated since
+		// readers/writers could still have a reference to sendCh even though
+		// we shutdown the exchange and called Done on sendChRefs.
+		if atomic.CompareAndSwapUint32(&mex.errChNotified, 0, 1) {
+			mex.errCh.Notify(err)
+		}
+	}
 }
