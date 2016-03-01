@@ -23,6 +23,7 @@ package tchannel
 import (
 	"encoding/json"
 	"runtime"
+	"sort"
 
 	"golang.org/x/net/context"
 )
@@ -237,6 +238,7 @@ func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[s
 			for k := range hmap.handlers {
 				methods = append(methods, k)
 			}
+			sort.Strings(methods)
 			state.Handler.Methods = methods
 		} else {
 			state.Handler.Type = overrideHandler
