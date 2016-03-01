@@ -77,16 +77,32 @@ func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
 	return filtered
 }
 
+var retryStates = map[string]struct{}{
+	"runnable": struct{}{},
+	"running":  struct{}{},
+	"syscall":  struct{}{},
+}
+
+func shouldRetry(stack Stack) bool {
+	if _, ok := retryStates[stack.State()]; ok {
+		return true
+	}
+
+	if stack.State() == "sleep" {
+		// Go 1.5 has a time.Sleep in the GC path. If we find the exact
+		// time.Sleep call, we should treat this as a runnable goroutine.
+		// see: https://github.com/uber/tchannel-go/issues/151
+		return bytes.Contains(stack.Full(), []byte("time.Sleep(0x186a0)"))
+	}
+
+	return false
+}
+
 // VerifyNoLeaks verifies that there are no goroutines running that are stuck
 // inside of readFrames or writeFrames.
 // Since some goroutines may still be performing work in the background, we retry the
 // checks if any goroutines are fine in a running state a finite number of times.
 func VerifyNoLeaks(t *testing.T, opts *VerifyOpts) {
-	retryStates := map[string]struct{}{
-		"runnable": struct{}{},
-		"running":  struct{}{},
-		"syscall":  struct{}{},
-	}
 	const maxAttempts = 50
 	var leakAttempts int
 	var stacks []Stack
@@ -97,7 +113,7 @@ retry:
 		stacks = GetAll()[1:]
 		stacks = filterStacks(stacks, opts)
 		for _, stack := range stacks {
-			if _, ok := retryStates[stack.State()]; ok {
+			if shouldRetry(stack) {
 				runtime.Gosched()
 				if i > maxAttempts/2 {
 					time.Sleep(time.Millisecond)
