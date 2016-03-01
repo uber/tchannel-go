@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"golang.org/x/net/context"
 )
@@ -120,30 +121,24 @@ func TestSetHandler(t *testing.T) {
 		return tchannel.HandlerFunc(func(ctx context.Context, call *tchannel.InboundCall) {
 			method := call.MethodString()
 			assert.Contains(t, allowedMethods, method, "unexpected call to %q", method)
-
-			resp := call.Response()
-			require.NoError(t, tchannel.NewArgWriter(resp.Arg2Writer()).Write(nil))
-			require.NoError(t, tchannel.NewArgWriter(resp.Arg3Writer()).Write([]byte(method)))
+			err := raw.WriteResponse(call.Response(), &raw.Res{Arg3: []byte(method)})
+			require.NoError(t, err)
 		})
 	}
 
-	ch, err := tchannel.NewChannel("svc1", &tchannel.ChannelOptions{
-		Logger: tchannel.NewLogger(ioutil.Discard),
-	})
-	require.NoError(t, err, "NewChannel failed")
+	ch := testutils.NewServer(t, testutils.NewOpts().
+		AddLogFilter("Couldn't find handler", 1, "serviceName", "svc2", "method", "bar"),
+	)
 
 	// Catch-all handler for the main channel that accepts foo, bar, and baz,
 	// and a single registered handler for a different subchannel.
 	ch.GetSubChannel("svc1").SetHandler(genHandler("foo", "bar", "baz"))
 	ch.GetSubChannel("svc2").Register(genHandler("foo"), "foo")
-	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"), "ListenAndServe failed")
 	defer ch.Close()
 
-	client, err := tchannel.NewChannel("client", &tchannel.ChannelOptions{
-		Logger: tchannel.NewLogger(ioutil.Discard),
-	})
-	require.NoError(t, err, "NewChannel failed")
+	client := testutils.NewClient(t, nil)
 	client.Peers().Add(ch.PeerInfo().HostPort)
+	defer client.Close()
 
 	tests := []struct {
 		Service    string
@@ -161,20 +156,15 @@ func TestSetHandler(t *testing.T) {
 	for _, tt := range tests {
 		c := client.GetSubChannel(tt.Service)
 
-		ctx, _ := tchannel.NewContext(1 * time.Second)
+		ctx, _ := tchannel.NewContext(time.Second)
 		call, err := c.BeginCall(ctx, tt.Method, nil)
 		require.NoError(t, err, "BeginCall failed")
-		require.NoError(t, tchannel.NewArgWriter(call.Arg2Writer()).Write(nil))
-		require.NoError(t, tchannel.NewArgWriter(call.Arg3Writer()).Write([]byte("irrelevant")))
+		_, data, _, err := raw.WriteArgs(call, nil, []byte("irrelevant"))
 
-		var data []byte
-		resp := call.Response()
 		if tt.ShouldFail {
-			require.Error(t, tchannel.NewArgReader(resp.Arg2Reader()).Read(&data))
-			require.Error(t, tchannel.NewArgReader(resp.Arg3Reader()).Read(&data))
+			require.Error(t, err)
 		} else {
-			require.NoError(t, tchannel.NewArgReader(resp.Arg2Reader()).Read(&data))
-			require.NoError(t, tchannel.NewArgReader(resp.Arg3Reader()).Read(&data))
+			require.NoError(t, err)
 			assert.Equal(t, tt.Method, string(data))
 		}
 	}
