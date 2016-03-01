@@ -393,7 +393,7 @@ func (ch fragmentChannel) flushFragment(fragment *writableFragment) error {
 func (ch fragmentChannel) recvNextFragment(initial bool) (*readableFragment, error) {
 	rbuf := typed.NewReadBuffer(<-ch)
 	fragment := new(readableFragment)
-	fragment.done = func() {}
+	fragment.onDone = func() {}
 	fragment.flags = rbuf.ReadSingleByte()
 	fragment.checksumType = ChecksumType(rbuf.ReadSingleByte())
 	fragment.checksum = rbuf.ReadBytes(fragment.checksumType.ChecksumSize())

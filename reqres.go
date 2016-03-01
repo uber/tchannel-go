@@ -184,6 +184,7 @@ type reqResReader struct {
 	state              reqResReaderState
 	messageForFragment messageForFragment
 	initialFragment    *readableFragment
+	previousFragment   *readableFragment
 	log                Logger
 	err                error
 }
@@ -224,6 +225,7 @@ func (r *reqResReader) recvNextFragment(initial bool) (*readableFragment, error)
 	if r.initialFragment != nil {
 		fragment := r.initialFragment
 		r.initialFragment = nil
+		r.previousFragment = fragment
 		return fragment, nil
 	}
 
@@ -247,7 +249,18 @@ func (r *reqResReader) recvNextFragment(initial bool) (*readableFragment, error)
 		return nil, r.failed(err)
 	}
 
+	r.previousFragment = fragment
 	return fragment, nil
+}
+
+// releasePreviousFrament releases the last fragment returned by the reader if
+// it's still around. This operation is idempotent.
+func (r *reqResReader) releasePreviousFragment() {
+	fragment := r.previousFragment
+	r.previousFragment = nil
+	if fragment != nil {
+		fragment.done()
+	}
 }
 
 // failed indicates the reader failed
@@ -274,7 +287,7 @@ func parseInboundFragment(framePool FramePool, frame *Frame, message message) (*
 	fragment.checksumType = ChecksumType(rbuf.ReadSingleByte())
 	fragment.checksum = rbuf.ReadBytes(fragment.checksumType.ChecksumSize())
 	fragment.contents = rbuf
-	fragment.done = func() {
+	fragment.onDone = func() {
 		framePool.Release(frame)
 	}
 	return fragment, rbuf.Err()
