@@ -296,6 +296,13 @@ type Registrar interface {
 }
 
 // Register registers a handler for a method.
+//
+// The handler is registered with the service name used when the Channel was
+// created. To register a handler with a different service name, obtain a
+// SubChannel for that service with GetSubChannel, and Register a handler
+// under that. You may also use SetHandler on a SubChannel to set up a
+// catch-all Handler for that service. See the docs for SetHandler for more
+// information.
 func (ch *Channel) Register(h Handler, methodName string) {
 	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
 }

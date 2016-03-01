@@ -102,9 +102,10 @@ func (c *SubChannel) Isolated() bool {
 	return c.topChannel.Peers() != c.peers
 }
 
-// Register registers a handler on the subchannel for a method.
+// Register registers a handler on the subchannel for the given method.
 //
-// This function panics if the Handler for the SubChannel was overwritten.
+// This function panics if the Handler for the SubChannel was overwritten with
+// SetHandler.
 func (c *SubChannel) Register(h Handler, methodName string) {
 	handlers, ok := c.handler.(*handlerMap)
 	if !ok {
