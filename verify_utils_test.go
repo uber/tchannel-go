@@ -34,7 +34,7 @@ func waitForChannelClose(t *testing.T, ch *Channel) bool {
 	started := time.Now()
 
 	var state ChannelState
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 50; i++ {
 		if state = ch.State(); state == ChannelClosed {
 			return true
 		}

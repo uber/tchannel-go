@@ -417,7 +417,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
 		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
 
-		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
@@ -426,7 +426,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		close(startReading)
 		select {
 		case <-handlerComplete:
-		case <-time.After(testutils.Timeout(50 * time.Millisecond)):
+		case <-time.After(testutils.Timeout(70 * time.Millisecond)):
 			t.Errorf("Handler not called, context timeout may be too low")
 		}
 	})
