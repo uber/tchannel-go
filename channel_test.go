@@ -181,6 +181,13 @@ func TestSetHandler(t *testing.T) {
 			assert.Equal(t, tt.Method, string(data))
 		}
 	}
+
+	st := ch.IntrospectState(nil)
+	assert.Equal(t, "overriden", st.SubChannels["svc1"].Handler.Type.String())
+	assert.Nil(t, st.SubChannels["svc1"].Handler.Methods)
+
+	assert.Equal(t, "methods", st.SubChannels["svc2"].Handler.Type.String())
+	assert.Equal(t, []string{"foo"}, st.SubChannels["svc2"].Handler.Methods)
 }
 
 func TestCannotRegisterAfterSetHandler(t *testing.T) {
