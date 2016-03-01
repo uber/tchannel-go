@@ -123,9 +123,7 @@ func (c *SubChannel) Register(h Handler, methodName string) {
 // SetHandler() will be forgotten. Further calls to Register() on this
 // SubChannel after SetHandler() is called will cause panics.
 func (c *SubChannel) SetHandler(h Handler) {
-	c.Lock()
 	c.handler = h
-	c.Unlock()
 }
 
 // Logger returns the logger for this subchannel.
