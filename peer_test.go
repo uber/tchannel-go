@@ -418,7 +418,7 @@ func TestPeerSelection(t *testing.T) {
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
-		assert.EqualValues(t, 4, *count, "Expect exchange update from init resp, ping, pong")
+		assert.EqualValues(t, 4, atomic.LoadUint64(count), "Expect exchange update from init resp, ping, pong")
 	})
 }
 
@@ -503,15 +503,17 @@ func TestPeerSelectionRanking(t *testing.T) {
 	}
 }
 
-func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, count *int64) {
-	var score uint64
-	count = new(int64)
+func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, retCount *uint64) {
+	var (
+		count uint64
+		score uint64
+	)
 
 	return ScoreCalculatorFunc(func(p *Peer) uint64 {
-		atomic.AddInt64(count, 1)
+		atomic.AddUint64(&count, 1)
 		atomic.AddUint64(&score, uint64(delta))
 		return atomic.LoadUint64(&score)
-	}), count
+	}), &count
 }
 
 func createSubChannelWNewStrategy(ch *Channel, name string, initial, delta int64, opts ...SubChannelOption) *PeerList {
