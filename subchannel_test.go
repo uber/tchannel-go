@@ -127,8 +127,7 @@ func TestSetHandler(t *testing.T) {
 	}
 
 	ch := testutils.NewServer(t, testutils.NewOpts().
-		AddLogFilter("Couldn't find handler", 1, "serviceName", "svc2", "method", "bar"),
-	)
+		AddLogFilter("Couldn't find handler", 1, "serviceName", "svc2", "method", "bar"))
 
 	// Catch-all handler for the main channel that accepts foo, bar, and baz,
 	// and a single registered handler for a different subchannel.
@@ -155,11 +154,8 @@ func TestSetHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		c := client.GetSubChannel(tt.Service)
-
 		ctx, _ := tchannel.NewContext(time.Second)
-		call, err := c.BeginCall(ctx, tt.Method, nil)
-		require.NoError(t, err, "BeginCall failed")
-		_, data, _, err := raw.WriteArgs(call, nil, []byte("irrelevant"))
+		_, data, _, err := raw.CallSC(ctx, c, tt.Method, nil, []byte("irrelevant"))
 
 		if tt.ShouldFail {
 			require.Error(t, err)

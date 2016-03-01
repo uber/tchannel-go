@@ -110,7 +110,8 @@ func (c *SubChannel) Register(h Handler, methodName string) {
 	handlers, ok := c.handler.(*handlerMap)
 	if !ok {
 		panic(fmt.Sprintf(
-			"handler for SubChannel(%v) was changed to disallow method registration", c.ServiceName,
+			"handler for SubChannel(%v) was changed to disallow method registration",
+			c.ServiceName(),
 		))
 	}
 	handlers.register(h, methodName)
