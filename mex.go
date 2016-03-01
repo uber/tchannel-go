@@ -49,6 +49,7 @@ const (
 // timed out or been cancelled.
 type messageExchange struct {
 	recvCh    chan *Frame
+	errCh     chan error
 	ctx       context.Context
 	msgID     uint32
 	msgType   messageType
@@ -72,6 +73,9 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		// Note: One slow reader processing a large request could stall the connection.
 		// If we see this, we need to increase the recvCh buffer size.
 		return GetContextError(mex.ctx.Err())
+	case connErr := <-mex.errCh:
+		// Unblock on connection error and forward the error.
+		return connErr
 	}
 }
 
@@ -94,6 +98,9 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 		return frame, nil
 	case <-mex.ctx.Done():
 		return nil, GetContextError(mex.ctx.Err())
+	case connErr := <-mex.errCh:
+		// Unblock on connection error and forward the error.
+		return nil, connErr
 	}
 }
 
@@ -139,10 +146,12 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown() {
+func (mex *messageExchange) shutdown(err error) {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+		// first unblock all applications
+		mex.errCh <- err
 		mex.mexset.removeExchange(mex.msgID)
 	}
 }
@@ -199,6 +208,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgID:     msgID,
 		ctx:       ctx,
 		recvCh:    make(chan *Frame, bufferSize),
+		errCh:     make(chan error, 1),
 		mexset:    mexset,
 		framePool: framePool,
 	}
@@ -322,6 +332,32 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 		mexset.log.Infof("Unable to forward frame %v length %v to %s: %v",
 			frame.Header, frame.Header.FrameSize(), mexset.name, err)
 		return err
+	}
+
+	return nil
+}
+
+// stopExchanges goes through all the exhanges and makes sure nobody is waiting
+// because the connection is already being run down
+func (mexset *messageExchangeSet) stopExchanges(err error) error {
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("stopping %v exchanges due to error: %v", mexset.count(), err)
+	}
+
+	// local map to maintain the all the exchanges to be shutdown,
+	// since we can't hold the lock during shutdown
+	localExchanges := make(map[uint32]*messageExchange)
+
+	// We need to shutdown all exchanges on this set
+	// TODO: fix this? Can we get a new exchange before we shutdown
+	mexset.RLock()
+	for k, mex := range mexset.exchanges {
+		localExchanges[k] = mex
+	}
+	mexset.RUnlock()
+
+	for _, mex := range localExchanges {
+		mex.shutdown(err)
 	}
 
 	return nil

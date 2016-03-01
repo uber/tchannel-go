@@ -64,7 +64,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 
 	// Close may have been called between the time we checked the state and us creating the exchange.
 	if state := c.readState(); state != connectionStartClose && state != connectionActive {
-		mex.shutdown()
+		mex.shutdown(nil)
 		return nil, ErrConnectionClosed
 	}
 
@@ -356,5 +356,5 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 		response.statsReporter.IncCounter("outbound.calls.success", response.commonStatsTags, 1)
 	}
 
-	response.mex.shutdown()
+	response.mex.shutdown(nil)
 }
