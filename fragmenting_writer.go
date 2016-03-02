@@ -36,6 +36,7 @@ var (
 const (
 	chunkHeaderSize      = 2    // each chunk is a uint16
 	hasMoreFragmentsFlag = 0x01 // flags indicating there are more fragments coming
+	isStreamingFlag      = 0x02 // flags indicating that this is a streaming request/response
 )
 
 // A writableFragment is a fragment that can be written to, containing a buffer
