@@ -100,8 +100,14 @@ func (s *tchanHyperbahnServer) handleDiscover(ctx thrift.Context, protocol athri
 	if err != nil {
 		switch v := err.(type) {
 		case *NoPeersAvailable:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for noPeersAvailable returned non-nil error type *NoPeersAvailable but nil value")
+			}
 			res.NoPeersAvailable = v
 		case *InvalidServiceName:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for invalidServiceName returned non-nil error type *InvalidServiceName but nil value")
+			}
 			res.InvalidServiceName = v
 		default:
 			return false, nil, err
