@@ -417,7 +417,9 @@ func TestFragmentationSlowReader(t *testing.T) {
 	}
 
 	// Inbound forward will timeout and cause a warning log.
-	opts := testutils.NewOpts().AddLogFilter("Unable to forward frame", 1)
+	opts := testutils.NewOpts().
+		AddLogFilter("Unable to forward frame", 1).
+		AddLogFilter("Connection error", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ch.Register(HandlerFunc(handler), "echo")
 
