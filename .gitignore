@@ -5,6 +5,9 @@ thrift-gen-release/
 # Lint output
 lint.log
 
+# Test binaries
+*.test
+
 # Cover profiles
 *.out
 
