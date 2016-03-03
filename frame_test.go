@@ -140,10 +140,14 @@ func TestServiceCallReq(t *testing.T) {
 	// reqResWriter instead of callReq. We should instead handle that in
 	// callReq, which will allow tests to be sane.
 	return
+	/* go vet doesn't like unreachable code...
+
 	frame := NewFrame(MaxFramePayloadSize)
 	err := frame.write(&callReq{Service: "udr"})
 	require.NoError(t, err, "Error writing message to frame.")
 	assert.Equal(t, "udr", frame.Service(), "Failed to read service name from frame.")
+
+	*/
 }
 
 func TestServiceCallReqTerrible(t *testing.T) {

@@ -98,9 +98,9 @@ lint:
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) 2>&1 | tee -a lint.log
+	-go tool vet $(PKGS) 2>&1 | grep -v Godeps | tee -a lint.log
 	@echo "Checking gofmt"
-	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d . | tee -a lint.log
+	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d `go list -f {{.Dir}} ./...` | tee -a lint.log
 	@[ ! -s lint.log ]
 
 thrift_example: thrift_gen
