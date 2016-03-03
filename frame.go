@@ -186,12 +186,12 @@ func (f *Frame) Service() string {
 	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
 }
 
-// isLast indicates whether the frame has a continuation or streaming bit set.
+// isLast indicates whether the frame has the continuation bit set.
 func (f *Frame) isLast() bool {
 	switch f.messageType() {
 	case messageTypeCallReq, messageTypeCallRes, messageTypeCallResContinue, messageTypeCallReqContinue:
 		flags := f.Payload[_flagsIndex]
-		return (flags&hasMoreFragmentsFlag != hasMoreFragmentsFlag && flags&isStreamingFlag != isStreamingFlag)
+		return (flags&hasMoreFragmentsFlag != hasMoreFragmentsFlag)
 	default:
 		// This message type can't be continued or streamed.
 		return false

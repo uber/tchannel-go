@@ -169,7 +169,7 @@ func TestFrameFlags(t *testing.T) {
 	}{
 		{0x00, true},
 		{0x01, false},
-		{0x02, false},
+		{0x02, true},
 		{0x03, false},
 		{0x04, true},
 	}
@@ -180,7 +180,7 @@ func TestFrameFlags(t *testing.T) {
 		fh.write(typed.NewWriteBuffer(f.headerBuffer))
 
 		payload := typed.NewWriteBuffer(f.Payload)
-		payload.WriteSingleByte(tt.flags) // flags
+		payload.WriteSingleByte(tt.flags)
 		assert.Equal(t, tt.isLast, f.isLast(), "Wrong IsLast for flags %v", tt.flags)
 	}
 }
