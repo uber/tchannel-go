@@ -39,6 +39,7 @@ const (
 	// MaxFramePayloadSize is the maximum size of the payload for a single frame
 	MaxFramePayloadSize = MaxFrameSize - FrameHeaderSize
 
+	_flagsIndex       = 0
 	_serviceLenIndex  = 1 /* flags */ + 4 /* ttl */ + 25 /* tracing */
 	_serviceNameIndex = _serviceLenIndex + 1
 )
@@ -183,6 +184,18 @@ func (f *Frame) Service() string {
 	}
 	l := f.Payload[_serviceLenIndex]
 	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
+}
+
+// isLast indicates whether the frame has the continuation bit set.
+func (f *Frame) isLast() bool {
+	switch f.messageType() {
+	case messageTypeCallReq, messageTypeCallRes, messageTypeCallResContinue, messageTypeCallReqContinue:
+		flags := f.Payload[_flagsIndex]
+		return (flags&hasMoreFragmentsFlag != hasMoreFragmentsFlag)
+	default:
+		// This message type can't be continued or streamed.
+		return false
+	}
 }
 
 func (f *Frame) write(msg message) error {
