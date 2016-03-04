@@ -1,7 +1,7 @@
 package tchannel_test
 
 import (
-	"sync"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,15 +12,26 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 )
 
+func assertRelaysReleased(t *testing.T, ch *Channel) {
+	for _, peerState := range ch.IntrospectState(nil).RootPeers {
+		var connStates []ConnectionRuntimeState
+		connStates = append(connStates, peerState.InboundConnections...)
+		connStates = append(connStates, peerState.OutboundConnections...)
+		for _, connState := range connStates {
+			n := connState.Relayer.NumItems
+			assert.Equal(t, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort)
+		}
+	}
+}
+
 func TestRelay(t *testing.T) {
 	relay, err := NewChannel("relay", &ChannelOptions{
 		RelayHosts: NewSimpleRelayHosts(map[string][]string{}),
 	})
 	require.NoError(t, err, "Failed to create a relay channel.")
+	defer assertRelaysReleased(t, relay)
 	defer relay.Close()
 	require.NoError(t, relay.ListenAndServe("127.0.0.1:0"), "Relay failed to listen.")
-
-	data := []byte("fake-body")
 
 	server := testutils.NewServer(t, testutils.NewOpts().SetServiceName("test"))
 	defer server.Close()
@@ -31,22 +42,22 @@ func TestRelay(t *testing.T) {
 	defer client.Close()
 	client.Peers().Add(relay.PeerInfo().HostPort)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
+	sc := client.GetSubChannel("test")
 
-	go func(c *Channel) {
-		sc := client.GetSubChannel("test")
+	tests := []struct {
+		header string
+		body   string
+	}{
+		{"fake-header", "fake-body"},                        // fits in one frame
+		{"fake-header", strings.Repeat("fake-body", 10000)}, // requires continuation
+	}
+	for _, tt := range tests {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		arg2, arg3, _, err := raw.CallSC(ctx, sc, "echo", []byte("fake-header"), data)
-		t.Log(string(arg3))
+		arg2, arg3, _, err := raw.CallSC(ctx, sc, "echo", []byte(tt.header), []byte(tt.body))
 		require.NoError(t, err, "Relayed call failed.")
-		assert.Equal(t, "fake-header", string(arg2), "Header was mangled during relay.")
-		assert.Equal(t, "fake-body", string(arg3), "Body was mangled during relay.")
-
-		wg.Done()
-	}(client)
-
-	wg.Wait()
+		assert.Equal(t, tt.header, string(arg2), "Header was mangled during relay.")
+		assert.Equal(t, tt.body, string(arg3), "Body was mangled during relay.")
+	}
 }
