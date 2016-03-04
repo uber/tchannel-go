@@ -139,11 +139,12 @@ func TestServiceCallReq(t *testing.T) {
 	// TODO: This test doesn't work, since the initial flags byte is written in
 	// reqResWriter instead of callReq. We should instead handle that in
 	// callReq, which will allow tests to be sane.
-	return
-	frame := NewFrame(MaxFramePayloadSize)
-	err := frame.write(&callReq{Service: "udr"})
-	require.NoError(t, err, "Error writing message to frame.")
-	assert.Equal(t, "udr", frame.Service(), "Failed to read service name from frame.")
+	if 1 == 2 { // go vet doesn't like unreachable code...
+		frame := NewFrame(MaxFramePayloadSize)
+		err := frame.write(&callReq{Service: "udr"})
+		require.NoError(t, err, "Error writing message to frame.")
+		assert.Equal(t, "udr", frame.Service(), "Failed to read service name from frame.")
+	}
 }
 
 func TestServiceCallReqTerrible(t *testing.T) {
@@ -159,6 +160,30 @@ func TestServiceCallReqTerrible(t *testing.T) {
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
 	assert.Equal(t, "bankmoji", f.Service(), "Failed to read service name from frame.")
+}
+
+func TestFrameFlags(t *testing.T) {
+	// TODO: Same as TestServiceCallReq, above.
+	tests := []struct {
+		flags  byte
+		isLast bool
+	}{
+		{0x00, true},
+		{0x01, false},
+		{0x02, true},
+		{0x03, false},
+		{0x04, true},
+	}
+	for _, tt := range tests {
+		f := NewFrame(100)
+		fh := fakeHeader()
+		f.Header = fh
+		fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+		payload := typed.NewWriteBuffer(f.Payload)
+		payload.WriteSingleByte(tt.flags)
+		assert.Equal(t, tt.isLast, f.isLast(), "Wrong IsLast for flags %v", tt.flags)
+	}
 }
 
 func TestServiceOtherMessages(t *testing.T) {
