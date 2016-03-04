@@ -429,11 +429,11 @@ func (p *Peer) checkConnections(connsPtr *[]*Connection, changed *Connection) (u
 func (p *Peer) connectionStateChanged(changed *Connection) {
 	p.Lock()
 	updated, found := p.checkConnections(&p.inboundConnections, changed)
-	p.Unlock()
 
 	if !found {
 		updated, found = p.checkConnections(&p.outboundConnections, changed)
 	}
+	p.Unlock()
 
 	if updated {
 		p.onConnChange(p)
