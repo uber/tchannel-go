@@ -33,12 +33,16 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
-func TestFrameHeaderJSON(t *testing.T) {
-	fh := FrameHeader{
+func fakeHeader() FrameHeader {
+	return FrameHeader{
 		size:        uint16(0xFF34),
 		messageType: messageTypeCallReq,
 		ID:          0xDEADBEEF,
 	}
+}
+
+func TestFrameHeaderJSON(t *testing.T) {
+	fh := fakeHeader()
 	logged, err := json.Marshal(fh)
 	assert.NoError(t, err, "FrameHeader can't be marshalled to JSON")
 	assert.Equal(
@@ -50,12 +54,7 @@ func TestFrameHeaderJSON(t *testing.T) {
 }
 
 func TestFraming(t *testing.T) {
-	fh := FrameHeader{
-		size:        uint16(0xFF34),
-		messageType: messageTypeCallReq,
-		ID:          0xDEADBEEF,
-	}
-
+	fh := fakeHeader()
 	wbuf := typed.NewWriteBufferWithSize(1024)
 	require.Nil(t, fh.write(wbuf))
 
@@ -134,4 +133,48 @@ func TestReservedBytes(t *testing.T) {
 			0x0, 0x0, 0x0, 0x0, // reserved should always be 0
 		},
 		buf.Bytes(), "Unexpected bytes")
+}
+
+func TestServiceCallReq(t *testing.T) {
+	// TODO: This test doesn't work, since the initial flags byte is written in
+	// reqResWriter instead of callReq. We should instead handle that in
+	// callReq, which will allow tests to be sane.
+	return
+	frame := NewFrame(MaxFramePayloadSize)
+	err := frame.write(&callReq{Service: "udr"})
+	require.NoError(t, err, "Error writing message to frame.")
+	assert.Equal(t, "udr", frame.Service(), "Failed to read service name from frame.")
+}
+
+func TestServiceCallReqTerrible(t *testing.T) {
+	// TODO: Delete in favor of TestServiceCallReq.
+	f := NewFrame(100)
+	fh := fakeHeader()
+	f.Header = fh
+	fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+	payload := typed.NewWriteBuffer(f.Payload)
+	payload.WriteSingleByte(0)           // flags
+	payload.WriteUint32(42)              // TTL
+	payload.WriteBytes(make([]byte, 25)) // tracing
+	payload.WriteLen8String("bankmoji")  // service
+	assert.Equal(t, "bankmoji", f.Service(), "Failed to read service name from frame.")
+}
+
+func TestServiceOtherMessages(t *testing.T) {
+	msg := &initReq{initMessage{id: 1, Version: 0x1, initParams: initParams{
+		InitParamHostPort:    "0.0.0.0:0",
+		InitParamProcessName: "test",
+	}}}
+	frame := NewFrame(MaxFramePayloadSize)
+	err := frame.write(msg)
+	require.NoError(t, err, "Error writing message to frame.")
+	assert.Panics(t, func() { frame.Service() }, "Should panic when getting service from non-callReq frame.")
+}
+
+func TestMessageType(t *testing.T) {
+	frame := NewFrame(MaxFramePayloadSize)
+	err := frame.write(&callReq{Service: "foo"})
+	require.NoError(t, err, "Error writing message to frame.")
+	assert.Equal(t, messageTypeCallReq, frame.messageType(), "Failed to read message type from frame.")
 }
