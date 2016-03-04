@@ -49,9 +49,6 @@ func (r *Relayer) Hosts() RelayHosts {
 
 // Relay forwards a frame.
 func (r *Relayer) Relay(f *Frame) error {
-	// TODO: remove relay items when we get a call req continue or call res
-	// continue frame without a continuation bit.
-	//
 	// TODO: remove relay items on timeout.
 	if f.messageType() != messageTypeCallReq {
 		r.RLock()
@@ -62,9 +59,13 @@ func (r *Relayer) Relay(f *Frame) error {
 		}
 		f.Header.ID = item.remapID
 		item.destination.Receive(f)
+		if f.isLast() {
+			r.removeRelayItem(f.Header.ID)
+		}
 		return nil
 	}
 
+	// Handle messageTypeCallReq
 	if _, ok := r.items[f.Header.ID]; ok {
 		return errors.New("callReq with already active ID")
 	}
@@ -94,6 +95,9 @@ func (r *Relayer) Relay(f *Frame) error {
 
 	f.Header.ID = destinationID
 	relayToDest.destination.Receive(f)
+	if f.isLast() {
+		r.removeRelayItem(f.Header.ID)
+	}
 	return nil
 }
 
@@ -111,4 +115,10 @@ func (r *Relayer) addRelayItem(id, remapID uint32, destination *Relayer) relayIt
 	r.items[id] = item
 	r.Unlock()
 	return item
+}
+
+func (r *Relayer) removeRelayItem(id uint32) {
+	r.Lock()
+	delete(r.items, id)
+	r.Unlock()
 }
