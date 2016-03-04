@@ -1,7 +1,6 @@
 package tchannel_test
 
 import (
-	"net"
 	"sync"
 	"testing"
 	"time"
@@ -12,21 +11,6 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
-
-func getUnusedHostPort(t testing.TB) net.Addr {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Errorf("net.Listen failed: %v", err)
-		return nil
-	}
-
-	if err := listener.Close(); err != nil {
-		t.Errorf("listener.Close failed")
-		return nil
-	}
-
-	return listener.Addr()
-}
 
 func TestRelay(t *testing.T) {
 	relay, err := NewChannel("relay", &ChannelOptions{
@@ -39,6 +23,7 @@ func TestRelay(t *testing.T) {
 	data := []byte("fake-body")
 
 	server := testutils.NewServer(t, testutils.NewOpts().SetServiceName("test"))
+	defer server.Close()
 	server.Register(raw.Wrap(newTestHandler(t)), "echo")
 	relay.RelayHosts().(*SimpleRelayHosts).Add("test", server.PeerInfo().HostPort)
 
