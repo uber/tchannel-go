@@ -402,13 +402,14 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	return nil
 }
 
-// checkInboundConnection will check whether the changed connection is an inbound
-// connection, and will remove any closed connections.
-func (p *Peer) checkInboundConnection(changed *Connection) (updated bool, isInbound bool) {
-	newConns := p.inboundConnections[:0]
-	for _, c := range p.inboundConnections {
+// checkConnection will check whether the changed connection should be removed
+// from the specified connection list. If so, it will be removed.
+func (p *Peer) checkConnections(connsPtr *[]*Connection, changed *Connection) (updated bool, found bool) {
+	conns := *connsPtr
+	newConns := conns[:0]
+	for _, c := range conns {
 		if c == changed {
-			isInbound = true
+			found = true
 		}
 
 		if c.readState() != connectionClosed {
@@ -418,16 +419,20 @@ func (p *Peer) checkInboundConnection(changed *Connection) (updated bool, isInbo
 		}
 	}
 	if updated {
-		p.inboundConnections = newConns
+		*connsPtr = newConns
 	}
 
-	return updated, isInbound
+	return updated, found
 }
 
 // connectionStateChanged is called when one of the peers' connections states changes.
 func (p *Peer) connectionStateChanged(changed *Connection) {
 	p.Lock()
-	updated, _ := p.checkInboundConnection(changed)
+	updated, found := p.checkConnections(&p.inboundConnections, changed)
+
+	if !found {
+		updated, found = p.checkConnections(&p.outboundConnections, changed)
+	}
 	p.Unlock()
 
 	if updated {

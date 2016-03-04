@@ -112,3 +112,7 @@ func (r *Relayer) addRelayItem(id, remapID uint32, destination *Relayer) relayIt
 	r.Unlock()
 	return item
 }
+
+func (r *Relayer) waitForSendCh() {
+	select {}
+}

@@ -50,3 +50,35 @@ func TestRelay(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestRelayHandlesCrashedPeers(t *testing.T) {
+	// TODO: Clean up duplication with previous test.
+	relay, err := NewChannel("relay", &ChannelOptions{
+		RelayHosts: NewSimpleRelayHosts(map[string][]string{}),
+	})
+	require.NoError(t, err, "Failed to create a relay channel.")
+	defer relay.Close()
+	require.NoError(t, relay.ListenAndServe("127.0.0.1:0"), "Relay failed to listen.")
+
+	server := testutils.NewServer(t, testutils.NewOpts().SetServiceName("test"))
+	defer server.Close()
+	server.Register(raw.Wrap(newTestHandler(t)), "echo")
+	relay.RelayHosts().(*SimpleRelayHosts).Add("test", server.PeerInfo().HostPort)
+
+	client := testutils.NewClient(t, nil)
+	defer client.Close()
+	client.Peers().Add(relay.PeerInfo().HostPort)
+
+	sc := client.GetSubChannel("test")
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	_, _, _, err = raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
+	require.NoError(t, err, "Relayed call failed.")
+
+	// Simulate a server crash.
+	server.Close()
+	require.NotPanics(t, func() {
+		raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
+	})
+}
