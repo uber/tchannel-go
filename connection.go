@@ -812,6 +812,9 @@ func (c *Connection) checkExchanges() {
 				// that may try to write to sendCh.
 				c.inbound.waitForSendCh()
 				c.outbound.waitForSendCh()
+				if c.relay != nil {
+					c.relay.waitForSendCh()
+				}
 				close(c.sendCh)
 			}(c.connID)
 		}
