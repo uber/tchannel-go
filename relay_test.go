@@ -66,7 +66,8 @@ func TestRelay(t *testing.T) {
 	wg.Wait()
 }
 
-func TestRelayIgnoresDeadConnections(t *testing.T) {
+func TestRelayHandlesCrashedPeers(t *testing.T) {
+	// TODO: Clean up duplication with previous test.
 	relay, err := NewChannel("relay", &ChannelOptions{
 		RelayHosts: NewSimpleRelayHosts(map[string][]string{}),
 	})
@@ -90,16 +91,9 @@ func TestRelayIgnoresDeadConnections(t *testing.T) {
 	_, _, _, err = raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
 	require.NoError(t, err, "Relayed call failed.")
 
-	peer, err := client.Peers().Get(nil)
-	require.NoError(t, err, "Expected at least one peer.")
-	conn, err := peer.GetConnection(nil)
-	require.NoError(t, err, "Expected at least one connection.")
-	_ = conn
-	// conn.Close()
-	// time.Sleep(time.Second)
-
+	// Simulate a server crash.
 	server.Close()
-
-	_, _, _, err = raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
-	require.NoError(t, err, "Expected new connections to be created on demand.")
+	require.NotPanics(t, func() {
+		raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
+	})
 }
