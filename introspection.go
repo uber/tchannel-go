@@ -121,6 +121,12 @@ type ConnectionRuntimeState struct {
 	IsEphemeral      bool                    `json:"isEphemeral"`
 	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
 	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
+	Relayer          RelayerRuntimeState     `json:"relayer"`
+}
+
+// RelayerRuntimeState is the runtime state for a single relayer.
+type RelayerRuntimeState struct {
+	NumItems int `json:"numItems"`
 }
 
 // ExchangeSetRuntimeState is the runtime state for a message exchange set.
@@ -278,7 +284,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 	c.stateMut.RLock()
 	defer c.stateMut.RUnlock()
 
-	return ConnectionRuntimeState{
+	state := ConnectionRuntimeState{
 		ID:               c.connID,
 		ConnectionState:  c.state.String(),
 		LocalHostPort:    c.conn.LocalAddr().String(),
@@ -286,6 +292,19 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		IsEphemeral:      c.remotePeerInfo.IsEphemeral,
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
+	}
+	if c.relay != nil {
+		state.Relayer = c.relay.IntrospectState(opts)
+	}
+	return state
+}
+
+// IntrospectState returns the runtime state for this relayer.
+func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeState {
+	r.RLock()
+	defer r.RUnlock()
+	return RelayerRuntimeState{
+		NumItems: len(r.items),
 	}
 }
 
