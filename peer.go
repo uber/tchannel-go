@@ -289,28 +289,52 @@ func (p *Peer) HostPort() string {
 	return p.hostPort
 }
 
-// getActive returns a list of active connections.
-// TODO(prashant): Should we clear inactive connections?
-func (p *Peer) getActive() []*Connection {
-	var active []*Connection
-	p.runWithConnections(func(c *Connection) {
-		if c.IsActive() {
-			active = append(active, c)
-		}
-	})
-	return active
+// getConn treats inbound and outbound connections as a single virtual list
+// that can be indexed. The peer must be read-locked.
+func (p *Peer) getConn(i int) *Connection {
+	inboundLen := len(p.inboundConnections)
+	if i < inboundLen {
+		return p.inboundConnections[i]
+	}
+
+	return p.outboundConnections[i-inboundLen]
 }
 
-func randConn(conns []*Connection) *Connection {
-	return conns[peerRng.Intn(len(conns))]
+func (p *Peer) getActiveConnLocked() (*Connection, bool) {
+	allConns := len(p.inboundConnections) + len(p.outboundConnections)
+	if allConns == 0 {
+		return nil, false
+	}
+
+	// We cycle through the connection list, starting at a random point
+	// to avoid always choosing the same connection.
+	startOffset := peerRng.Intn(allConns)
+	for i := 0; i < allConns; i++ {
+		connIndex := (i + startOffset) % allConns
+		if conn := p.getConn(connIndex); conn.IsActive() {
+			return conn, true
+		}
+	}
+
+	return nil, false
+}
+
+// getActiveConn will randomly select an active connection.
+// TODO(prashant): Should we clear inactive connections?
+// TODO(prashant): Do we want some sort of scoring for connections?
+func (p *Peer) getActiveConn() (*Connection, bool) {
+	p.RLock()
+	conn, ok := p.getActiveConnLocked()
+	p.RUnlock()
+
+	return conn, ok
 }
 
 // GetConnection returns an active connection to this peer. If no active connections
 // are found, it will create a new outbound connection and return it.
 func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
-	// TODO(prashant): Use some sort of scoring to pick a connection.
-	if activeConns := p.getActive(); len(activeConns) > 0 {
-		return randConn(activeConns), nil
+	if activeConn, ok := p.getActiveConn(); ok {
+		return activeConn, nil
 	}
 
 	// No active connections, make a new outgoing connection.
