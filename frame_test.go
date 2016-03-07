@@ -182,7 +182,7 @@ func TestFrameFlags(t *testing.T) {
 
 		payload := typed.NewWriteBuffer(f.Payload)
 		payload.WriteSingleByte(tt.flags)
-		assert.Equal(t, tt.isLast, f.isLast(), "Wrong IsLast for flags %v", tt.flags)
+		assert.Equal(t, tt.isLast, f.isLast(), "Wrong isLast for flags %v", tt.flags)
 	}
 }
 
