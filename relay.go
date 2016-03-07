@@ -52,21 +52,17 @@ func (r *Relayer) Hosts() RelayHosts {
 func (r *Relayer) Relay(f *Frame) error {
 	// TODO: remove relay items on timeout.
 	if f.messageType() != messageTypeCallReq {
-		r.RLock()
-		item, ok := r.items[f.Header.ID]
-		r.RUnlock()
-		if !ok {
-			return errors.New("non-callReq for inactive ID")
-		}
-		f.Header.ID = item.remapID
-		item.destination.Receive(f)
-		if f.isLast() {
-			r.removeRelayItem(f.Header.ID)
-		}
-		return nil
+		return r.handleNonCallReq(f)
 	}
+	return r.handleCallReq(f)
+}
 
-	// Handle messageTypeCallReq
+// Receive accepts a relayed frame.
+func (r *Relayer) Receive(f *Frame) {
+	r.conn.sendCh <- f
+}
+
+func (r *Relayer) handleCallReq(f *Frame) error {
 	if _, ok := r.items[f.Header.ID]; ok {
 		return errors.New("callReq with already active ID")
 	}
@@ -105,9 +101,20 @@ func (r *Relayer) Relay(f *Frame) error {
 	return nil
 }
 
-// Receive accepts a relayed frame.
-func (r *Relayer) Receive(f *Frame) {
-	r.conn.sendCh <- f
+// Handle all frames except messageTypeCallReq.
+func (r *Relayer) handleNonCallReq(f *Frame) error {
+	r.RLock()
+	item, ok := r.items[f.Header.ID]
+	r.RUnlock()
+	if !ok {
+		return errors.New("non-callReq for inactive ID")
+	}
+	f.Header.ID = item.remapID
+	item.destination.Receive(f)
+	if f.isLast() {
+		r.removeRelayItem(f.Header.ID)
+	}
+	return nil
 }
 
 func (r *Relayer) addRelayItem(id, remapID uint32, destination *Relayer) relayItem {
