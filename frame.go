@@ -191,9 +191,9 @@ func (f *Frame) isLast() bool {
 	switch f.messageType() {
 	case messageTypeCallReq, messageTypeCallRes, messageTypeCallResContinue, messageTypeCallReqContinue:
 		flags := f.Payload[_flagsIndex]
-		return (flags&hasMoreFragmentsFlag != hasMoreFragmentsFlag)
+		return flags&hasMoreFragmentsFlag == 0
 	default:
-		// This message type can't be continued or streamed.
+		// This message type can't be continued.
 		return false
 	}
 }
