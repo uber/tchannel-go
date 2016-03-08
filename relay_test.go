@@ -10,6 +10,7 @@ import (
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 )
 
 func assertRelaysReleased(t testing.TB, ch *Channel) {
@@ -24,7 +25,7 @@ func assertRelaysReleased(t testing.TB, ch *Channel) {
 	}
 }
 
-func withRelayedEcho(t testing.TB, f func(relay, server *Channel, client *SubChannel)) {
+func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel)) {
 	relay, err := NewChannel("relay", &ChannelOptions{
 		RelayHosts: NewSimpleRelayHosts(map[string][]string{}),
 	})
@@ -38,16 +39,15 @@ func withRelayedEcho(t testing.TB, f func(relay, server *Channel, client *SubCha
 	server.Register(raw.Wrap(newTestHandler(t)), "echo")
 	relay.RelayHosts().(*SimpleRelayHosts).Add("test", server.PeerInfo().HostPort)
 
-	client := testutils.NewClient(t, nil)
+	client := testutils.NewServer(t, nil)
 	defer client.Close()
 	client.Peers().Add(relay.PeerInfo().HostPort)
-	sc := client.GetSubChannel("test")
 
-	f(relay, server, sc)
+	f(relay, server, client)
 }
 
 func TestRelay(t *testing.T) {
-	withRelayedEcho(t, func(_, _ *Channel, sc *SubChannel) {
+	withRelayedEcho(t, func(_, _, client *Channel) {
 		tests := []struct {
 			header string
 			body   string
@@ -55,6 +55,7 @@ func TestRelay(t *testing.T) {
 			{"fake-header", "fake-body"},                        // fits in one frame
 			{"fake-header", strings.Repeat("fake-body", 10000)}, // requires continuation
 		}
+		sc := client.GetSubChannel("test")
 		for _, tt := range tests {
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()
@@ -67,12 +68,12 @@ func TestRelay(t *testing.T) {
 	})
 }
 
-// TODO: Fix races and leaks, then enable.
 func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
-	withRelayedEcho(t, func(_, server *Channel, sc *SubChannel) {
+	withRelayedEcho(t, func(_, server, client *Channel) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
+		sc := client.GetSubChannel("test")
 		_, _, _, err := raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
 		require.NoError(t, err, "Relayed call failed.")
 
@@ -82,4 +83,24 @@ func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
 			raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
 		})
 	})
+}
+
+func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
+	withRelayedEcho(t, func(relay, server, client *Channel) {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		clientHP := client.PeerInfo().HostPort
+		testutils.RegisterEcho(server, func() {
+			// Handler should close the connection to the relay.
+			conn, err := relay.Peers().GetOrAdd(clientHP).GetConnection(ctx)
+			require.NoError(t, err, "TODO")
+			conn.Close()
+		})
+
+		_, _, _, err := raw.CallSC(ctx, client.GetSubChannel("test"), "echo", []byte("fake-header"), []byte("fake-body"))
+		require.NoError(t, err, "Relayed call failed.")
+	})
+
+	goroutines.VerifyNoLeaks(t, nil)
 }
