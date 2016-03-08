@@ -257,9 +257,9 @@ func newPeerScore(p *Peer, score uint64) *peerScore {
 type Peer struct {
 	sync.RWMutex
 
-	channel      Connectable
-	hostPort     string
-	onConnChange func(*Peer)
+	channel             Connectable
+	hostPort            string
+	onClosedConnRemoved func(*Peer)
 
 	// scCount is the number of subchannels that this peer is added to.
 	scCount uint32
@@ -273,14 +273,14 @@ type Peer struct {
 	onUpdate func(*Peer)
 }
 
-func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
+func newPeer(channel Connectable, hostPort string, onClosedConnRemoved func(*Peer)) *Peer {
 	if hostPort == "" {
 		panic("Cannot create peer with blank hostPort")
 	}
 	return &Peer{
-		channel:      channel,
-		hostPort:     hostPort,
-		onConnChange: onConnChange,
+		channel:             channel,
+		hostPort:            hostPort,
+		onClosedConnRemoved: onClosedConnRemoved,
 	}
 }
 
@@ -359,8 +359,6 @@ func (p *Peer) AddInboundConnection(c *Connection) error {
 	p.Lock()
 	p.inboundConnections = append(p.inboundConnections, c)
 	p.Unlock()
-
-	p.connectionStateChanged(c)
 	return nil
 }
 
@@ -399,13 +397,11 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	p.Lock()
 	p.outboundConnections = append(p.outboundConnections, c)
 	p.Unlock()
-
-	p.connectionStateChanged(c)
 	return nil
 }
 
-// removeClosed will check whether the changed connection should be removed
-// from the specified connection list. If so, it will be removed.
+// removeClosed will check remove the changed connection if it exists
+// in the specified connections list.
 func (p *Peer) removeClosed(connsPtr *[]*Connection, changed *Connection) (updated bool, found bool) {
 	conns := *connsPtr
 	newConns := conns[:0]
@@ -414,11 +410,7 @@ func (p *Peer) removeClosed(connsPtr *[]*Connection, changed *Connection) (updat
 			found = true
 		}
 
-		if c.readState() != connectionClosed {
-			newConns = append(newConns, c)
-		} else {
-			updated = true
-		}
+		updated = true
 	}
 	if updated {
 		*connsPtr = newConns
@@ -428,7 +420,11 @@ func (p *Peer) removeClosed(connsPtr *[]*Connection, changed *Connection) (updat
 }
 
 // connectionStateChanged is called when one of the peers' connections states changes.
-func (p *Peer) connectionStateChanged(changed *Connection) {
+func (p *Peer) connectionCloseStateChange(changed *Connection) {
+	if changed.readState() != connectionClosed {
+		return
+	}
+
 	p.Lock()
 	updated, found := p.removeClosed(&p.inboundConnections, changed)
 	if !found {
@@ -437,7 +433,7 @@ func (p *Peer) connectionStateChanged(changed *Connection) {
 	p.Unlock()
 
 	if updated {
-		p.onConnChange(p)
+		p.onClosedConnRemoved(p)
 	}
 }
 
