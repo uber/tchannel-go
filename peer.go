@@ -400,23 +400,21 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	return nil
 }
 
-// removeClosed will check remove the changed connection if it exists
-// in the specified connections list.
-func (p *Peer) removeClosed(connsPtr *[]*Connection, changed *Connection) (updated bool, found bool) {
+// removeConnection will check remove the connection if it exists on connsPtr
+// and returns whether it removed the connection.
+func (p *Peer) removeConnection(connsPtr *[]*Connection, changed *Connection) bool {
 	conns := *connsPtr
-	newConns := conns[:0]
-	for _, c := range conns {
+	for i, c := range conns {
 		if c == changed {
-			found = true
+			// Remove the connection by moving to the end and slicing the list.
+			last := len(conns) - 1
+			conns[i], conns[last] = conns[last], conns[i]
+			*connsPtr = conns[:last]
+			return true
 		}
-
-		updated = true
-	}
-	if updated {
-		*connsPtr = newConns
 	}
 
-	return updated, found
+	return false
 }
 
 // connectionStateChanged is called when one of the peers' connections states changes.
@@ -426,13 +424,13 @@ func (p *Peer) connectionCloseStateChange(changed *Connection) {
 	}
 
 	p.Lock()
-	updated, found := p.removeClosed(&p.inboundConnections, changed)
+	found := p.removeConnection(&p.inboundConnections, changed)
 	if !found {
-		updated, found = p.removeClosed(&p.outboundConnections, changed)
+		found = p.removeConnection(&p.outboundConnections, changed)
 	}
 	p.Unlock()
 
-	if updated {
+	if found {
 		p.onClosedConnRemoved(p)
 	}
 }

@@ -136,6 +136,31 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 	}
 }
 
+func TestPeerRemoveClosedConnection(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		p := client.Peers().Add(hostPort)
+
+		c1, err := p.Connect(ctx)
+		require.NoError(t, err, "Failed to connect")
+		c2, err := p.Connect(ctx)
+		require.NoError(t, err, "Failed to connect")
+
+		require.NoError(t, c1.Close(), "Failed to close first connection")
+		_, outConns := p.NumConnections()
+		assert.Equal(t, 1, outConns, "Expected 1 remaining outgoing connection")
+
+		c, err := p.GetConnection(ctx)
+		require.NoError(t, err, "GetConnection failed")
+		assert.Equal(t, c2, c, "Expected second active connection")
+	})
+}
+
 func TestInboundEphemeralPeerRemoved(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
