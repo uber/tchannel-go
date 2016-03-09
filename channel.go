@@ -555,7 +555,7 @@ func (ch *Channel) removeClosedConn(c *Connection) {
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	ch.removeClosedConn(c)
 	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
-		peer.connectionStateChanged(c)
+		peer.connectionCloseStateChange(c)
 		ch.updatePeer(peer)
 	}
 
