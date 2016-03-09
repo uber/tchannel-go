@@ -498,12 +498,17 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, testutils.RandBytes(100000))
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 		close(timedOut)
-		<-done
+
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Errorf("Handler not called, timeout may be too low")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
