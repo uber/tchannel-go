@@ -63,10 +63,14 @@ func (r *Relayer) Receive(f *Frame) {
 	r.RLock()
 	_, ok := r.items[f.Header.ID]
 	r.RUnlock()
+	if !ok {
+		r.logger.WithFields(
+			LogField{"ID", f.Header.ID},
+		).Warn("Received a frame without a RelayItem.")
+	}
 
 	r.conn.sendCh <- f
-
-	if ok && finishesCall(f) {
+	if finishesCall(f) {
 		r.removeRelayItem(f.Header.ID)
 	}
 }
