@@ -842,6 +842,7 @@ func (c *Connection) closeSendCh(connID uint32) {
 // checkExchanges is called whenever an exchange is removed, and when Close is called.
 func (c *Connection) checkExchanges() {
 	c.callOnExchangeChange()
+
 	moveState := func(fromState, toState connectionState) bool {
 		err := c.withStateLock(func() error {
 			if c.state != fromState {
@@ -855,6 +856,11 @@ func (c *Connection) checkExchanges() {
 
 	var updated connectionState
 	if c.readState() == connectionStartClose {
+		if c.relay != nil {
+			if !c.relay.canClose() {
+				return
+			}
+		}
 		if c.inbound.count() == 0 && moveState(connectionStartClose, connectionInboundClosed) {
 			updated = connectionInboundClosed
 		}
