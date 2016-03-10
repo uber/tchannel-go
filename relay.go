@@ -72,9 +72,12 @@ func (r *Relayer) Receive(f *Frame) {
 }
 
 func (r *Relayer) handleCallReq(f *Frame) error {
+	r.RLock()
 	if _, ok := r.items[f.Header.ID]; ok {
+		r.RUnlock()
 		return errors.New("callReq with already active ID")
 	}
+	r.RUnlock()
 
 	// Get the destination
 	svc := f.Service()
