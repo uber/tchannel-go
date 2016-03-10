@@ -186,20 +186,6 @@ func (f *Frame) Service() string {
 	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
 }
 
-// isLast indicates whether the frame has the continuation bit set.
-// TODO: move to relay
-// DONTCOMMIT
-func (f *Frame) isLast() bool {
-	switch f.messageType() {
-	case messageTypeCallRes, messageTypeCallResContinue:
-		flags := f.Payload[_flagsIndex]
-		return flags&hasMoreFragmentsFlag == 0
-	default:
-		// This message type can't be continued.
-		return false
-	}
-}
-
 func (f *Frame) write(msg message) error {
 	var wbuf typed.WriteBuffer
 	wbuf.Wrap(f.Payload[:])

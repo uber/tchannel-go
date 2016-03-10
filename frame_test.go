@@ -162,30 +162,6 @@ func TestServiceCallReqTerrible(t *testing.T) {
 	assert.Equal(t, "bankmoji", f.Service(), "Failed to read service name from frame.")
 }
 
-func TestFrameFlags(t *testing.T) {
-	// TODO: Same as TestServiceCallReq, above.
-	tests := []struct {
-		flags  byte
-		isLast bool
-	}{
-		{0x00, true},
-		{0x01, false},
-		{0x02, true},
-		{0x03, false},
-		{0x04, true},
-	}
-	for _, tt := range tests {
-		f := NewFrame(100)
-		fh := fakeHeader()
-		f.Header = fh
-		fh.write(typed.NewWriteBuffer(f.headerBuffer))
-
-		payload := typed.NewWriteBuffer(f.Payload)
-		payload.WriteSingleByte(tt.flags)
-		assert.Equal(t, tt.isLast, f.isLast(), "Wrong isLast for flags %v", tt.flags)
-	}
-}
-
 func TestServiceOtherMessages(t *testing.T) {
 	msg := &initReq{initMessage{id: 1, Version: 0x1, initParams: initParams{
 		InitParamHostPort:    "0.0.0.0:0",
