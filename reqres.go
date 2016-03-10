@@ -109,8 +109,8 @@ func (w *reqResWriter) arg3Writer() (ArgWriter, error) {
 
 // newFragment creates a new fragment for marshaling into
 func (w *reqResWriter) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
-	if err := w.mex.ctx.Err(); err != nil {
-		return nil, w.failed(GetContextError(err))
+	if err := w.mex.checkError(); err != nil {
+		return nil, w.failed(err)
 	}
 
 	message := w.messageForFragment(initial)
@@ -141,15 +141,17 @@ func (w *reqResWriter) flushFragment(fragment *writableFragment) error {
 		return w.err
 	}
 
-	if err := w.mex.ctx.Err(); err != nil {
-		return w.failed(GetContextError(err))
-	}
-
 	frame := fragment.frame.(*Frame)
 	frame.Header.SetPayloadSize(uint16(fragment.contents.BytesWritten()))
+
+	if err := w.mex.checkError(); err != nil {
+		return w.failed(err)
+	}
 	select {
 	case <-w.mex.ctx.Done():
 		return w.failed(GetContextError(w.mex.ctx.Err()))
+	case <-w.mex.errCh.c:
+		return w.failed(w.mex.errCh.err)
 	case w.conn.sendCh <- frame:
 		return nil
 	}
@@ -184,6 +186,7 @@ type reqResReader struct {
 	state              reqResReaderState
 	messageForFragment messageForFragment
 	initialFragment    *readableFragment
+	previousFragment   *readableFragment
 	log                Logger
 	err                error
 }
@@ -224,6 +227,7 @@ func (r *reqResReader) recvNextFragment(initial bool) (*readableFragment, error)
 	if r.initialFragment != nil {
 		fragment := r.initialFragment
 		r.initialFragment = nil
+		r.previousFragment = fragment
 		return fragment, nil
 	}
 
@@ -247,7 +251,18 @@ func (r *reqResReader) recvNextFragment(initial bool) (*readableFragment, error)
 		return nil, r.failed(err)
 	}
 
+	r.previousFragment = fragment
 	return fragment, nil
+}
+
+// releasePreviousFrament releases the last fragment returned by the reader if
+// it's still around. This operation is idempotent.
+func (r *reqResReader) releasePreviousFragment() {
+	fragment := r.previousFragment
+	r.previousFragment = nil
+	if fragment != nil {
+		fragment.done()
+	}
 }
 
 // failed indicates the reader failed
@@ -274,7 +289,7 @@ func parseInboundFragment(framePool FramePool, frame *Frame, message message) (*
 	fragment.checksumType = ChecksumType(rbuf.ReadSingleByte())
 	fragment.checksum = rbuf.ReadBytes(fragment.checksumType.ChecksumSize())
 	fragment.contents = rbuf
-	fragment.done = func() {
+	fragment.onDone = func() {
 		framePool.Release(frame)
 	}
 	return fragment, rbuf.Err()

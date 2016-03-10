@@ -86,6 +86,10 @@ type ClientOptions struct {
 	TimeoutPerAttempt time.Duration
 	Handler           Handler
 	FailStrategy      FailStrategy
+
+	// The following are variables for stubbing in unit tests.
+	// They are not part of the stable API and may change.
+	TimeSleep func(d time.Duration)
 }
 
 // NewClient creates a new Hyperbahn client using the given channel.
@@ -104,6 +108,9 @@ func NewClient(ch *tchannel.Channel, config Configuration, opts *ClientOptions) 
 	}
 	if client.opts.Handler == nil {
 		client.opts.Handler = nullHandler{}
+	}
+	if client.opts.TimeSleep == nil {
+		client.opts.TimeSleep = time.Sleep
 	}
 
 	if err := parseConfig(&config); err != nil {

@@ -117,7 +117,7 @@ func NewWrappedSystemError(code SystemErrCode, wrapped error) error {
 		return se
 	}
 
-	return SystemError{code: code, msg: fmt.Sprintf("sys err %x: %s", code, wrapped.Error()), wrapped: wrapped}
+	return SystemError{code: code, msg: fmt.Sprint(wrapped), wrapped: wrapped}
 }
 
 // Error returns the code and message, conforming to the error interface

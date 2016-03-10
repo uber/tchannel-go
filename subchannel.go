@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -46,7 +47,7 @@ type SubChannel struct {
 	topChannel         *Channel
 	defaultCallOptions *CallOptions
 	peers              *PeerList
-	handlers           *handlerMap
+	handler            Handler
 	logger             Logger
 	statsReporter      StatsReporter
 }
@@ -63,7 +64,7 @@ func newSubChannel(serviceName string, ch *Channel) *SubChannel {
 		serviceName:   serviceName,
 		peers:         ch.peers,
 		topChannel:    ch,
-		handlers:      &handlerMap{},
+		handler:       &handlerMap{}, // use handlerMap by default
 		logger:        logger,
 		statsReporter: ch.StatsReporter(),
 	}
@@ -101,9 +102,29 @@ func (c *SubChannel) Isolated() bool {
 	return c.topChannel.Peers() != c.peers
 }
 
-// Register registers a handler on the subchannel for a service+method pair
+// Register registers a handler on the subchannel for the given method.
+//
+// This function panics if the Handler for the SubChannel was overwritten with
+// SetHandler.
 func (c *SubChannel) Register(h Handler, methodName string) {
-	c.handlers.register(h, c.ServiceName(), methodName)
+	handlers, ok := c.handler.(*handlerMap)
+	if !ok {
+		panic(fmt.Sprintf(
+			"handler for SubChannel(%v) was changed to disallow method registration",
+			c.ServiceName(),
+		))
+	}
+	handlers.register(h, methodName)
+}
+
+// SetHandler changes the SubChannel's underlying handler. This may be used to
+// set up a catch-all Handler for all requests received by this SubChannel.
+//
+// Methods registered on this SubChannel using Register() before calling
+// SetHandler() will be forgotten. Further calls to Register() on this
+// SubChannel after SetHandler() is called will cause panics.
+func (c *SubChannel) SetHandler(h Handler) {
+	c.handler = h
 }
 
 // Logger returns the logger for this subchannel.
@@ -121,15 +142,6 @@ func (c *SubChannel) StatsTags() map[string]string {
 	tags := c.topChannel.StatsTags()
 	tags["subchannel"] = c.serviceName
 	return tags
-}
-
-// Find if a handler for the given service+method pair exists
-func (subChMap *subChannelMap) find(serviceName string, method []byte) Handler {
-	if sc, ok := subChMap.get(serviceName); ok {
-		return sc.handlers.find(serviceName, method)
-	}
-
-	return nil
 }
 
 // Register a new subchannel for the given serviceName

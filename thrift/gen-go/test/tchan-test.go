@@ -217,6 +217,9 @@ func (s *tchanSimpleServiceServer) handleSimple(ctx thrift.Context, protocol ath
 	if err != nil {
 		switch v := err.(type) {
 		case *SimpleErr:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for simpleErr returned non-nil error type *SimpleErr but nil value")
+			}
 			res.SimpleErr = v
 		default:
 			return false, nil, err

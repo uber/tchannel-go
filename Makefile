@@ -1,4 +1,5 @@
 GODEPS := $(shell pwd)/Godeps/_workspace
+GO_VERSION := $(shell go version | awk '{ print $$3 }')
 OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
@@ -97,9 +98,9 @@ lint:
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) | tee -a lint.log
+	-go tool vet $(PKGS) 2>&1 | tee -a lint.log
 	@echo "Checking gofmt"
-	-gofmt -d . | tee -a lint.log
+	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d . | tee -a lint.log
 	@[ ! -s lint.log ]
 
 thrift_example: thrift_gen

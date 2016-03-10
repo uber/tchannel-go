@@ -75,10 +75,6 @@ func (lt *latencyTracker) addLatency(d time.Duration) {
 	lt.Unlock()
 }
 
-func (lt *latencyTracker) reset() {
-	*lt = *newLatencyTracker()
-}
-
 func (lt *latencyTracker) report(t testing.TB) {
 	duration := time.Since(lt.started)
 	lt.Lock()
@@ -162,7 +158,7 @@ func benchmarkCallsN(b *testing.B, c benchmarkConfig) {
 		})
 	}
 
-	lt.reset()
+	lt = newLatencyTracker()
 	defer lt.report(b)
 	b.ResetTimer()
 

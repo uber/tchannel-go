@@ -120,6 +120,9 @@ func (s *tchanAdminServer) handleClearAll(ctx thrift.Context, protocol athrift.T
 	if err != nil {
 		switch v := err.(type) {
 		case *NotAuthorized:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for notAuthorized returned non-nil error type *NotAuthorized but nil value")
+			}
 			res.NotAuthorized = v
 		default:
 			return false, nil, err
@@ -240,8 +243,14 @@ func (s *tchanKeyValueServer) handleGet(ctx thrift.Context, protocol athrift.TPr
 	if err != nil {
 		switch v := err.(type) {
 		case *KeyNotFound:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for notFound returned non-nil error type *KeyNotFound but nil value")
+			}
 			res.NotFound = v
 		case *InvalidKey:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for invalidKey returned non-nil error type *InvalidKey but nil value")
+			}
 			res.InvalidKey = v
 		default:
 			return false, nil, err
@@ -267,6 +276,9 @@ func (s *tchanKeyValueServer) handleSet(ctx thrift.Context, protocol athrift.TPr
 	if err != nil {
 		switch v := err.(type) {
 		case *InvalidKey:
+			if v == nil {
+				return false, nil, fmt.Errorf("Handler for invalidKey returned non-nil error type *InvalidKey but nil value")
+			}
 			res.InvalidKey = v
 		default:
 			return false, nil, err

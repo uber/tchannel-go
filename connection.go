@@ -148,7 +148,7 @@ type Connection struct {
 	stateMut        sync.RWMutex
 	inbound         *messageExchangeSet
 	outbound        *messageExchangeSet
-	handlers        *handlerMap
+	handler         Handler
 	nextMessageID   uint32
 	events          connectionEvents
 	commonStatsTags map[string]string
@@ -156,6 +156,8 @@ type Connection struct {
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
 	closeNetworkCalled int32
+	// stoppedExchanges is atomically set when exchanges are stopped due to error.
+	stoppedExchanges uint32
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -254,7 +256,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		checksumType:    checksumType,
 		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
 		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handlers:        ch.handlers,
+		handler:         channelHandler{ch},
 		events:          events,
 		commonStatsTags: ch.commonStatsTags,
 	}
@@ -600,8 +602,8 @@ func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
 	})
 }
 
-// connectionError handles a connection level error
-func (c *Connection) connectionError(site string, err error) error {
+func (c *Connection) logConnectionError(site string, err error) error {
+	errCode := ErrCodeNetwork
 	if err == io.EOF {
 		c.log.Debugf("Connection got EOF")
 	} else {
@@ -610,13 +612,26 @@ func (c *Connection) connectionError(site string, err error) error {
 			ErrField(err),
 		)
 		if se, ok := err.(SystemError); ok && se.Code() != ErrCodeNetwork {
+			errCode = se.Code()
 			logger.Error("Connection error.")
 		} else {
 			logger.Warn("Connection error.")
 		}
 	}
+	return NewWrappedSystemError(errCode, err)
+}
+
+// connectionError handles a connection level error
+func (c *Connection) connectionError(site string, err error) error {
+	err = c.logConnectionError(site, err)
 	c.Close()
-	return NewWrappedSystemError(ErrCodeNetwork, err)
+
+	// On any connection error, notify the exchanges of this error.
+	if atomic.CompareAndSwapUint32(&c.stoppedExchanges, 0, 1) {
+		c.outbound.stopExchanges(err)
+		c.inbound.stopExchanges(err)
+	}
+	return err
 }
 
 func (c *Connection) protocolError(id uint32, err error) error {

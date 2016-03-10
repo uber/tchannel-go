@@ -99,6 +99,13 @@ func (h *testHandler) OnError(ctx context.Context, err error) {
 	h.t.Errorf("testHandler got error: %v stack:\n%s", err, stack)
 }
 
+func writeFlushStr(w ArgWriter, d string) error {
+	if _, err := io.WriteString(w, d); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
 func TestRoundTrip(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		handler := newTestHandler(t)
@@ -410,14 +417,16 @@ func TestFragmentationSlowReader(t *testing.T) {
 	}
 
 	// Inbound forward will timeout and cause a warning log.
-	opts := testutils.NewOpts().AddLogFilter("Unable to forward frame", 1)
+	opts := testutils.NewOpts().
+		AddLogFilter("Unable to forward frame", 1).
+		AddLogFilter("Connection error", 1)
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		ch.Register(HandlerFunc(handler), "echo")
 
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
 		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
 
-		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
@@ -426,7 +435,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		close(startReading)
 		select {
 		case <-handlerComplete:
-		case <-time.After(testutils.Timeout(50 * time.Millisecond)):
+		case <-time.After(testutils.Timeout(70 * time.Millisecond)):
 			t.Errorf("Handler not called, context timeout may be too low")
 		}
 	})
@@ -489,14 +498,53 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		}
 		ch.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, testutils.RandBytes(100000))
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 		close(timedOut)
-		<-done
+
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Errorf("Handler not called, timeout may be too low")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
+}
+
+func TestWriteAfterConnectionError(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	// Closing network connections can lead to warnings in many places.
+	opts := testutils.NewOpts().DisableLogVerification()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+		testutils.RegisterEcho(ch, nil)
+
+		call, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "echo", nil)
+		require.NoError(t, err, "Call failed")
+
+		w, err := call.Arg2Writer()
+		require.NoError(t, err, "Arg2Writer failed")
+		require.NoError(t, writeFlushStr(w, "initial"), "write initial failed")
+
+		// Now close the underlying network connection, writes should fail.
+		_, conn := OutboundConnection(call)
+		conn.Close()
+
+		// Writes should start failing pretty soon.
+		var writeErr error
+		for i := 0; i < 100; i++ {
+			if writeErr = writeFlushStr(w, "f"); writeErr != nil {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if assert.Error(t, writeErr, "Writes should fail after a connection is closed") {
+			assert.Equal(t, ErrCodeNetwork, GetSystemErrorCode(writeErr), "write should fail due to network error")
+		}
+	})
 }
 
 func TestReadTimeout(t *testing.T) {

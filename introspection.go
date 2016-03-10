@@ -23,6 +23,7 @@ package tchannel
 import (
 	"encoding/json"
 	"runtime"
+	"sort"
 
 	"golang.org/x/net/context"
 )
@@ -86,8 +87,24 @@ type SubChannelRuntimeState struct {
 	Service  string `json:"service"`
 	Isolated bool   `json:"isolated"`
 	// IsolatedPeers is the list of all isolated peers for this channel.
-	IsolatedPeers []SubPeerScore `json:"isolatedPeers,omitempty"`
+	IsolatedPeers []SubPeerScore      `json:"isolatedPeers,omitempty"`
+	Handler       HandlerRuntimeState `json:"handler"`
 }
+
+// HandlerRuntimeState TODO
+type HandlerRuntimeState struct {
+	Type    handlerType `json:"type"`
+	Methods []string    `json:"methods,omitempty"`
+}
+
+type handlerType string
+
+func (h handlerType) String() string { return string(h) }
+
+const (
+	methodHandler   handlerType = "methods"
+	overrideHandler             = "overriden"
+)
 
 // SubPeerScore show the runtime state of a peer with score.
 type SubPeerScore struct {
@@ -214,6 +231,17 @@ func (subChMap *subChannelMap) IntrospectState(opts *IntrospectionOptions) map[s
 		}
 		if state.Isolated {
 			state.IsolatedPeers = sc.Peers().IntrospectList(opts)
+		}
+		if hmap, ok := sc.handler.(*handlerMap); ok {
+			state.Handler.Type = methodHandler
+			methods := make([]string, 0, len(hmap.handlers))
+			for k := range hmap.handlers {
+				methods = append(methods, k)
+			}
+			sort.Strings(methods)
+			state.Handler.Methods = methods
+		} else {
+			state.Handler.Type = overrideHandler
 		}
 		m[k] = state
 	}
