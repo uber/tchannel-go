@@ -187,9 +187,11 @@ func (f *Frame) Service() string {
 }
 
 // isLast indicates whether the frame has the continuation bit set.
+// TODO: move to relay
+// DONTCOMMIT
 func (f *Frame) isLast() bool {
 	switch f.messageType() {
-	case messageTypeCallReq, messageTypeCallRes, messageTypeCallResContinue, messageTypeCallReqContinue:
+	case messageTypeCallRes, messageTypeCallResContinue:
 		flags := f.Payload[_flagsIndex]
 		return flags&hasMoreFragmentsFlag == 0
 	default:
