@@ -118,11 +118,12 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	if !ok {
 		return errors.New("non-callReq for inactive ID")
 	}
+	originalID := f.Header.ID
 	f.Header.ID = item.remapID
 	item.destination.Receive(f)
 
 	if finishesCall(f) {
-		r.removeRelayItem(f.Header.ID)
+		r.removeRelayItem(originalID)
 	}
 	return nil
 }
