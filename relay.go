@@ -167,8 +167,7 @@ func finishesCall(f *Frame) bool {
 	case messageTypeCallRes, messageTypeCallResContinue:
 		flags := f.Payload[_flagsIndex]
 		return flags&hasMoreFragmentsFlag == 0
-	case messageTypeError:
-		return true
+	// TODO: errors should also terminate an RPC.
 	default:
 		return false
 	}
