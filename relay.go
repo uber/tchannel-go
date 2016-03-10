@@ -3,6 +3,7 @@ package tchannel
 import (
 	"errors"
 	"sync"
+	"time"
 )
 
 // RelayHosts allows external wrappers to inject peer selection logic for
@@ -78,7 +79,10 @@ func (r *Relayer) Relay(f *Frame) error {
 	}
 	peer := r.peers.GetOrAdd(hostPort)
 
-	c, err := peer.GetRelayConnection()
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	c, err := peer.GetConnection(ctx)
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),

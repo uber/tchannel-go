@@ -350,28 +350,6 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 	return c, nil
 }
 
-// GetRelayConnection returns an active connection for relaying to this peer.
-// Like GetConnection, if will create a new outbound connection if necessary.
-func (p *Peer) GetRelayConnection() (*Connection, error) {
-	p.RLock()
-	if len(p.inboundConnections)+len(p.outboundConnections) == 0 {
-		p.RUnlock()
-		ctx, cancel := NewContext(5 * time.Second)
-		defer cancel()
-		return p.GetConnection(ctx)
-	}
-
-	var conn *Connection
-	if len(p.outboundConnections) > 0 {
-		conn = randConn(p.outboundConnections)
-	} else {
-		conn = randConn(p.inboundConnections)
-	}
-
-	p.RUnlock()
-	return conn, nil
-}
-
 // AddInboundConnection adds an active inbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
 func (p *Peer) AddInboundConnection(c *Connection) error {
