@@ -3,6 +3,7 @@ package tchannel
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type Relayer struct {
 	peers   *PeerList
 	conn    *Connection
 	logger  Logger
+	pending uint32
 }
 
 // NewRelayer constructs a Relayer.
@@ -50,7 +52,6 @@ func (r *Relayer) Hosts() RelayHosts {
 
 // Relay forwards a frame.
 func (r *Relayer) Relay(f *Frame) error {
-	// TODO: remove relay items on timeout.
 	if f.messageType() != messageTypeCallReq {
 		return r.handleNonCallReq(f)
 	}
@@ -59,7 +60,15 @@ func (r *Relayer) Relay(f *Frame) error {
 
 // Receive accepts a relayed frame.
 func (r *Relayer) Receive(f *Frame) {
+	r.RLock()
+	_, ok := r.items[f.Header.ID]
+	r.RUnlock()
+
 	r.conn.sendCh <- f
+
+	if ok && finishesCall(f) {
+		r.removeRelayItem(f.Header.ID)
+	}
 }
 
 func (r *Relayer) handleCallReq(f *Frame) error {
@@ -95,9 +104,6 @@ func (r *Relayer) handleCallReq(f *Frame) error {
 
 	f.Header.ID = destinationID
 	relayToDest.destination.Receive(f)
-	if f.isLast() {
-		r.removeRelayItem(f.Header.ID)
-	}
 	return nil
 }
 
@@ -111,7 +117,8 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	}
 	f.Header.ID = item.remapID
 	item.destination.Receive(f)
-	if f.isLast() {
+
+	if finishesCall(f) {
 		r.removeRelayItem(f.Header.ID)
 	}
 	return nil
@@ -122,6 +129,7 @@ func (r *Relayer) addRelayItem(id, remapID uint32, destination *Relayer) relayIt
 		remapID:     remapID,
 		destination: destination,
 	}
+	r.incPending()
 	r.Lock()
 	r.items[id] = item
 	r.Unlock()
@@ -132,4 +140,36 @@ func (r *Relayer) removeRelayItem(id uint32) {
 	r.Lock()
 	delete(r.items, id)
 	r.Unlock()
+	r.decPending()
+	r.conn.checkExchanges()
+}
+
+func (r *Relayer) canClose() bool {
+	return r.countPending() == 0
+}
+
+func (r *Relayer) incPending() {
+	atomic.AddUint32(&r.pending, 1)
+}
+
+func (r *Relayer) decPending() {
+	atomic.AddUint32(&r.pending, ^uint32(0))
+}
+
+func (r *Relayer) countPending() uint32 {
+	return atomic.LoadUint32(&r.pending)
+}
+
+// finishesCall checks whether this frame is the last one we should expect for
+// this RPC req-res.
+func finishesCall(f *Frame) bool {
+	switch f.messageType() {
+	case messageTypeCallRes, messageTypeCallResContinue:
+		flags := f.Payload[_flagsIndex]
+		return flags&hasMoreFragmentsFlag == 0
+	case messageTypeError:
+		return true
+	default:
+		return false
+	}
 }
