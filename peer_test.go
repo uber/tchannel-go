@@ -56,24 +56,6 @@ func assertNumConnections(t *testing.T, peer *Peer, in, out int) {
 	assert.Equal(t, actualOut, out, "Expected %v outgoing connection.", out)
 }
 
-func TestPeerRelayConnection(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		peer := fakePeer(t, ch, hostPort)
-
-		// Should create connections.
-		conn, err := peer.GetRelayConnection()
-		assert.NoError(t, err)
-		assert.NotNil(t, conn)
-		assertNumConnections(t, peer, 1, 1)
-
-		// Should reuse the connections we've already created.
-		conn, err = peer.GetRelayConnection()
-		assert.NoError(t, err)
-		assert.NotNil(t, conn)
-		assertNumConnections(t, peer, 1, 1)
-	})
-}
-
 func TestGetPeerNoPeer(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
 	peer, err := ch.Peers().Get(nil)
