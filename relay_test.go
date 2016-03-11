@@ -94,7 +94,7 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 		testutils.RegisterEcho(server, func() {
 			// Handler should close the connection to the relay.
 			conn, err := relay.Peers().GetOrAdd(clientHP).GetConnection(ctx)
-			require.NoError(t, err, "TODO")
+			require.NoError(t, err, "Unexpected failure getting a connection to the client.")
 			conn.Close()
 		})
 
