@@ -77,11 +77,12 @@ func (r *Relayer) Receive(f *Frame) {
 
 func (r *Relayer) handleCallReq(f *Frame) error {
 	r.RLock()
-	if _, ok := r.items[f.Header.ID]; ok {
-		r.RUnlock()
+	_, ok := r.items[f.Header.ID]
+	r.RUnlock()
+
+	if ok {
 		return errors.New("callReq with already active ID")
 	}
-	r.RUnlock()
 
 	// Get the destination
 	svc := f.Service()
@@ -153,6 +154,9 @@ func (r *Relayer) removeRelayItem(id uint32) {
 }
 
 func (r *Relayer) canClose() bool {
+	if r == nil {
+		return true
+	}
 	return r.countPending() == 0
 }
 
