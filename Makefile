@@ -101,6 +101,8 @@ lint:
 	-go tool vet $(PKGS) 2>&1 | tee -a lint.log
 	@echo "Checking gofmt"
 	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d . | tee -a lint.log
+	@echo "Checking for unresolved FIXMEs"
+	-git grep -i fixme | grep -v -e Godeps -e vendor -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
 
 thrift_example: thrift_gen
