@@ -856,10 +856,8 @@ func (c *Connection) checkExchanges() {
 
 	var updated connectionState
 	if c.readState() == connectionStartClose {
-		if c.relay != nil {
-			if !c.relay.canClose() {
-				return
-			}
+		if !c.relay.canClose() {
+			return
 		}
 		if c.inbound.count() == 0 && moveState(connectionStartClose, connectionInboundClosed) {
 			updated = connectionInboundClosed
