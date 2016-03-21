@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// Package atom provides simple wrappers around numerics to enforce atomic
+// Package atomic provides simple wrappers around numerics to enforce atomic
 // access.
 package atomic
 
