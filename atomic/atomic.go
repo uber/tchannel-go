@@ -20,7 +20,7 @@
 
 // Package atom provides simple wrappers around numerics to enforce atomic
 // access.
-package atom
+package atomic
 
 import "sync/atomic"
 
