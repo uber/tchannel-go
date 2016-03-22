@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")
@@ -172,6 +173,6 @@ func DefaultOpts(opts *ChannelOpts) *ChannelOpts {
 // WrapLogger wraps the given logger with extra verification.
 func (v *LogVerification) WrapLogger(t testing.TB, l tchannel.Logger) tchannel.Logger {
 	return errorLogger{l, t, v, &errorLoggerState{
-		matchCount: make([]uint32, len(v.Filters)),
+		matchCount: make([]atomic.Uint32, len(v.Filters)),
 	}}
 }

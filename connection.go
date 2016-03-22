@@ -28,10 +28,11 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/typed"
+
 	"golang.org/x/net/context"
 )
 
@@ -149,19 +150,19 @@ type Connection struct {
 	inbound         *messageExchangeSet
 	outbound        *messageExchangeSet
 	handler         Handler
-	nextMessageID   uint32
+	nextMessageID   atomic.Uint32
 	events          connectionEvents
 	commonStatsTags map[string]string
 
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
-	closeNetworkCalled int32
+	closeNetworkCalled atomic.Int32
 	// stoppedExchanges is atomically set when exchanges are stopped due to error.
-	stoppedExchanges uint32
+	stoppedExchanges atomic.Uint32
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
-var nextConnID uint32
+var nextConnID atomic.Uint32
 
 type connectionState int
 
@@ -235,7 +236,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		framePool = DefaultFramePool
 	}
 
-	connID := atomic.AddUint32(&nextConnID, 1)
+	connID := nextConnID.Inc()
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
 		{"localAddr", conn.LocalAddr()},
@@ -550,7 +551,7 @@ func (c *Connection) RemotePeerInfo() PeerInfo {
 
 // NextMessageID reserves the next available message id for this connection
 func (c *Connection) NextMessageID() uint32 {
-	return atomic.AddUint32(&c.nextMessageID, 1)
+	return c.nextMessageID.Inc()
 }
 
 // SendSystemError sends an error frame for the given system error.
@@ -627,7 +628,7 @@ func (c *Connection) connectionError(site string, err error) error {
 	c.Close()
 
 	// On any connection error, notify the exchanges of this error.
-	if atomic.CompareAndSwapUint32(&c.stoppedExchanges, 0, 1) {
+	if c.stoppedExchanges.CAS(0, 1) {
 		c.outbound.stopExchanges(err)
 		c.inbound.stopExchanges(err)
 	}
@@ -677,7 +678,7 @@ func (c *Connection) readFrames(_ uint32) {
 	for {
 		frame := c.framePool.Get()
 		if err := frame.ReadIn(c.conn); err != nil {
-			if atomic.LoadInt32(&c.closeNetworkCalled) == 0 {
+			if c.closeNetworkCalled.Load() == 0 {
 				c.connectionError("read frames", err)
 			} else {
 				c.log.Debugf("Ignoring error after connection was closed: %v", err)
@@ -831,7 +832,7 @@ func (c *Connection) closeNetwork() {
 	// closed; no need to close the send channel (and closing the send
 	// channel would be dangerous since other goroutine might be sending)
 	c.log.Debugf("Closing underlying network connection")
-	atomic.AddInt32(&c.closeNetworkCalled, 1)
+	c.closeNetworkCalled.Inc()
 	if err := c.conn.Close(); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},

@@ -22,12 +22,13 @@ package testutils
 
 import (
 	"net"
-	"sync/atomic"
 	"testing"
+
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go"
 )
 
 type frameRelay struct {
@@ -37,7 +38,7 @@ type frameRelay struct {
 }
 
 func (r frameRelay) listen() (listenHostPort string, cancel func()) {
-	closed := uint32(0)
+	closed := atomic.Uint32{}
 
 	conn, err := net.Listen("tcp", ":0")
 	require.NoError(r.t, err, "net.Listen failed")
@@ -46,7 +47,7 @@ func (r frameRelay) listen() (listenHostPort string, cancel func()) {
 		for {
 			c, err := conn.Accept()
 			if err != nil {
-				if atomic.LoadUint32(&closed) == 0 {
+				if closed.Load() == 0 {
 					r.t.Errorf("Accept failed: %v", err)
 				}
 				return
@@ -57,7 +58,7 @@ func (r frameRelay) listen() (listenHostPort string, cancel func()) {
 	}()
 
 	return conn.Addr().String(), func() {
-		atomic.AddUint32(&closed, 1)
+		closed.Inc()
 		conn.Close()
 	}
 }

@@ -27,6 +27,11 @@ import "sync/atomic"
 // Int32 is an atomic wrapper around an int32.
 type Int32 struct{ int32 }
 
+// NewInt32 creates an Int32.
+func NewInt32(i int32) *Int32 {
+	return &Int32{i}
+}
+
 // Load atomically loads the wrapped value.
 func (i *Int32) Load() int32 {
 	return atomic.LoadInt32(&i.int32)
@@ -64,6 +69,11 @@ func (i *Int32) Swap(n int32) int32 {
 
 // Int64 is an atomic wrapper around an int64.
 type Int64 struct{ int64 }
+
+// NewInt64 creates an Int64.
+func NewInt64(i int64) *Int64 {
+	return &Int64{i}
+}
 
 // Load atomically loads the wrapped value.
 func (i *Int64) Load() int64 {
@@ -103,6 +113,11 @@ func (i *Int64) Swap(n int64) int64 {
 // Uint32 is an atomic wrapper around an uint32.
 type Uint32 struct{ uint32 }
 
+// NewUint32 creates a Uint32.
+func NewUint32(i uint32) *Uint32 {
+	return &Uint32{i}
+}
+
 // Load atomically loads the wrapped value.
 func (i *Uint32) Load() uint32 {
 	return atomic.LoadUint32(&i.uint32)
@@ -140,6 +155,11 @@ func (i *Uint32) Swap(n uint32) uint32 {
 
 // Uint64 is an atomic wrapper around a uint64.
 type Uint64 struct{ uint64 }
+
+// NewUint64 creates a Uint64.
+func NewUint64(i uint64) *Uint64 {
+	return &Uint64{i}
+}
 
 // Load atomically loads the wrapped value.
 func (i *Uint64) Load() uint64 {

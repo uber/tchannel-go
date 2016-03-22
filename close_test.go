@@ -23,11 +23,11 @@ package tchannel_test
 import (
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	. "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -415,15 +415,17 @@ func TestCloseOneSide(t *testing.T) {
 // a connection is closed, and ensures there's no race conditions such as the error
 // frame being added to the channel just as it is closed.
 func TestCloseSendError(t *testing.T) {
-	closed := uint32(0)
-	counter := uint32(0)
+	var (
+		closed  atomic.Uint32
+		counter atomic.Uint32
+	)
 
 	serverCh := testutils.NewServer(t, nil)
 	testutils.RegisterEcho(serverCh, func() {
-		if atomic.AddUint32(&counter, 1) > 10 {
+		if counter.Inc() > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
 			go func() {
-				atomic.AddUint32(&closed, 1)
+				closed.Inc()
 				serverCh.Close()
 			}()
 		}
@@ -440,7 +442,7 @@ func TestCloseSendError(t *testing.T) {
 		go func() {
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Microsecond)
 			err := testutils.CallEcho(clientCh, serverCh, nil)
-			if err != nil && atomic.LoadUint32(&closed) == 0 {
+			if err != nil && closed.Load() == 0 {
 				t.Errorf("Call failed: %v", err)
 			}
 			wg.Done()

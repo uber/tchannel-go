@@ -23,10 +23,11 @@ package testutils
 import (
 	"fmt"
 	"net"
-	"sync/atomic"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/raw"
+
 	"golang.org/x/net/context"
 )
 
@@ -59,7 +60,7 @@ func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	return ch, nil
 }
 
-var totalClients uint32
+var totalClients = atomic.Uint32{}
 
 // NewClientChannel creates a TChannel that is not listening.
 func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
@@ -67,7 +68,7 @@ func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 		opts = &ChannelOpts{}
 	}
 
-	clientNum := atomic.AddUint32(&totalClients, 1)
+	clientNum := totalClients.Inc()
 	serviceName := defaultString(opts.ServiceName, DefaultClientName)
 	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+fmt.Sprint(clientNum))
 	return tchannel.NewChannel(serviceName, getChannelOptions(opts))
