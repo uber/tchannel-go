@@ -24,8 +24,9 @@ import (
 	"container/heap"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/uber/tchannel-go/atomic"
 
 	"golang.org/x/net/context"
 )
@@ -178,7 +179,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	}
 
 	l.peerHeap.pushPeer(ps)
-	atomic.AddUint64(&ps.chosenCount, 1)
+	ps.chosenCount.Inc()
 	return ps.Peer
 }
 
@@ -267,7 +268,7 @@ type Peer struct {
 	// connections are mutable, and are protected by the mutex.
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
-	chosenCount         uint64
+	chosenCount         atomic.Uint64
 
 	// onUpdate is a test-only hook.
 	onUpdate func(*Peer)

@@ -24,9 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/typed"
+
 	"golang.org/x/net/context"
 )
 
@@ -49,7 +50,7 @@ const (
 type errNotifier struct {
 	c        chan struct{}
 	err      error
-	notified int32
+	notified atomic.Int32
 }
 
 func newErrNotifier() errNotifier {
@@ -64,7 +65,7 @@ func (e *errNotifier) Notify(err error) error {
 	}
 
 	// There may be some sort of race where we try to notify the mex twice.
-	if !atomic.CompareAndSwapInt32(&e.notified, 0, 1) {
+	if !e.notified.CAS(0, 1) {
 		return fmt.Errorf("cannot broadcast error: %v, already have: %v", err, e.err)
 	}
 
@@ -96,9 +97,8 @@ type messageExchange struct {
 	mexset    *messageExchangeSet
 	framePool FramePool
 
-	// The following are atomically updated uint32.
-	shutdownAtomic uint32
-	errChNotified  uint32
+	shutdownAtomic atomic.Uint32
+	errChNotified  atomic.Uint32
 }
 
 // checkError is called before waiting on the mex channels.
@@ -235,11 +235,11 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 func (mex *messageExchange) shutdown() {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
-	if !atomic.CompareAndSwapUint32(&mex.shutdownAtomic, 0, 1) {
+	if !mex.shutdownAtomic.CAS(0, 1) {
 		return
 	}
 
-	if atomic.CompareAndSwapUint32(&mex.errChNotified, 0, 1) {
+	if mex.errChNotified.CAS(0, 1) {
 		mex.errCh.Notify(errMexShutdown)
 	}
 
@@ -486,7 +486,7 @@ func (mexset *messageExchangeSet) stopExchanges(err error) {
 		// on sendChRefs that there's no references to sendCh is violated since
 		// readers/writers could still have a reference to sendCh even though
 		// we shutdown the exchange and called Done on sendChRefs.
-		if atomic.CompareAndSwapUint32(&mex.errChNotified, 0, 1) {
+		if mex.errChNotified.CAS(0, 1) {
 			mex.errCh.Notify(err)
 		}
 	}

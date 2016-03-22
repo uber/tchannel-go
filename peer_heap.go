@@ -23,15 +23,15 @@ package tchannel
 import (
 	"container/heap"
 	"math/rand"
-	"sync/atomic"
 	"time"
 )
 
-// peerHeap maintains a min-heap of peers based on the peers' score.
+// peerHeap maintains a min-heap of peers based on the peers' score. All method
+// calls must be serialized externally.
 type peerHeap struct {
 	peerScores []*peerScore
 	rng        *rand.Rand
-	order      uint64 // atomic
+	order      uint64
 }
 
 func newPeerHeap() *peerHeap {
@@ -88,7 +88,8 @@ func (ph *peerHeap) popPeer() *peerScore {
 
 // pushPeer pushes the new peer into the heap.
 func (ph *peerHeap) pushPeer(peerScore *peerScore) {
-	newOrder := atomic.AddUint64(&ph.order, 1)
+	ph.order++
+	newOrder := ph.order
 	// randRange will affect the deviation of peer's chosenCount
 	randRange := ph.Len()/2 + 1
 	peerScore.order = newOrder + uint64(ph.rng.Intn(randRange))

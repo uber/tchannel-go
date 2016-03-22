@@ -23,10 +23,10 @@ package testutils
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 )
 
 // Matches returns true if the message and fields match the filter.
@@ -61,7 +61,7 @@ func (f LogFilter) Matches(msg string, fields tchannel.LogFields) bool {
 }
 
 type errorLoggerState struct {
-	matchCount []uint32
+	matchCount []atomic.Uint32
 }
 
 type errorLogger struct {
@@ -84,7 +84,7 @@ func (l errorLogger) checkFilters(msg string) bool {
 		return false
 	}
 
-	matchCount := atomic.AddUint32(&l.s.matchCount[match], 1)
+	matchCount := l.s.matchCount[match].Inc()
 	return uint(matchCount) <= l.v.Filters[match].Count
 }
 func (l errorLogger) checkErr(prefix, msg string) {

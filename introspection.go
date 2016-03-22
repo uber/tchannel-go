@@ -268,7 +268,7 @@ func (p *Peer) IntrospectState(opts *IntrospectionOptions) PeerRuntimeState {
 		HostPort:            p.hostPort,
 		InboundConnections:  getConnectionRuntimeState(p.inboundConnections, opts),
 		OutboundConnections: getConnectionRuntimeState(p.outboundConnections, opts),
-		ChosenCount:         p.chosenCount,
+		ChosenCount:         p.chosenCount.Load(),
 		SCCount:             p.scCount,
 	}
 }
