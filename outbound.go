@@ -56,6 +56,12 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, ErrTimeout
 	}
 
+	if !c.pendingExchangeMethodAdd() {
+		// Connection is closed, no need to do anything.
+		return nil, ErrInvalidConnectionState
+	}
+	defer c.pendingExchangeMethodDone()
+
 	requestID := c.NextMessageID()
 	mex, err := c.outbound.newExchange(ctx, c.framePool, messageTypeCallReq, requestID, mexChannelBufferSize)
 	if err != nil {

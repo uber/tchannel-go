@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"runtime"
 	"strings"
@@ -159,6 +160,8 @@ type Connection struct {
 	closeNetworkCalled atomic.Int32
 	// stoppedExchanges is atomically set when exchanges are stopped due to error.
 	stoppedExchanges atomic.Uint32
+	// pendingMethods is the number of methods running that may block closing of sendCh.
+	pendingMethods atomic.Int64
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -335,6 +338,12 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	req.Version = CurrentProtocolVersion
 	req.initParams = c.getInitParams()
 
+	if !c.pendingExchangeMethodAdd() {
+		// Connection is closed, no need to do anything.
+		return ErrInvalidConnectionState
+	}
+	defer c.pendingExchangeMethodDone()
+
 	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
 	if err != nil {
 		return c.connectionError("create init req", err)
@@ -409,6 +418,12 @@ func (c *Connection) handleInitReq(frame *Frame) {
 
 // ping sends a ping message and waits for a ping response.
 func (c *Connection) ping(ctx context.Context) error {
+	if !c.pendingExchangeMethodAdd() {
+		// Connection is closed, no need to do anything.
+		return ErrInvalidConnectionState
+	}
+	defer c.pendingExchangeMethodDone()
+
 	req := &pingReq{id: c.NextMessageID()}
 	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
 	if err != nil {
@@ -441,6 +456,12 @@ func (c *Connection) handlePingRes(frame *Frame) bool {
 
 // handlePingReq responds to the pingReq message with a pingRes.
 func (c *Connection) handlePingReq(frame *Frame) {
+	if !c.pendingExchangeMethodAdd() {
+		// Connection is closed, no need to do anything.
+		return
+	}
+	defer c.pendingExchangeMethodDone()
+
 	if c.readState() != connectionActive {
 		c.protocolError(frame.Header.ID, fmt.Errorf("connection state is not active"))
 		return
@@ -742,6 +763,36 @@ func (c *Connection) writeFrames(_ uint32) {
 	c.closeNetwork()
 }
 
+// pendingExchangeMethodAdd returns whether the method that is trying to
+// add a message exchange can continue.
+func (c *Connection) pendingExchangeMethodAdd() bool {
+	return c.pendingMethods.Inc() > 0
+}
+
+// pendingExchangeMethodDone should be deferred by a method called
+// pendingExchangeMessageAdd.
+func (c *Connection) pendingExchangeMethodDone() {
+	c.pendingMethods.Dec()
+}
+
+// closeSendCh waits till there are no other goroutines that may try to write
+// to sendCh.
+// We accept connID on the stack so can more easily debug panics or leaked goroutines.
+func (c *Connection) closeSendCh(connID uint32) {
+	// Wait till all methods that may add exchanges are done running.
+	// When they are done, we set the value to a negative value which
+	// will ensure that if any other methods start that may add exchanges
+	// they will fail due to closed connection.
+	for !c.pendingMethods.CAS(0, math.MinInt32) {
+		time.Sleep(time.Millisecond)
+	}
+
+	c.inbound.waitForSendCh()
+	c.outbound.waitForSendCh()
+	c.log.Debugf("Closing send channel.")
+	close(c.sendCh)
+}
+
 // checkExchanges is called whenever an exchange is removed, and when Close is called.
 func (c *Connection) checkExchanges() {
 	c.callOnExchangeChange()
@@ -776,14 +827,7 @@ func (c *Connection) checkExchanges() {
 	if updated != 0 {
 		// If the connection is closed, we can safely close the channel.
 		if updated == connectionClosed {
-			// Pass connID on the stack so can more easily debug panics or leaked goroutines.
-			go func(connID uint32) {
-				// We cannot close sendCh until we are sure that there are no other goroutines
-				// that may try to write to sendCh.
-				c.inbound.waitForSendCh()
-				c.outbound.waitForSendCh()
-				close(c.sendCh)
-			}(c.connID)
+			go c.closeSendCh(c.connID)
 		}
 
 		c.log.Debugf("checkExchanges updated connection state to %v", updated)
@@ -815,7 +859,7 @@ func (c *Connection) Close() error {
 	}
 
 	if closeSendCh {
-		close(c.sendCh)
+		go c.closeSendCh(c.connID)
 	}
 
 	// Check all in-flight requests to see whether we can transition the Close state.
