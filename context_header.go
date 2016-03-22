@@ -40,7 +40,7 @@ type headerCtx struct {
 	context.Context
 }
 
-// headersContainer stores the headers, and is itself stored in the context under `headersKey`
+// headersContainer stores the headers, and is itself stored in the context under `contextKeyHeaders`
 type headersContainer struct {
 	reqHeaders  map[string]string
 	respHeaders map[string]string
