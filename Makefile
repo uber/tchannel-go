@@ -2,7 +2,7 @@ GODEPS := $(shell pwd)/Godeps/_workspace
 GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
-FMTABLE_MINOR_VERSIONS := 5
+FMTABLE_MINOR_VERSIONS := 6
 ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT := true
 endif
