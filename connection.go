@@ -162,6 +162,9 @@ type Connection struct {
 	stoppedExchanges atomic.Uint32
 	// pendingMethods is the number of methods running that may block closing of sendCh.
 	pendingMethods atomic.Int64
+	// ignoreRemotePeer is used to avoid a data race between setting the RemotePeerInfo
+	// and the connection failing, causing a read of the RemotePeerInfo at the same time.
+	ignoreRemotePeer bool
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -507,17 +510,22 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		return true
 	}
 
-	c.remotePeerInfo.HostPort = res.initParams[InitParamHostPort]
-	if c.remotePeerInfo.IsEphemeralHostPort() {
-		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
-		c.remotePeerInfo.IsEphemeral = true
-	}
-	c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
-
 	c.withStateLock(func() error {
-		if c.state == connectionWaitingToRecvInitRes {
-			c.state = connectionActive
+		if c.state != connectionWaitingToRecvInitRes {
+			return nil
 		}
+		if c.ignoreRemotePeer {
+			return nil
+		}
+
+		c.remotePeerInfo.HostPort = res.initParams[InitParamHostPort]
+		if c.remotePeerInfo.IsEphemeralHostPort() {
+			c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
+			c.remotePeerInfo.IsEphemeral = true
+		}
+		c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
+
+		c.state = connectionActive
 		return nil
 	})
 	c.callOnActive()
@@ -645,6 +653,12 @@ func (c *Connection) logConnectionError(site string, err error) error {
 
 // connectionError handles a connection level error
 func (c *Connection) connectionError(site string, err error) error {
+	// Avoid racing with setting the peer info.
+	c.withStateLock(func() error {
+		c.ignoreRemotePeer = true
+		return nil
+	})
+
 	err = c.logConnectionError(site, err)
 	c.Close()
 
