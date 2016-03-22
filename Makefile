@@ -95,18 +95,18 @@ cover_ci: cover_profile
 	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci
 
 
-FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/'
+FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'Godeps/' -e 'vendor/'
 lint:
 ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 	@echo "Linters are enabled on Go version" $(GO_VERSION)
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) 2>&1 | tee -a lint.log
+	-go tool vet $(PKGS) 2>&1 | $(FILTER) | tee -a lint.log
 	@echo "Checking gofmt"
 	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d . | tee -a lint.log
 	@echo "Checking for unresolved FIXMEs"
-	-git grep -i fixme | grep -v -e Godeps -e vendor -e Makefile | tee -a lint.log
+	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
 else
 	@echo "Not running linters on Go version" $(GO_VERSION)
