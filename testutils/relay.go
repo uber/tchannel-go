@@ -38,7 +38,7 @@ type frameRelay struct {
 }
 
 func (r frameRelay) listen() (listenHostPort string, cancel func()) {
-	closed := atomic.Uint32{}
+	var closed atomic.Uint32
 
 	conn, err := net.Listen("tcp", ":0")
 	require.NoError(r.t, err, "net.Listen failed")

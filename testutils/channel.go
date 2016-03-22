@@ -60,7 +60,7 @@ func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	return ch, nil
 }
 
-var totalClients = atomic.Uint32{}
+var totalClients atomic.Uint32
 
 // NewClientChannel creates a TChannel that is not listening.
 func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {

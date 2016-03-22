@@ -122,7 +122,7 @@ func BenchmarkInboundSerial(b *testing.B) {
 }
 
 func BenchmarkInboundParallel(b *testing.B) {
-	var reqCounter = &atomic.Int32{}
+	var reqCounter atomic.Int32
 	serverAddr, err := setupBenchServer()
 	require.NoError(b, err, "setupBenchServer failed")
 
