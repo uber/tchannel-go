@@ -30,7 +30,10 @@ const defaultTimeout = time.Second
 
 type contextKey int
 
-const contextKeyTChannel = 1
+const (
+	contextKeyTChannel contextKey = iota
+	contextKeyHeaders
+)
 
 type tchannelCtxParams struct {
 	span         *Span
