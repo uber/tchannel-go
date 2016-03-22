@@ -2,7 +2,7 @@ GODEPS := $(shell pwd)/Godeps/_workspace
 GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
-FMTABLE_MINOR_VERSION := 5
+FMTABLE_MINOR_VERSIONS := 5
 ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT := true
 endif
@@ -115,7 +115,7 @@ ifdef SHOULD_LINT
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) 2>&1 | $(FILTER) | tee -a lint.log
+	-go vet $(PKGS) 2>&1 | tee -a lint.log
 ifdef SHOULD_LINT_FMT
 	@echo "Checking gofmt"
 	-gofmt -l -s . | $(FILTER) | tee -a lint.log
