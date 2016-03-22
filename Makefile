@@ -2,6 +2,7 @@ GODEPS := $(shell pwd)/Godeps/_workspace
 GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
+FMTABLE_MINOR_VERSION := 5
 OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
@@ -104,7 +105,7 @@ ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 	@echo "Running go vet"
 	-go tool vet $(PKGS) 2>&1 | $(FILTER) | tee -a lint.log
 	@echo "Checking gofmt"
-	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d . | tee -a lint.log
+	-[ $(GO_MINOR_VERSION) != $(FMTABLE_MINOR_VERSION) ] || gofmt -d . | tee -a lint.log
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
