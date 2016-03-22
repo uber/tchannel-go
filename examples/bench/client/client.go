@@ -42,7 +42,7 @@ var (
 	getToSetRatio = flag.Int("getToSetRatio", 1, "The number of Gets to do per Set call")
 
 	// counter tracks the total number of requests completed in the past second.
-	counter = &atomic.Int64{}
+	counter = atomic.Int64{}
 )
 
 func main() {

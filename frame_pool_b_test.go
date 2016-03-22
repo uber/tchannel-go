@@ -33,7 +33,7 @@ func benchmarkUsing(b *testing.B, pool FramePool) {
 	const numGoroutines = 1000
 	const maxHoldFrames = 1000
 
-	gotFrames := &atomic.Uint64{}
+	gotFrames := atomic.Uint64{}
 
 	var wg sync.WaitGroup
 	for i := 0; i < numGoroutines; i++ {
