@@ -139,7 +139,12 @@ var requestStatePool = sync.Pool{
 }
 
 func getRetryOptions(ctx context.Context) *RetryOptions {
-	opts := getTChannelParams(ctx).retryOptions
+	params := getTChannelParams(ctx)
+	if params == nil {
+		return defaultRetryOptions
+	}
+
+	opts := params.retryOptions
 	if opts == nil {
 		return defaultRetryOptions
 	}
