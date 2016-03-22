@@ -353,11 +353,7 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 // AddInboundConnection adds an active inbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
 func (p *Peer) AddInboundConnection(c *Connection) error {
-	switch c.readState() {
-	case connectionActive, connectionStartClose:
-		// TODO(prashantv): Block inbound connections when the connection is not active.
-		break
-	default:
+	if c.readState() != connectionActive {
 		return ErrInvalidConnectionState
 	}
 
