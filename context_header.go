@@ -36,31 +36,56 @@ type ContextWithHeaders interface {
 	SetResponseHeaders(map[string]string)
 }
 
+type headersContextKey int
+
+const headersKey headersContextKey = iota
+
 type headerCtx struct {
 	context.Context
+}
+
+// headersContainer stores the headers, and is itself stored in the context under `headersKey`
+type headersContainer struct {
 	reqHeaders  map[string]string
 	respHeaders map[string]string
 }
 
+func (c *headerCtx) headers() *headersContainer {
+	if h, ok := c.Value(headersKey).(*headersContainer); ok {
+		return h
+	}
+	return nil
+}
+
 // Headers gets application headers out of the context.
 func (c *headerCtx) Headers() map[string]string {
-	return c.reqHeaders
+	if h := c.headers(); h != nil {
+		return h.reqHeaders
+	}
+	return nil
 }
 
 // ResponseHeaders returns the response headers.
 func (c *headerCtx) ResponseHeaders() map[string]string {
-	return c.respHeaders
+	if h := c.headers(); h != nil {
+		return h.respHeaders
+	}
+	return nil
 }
 
 // SetResponseHeaders sets the response headers.
 func (c *headerCtx) SetResponseHeaders(headers map[string]string) {
-	c.respHeaders = headers
+	if h := c.headers(); h != nil {
+		h.respHeaders = headers
+	}
+	// TODO what if we don't find the container?
 }
 
 // WrapWithHeaders returns a Context that can be used to make a call with request headers.
 func WrapWithHeaders(ctx context.Context, headers map[string]string) ContextWithHeaders {
-	return &headerCtx{
-		Context:    ctx,
+	h := &headersContainer{
 		reqHeaders: headers,
 	}
+	newCtx := context.WithValue(ctx, headersKey, h)
+	return &headerCtx{Context: newCtx}
 }
