@@ -118,7 +118,7 @@ ifdef SHOULD_LINT
 	-go vet $(PKGS) 2>&1 | tee -a lint.log
 ifdef SHOULD_LINT_FMT
 	@echo "Checking gofmt"
-	-gofmt -l -s . | $(FILTER) | tee -a lint.log
+	-gofmt -l . | $(FILTER) | tee -a lint.log
 else
 	@echo "Not checking gofmt on" $(GO_VERSION)
 endif
