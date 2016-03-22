@@ -109,7 +109,7 @@ ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 	@echo "Running go vet"
 	-go tool vet $(PKGS) 2>&1 | $(FILTER) | tee -a lint.log
 	@echo "Checking gofmt"
-	-[ $(GO_MINOR_VERSION) != $(FMTABLE_MINOR_VERSION) ] || gofmt -d . | tee -a lint.log
+	-[ $(GO_MINOR_VERSION) != $(FMTABLE_MINOR_VERSION) ] || gofmt -l -s . | $(FILTER) | tee -a lint.log
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
