@@ -241,8 +241,12 @@ func (l *PeerList) updatePeer(p *Peer) {
 type peerScore struct {
 	*Peer
 
+	// score according to the current peer list's ScoreCalculator.
 	score uint64
+	// index of the peerScore in the peerHeap. Used to interact with container/heap.
 	index int
+	// order is the tiebreaker for when score is equal. It is set when a peer
+	// is pushed to the heap based on peerHeap.order with jitter.
 	order uint64
 }
 
