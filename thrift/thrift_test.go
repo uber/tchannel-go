@@ -88,8 +88,8 @@ func TestRetryRequest(t *testing.T) {
 		count := 0
 		args.s1.On("Simple", ctxArg()).Return(tchannel.ErrServerBusy).
 			Run(func(args mock.Arguments) {
-			count++
-		})
+				count++
+			})
 		require.Error(t, args.c1.Simple(ctx), "Simple expected to fail")
 		assert.Equal(t, 5, count, "Expected Simple to be retried 5 times")
 	})
