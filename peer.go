@@ -146,7 +146,11 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	var psPopList []*peerScore
 	var ps *peerScore
 
-	canChoosePeer := func(hostPort string) bool {
+	canChoosePeer := func(p *peerScore) bool {
+		if p.countActiveConns() == 0 {
+			return false
+		}
+		hostPort := p.HostPort()
 		if _, ok := prevSelected[hostPort]; ok {
 			return false
 		}
@@ -162,7 +166,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	for i := 0; i < size; i++ {
 		popped := l.peerHeap.popPeer()
 
-		if canChoosePeer(popped.HostPort()) {
+		if canChoosePeer(popped) {
 			ps = popped
 			break
 		}
@@ -328,6 +332,16 @@ func (p *Peer) getActiveConn() (*Connection, bool) {
 	p.RUnlock()
 
 	return conn, ok
+}
+
+func (p *Peer) countActiveConns() uint {
+	var count uint
+	p.runWithConnections(func(c *Connection) {
+		if c.IsActive() {
+			count++
+		}
+	})
+	return count
 }
 
 // GetConnection returns an active connection to this peer. If no active connections
