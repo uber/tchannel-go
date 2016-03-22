@@ -119,3 +119,26 @@ func TestCurrentCallWithNilResult(t *testing.T) {
 	call := CurrentCall(ctx)
 	assert.Nil(t, call, "Should return nil.")
 }
+
+func TestContextWithHeaders(t *testing.T) {
+	ctx := context.WithValue(context.Background(), "some key", "some value")
+
+	t_ctx1, _ := NewContextBuilder(time.Second).
+		AddHeader("header key", "header value").
+		Build()
+	assert.EqualValues(t, "header value", t_ctx1.Headers()["header key"])
+	assert.Nil(t, t_ctx1.Value("some key"), "no inheritance of parent context")
+
+	t_ctx2, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx).
+		AddHeader("header key", "header value").
+		Build()
+	assert.EqualValues(t, "header value", t_ctx2.Headers()["header key"])
+	assert.EqualValues(t, "some value", t_ctx2.Value("some key"), "inherited from parent ctx")
+
+	t_ctx2.SetResponseHeaders(map[string]string{"resp key": "resp value"})
+	assert.EqualValues(t, "resp value", t_ctx2.ResponseHeaders()["resp key"])
+
+	ctx = t_ctx2 // test as regular context
+	assert.EqualValues(t, "some value", ctx.Value("some key"))
+}
