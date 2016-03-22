@@ -1,5 +1,7 @@
 GODEPS := $(shell pwd)/Godeps/_workspace
 GO_VERSION := $(shell go version | awk '{ print $$3 }')
+GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
+LINTABLE_MINOR_VERSIONS := 5 6
 OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
@@ -95,6 +97,8 @@ cover_ci: cover_profile
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/'
 lint:
+ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+	@echo "Linters are enabled on Go version" $(GO_VERSION)
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
@@ -104,6 +108,10 @@ lint:
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i fixme | grep -v -e Godeps -e vendor -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
+else
+	@echo "Not running linters on Go version" $(GO_VERSION)
+endif
+
 
 thrift_example: thrift_gen
 	go build -o $(BUILD)/examples/thrift       ./examples/thrift/main.go
