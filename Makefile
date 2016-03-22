@@ -3,6 +3,13 @@ GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
 FMTABLE_MINOR_VERSION := 5
+ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+SHOULD_LINT := true
+endif
+ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+SHOULD_LINT_FMT := true
+endif
+
 OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
@@ -48,7 +55,8 @@ get_thrift:
 install:
 	GOPATH=$(GODEPS) go get github.com/tools/godep
 	GOPATH=$(GODEPS) godep restore -v
-ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+ifdef SHOULD_LINT
+	@echo "Installing golint, since we expect to lint on" $(GO_VERSION)
 	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
 else
 	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
@@ -102,19 +110,23 @@ cover_ci: cover_profile
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'Godeps/' -e 'vendor/'
 lint:
-ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
-	@echo "Linters are enabled on Go version" $(GO_VERSION)
+ifdef SHOULD_LINT
+	@echo "Linters are enabled on" $(GO_VERSION)
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
 	-go tool vet $(PKGS) 2>&1 | $(FILTER) | tee -a lint.log
+ifdef SHOULD_LINT_FMT
 	@echo "Checking gofmt"
-	-[ $(GO_MINOR_VERSION) != $(FMTABLE_MINOR_VERSION) ] || gofmt -l -s . | $(FILTER) | tee -a lint.log
+	-gofmt -l -s . | $(FILTER) | tee -a lint.log
+else
+	@echo "Not checking gofmt on" $(GO_VERSION)
+endif
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
 else
-	@echo "Skipping linters on Go version" $(GO_VERSION)
+	@echo "Skipping linters on" $(GO_VERSION)
 endif
 
 
