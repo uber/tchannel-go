@@ -27,7 +27,7 @@ import (
 )
 
 func TestInt32(t *testing.T) {
-	atom := &Int32{42}
+	atom := NewInt32(42)
 
 	require.Equal(t, int32(42), atom.Load(), "Load didn't work.")
 	require.Equal(t, int32(44), atom.Add(2), "Add didn't work.")
@@ -45,7 +45,7 @@ func TestInt32(t *testing.T) {
 }
 
 func TestInt64(t *testing.T) {
-	atom := &Int64{42}
+	atom := NewInt64(42)
 
 	require.Equal(t, int64(42), atom.Load(), "Load didn't work.")
 	require.Equal(t, int64(44), atom.Add(2), "Add didn't work.")
@@ -63,7 +63,7 @@ func TestInt64(t *testing.T) {
 }
 
 func TestUint32(t *testing.T) {
-	atom := &Uint32{42}
+	atom := NewUint32(42)
 
 	require.Equal(t, uint32(42), atom.Load(), "Load didn't work.")
 	require.Equal(t, uint32(44), atom.Add(2), "Add didn't work.")
@@ -81,7 +81,7 @@ func TestUint32(t *testing.T) {
 }
 
 func TestUint64(t *testing.T) {
-	atom := &Uint64{42}
+	atom := NewUint64(42)
 
 	require.Equal(t, uint64(42), atom.Load(), "Load didn't work.")
 	require.Equal(t, uint64(44), atom.Add(2), "Add didn't work.")
