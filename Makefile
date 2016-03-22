@@ -47,8 +47,12 @@ get_thrift:
 
 install:
 	GOPATH=$(GODEPS) go get github.com/tools/godep
-	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
 	GOPATH=$(GODEPS) godep restore -v
+ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
+else
+	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
+endif
 
 install_ci: get_thrift install
 	go get -u github.com/mattn/goveralls
@@ -110,7 +114,7 @@ ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
 else
-	@echo "Not running linters on Go version" $(GO_VERSION)
+	@echo "Skipping linters on Go version" $(GO_VERSION)
 endif
 
 
