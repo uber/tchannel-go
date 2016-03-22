@@ -44,6 +44,9 @@ type ContextBuilder struct {
 	// RetryOptions are the retry options for this call.
 	RetryOptions *RetryOptions
 
+	// ParentContext to build the new context from. If empty, context.Background() is used.
+	ParentContext context.Context
+
 	// Hidden fields: we do not want users outside of tchannel to set these.
 	incomingCall IncomingCall
 	span         *Span
@@ -139,6 +142,12 @@ func (cb *ContextBuilder) SetTimeoutPerAttempt(timeoutPerAttempt time.Duration) 
 	return cb
 }
 
+// SetParentContext sets the parent for the Context.
+func (cb *ContextBuilder) SetParentContext(ctx context.Context) *ContextBuilder {
+	cb.ParentContext = ctx
+	return cb
+}
+
 func (cb *ContextBuilder) setSpan(span *Span) *ContextBuilder {
 	cb.span = span
 	return cb
@@ -151,8 +160,6 @@ func (cb *ContextBuilder) setIncomingCall(call IncomingCall) *ContextBuilder {
 
 // Build returns a ContextWithHeaders that can be used to make calls.
 func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
-	timeout := cb.Timeout
-
 	if cb.TracingDisabled {
 		cb.span.EnableTracing(false)
 	}
@@ -164,7 +171,12 @@ func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 		retryOptions: cb.RetryOptions,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	parent := cb.ParentContext
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, cb.Timeout)
+
 	ctx = context.WithValue(ctx, contextKeyTChannel, params)
 	return WrapWithHeaders(ctx, cb.Headers), cancel
 }
