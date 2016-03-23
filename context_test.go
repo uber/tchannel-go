@@ -119,3 +119,90 @@ func TestCurrentCallWithNilResult(t *testing.T) {
 	call := CurrentCall(ctx)
 	assert.Nil(t, call, "Should return nil.")
 }
+
+func getParentContext(t *testing.T) ContextWithHeaders {
+	ctx := context.WithValue(context.Background(), "some key", "some value")
+
+	ctx1, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx).
+		AddHeader("header key", "header value").
+		Build()
+	return ctx1
+}
+
+func TestContextBuilderParentContextNoHeaders(t *testing.T) {
+	ctx := getParentContext(t)
+	assert.Equal(t, map[string]string{"header key": "header value"}, ctx.Headers())
+	assert.EqualValues(t, "some value", ctx.Value("some key"), "inherited from parent ctx")
+}
+
+func TestContextBuilderParentContextMergeHeaders(t *testing.T) {
+	ctx := getParentContext(t)
+	ctx.Headers()["fixed header"] = "fixed value"
+
+	// append header to parent
+	ctx2, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx).
+		AddHeader("header key 2", "header value 2").
+		Build()
+	assert.Equal(t, map[string]string{
+		"header key":   "header value",   // inherited
+		"fixed header": "fixed value",    // inherited
+		"header key 2": "header value 2", // appended
+	}, ctx2.Headers())
+
+	// override parent header
+	ctx3, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx).
+		AddHeader("header key", "header value 2"). // override
+		Build()
+
+	assert.Equal(t, map[string]string{
+		"header key":   "header value 2", // overwritten
+		"fixed header": "fixed value",    // inherited
+	}, ctx3.Headers())
+}
+
+func TestContextBuilderParentContextReplaceHeaders(t *testing.T) {
+	ctx := getParentContext(t)
+	ctx.Headers()["fixed header"] = "fixed value"
+	assert.Equal(t, map[string]string{
+		"header key":   "header value",
+		"fixed header": "fixed value",
+	}, ctx.Headers())
+
+	// replace headers with a new map
+	ctx2, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx).
+		SetHeaders(map[string]string{"header key": "header value 2"}).
+		Build()
+	assert.Equal(t, map[string]string{"header key": "header value 2"}, ctx2.Headers())
+}
+
+func TestContextWithHeadersAsContext(t *testing.T) {
+	var ctx context.Context = getParentContext(t)
+	assert.EqualValues(t, "some value", ctx.Value("some key"), "inherited from parent ctx")
+}
+
+func TestContextBuilderParentContextSpan(t *testing.T) {
+	ctx := getParentContext(t)
+	span := NewSpan(5, 4, 3)
+
+	ctx2, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx).
+		SetSpanForTest(&span).
+		Build()
+	assert.Equal(t, &span, CurrentSpan(ctx2), "explicitly provided span used")
+
+	ctx3, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx2).
+		Build()
+	assert.Equal(t, &span, CurrentSpan(ctx3), "span inherited from parent")
+
+	ctx4, _ := NewContextBuilder(time.Second).
+		SetParentContext(ctx2).
+		SetExternalSpan(3, 2, 1, true).
+		Build()
+	span4 := NewSpan(3, 2, 1)
+	assert.Equal(t, &span4, CurrentSpan(ctx4), "external span used")
+}

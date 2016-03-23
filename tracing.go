@@ -121,3 +121,16 @@ func (s *Span) sampleRootSpan(sampleRate float64) {
 		s.EnableTracing(false)
 	}
 }
+
+func newSpan(traceID, spanID, parentID uint64, tracingEnabled bool) *Span {
+	flags := byte(0)
+	if tracingEnabled {
+		flags = tracingFlagEnabled
+	}
+	return &Span{
+		traceID:  traceID,
+		spanID:   spanID,
+		parentID: parentID,
+		flags:    flags,
+	}
+}
