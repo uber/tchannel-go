@@ -102,7 +102,7 @@ func shouldRetry(stack Stack) bool {
 // inside of readFrames or writeFrames.
 // Since some goroutines may still be performing work in the background, we retry the
 // checks if any goroutines are fine in a running state a finite number of times.
-func VerifyNoLeaks(t *testing.T, opts *VerifyOpts) {
+func VerifyNoLeaks(t testing.TB, opts *VerifyOpts) {
 	const maxAttempts = 50
 	var leakAttempts int
 	var stacks []Stack
