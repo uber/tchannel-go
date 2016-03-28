@@ -23,6 +23,7 @@ package goroutines
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"runtime"
 	"strings"
@@ -98,14 +99,20 @@ func shouldRetry(stack Stack) bool {
 	return false
 }
 
-// VerifyNoLeaks verifies that there are no goroutines running that are stuck
-// inside of readFrames or writeFrames.
-// Since some goroutines may still be performing work in the background, we retry the
-// checks if any goroutines are fine in a running state a finite number of times.
-func VerifyNoLeaks(t testing.TB, opts *VerifyOpts) {
+// IdentifyLeaks looks for running goroutines that are stuck inside of
+// readFrames or writeFrames, returning a string describing each leaked
+// goroutine.
+//
+// Since some goroutines may still be performing work in the background, we
+// retry the checks a few times if any goroutines are found in a running or
+// runnable state.
+func IdentifyLeaks(opts *VerifyOpts) ([]string, error) {
 	const maxAttempts = 50
-	var leakAttempts int
-	var stacks []Stack
+	var (
+		leakAttempts int
+		stacks       []Stack
+		leaks        []string
+	)
 
 retry:
 	for i := 0; i < maxAttempts; i++ {
@@ -134,16 +141,29 @@ retry:
 		}
 
 		for _, v := range leakStacks {
-			t.Errorf("Found leaked goroutine: %v", v)
+			leaks = append(leaks, fmt.Sprintf("Found leaked goroutine: %v", v))
 		}
 
 		// Note: we cannot use NumGoroutine here as it includes system goroutines
 		// while runtime.Stack does not: https://github.com/golang/go/issues/11706
 		if len(stacks) > 2 {
-			t.Errorf("Expect at most 2 goroutines, found more:\n%s", stacks)
+			leaks = append(leaks, fmt.Sprintf("Expect at most 2 goroutines, found more:\n%s", stacks))
 		}
-		return
+		return leaks, nil
 	}
 
-	t.Errorf("VerifyNoBlockedGoroutines failed: too many retries. Stacks:\n%s", stacks)
+	return nil, fmt.Errorf("IdentifyLeaks failed: too many retries. Stacks:\n%s", stacks)
+}
+
+// VerifyNoLeaks calls IdentifyLeaks and fails the test if it finds any leaked
+// goroutines.
+func VerifyNoLeaks(t testing.TB, opts *VerifyOpts) {
+	leaks, err := IdentifyLeaks(opts)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+	for _, leak := range leaks {
+		t.Error(leak)
+	}
 }
