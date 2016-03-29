@@ -54,14 +54,12 @@ func IdentifyLeaks(opts *VerifyOpts) error {
 		stacks = GetAll()[1:]
 		stacks = filterStacks(stacks, opts)
 
-		// If there are leaks found, retry 3 times since the goroutine's state
-		// may not yet have updated.
 		if len(stacks) <= _expectedRuntimeGoroutines {
 			return nil
 		}
 
 		if i > maxAttempts/2 {
-			time.Sleep(time.Millisecond)
+			time.Sleep(time.Duration(i) * time.Millisecond)
 		} else {
 			runtime.Gosched()
 		}
