@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -161,6 +162,8 @@ func TestContextBuilderParentContextMergeHeaders(t *testing.T) {
 		"header key":   "header value 2", // overwritten
 		"fixed header": "fixed value",    // inherited
 	}, ctx3.Headers())
+
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestContextBuilderParentContextReplaceHeaders(t *testing.T) {
@@ -177,6 +180,8 @@ func TestContextBuilderParentContextReplaceHeaders(t *testing.T) {
 		SetHeaders(map[string]string{"header key": "header value 2"}).
 		Build()
 	assert.Equal(t, map[string]string{"header key": "header value 2"}, ctx2.Headers())
+
+	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestContextWithHeadersAsContext(t *testing.T) {
@@ -205,4 +210,6 @@ func TestContextBuilderParentContextSpan(t *testing.T) {
 		Build()
 	span4 := NewSpan(3, 2, 1)
 	assert.Equal(t, &span4, CurrentSpan(ctx4), "external span used")
+
+	goroutines.VerifyNoLeaks(t, nil)
 }
