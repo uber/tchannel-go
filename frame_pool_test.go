@@ -141,8 +141,12 @@ func TestFramesReleased(t *testing.T) {
 		Exclude: "testutils.SetTimeout",
 	})
 
+	// TODO: The goroutines.GetAll is to debug test failures in Travis. Remove this once
+	// we confirm that the test is not flaky.
+	stacks := goroutines.GetAll()
 	if unreleasedCount, isEmpty := pool.CheckEmpty(); isEmpty != "" || unreleasedCount > 0 {
-		t.Errorf("Frame pool has %v unreleased frames, errors:\n%v", unreleasedCount, isEmpty)
+		t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\nStacks:%v",
+			unreleasedCount, isEmpty, stacks)
 	}
 
 	// Check the message exchanges and make sure they are all empty.
