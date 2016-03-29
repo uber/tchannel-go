@@ -38,16 +38,16 @@ import (
 )
 
 type channelState struct {
-	ch      *Channel
-	closeCh chan struct{}
-	closed  bool
+	testServer *testutils.TestServer
+	closeCh    chan struct{}
+	closed     bool
 }
 
-func makeCall(ch *Channel, hostPort, service string) error {
+func makeCall(client *Channel, server *testutils.TestServer) error {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	_, _, _, err := raw.Call(ctx, ch, hostPort, service, "test", nil, nil)
+	_, _, _, err := raw.Call(ctx, client, server.HostPort(), server.ServiceName(), "test", nil, nil)
 	return err
 }
 
@@ -78,17 +78,16 @@ func TestCloseNewClient(t *testing.T) {
 }
 
 func TestCloseAfterTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		testHandler := onErrorTestHandler{newTestHandler(t), func(_ context.Context, err error) {}}
-		ch.Register(raw.Wrap(testHandler), "block")
+		ts.Register(raw.Wrap(testHandler), "block")
 
 		ctx, cancel := NewContext(100 * time.Millisecond)
 		defer cancel()
 
 		// Make a call, wait for it to timeout.
-		clientCh := testutils.NewClient(t, nil)
-		peerInfo := ch.PeerInfo()
-		_, _, _, err := raw.Call(ctx, clientCh, peerInfo.HostPort, peerInfo.ServiceName, "block", nil, nil)
+		clientCh := ts.NewClient(nil)
+		_, _, _, err := raw.Call(ctx, clientCh, ts.HostPort(), ts.ServiceName(), "block", nil, nil)
 		require.Error(t, err, "Expected call to timeout")
 
 		// The client channel should also close immediately.
@@ -99,7 +98,6 @@ func TestCloseAfterTimeout(t *testing.T) {
 		// Unblock the testHandler so that a goroutine isn't leaked.
 		<-testHandler.blockErr
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 // TestCloseStress ensures that once a Channel is closed, it cannot be reached.
@@ -116,12 +114,12 @@ func TestCloseStress(t *testing.T) {
 	for i := 0; i < numHandlers; i++ {
 		wg.Add(1)
 		go func() {
-			WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-				ch.Register(raw.Wrap(handler), "test")
+			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+				ts.Register(raw.Wrap(handler), "test")
 
 				chState := &channelState{
-					ch:      ch,
-					closeCh: make(chan struct{}),
+					testServer: ts,
+					closeCh:    make(chan struct{}),
 				}
 
 				lock.Lock()
@@ -136,7 +134,6 @@ func TestCloseStress(t *testing.T) {
 				lock.Lock()
 				chState.closed = true
 			})
-			lock.Unlock()
 		}()
 	}
 
@@ -167,12 +164,28 @@ func TestCloseStress(t *testing.T) {
 				// Grab a read lock to make sure channels aren't closed while we call.
 				ch1Closed := chState1.closed
 				ch2Closed := chState2.closed
-				err := makeCall(chState1.ch, chState2.ch.PeerInfo().HostPort, chState2.ch.PeerInfo().ServiceName)
+				err := makeCall(chState1.testServer.NewClient(nil), chState2.testServer)
 				lock.RUnlock()
 				if ch1Closed || ch2Closed {
-					assert.Error(t, err, "Call from %v to %v should fail", chState1.ch.PeerInfo(), chState2.ch.PeerInfo())
+					assert.Error(
+						t,
+						err,
+						"Call from %v (%v) to %v (%v) should fail",
+						chState1.testServer.ServiceName(),
+						chState1.testServer.HostPort(),
+						chState2.testServer.ServiceName(),
+						chState2.testServer.HostPort(),
+					)
 				} else {
-					assert.NoError(t, err, "Call from %v to %v should not fail", chState1.ch.PeerInfo(), chState2.ch.PeerInfo())
+					assert.NoError(
+						t,
+						err,
+						"Call from %v (%v) to %v (%v) should not fail",
+						chState1.testServer.ServiceName(),
+						chState1.testServer.HostPort(),
+						chState2.testServer.ServiceName(),
+						chState2.testServer.HostPort(),
+					)
 				}
 			}
 		}()
@@ -466,10 +479,11 @@ func callWithNewClient(t *testing.T, hostPort string) {
 }
 
 func TestNoLeakedState(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		state1 := ch.IntrospectState(nil)
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		state1 := ts.ServerState(nil)
+
 		for i := 0; i < 100; i++ {
-			callWithNewClient(t, hostPort)
+			callWithNewClient(t, ts.HostPort())
 		}
 
 		// Wait for all runnable goroutines to end. We expect one extra goroutine for the server.
@@ -477,7 +491,6 @@ func TestNoLeakedState(t *testing.T) {
 			Exclude: "(*Channel).Serve",
 		})
 
-		state2 := ch.IntrospectState(nil)
-		assert.Equal(t, state1, state2, "State mismatch")
+		assert.Equal(t, state1, ts.ServerState(nil), "State mismatch")
 	})
 }

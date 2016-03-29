@@ -31,6 +31,7 @@ import (
 )
 
 func waitForChannelClose(t *testing.T, ch *Channel) bool {
+	// TODO: remove standalone use (outside testutils.TestServer).
 	started := time.Now()
 
 	var state ChannelState
