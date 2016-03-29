@@ -353,7 +353,12 @@ func TestTimeout(t *testing.T) {
 		assert.Equal(t, ErrTimeout, err)
 
 		// Verify the server-side receives an error from the context.
-		assert.Equal(t, context.DeadlineExceeded, <-testHandler.blockErr)
+		select {
+		case err := <-testHandler.blockErr:
+			assert.Equal(t, context.DeadlineExceeded, err, "Server should have received timeout")
+		case <-time.After(time.Second):
+			t.Errorf("Server did not receive call, may need higher timeout")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
