@@ -65,6 +65,10 @@ endif
 install_ci: get_thrift install
 	go get -u github.com/mattn/goveralls
 
+install_test:
+	go test -i $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS)) $(TEST_ARG)
+	go test -i $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS)) $(TEST_ARG)
+
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
 
@@ -85,7 +89,7 @@ godep:
 
 test_ci: test
 
-test: clean setup
+test: clean setup install_test
 	@echo Testing packages:
 	go test $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS)) $(TEST_ARG) -parallel=4
 	go test $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS)) $(TEST_ARG) -timeoutMultiplier 10 -parallel=4
