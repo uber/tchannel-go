@@ -21,50 +21,15 @@
 package goroutines
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"io"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 )
 
-// isLeak returns whether the given stack contains a stack frame that is considered a leak.
-func (s Stack) isLeak() bool {
-	isLeakLine := func(line string) bool {
-		return strings.Contains(line, "(*Channel).Serve") ||
-			strings.Contains(line, "(*Connection).readFrames") ||
-			strings.Contains(line, "(*Connection).writeFrames") ||
-			strings.Contains(line, "(*Connection).dispatchInbound.func")
-	}
-
-	lineReader := bufio.NewReader(bytes.NewReader(s.fullStack.Bytes()))
-	for {
-		line, err := lineReader.ReadString('\n')
-		if err == io.EOF {
-			return false
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		if isLeakLine(line) {
-			return true
-		}
-	}
-}
-
-func getLeakStacks(stacks []Stack) []Stack {
-	var leakStacks []Stack
-	for _, s := range stacks {
-		if s.isLeak() {
-			leakStacks = append(leakStacks, s)
-		}
-	}
-	return leakStacks
-}
+// At baseline, we expect to see one goroutine in the testing package's main
+// function and one in syscall.goexit.
+const _expectedRuntimeGoroutines = 2
 
 // filterStacks will filter any stacks excluded by the given VerifyOpts.
 func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
@@ -78,92 +43,37 @@ func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
 	return filtered
 }
 
-var retryStates = map[string]struct{}{
-	"runnable": struct{}{},
-	"running":  struct{}{},
-	"syscall":  struct{}{},
-}
-
-func shouldRetry(stack Stack) bool {
-	if _, ok := retryStates[stack.State()]; ok {
-		return true
-	}
-
-	if stack.State() == "sleep" {
-		// Go 1.5 has a time.Sleep in the GC path. If we find the exact
-		// time.Sleep call, we should treat this as a runnable goroutine.
-		// see: https://github.com/uber/tchannel-go/issues/151
-		return bytes.Contains(stack.Full(), []byte("time.Sleep(0x186a0)"))
-	}
-
-	return false
-}
-
-// IdentifyLeaks looks for running goroutines that are stuck inside of
-// readFrames or writeFrames, returning a string describing each leaked
-// goroutine.
-//
-// Since some goroutines may still be performing work in the background, we
-// retry the checks a few times if any goroutines are found in a running or
-// runnable state.
-func IdentifyLeaks(opts *VerifyOpts) ([]string, error) {
+// IdentifyLeaks looks for extra goroutines, and returns a descriptive error if
+// it finds any.
+func IdentifyLeaks(opts *VerifyOpts) error {
 	const maxAttempts = 50
-	var (
-		leakAttempts int
-		stacks       []Stack
-		leaks        []string
-	)
-
-retry:
+	var stacks []Stack
 	for i := 0; i < maxAttempts; i++ {
-		// Ignore the first stack which is the current goroutine that is doing the verification.
+		// Ignore the first stack, which is the current goroutine (the one
+		// that's doing the verification).
 		stacks = GetAll()[1:]
 		stacks = filterStacks(stacks, opts)
-		for _, stack := range stacks {
-			if shouldRetry(stack) {
-				runtime.Gosched()
-				if i > maxAttempts/2 {
-					time.Sleep(time.Millisecond)
-				}
-				continue retry
-			}
-		}
-
-		// There are no running/runnable goroutines, so check for bad leaks.
-		leakStacks := getLeakStacks(stacks)
 
 		// If there are leaks found, retry 3 times since the goroutine's state
 		// may not yet have updated.
-		if len(leakStacks) > 0 && leakAttempts < 3 {
-			leakAttempts++
-			i--
-			continue
+		if len(stacks) <= _expectedRuntimeGoroutines {
+			return nil
 		}
 
-		for _, v := range leakStacks {
-			leaks = append(leaks, fmt.Sprintf("Found leaked goroutine: %v", v))
+		if i > maxAttempts/2 {
+			time.Sleep(time.Millisecond)
+		} else {
+			runtime.Gosched()
 		}
-
-		// Note: we cannot use NumGoroutine here as it includes system goroutines
-		// while runtime.Stack does not: https://github.com/golang/go/issues/11706
-		if len(stacks) > 2 {
-			leaks = append(leaks, fmt.Sprintf("Expect at most 2 goroutines, found more:\n%s", stacks))
-		}
-		return leaks, nil
 	}
 
-	return nil, fmt.Errorf("IdentifyLeaks failed: too many retries. Stacks:\n%s", stacks)
+	return fmt.Errorf("expected at most %v goroutines, found more:\n%s", _expectedRuntimeGoroutines, stacks)
 }
 
 // VerifyNoLeaks calls IdentifyLeaks and fails the test if it finds any leaked
 // goroutines.
 func VerifyNoLeaks(t testing.TB, opts *VerifyOpts) {
-	leaks, err := IdentifyLeaks(opts)
-	if err != nil {
+	if err := IdentifyLeaks(opts); err != nil {
 		t.Error(err.Error())
-		return
-	}
-	for _, leak := range leaks {
-		t.Error(leak)
 	}
 }
