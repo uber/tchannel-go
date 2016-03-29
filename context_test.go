@@ -184,6 +184,22 @@ func TestContextBuilderParentContextReplaceHeaders(t *testing.T) {
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
+func TestContextWrapWithHeaders(t *testing.T) {
+	headers1 := map[string]string{
+		"k1": "v1",
+	}
+	ctx, _ := NewContextBuilder(time.Second).
+		SetHeaders(headers1).
+		Build()
+	assert.Equal(t, headers1, ctx.Headers(), "Headers mismatch after Build")
+
+	headers2 := map[string]string{
+		"k1": "v1",
+	}
+	ctx2 := WrapWithHeaders(ctx, headers2)
+	assert.Equal(t, headers2, ctx2.Headers(), "Headers mismatch after WrapWithHeaders")
+}
+
 func TestContextWithHeadersAsContext(t *testing.T) {
 	var ctx context.Context = getParentContext(t)
 	assert.EqualValues(t, "some value", ctx.Value("some key"), "inherited from parent ctx")

@@ -46,7 +46,7 @@ type headersContainer struct {
 	respHeaders map[string]string
 }
 
-func (c *headerCtx) headers() *headersContainer {
+func (c headerCtx) headers() *headersContainer {
 	if h, ok := c.Value(contextKeyHeaders).(*headersContainer); ok {
 		return h
 	}
@@ -54,7 +54,7 @@ func (c *headerCtx) headers() *headersContainer {
 }
 
 // Headers gets application headers out of the context.
-func (c *headerCtx) Headers() map[string]string {
+func (c headerCtx) Headers() map[string]string {
 	if h := c.headers(); h != nil {
 		return h.reqHeaders
 	}
@@ -62,7 +62,7 @@ func (c *headerCtx) Headers() map[string]string {
 }
 
 // ResponseHeaders returns the response headers.
-func (c *headerCtx) ResponseHeaders() map[string]string {
+func (c headerCtx) ResponseHeaders() map[string]string {
 	if h := c.headers(); h != nil {
 		return h.respHeaders
 	}
@@ -70,7 +70,7 @@ func (c *headerCtx) ResponseHeaders() map[string]string {
 }
 
 // SetResponseHeaders sets the response headers.
-func (c *headerCtx) SetResponseHeaders(headers map[string]string) {
+func (c headerCtx) SetResponseHeaders(headers map[string]string) {
 	if h := c.headers(); h != nil {
 		h.respHeaders = headers
 		return
@@ -82,9 +82,12 @@ func (c *headerCtx) SetResponseHeaders(headers map[string]string) {
 // If the parent `ctx` is already an instance of ContextWithHeaders, its existing headers
 // will be ignored. In order to merge new headers with parent headers, use ContextBuilder.
 func WrapWithHeaders(ctx context.Context, headers map[string]string) ContextWithHeaders {
+	if hctx, ok := ctx.(headerCtx); ok {
+		ctx = hctx
+	}
 	h := &headersContainer{
 		reqHeaders: headers,
 	}
 	newCtx := context.WithValue(ctx, contextKeyHeaders, h)
-	return &headerCtx{Context: newCtx}
+	return headerCtx{Context: newCtx}
 }

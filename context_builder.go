@@ -225,7 +225,7 @@ func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 	parent := cb.ParentContext
 	if parent == nil {
 		parent = context.Background()
-	} else if headerCtx, ok := parent.(*headerCtx); ok {
+	} else if headerCtx, ok := parent.(headerCtx); ok {
 		// Unwrap any headerCtx, since we'll be rewrapping anyway.
 		parent = headerCtx.Context
 	}
