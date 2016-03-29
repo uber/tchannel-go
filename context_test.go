@@ -123,10 +123,11 @@ func TestCurrentCallWithNilResult(t *testing.T) {
 func getParentContext(t *testing.T) ContextWithHeaders {
 	ctx := context.WithValue(context.Background(), "some key", "some value")
 
-	ctx1, _ := NewContextBuilder(time.Second).
+	ctx1, cancel := NewContextBuilder(time.Second).
 		SetParentContext(ctx).
 		AddHeader("header key", "header value").
 		Build()
+	cancel()
 	return ctx1
 }
 
@@ -141,10 +142,11 @@ func TestContextBuilderParentContextMergeHeaders(t *testing.T) {
 	ctx.Headers()["fixed header"] = "fixed value"
 
 	// append header to parent
-	ctx2, _ := NewContextBuilder(time.Second).
+	ctx2, cancel := NewContextBuilder(time.Second).
 		SetParentContext(ctx).
 		AddHeader("header key 2", "header value 2").
 		Build()
+	defer cancel()
 	assert.Equal(t, map[string]string{
 		"header key":   "header value",   // inherited
 		"fixed header": "fixed value",    // inherited
@@ -152,10 +154,11 @@ func TestContextBuilderParentContextMergeHeaders(t *testing.T) {
 	}, ctx2.Headers())
 
 	// override parent header
-	ctx3, _ := NewContextBuilder(time.Second).
+	ctx3, cancel := NewContextBuilder(time.Second).
 		SetParentContext(ctx).
 		AddHeader("header key", "header value 2"). // override
 		Build()
+	defer cancel()
 
 	assert.Equal(t, map[string]string{
 		"header key":   "header value 2", // overwritten
@@ -188,21 +191,24 @@ func TestContextBuilderParentContextSpan(t *testing.T) {
 	ctx := getParentContext(t)
 	span := NewSpan(5, 4, 3)
 
-	ctx2, _ := NewContextBuilder(time.Second).
+	ctx2, cancel := NewContextBuilder(time.Second).
 		SetParentContext(ctx).
 		SetSpanForTest(&span).
 		Build()
+	defer cancel()
 	assert.Equal(t, &span, CurrentSpan(ctx2), "explicitly provided span used")
 
-	ctx3, _ := NewContextBuilder(time.Second).
+	ctx3, cancel := NewContextBuilder(time.Second).
 		SetParentContext(ctx2).
 		Build()
+	defer cancel()
 	assert.Equal(t, &span, CurrentSpan(ctx3), "span inherited from parent")
 
-	ctx4, _ := NewContextBuilder(time.Second).
+	ctx4, cancel := NewContextBuilder(time.Second).
 		SetParentContext(ctx2).
 		SetExternalSpan(3, 2, 1, true).
 		Build()
+	defer cancel()
 	span4 := NewSpan(3, 2, 1)
 	assert.Equal(t, &span4, CurrentSpan(ctx4), "external span used")
 }
