@@ -90,10 +90,7 @@ test_ci: test
 
 test: clean setup install_test
 	@echo Testing packages:
-	go test -parallel=4 $(TEST_ARG) $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS))
-	go test -parallel=4 -timeoutMultiplier=10 $(TEST_ARG) $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS))
-	@echo Running frame pool tests
-	go test -run TestFramesReleased -stressTest $(TEST_ARG) -timeoutMultiplier 10
+	go test $(TEST_ARG) -timeoutMultiplier 10 -count 3 --connectionLog github.com/uber/tchannel-go
 
 benchmark: clean setup
 	echo Running benchmarks:
