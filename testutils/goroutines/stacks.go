@@ -30,34 +30,6 @@ import (
 	"strings"
 )
 
-func getStackBuffer(all bool) []byte {
-	for i := 4096; ; i *= 2 {
-		buf := make([]byte, i)
-		if n := runtime.Stack(buf, all); n < i {
-			return buf
-		}
-	}
-}
-
-// parseGoStackHeader parses a stack header that looks like:
-// goroutine 643 [runnable]:\n
-// And returns the goroutine ID, and the state.
-func parseGoStackHeader(line string) (goroutineID int, state string) {
-	line = strings.TrimSuffix(line, ":\n")
-	parts := strings.SplitN(line, " ", 3)
-	if len(parts) != 3 {
-		panic(fmt.Sprintf("unexpected stack header format: %v", line))
-	}
-
-	id, err := strconv.Atoi(parts[1])
-	if err != nil {
-		panic(fmt.Sprintf("failed to parse goroutine ID: %v", parts[1]))
-	}
-
-	state = strings.TrimSuffix(strings.TrimPrefix(parts[2], "["), "]")
-	return id, state
-}
-
 // Stack represents a single Goroutine's stack.
 type Stack struct {
 	id        int
@@ -119,4 +91,32 @@ func GetAll() []Stack {
 		stacks = append(stacks, *curStack)
 	}
 	return stacks
+}
+
+func getStackBuffer(all bool) []byte {
+	for i := 4096; ; i *= 2 {
+		buf := make([]byte, i)
+		if n := runtime.Stack(buf, all); n < i {
+			return buf
+		}
+	}
+}
+
+// parseGoStackHeader parses a stack header that looks like:
+// goroutine 643 [runnable]:\n
+// And returns the goroutine ID, and the state.
+func parseGoStackHeader(line string) (goroutineID int, state string) {
+	line = strings.TrimSuffix(line, ":\n")
+	parts := strings.SplitN(line, " ", 3)
+	if len(parts) != 3 {
+		panic(fmt.Sprintf("unexpected stack header format: %v", line))
+	}
+
+	id, err := strconv.Atoi(parts[1])
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse goroutine ID: %v", parts[1]))
+	}
+
+	state = strings.TrimSuffix(strings.TrimPrefix(parts[2], "["), "]")
+	return id, state
 }

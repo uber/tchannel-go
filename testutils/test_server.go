@@ -168,12 +168,8 @@ func (ts *TestServer) verifyExchangesCleared() {
 }
 
 func (ts *TestServer) verifyNoGoroutinesLeaked() {
-	leaks, err := goroutines.IdentifyLeaks(ts.verifyOpts)
-	if err != nil {
-		ts.Error(err.Error())
-		return
-	}
-	if len(leaks) == 0 {
+	err := goroutines.IdentifyLeaks(ts.verifyOpts)
+	if err == nil {
 		// No leaks, nothing to do.
 		return
 	}
@@ -186,9 +182,7 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 		// more failures.
 		return
 	}
-	for _, leak := range leaks {
-		ts.Error(leak)
-	}
+	ts.Error(err.Error())
 }
 
 func describeLeakedExchanges(rs *tchannel.RuntimeState) string {
