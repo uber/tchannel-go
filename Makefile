@@ -6,6 +6,9 @@ FMTABLE_MINOR_VERSIONS := 6
 ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT := true
 endif
+ifneq ($(GO_MINOR_VERSION),4)
+TEST_COUNT := -count 3
+endif
 ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT_FMT := true
 endif
@@ -90,7 +93,7 @@ test_ci: test
 
 test: clean setup install_test
 	@echo Testing packages:
-	go test $(TEST_ARG) -timeoutMultiplier 10 -count 3 --connectionLog github.com/uber/tchannel-go
+	go test $(TEST_ARG) $(TEST_COUNT) -timeoutMultiplier 10 --connectionLog github.com/uber/tchannel-go
 
 benchmark: clean setup
 	echo Running benchmarks:
