@@ -105,7 +105,7 @@ cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
 cover_ci: cover_profile
-	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci
+	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'Godeps/' -e 'vendor/'
