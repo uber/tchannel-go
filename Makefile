@@ -84,6 +84,10 @@ godep:
 	godep save ./...
 
 test_ci: test
+ifdef SHOULD_LINT
+	@echo Stress testing TestCloseSendError
+	go test $(TEST_ARG) -run "TestCloseSendError" -timeoutMultiplier=10 -parallel=4 -count 500 .
+endif
 
 test: clean setup
 	@echo Testing packages:
