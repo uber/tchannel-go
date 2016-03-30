@@ -42,6 +42,7 @@ type Server struct {
 	log         tchannel.Logger
 	handlers    map[string]handler
 	metaHandler *metaHandler
+	ctxFn       func(ctx context.Context, method string, headers map[string]string) Context
 }
 
 // NewServer returns a server that can serve thrift services over TChannel.
@@ -52,6 +53,7 @@ func NewServer(registrar tchannel.Registrar) *Server {
 		log:         registrar.Logger(),
 		handlers:    make(map[string]handler),
 		metaHandler: metaHandler,
+		ctxFn:       defaultContextFn,
 	}
 	server.Register(newTChanMetaServer(metaHandler))
 	if ch, ok := registrar.(*tchannel.Channel); ok {
@@ -84,6 +86,12 @@ func (s *Server) RegisterHealthHandler(f HealthFunc) {
 	s.metaHandler.setHandler(f)
 }
 
+// SetContextFn sets the function used to convert a context.Context to a thrift.Context.
+// Note: This API may change and is only intended to bridge different contexts.
+func (s *Server) SetContextFn(f func(ctx context.Context, method string, headers map[string]string) Context) {
+	s.ctxFn = f
+}
+
 func (s *Server) onError(err error) {
 	// TODO(prashant): Expose incoming call errors through options for NewServer.
 	// Timeouts should not be reported as errors.
@@ -92,6 +100,10 @@ func (s *Server) onError(err error) {
 	} else {
 		s.log.WithFields(tchannel.ErrField(err)).Error("Thrift server error.")
 	}
+}
+
+func defaultContextFn(ctx context.Context, method string, headers map[string]string) Context {
+	return WithHeaders(ctx, headers)
 }
 
 func (s *Server) handle(origCtx context.Context, handler handler, method string, call *tchannel.InboundCall) error {
@@ -112,7 +124,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
-	ctx := WithHeaders(origCtx, headers)
+	ctx := s.ctxFn(origCtx, method, headers)
 
 	wp := getProtocolReader(reader)
 	success, resp, err := handler.server.Handle(ctx, method, wp.protocol)

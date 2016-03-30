@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	// Test is in a separate package to avoid circular dependencies.
 	. "github.com/uber/tchannel-go/thrift"
 
@@ -290,6 +292,21 @@ func TestThriftTimeout(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Echo handler did not run")
 		}
+	})
+}
+
+func TestThriftContextFn(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		args.server.SetContextFn(func(ctx context.Context, method string, headers map[string]string) Context {
+			return WithHeaders(ctx, map[string]string{"custom": "headers"})
+		})
+
+		args.s2.On("Echo", ctxArg(), "test").Return("test", nil).Run(func(args mock.Arguments) {
+			ctx := args.Get(0).(Context)
+			assert.Equal(t, "headers", ctx.Headers()["custom"], "Custom header is missing")
+		})
+		_, err := args.c2.Echo(ctx, "test")
+		assert.NoError(t, err, "Echo failed")
 	})
 }
 
