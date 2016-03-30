@@ -21,9 +21,11 @@
 package testutils
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/atomic"
@@ -67,10 +69,11 @@ type errorLoggerState struct {
 type testLogger struct {
 	t      testing.TB
 	fields tchannel.LogFields
+	buf    *bytes.Buffer
 }
 
-func newTestLogger(t testing.TB) tchannel.Logger {
-	return testLogger{t, nil}
+func newTestLogger(t testing.TB) testLogger {
+	return testLogger{t, nil, &bytes.Buffer{}}
 }
 
 func (l testLogger) Enabled(level tchannel.LogLevel) bool {
@@ -78,7 +81,7 @@ func (l testLogger) Enabled(level tchannel.LogLevel) bool {
 }
 
 func (l testLogger) log(prefix string, msg string) {
-	l.t.Logf("[%s] %v", prefix, msg)
+	fmt.Fprintf(l.buf, "%s [%v] %v\n", time.Now().Format("15:04:05.000000"), prefix, msg)
 }
 
 func (l testLogger) Fatal(msg string) {
@@ -118,7 +121,13 @@ func (l testLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {
 	newFields := make(tchannel.LogFields, existing+len(fields))
 	copy(newFields, l.Fields())
 	copy(newFields[existing:], fields)
-	return testLogger{l.t, newFields}
+	return testLogger{l.t, newFields, l.buf}
+}
+
+func (l testLogger) report() {
+	if l.t.Failed() {
+		l.t.Logf("Debug logs:\n%s", l.buf.String())
+	}
 }
 
 type errorLogger struct {

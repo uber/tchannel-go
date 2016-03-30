@@ -32,6 +32,7 @@ import (
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Has a previous test already leaked a goroutine?
@@ -48,15 +49,20 @@ type TestServer struct {
 	server        *tchannel.Channel
 	serverInitial *tchannel.RuntimeState
 	verifyOpts    *goroutines.VerifyOpts
+	postFns       []func()
 }
 
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
-	server := NewServer(t, opts)
+	opts = getOptsForTest(t, opts)
+	ch, err := NewServerChannel(opts)
+	require.NoError(t, err, "WithTestServer failed to create Server")
+
 	return &TestServer{
 		TB:            t,
-		server:        server,
-		serverInitial: comparableState(server),
+		server:        ch,
+		serverInitial: comparableState(ch),
+		postFns:       opts.postFns,
 	}
 }
 
@@ -66,6 +72,10 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 // TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 	ts := NewTestServer(t, chanOpts)
+	// Note: We use defer, as we want the postFns to run even if the test
+	// goroutine exits (e.g. user calls t.Fatalf).
+	defer ts.post()
+
 	f(ts)
 	ts.CloseAndVerify()
 }
@@ -127,6 +137,12 @@ func (ts *TestServer) verify() {
 	ts.verifyNoGoroutinesLeaked()
 	ts.verifyExchangesCleared()
 	ts.verifyNoStateLeak()
+}
+
+func (ts *TestServer) post() {
+	for _, fn := range ts.postFns {
+		fn()
+	}
 }
 
 func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
