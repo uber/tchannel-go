@@ -64,6 +64,63 @@ type errorLoggerState struct {
 	matchCount []atomic.Uint32
 }
 
+type testLogger struct {
+	t      testing.TB
+	fields tchannel.LogFields
+}
+
+func newTestLogger(t testing.TB) tchannel.Logger {
+	return testLogger{t, nil}
+}
+
+func (l testLogger) Enabled(level tchannel.LogLevel) bool {
+	return true
+}
+
+func (l testLogger) log(prefix string, msg string) {
+	l.t.Logf("[%s] %v", prefix, msg)
+}
+
+func (l testLogger) Fatal(msg string) {
+	l.log("F", msg)
+}
+
+func (l testLogger) Error(msg string) {
+	l.log("E", msg)
+}
+
+func (l testLogger) Warn(msg string) {
+	l.log("W", msg)
+}
+
+func (l testLogger) Info(msg string) {
+	l.log("I", msg)
+}
+
+func (l testLogger) Infof(msg string, args ...interface{}) {
+	l.log("I", fmt.Sprintf(msg, args...))
+}
+
+func (l testLogger) Debug(msg string) {
+	l.log("D", msg)
+}
+
+func (l testLogger) Debugf(msg string, args ...interface{}) {
+	l.log("D", fmt.Sprintf(msg, args...))
+}
+
+func (l testLogger) Fields() tchannel.LogFields {
+	return l.fields
+}
+
+func (l testLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {
+	existing := len(l.Fields())
+	newFields := make(tchannel.LogFields, existing+len(fields))
+	copy(newFields, l.Fields())
+	copy(newFields[existing:], fields)
+	return testLogger{l.t, newFields}
+}
+
 type errorLogger struct {
 	tchannel.Logger
 	t testing.TB
