@@ -209,48 +209,49 @@ func TestReuseConnection(t *testing.T) {
 	defer cancel()
 
 	s1Opts := &testutils.ChannelOpts{ServiceName: "s1"}
-	WithVerifiedServer(t, s1Opts, func(ch1 *Channel, hostPort1 string) {
-		s2Opts := &testutils.ChannelOpts{ServiceName: "s2"}
-		WithVerifiedServer(t, s2Opts, func(ch2 *Channel, hostPort2 string) {
-			ch1.Register(raw.Wrap(newTestHandler(t)), "echo")
-			ch2.Register(raw.Wrap(newTestHandler(t)), "echo")
+	testutils.WithTestServer(t, s1Opts, func(ts *testutils.TestServer) {
+		ch2 := ts.NewServer(&testutils.ChannelOpts{ServiceName: "s2"})
+		hostPort2 := ch2.PeerInfo().HostPort
+		defer ch2.Close()
 
-			outbound, err := ch1.BeginCall(ctx, hostPort2, "s2", "echo", nil)
-			require.NoError(t, err)
-			outboundConn, outboundNetConn := OutboundConnection(outbound)
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
+		ch2.Register(raw.Wrap(newTestHandler(t)), "echo")
 
-			// Try to make another call at the same time, should reuse the same connection.
-			outbound2, err := ch1.BeginCall(ctx, hostPort2, "s2", "echo", nil)
-			require.NoError(t, err)
-			outbound2Conn, _ := OutboundConnection(outbound)
-			assert.Equal(t, outboundConn, outbound2Conn)
+		outbound, err := ts.Server().BeginCall(ctx, hostPort2, "s2", "echo", nil)
+		require.NoError(t, err)
+		outboundConn, outboundNetConn := OutboundConnection(outbound)
 
-			// Wait for the connection to be marked as active in ch2.
-			assert.True(t, testutils.WaitFor(time.Second, func() bool {
-				return ch2.IntrospectState(nil).NumConnections > 0
-			}), "ch2 does not have any active connections")
+		// Try to make another call at the same time, should reuse the same connection.
+		outbound2, err := ts.Server().BeginCall(ctx, hostPort2, "s2", "echo", nil)
+		require.NoError(t, err)
+		outbound2Conn, _ := OutboundConnection(outbound)
+		assert.Equal(t, outboundConn, outbound2Conn)
 
-			// When ch2 tries to call ch1, it should reuse the inbound connection from ch1.
-			outbound3, err := ch2.BeginCall(ctx, hostPort1, "s1", "echo", nil)
-			require.NoError(t, err)
-			_, outbound3NetConn := OutboundConnection(outbound3)
-			assert.Equal(t, outboundNetConn.RemoteAddr(), outbound3NetConn.LocalAddr())
-			assert.Equal(t, outboundNetConn.LocalAddr(), outbound3NetConn.RemoteAddr())
+		// Wait for the connection to be marked as active in ch2.
+		assert.True(t, testutils.WaitFor(time.Second, func() bool {
+			return ch2.IntrospectState(nil).NumConnections > 0
+		}), "ch2 does not have any active connections")
 
-			// Ensure all calls can complete in parallel.
-			var wg sync.WaitGroup
-			for _, call := range []*OutboundCall{outbound, outbound2, outbound3} {
-				wg.Add(1)
-				go func(call *OutboundCall) {
-					defer wg.Done()
-					resp1, resp2, _, err := raw.WriteArgs(call, []byte("arg2"), []byte("arg3"))
-					require.NoError(t, err)
-					assert.Equal(t, resp1, []byte("arg2"), "result does match argument")
-					assert.Equal(t, resp2, []byte("arg3"), "result does match argument")
-				}(call)
-			}
-			wg.Wait()
-		})
+		// When ch2 tries to call ch1, it should reuse the inbound connection from ch1.
+		outbound3, err := ch2.BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
+		require.NoError(t, err)
+		_, outbound3NetConn := OutboundConnection(outbound3)
+		assert.Equal(t, outboundNetConn.RemoteAddr(), outbound3NetConn.LocalAddr())
+		assert.Equal(t, outboundNetConn.LocalAddr(), outbound3NetConn.RemoteAddr())
+
+		// Ensure all calls can complete in parallel.
+		var wg sync.WaitGroup
+		for _, call := range []*OutboundCall{outbound, outbound2, outbound3} {
+			wg.Add(1)
+			go func(call *OutboundCall) {
+				defer wg.Done()
+				resp1, resp2, _, err := raw.WriteArgs(call, []byte("arg2"), []byte("arg3"))
+				require.NoError(t, err)
+				assert.Equal(t, resp1, []byte("arg2"), "result does match argument")
+				assert.Equal(t, resp2, []byte("arg3"), "result does match argument")
+			}(call)
+		}
+		wg.Wait()
 	})
 }
 
