@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"log"
 	"math/rand"
 	"sync"
 	"testing"
@@ -98,6 +99,67 @@ func TestCloseAfterTimeout(t *testing.T) {
 		// Unblock the testHandler so that a goroutine isn't leaked.
 		<-testHandler.blockErr
 	})
+}
+
+func TestRaceExchangesWithClose(t *testing.T) {
+	log.SetFlags(log.Lmicroseconds)
+
+	var wg sync.WaitGroup
+
+	ctx, cancel := NewContext(testutils.Timeout(70 * time.Millisecond))
+	defer cancel()
+
+	opts := testutils.NewOpts().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+
+		gotCall := make(chan struct{})
+		completeCall := make(chan struct{})
+		testutils.RegisterFunc(server, "dummy", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{}, nil
+		})
+
+		testutils.RegisterEcho(server, func() {
+			close(gotCall)
+			<-completeCall
+		})
+
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		callDone := make(chan struct{})
+		go func() {
+			assert.NoError(t, testutils.CallEcho(client, ts.HostPort(), server.ServiceName(), &raw.Args{}), "Echo failed")
+			close(callDone)
+		}()
+
+		// Wait until the server recieves a call, so it has an active inbound.
+		<-gotCall
+
+		// Start a bunch of clients to trigger races between connecting and close.
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				c := testutils.NewClient(t, nil)
+				defer c.Close()
+
+				c.Ping(ctx, ts.HostPort())
+				raw.Call(ctx, c, ts.HostPort(), server.ServiceName(), "dummy", nil, nil)
+			}()
+		}
+
+		// Now try to close the channel, it should block since there's active exchanges.
+		server.Close()
+		assert.Equal(t, ChannelStartClose, ts.Server().State(), "Server should be in StartClose")
+
+		close(completeCall)
+		<-callDone
+	})
+
+	// Wait for all calls to complete
+	wg.Wait()
 }
 
 // TestCloseStress ensures that once a Channel is closed, it cannot be reached.
@@ -454,7 +516,7 @@ func TestCloseSendError(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Microsecond)
-			err := testutils.CallEcho(clientCh, serverCh, nil)
+			err := testutils.CallEcho(clientCh, serverCh.PeerInfo().HostPort, serverCh.ServiceName(), nil)
 			if err != nil && closed.Load() == 0 {
 				t.Errorf("Call failed: %v", err)
 			}

@@ -63,6 +63,12 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.conn = c
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
 
+	if !c.pendingExchangeMethodAdd() {
+		// Connection is closed, no need to do anything.
+		return true
+	}
+	defer c.pendingExchangeMethodDone()
+
 	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
 	if err != nil {
 		if err == errDuplicateMex {

@@ -30,16 +30,15 @@ import (
 )
 
 // CallEcho calls the "echo" endpoint from the given src to target.
-func CallEcho(src, target *tchannel.Channel, args *raw.Args) error {
-	ctx, cancel := tchannel.NewContext(Timeout(100 * time.Millisecond))
+func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args *raw.Args) error {
+	ctx, cancel := tchannel.NewContext(Timeout(300 * time.Millisecond))
 	defer cancel()
 
 	if args == nil {
 		args = &raw.Args{}
 	}
 
-	peerInfo := target.PeerInfo()
-	_, _, _, err := raw.Call(ctx, src, peerInfo.HostPort, peerInfo.ServiceName, "echo", args.Arg2, args.Arg3)
+	_, _, _, err := raw.Call(ctx, src, targetHostPort, targetService, "echo", args.Arg2, args.Arg3)
 	return err
 }
 
