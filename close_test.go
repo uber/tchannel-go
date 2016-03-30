@@ -110,7 +110,9 @@ func TestRaceExchangesWithClose(t *testing.T) {
 	defer cancel()
 
 	opts := testutils.NewOpts().DisableLogVerification()
-	WithVerifiedServer(t, opts, func(server *Channel, hostPort string) {
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+
 		gotCall := make(chan struct{})
 		completeCall := make(chan struct{})
 		testutils.RegisterFunc(server, "dummy", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -127,7 +129,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 
 		callDone := make(chan struct{})
 		go func() {
-			assert.NoError(t, testutils.CallEcho(client, server, &raw.Args{}), "Echo failed")
+			assert.NoError(t, testutils.CallEcho(client, ts.HostPort(), server.ServiceName(), &raw.Args{}), "Echo failed")
 			close(callDone)
 		}()
 
@@ -143,14 +145,14 @@ func TestRaceExchangesWithClose(t *testing.T) {
 				c := testutils.NewClient(t, nil)
 				defer c.Close()
 
-				c.Ping(ctx, server.PeerInfo().HostPort)
-				raw.Call(ctx, c, server.PeerInfo().HostPort, server.ServiceName(), "dummy", nil, nil)
+				c.Ping(ctx, ts.HostPort())
+				raw.Call(ctx, c, ts.HostPort(), server.ServiceName(), "dummy", nil, nil)
 			}()
 		}
 
 		// Now try to close the channel, it should block since there's active exchanges.
 		server.Close()
-		assert.Equal(t, ChannelStartClose, server.State(), "Server should be in StartClose")
+		assert.Equal(t, ChannelStartClose, ts.Server().State(), "Server should be in StartClose")
 
 		close(completeCall)
 		<-callDone
@@ -514,7 +516,7 @@ func TestCloseSendError(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Microsecond)
-			err := testutils.CallEcho(clientCh, serverCh, nil)
+			err := testutils.CallEcho(clientCh, serverCh.PeerInfo().HostPort, serverCh.ServiceName(), nil)
 			if err != nil && closed.Load() == 0 {
 				t.Errorf("Call failed: %v", err)
 			}
