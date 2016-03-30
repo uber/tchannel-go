@@ -49,6 +49,10 @@ type ChannelOpts struct {
 
 	// optFn is run with the channel options before creating the channel.
 	optFn func(*ChannelOpts)
+
+	// postFns is a list of functions that are run after the test.
+	// They are run even if the test fails.
+	postFns []func()
 }
 
 // LogVerification contains options to control the log verification.
@@ -140,6 +144,10 @@ func (o *ChannelOpts) AddLogFilter(filter string, maxCount uint, fields ...strin
 		FieldFilters: fieldFilters,
 	})
 	return o
+}
+
+func (o *ChannelOpts) addPostFn(f func()) {
+	o.postFns = append(o.postFns, f)
 }
 
 func defaultString(v string, defaultValue string) string {

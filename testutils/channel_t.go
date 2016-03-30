@@ -35,7 +35,11 @@ func getOptsForTest(t testing.TB, opts *ChannelOpts) *ChannelOpts {
 		opts.optFn = func(opts *ChannelOpts) {
 			// Set a custom logger now.
 			if opts.Logger == nil {
-				opts.Logger = tchannel.NullLogger
+				tl := newTestLogger(t)
+				opts.Logger = tl
+				opts.addPostFn(func() {
+					tl.report()
+				})
 			}
 			opts.Logger = opts.LogVerification.WrapLogger(t, opts.Logger)
 		}
