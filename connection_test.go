@@ -155,12 +155,12 @@ func TestDefaultFormat(t *testing.T) {
 func TestRemotePeer(t *testing.T) {
 	tests := []struct {
 		name       string
-		remote     *Channel
+		remote     func() *Channel
 		expectedFn func(state *RuntimeState, serverHP string) PeerInfo
 	}{
 		{
 			name:   "ephemeral client",
-			remote: testutils.NewClient(t, nil),
+			remote: func() *Channel { return testutils.NewClient(t, nil) },
 			expectedFn: func(state *RuntimeState, serverHP string) PeerInfo {
 				hostPort := state.RootPeers[serverHP].OutboundConnections[0].LocalHostPort
 				return PeerInfo{
@@ -172,7 +172,7 @@ func TestRemotePeer(t *testing.T) {
 		},
 		{
 			name:   "listening server",
-			remote: testutils.NewServer(t, nil),
+			remote: func() *Channel { return testutils.NewServer(t, nil) },
 			expectedFn: func(state *RuntimeState, _ string) PeerInfo {
 				return PeerInfo{
 					HostPort:    state.LocalPeer.HostPort,
@@ -188,7 +188,8 @@ func TestRemotePeer(t *testing.T) {
 
 	for _, tt := range tests {
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-			defer tt.remote.Close()
+			remote := tt.remote()
+			defer remote.Close()
 
 			gotPeer := make(chan PeerInfo, 1)
 			testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -196,9 +197,9 @@ func TestRemotePeer(t *testing.T) {
 				return &raw.Res{}, nil
 			})
 
-			_, _, _, err := raw.Call(ctx, tt.remote, hostPort, ch.ServiceName(), "test", nil, nil)
+			_, _, _, err := raw.Call(ctx, remote, hostPort, ch.ServiceName(), "test", nil, nil)
 			assert.NoError(t, err, "%v: Call failed", tt.name)
-			expected := tt.expectedFn(tt.remote.IntrospectState(nil), hostPort)
+			expected := tt.expectedFn(remote.IntrospectState(nil), hostPort)
 			assert.Equal(t, expected, <-gotPeer, "%v: RemotePeer mismatch", tt.name)
 		})
 	}
