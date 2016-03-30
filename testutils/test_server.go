@@ -213,6 +213,7 @@ func comparableState(ch *tchannel.Channel) *tchannel.RuntimeState {
 	})
 	s.OtherChannels = nil
 	s.SubChannels = nil
+	s.Peers = nil
 	return s
 }
 
