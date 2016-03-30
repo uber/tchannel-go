@@ -468,29 +468,3 @@ func TestCloseSendError(t *testing.T) {
 	clientCh.Close()
 	goroutines.VerifyNoLeaks(t, nil)
 }
-
-func callWithNewClient(t *testing.T, hostPort string) {
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
-	client := testutils.NewClient(t, nil)
-	assert.NoError(t, client.Ping(ctx, hostPort))
-	client.Close()
-}
-
-func TestNoLeakedState(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
-		state1 := ts.ServerState(nil)
-
-		for i := 0; i < 100; i++ {
-			callWithNewClient(t, ts.HostPort())
-		}
-
-		// Wait for all runnable goroutines to end. We expect one extra goroutine for the server.
-		goroutines.VerifyNoLeaks(t, &goroutines.VerifyOpts{
-			Exclude: "(*Channel).Serve",
-		})
-
-		assert.Equal(t, state1, ts.ServerState(nil), "State mismatch")
-	})
-}

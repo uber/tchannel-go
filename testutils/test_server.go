@@ -30,6 +30,8 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Has a previous test already leaked a goroutine?
@@ -43,15 +45,18 @@ type TestServer struct {
 	testing.TB
 
 	// Don't embed the server, since we'll soon want to introduce a relay.
-	server     *tchannel.Channel
-	verifyOpts *goroutines.VerifyOpts
+	server        *tchannel.Channel
+	serverInitial *tchannel.RuntimeState
+	verifyOpts    *goroutines.VerifyOpts
 }
 
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
+	server := NewServer(t, opts)
 	return &TestServer{
-		TB:     t,
-		server: NewServer(t, opts),
+		TB:            t,
+		server:        server,
+		serverInitial: comparableState(server),
 	}
 }
 
@@ -79,12 +84,6 @@ func (ts *TestServer) SetVerifyOpts(opts *goroutines.VerifyOpts) {
 // methods instead of accessing the server channel explicitly.
 func (ts *TestServer) Server() *tchannel.Channel {
 	return ts.server
-}
-
-// ServerState is a convenience method to introspect the runtime state of the
-// server channel.
-func (ts *TestServer) ServerState(opts *tchannel.IntrospectionOptions) *tchannel.RuntimeState {
-	return ts.server.IntrospectState(opts)
 }
 
 // HostPort returns the host:port for clients to connect to. Note that this may
@@ -124,8 +123,10 @@ func (ts *TestServer) close() {
 func (ts *TestServer) verify() {
 	ts.waitForChannelClose(ts.server)
 
-	ts.verifyExchangesCleared()
+	// Verify no goroutines leaked first, which will wait for all runnable goroutines.
 	ts.verifyNoGoroutinesLeaked()
+	ts.verifyExchangesCleared()
+	ts.verifyNoStateLeak()
 }
 
 func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
@@ -152,6 +153,11 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 	// Channel is not closing, fail the test.
 	sinceStart := time.Since(started)
 	ts.Errorf("Channel did not close after %v, last state: %v", sinceStart, state)
+}
+
+func (ts *TestServer) verifyNoStateLeak() {
+	serverFinal := comparableState(ts.server)
+	assert.Equal(ts.TB, ts.serverInitial, serverFinal, "Runtime state has leaks")
 }
 
 func (ts *TestServer) verifyExchangesCleared() {
@@ -183,6 +189,19 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 		return
 	}
 	ts.Error(err.Error())
+}
+
+func comparableState(ch *tchannel.Channel) *tchannel.RuntimeState {
+	s := ch.IntrospectState(&tchannel.IntrospectionOptions{
+		IncludeExchanges: true,
+	})
+	s.OtherChannels = nil
+	for sc := range s.SubChannels {
+		scState := s.SubChannels[sc]
+		scState.Handler = tchannel.HandlerRuntimeState{}
+		s.SubChannels[sc] = scState
+	}
+	return s
 }
 
 func describeLeakedExchanges(rs *tchannel.RuntimeState) string {
