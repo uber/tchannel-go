@@ -36,38 +36,38 @@ func TestRequestStateRetry(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	server := testutils.NewServer(t, nil)
-	defer server.Close()
-	server.Register(raw.Wrap(newTestHandler(t)), "echo")
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
-	client := testutils.NewClient(t, nil)
-	defer client.Close()
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
 
-	counter := 0
-	sc := client.GetSubChannel(server.PeerInfo().ServiceName)
-	err := client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
-		defer func() { counter++ }()
+		counter := 0
+		sc := client.GetSubChannel(ts.Server().ServiceName())
+		err := client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
+			defer func() { counter++ }()
 
-		expectedPeers := counter
-		if expectedPeers > 0 {
-			// An entry is also added for each host.
-			expectedPeers++
-		}
+			expectedPeers := counter
+			if expectedPeers > 0 {
+				// An entry is also added for each host.
+				expectedPeers++
+			}
 
-		assert.Equal(t, expectedPeers, len(rs.SelectedPeers), "SelectedPeers should not be reused")
+			assert.Equal(t, expectedPeers, len(rs.SelectedPeers), "SelectedPeers should not be reused")
 
-		if counter < 4 {
-			client.Peers().Add(testutils.GetClosedHostPort(t))
-		} else {
-			client.Peers().Add(server.PeerInfo().HostPort)
-		}
+			if counter < 4 {
+				client.Peers().Add(testutils.GetClosedHostPort(t))
+			} else {
+				client.Peers().Add(ts.HostPort())
+			}
 
-		_, err := raw.CallV2(ctx, sc, raw.CArgs{
-			Method:      "echo",
-			CallOptions: &CallOptions{RequestState: rs},
+			_, err := raw.CallV2(ctx, sc, raw.CArgs{
+				Method:      "echo",
+				CallOptions: &CallOptions{RequestState: rs},
+			})
+			return err
 		})
-		return err
+		assert.NoError(t, err, "RunWithRetry should succeed")
+		assert.Equal(t, 5, counter, "RunWithRetry should retry 5 times")
 	})
-	assert.NoError(t, err, "RunWithRetry should succeed")
-	assert.Equal(t, 5, counter, "RunWithRetry should retry 5 times")
 }
