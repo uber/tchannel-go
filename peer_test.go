@@ -487,6 +487,8 @@ func TestPeerSelection(t *testing.T) {
 
 		strategy, count := createScoreStrategy(0, 1)
 		s2, _ := pt.NewService(t, "S2", "S2")
+		defer s2.Close()
+
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)

@@ -31,16 +31,8 @@ import (
 )
 
 func TestPeersIncomingConnection(t *testing.T) {
-	var channels []*Channel
-	defer func() {
-		for _, ch := range channels {
-			ch.Close()
-		}
-	}()
-
 	newService := func(svcName string) (*Channel, string) {
 		ch, _, hostPort := NewServer(t, &testutils.ChannelOpts{ServiceName: svcName})
-		channels = append(channels, ch)
 		return ch, hostPort
 	}
 
@@ -55,7 +47,9 @@ func TestPeersIncomingConnection(t *testing.T) {
 		ringpopSC := ch.GetSubChannel("ringpop", Isolated)
 
 		hyperbahn, hyperbahnHostPort := newService("hyperbahn")
+		defer hyperbahn.Close()
 		ringpop, ringpopHostPort := newService("ringpop")
+		defer ringpop.Close()
 
 		doPing(hyperbahn)
 		doPing(ringpop)
