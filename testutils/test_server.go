@@ -121,9 +121,13 @@ func (ts *TestServer) CloseAndVerify() {
 	ts.verify()
 }
 
-// NewClient is a convenience wrapper around testutils.NewClient.
+// NewClient returns a client that with log verification.
+// TODO: Verify message exchanges and leaks for client channels as well.
 func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
-	return NewClient(ts, opts)
+	opts = getOptsForTest(ts, opts)
+	ch := NewClient(ts, opts)
+	ts.postFns = append(ts.postFns, opts.postFns...)
+	return ch
 }
 
 func (ts *TestServer) close() {
