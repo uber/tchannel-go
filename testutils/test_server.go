@@ -212,11 +212,8 @@ func comparableState(ch *tchannel.Channel) *tchannel.RuntimeState {
 		IncludeExchanges: true,
 	})
 	s.OtherChannels = nil
-	for sc := range s.SubChannels {
-		scState := s.SubChannels[sc]
-		scState.Handler = tchannel.HandlerRuntimeState{}
-		s.SubChannels[sc] = scState
-	}
+	s.SubChannels = nil
+	s.Peers = nil
 	return s
 }
 
