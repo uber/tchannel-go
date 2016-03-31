@@ -107,8 +107,9 @@ func (l testLogger) Enabled(level tchannel.LogLevel) bool {
 }
 
 func (l testLogger) log(prefix string, msg string) {
+	logLine := fmt.Sprintf("%s [%v] %v\n", time.Now().Format("15:04:05.000000"), prefix, msg)
 	l.w.withLock(func(w *bytes.Buffer) {
-		fmt.Fprintf(w, "%s [%v] %v\n", time.Now().Format("15:04:05.000000"), prefix, msg)
+		w.WriteString(logLine)
 	})
 }
 
