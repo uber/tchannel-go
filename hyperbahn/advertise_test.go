@@ -37,7 +37,7 @@ import (
 )
 
 func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 
 	clientOpts := stubbedSleep()
 	sleepArgs, sleepBlock, sleepClose := testutils.SleepStub(&clientOpts.TimeSleep)
@@ -158,7 +158,7 @@ func (r *retryTest) setAdvertiseFailure() {
 
 func runRetryTest(t *testing.T, f func(r *retryTest)) {
 	r := &retryTest{}
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 	r.setup()
 
 	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
