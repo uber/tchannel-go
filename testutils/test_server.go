@@ -190,6 +190,10 @@ func (ts *TestServer) verifyExchangesCleared() {
 }
 
 func (ts *TestServer) verifyNoGoroutinesLeaked() {
+	if _leakedGoroutine.Load() == 1 {
+		ts.Log("Skipping check for leaked goroutines because of a previous leak.")
+		return
+	}
 	err := goroutines.IdentifyLeaks(ts.verifyOpts)
 	if err == nil {
 		// No leaks, nothing to do.
