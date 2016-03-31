@@ -231,6 +231,9 @@ func (ch *Channel) RunWithRetry(runCtx context.Context, f RetriableFunc) error {
 			return nil
 		}
 		if !opts.RetryOn.CanRetry(err) {
+			if ch.log.Enabled(LogLevelInfo) {
+				ch.log.Infof("Failed after non-retriable error: %v", err)
+			}
 			return err
 		}
 
