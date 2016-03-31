@@ -205,6 +205,7 @@ func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string,
 	conn, err := net.DialTimeout("tcp", hostPort, timeout)
 	if err != nil {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			ch.log.WithFields(LogField{"hostPort", hostPort}, LogField{"timeout", timeout}).Infof("Outbound net.Dial timed out")
 			err = ErrTimeout
 		}
 		return nil, err
