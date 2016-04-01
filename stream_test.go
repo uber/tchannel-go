@@ -34,7 +34,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -241,106 +240,95 @@ func TestStreamSendError(t *testing.T) {
 }
 
 func TestStreamCancelled(t *testing.T) {
-	server := testutils.NewServer(t, nil)
-	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
-	ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
-	defer cancel()
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
 
-	helper := streamHelper{t}
-	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
-		callCtx, callCancel := context.WithCancel(ctx)
-		cancelContext := make(chan struct{})
+		helper := streamHelper{t}
+		WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
+			callCtx, callCancel := context.WithCancel(ctx)
+			cancelContext := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(callCtx, ch, server.PeerInfo().HostPort, server.ServiceName())
-		go func() {
+			arg3Writer, arg3Reader := helper.startCall(callCtx, ch, ts.HostPort(), ts.Server().ServiceName())
+			go func() {
+				for i := 0; i < 10; i++ {
+					assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
+				}
+
+				// Our reads and writes should fail now.
+				<-cancelContext
+				callCancel()
+
+				_, err := arg3Writer.Write([]byte{1})
+				// The write will succeed since it's buffered.
+				assert.NoError(t, err, "Write after fail should be buffered")
+				assert.Error(t, arg3Writer.Flush(), "writer.Flush should fail after cancel")
+				assert.Error(t, arg3Writer.Close(), "writer.Close should fail after cancel")
+			}()
+
 			for i := 0; i < 10; i++ {
-				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
+				arg3 := make([]byte, 1)
+				n, err := arg3Reader.Read(arg3)
+				assert.Equal(t, 1, n, "Read did not correct number of bytes")
+				assert.NoError(t, err, "Read failed")
 			}
 
-			// Our reads and writes should fail now.
-			<-cancelContext
-			callCancel()
+			close(cancelContext)
 
-			_, err := arg3Writer.Write([]byte{1})
-			// The write will succeed since it's buffered.
-			assert.NoError(t, err, "Write after fail should be buffered")
-			assert.Error(t, arg3Writer.Flush(), "writer.Flush should fail after cancel")
-			assert.Error(t, arg3Writer.Close(), "writer.Close should fail after cancel")
-		}()
-
-		for i := 0; i < 10; i++ {
-			arg3 := make([]byte, 1)
-			n, err := arg3Reader.Read(arg3)
-			assert.Equal(t, 1, n, "Read did not correct number of bytes")
-			assert.NoError(t, err, "Read failed")
-		}
-
-		close(cancelContext)
-
-		n, err := io.Copy(ioutil.Discard, arg3Reader)
-		assert.EqualValues(t, 0, n, "Read should not read any bytes after cancel")
-		assert.Error(t, err, "Read should fail after cancel")
-		assert.Error(t, arg3Reader.Close(), "reader.Close should fail after cancel")
+			n, err := io.Copy(ioutil.Discard, arg3Reader)
+			assert.EqualValues(t, 0, n, "Read should not read any bytes after cancel")
+			assert.Error(t, err, "Read should fail after cancel")
+			assert.Error(t, arg3Reader.Close(), "reader.Close should fail after cancel")
+		})
 	})
-
-	// TODO(prashant): Once calls are cancelled when the connection is closed, this
-	// can be removed, since the calls should fail.
-
-	<-ctx.Done()
-
-	server.Close()
-	waitForChannelClose(t, server)
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestResponseClosedBeforeRequest(t *testing.T) {
-	server := testutils.NewServer(t, nil)
-	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
-	ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
-	defer cancel()
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
 
-	helper := streamHelper{t}
-	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
-		responseClosed := make(chan struct{})
-		writerDone := make(chan struct{})
+		helper := streamHelper{t}
+		WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
+			responseClosed := make(chan struct{})
+			writerDone := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(ctx, ch, server.PeerInfo().HostPort, server.ServiceName())
-		go func() {
-			defer close(writerDone)
+			arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.Server().ServiceName())
+			go func() {
+				defer close(writerDone)
+
+				for i := 0; i < 10; i++ {
+					assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
+				}
+				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{streamRequestClose}), "Write failed")
+
+				// Wait until our reader gets the EOF.
+				<-responseClosed
+
+				// Now our writes should fail, since the stream is shutdown
+				err := writeFlushBytes(arg3Writer, []byte{1})
+				if assert.Error(t, err, "Req write should fail since response stream ended") {
+					assert.Contains(t, err.Error(), "mex has been shutdown")
+				}
+			}()
 
 			for i := 0; i < 10; i++ {
-				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
+				arg3 := make([]byte, 1)
+				n, err := arg3Reader.Read(arg3)
+				assert.Equal(t, 1, n, "Read did not correct number of bytes")
+				assert.NoError(t, err, "Read failed")
 			}
-			assert.NoError(t, writeFlushBytes(arg3Writer, []byte{streamRequestClose}), "Write failed")
 
-			// Wait until our reader gets the EOF.
-			<-responseClosed
-
-			// Now our writes should fail, since the stream is shutdown
-			err := writeFlushBytes(arg3Writer, []byte{1})
-			if assert.Error(t, err, "Req write should fail since response stream ended") {
-				assert.Contains(t, err.Error(), "mex has been shutdown")
-			}
-		}()
-
-		for i := 0; i < 10; i++ {
-			arg3 := make([]byte, 1)
-			n, err := arg3Reader.Read(arg3)
-			assert.Equal(t, 1, n, "Read did not correct number of bytes")
-			assert.NoError(t, err, "Read failed")
-		}
-
-		eofBuf := make([]byte, 1)
-		_, err := arg3Reader.Read(eofBuf)
-		assert.Equal(t, io.EOF, err, "Response should EOF after request close")
-		assert.NoError(t, arg3Reader.Close(), "Close should succeed")
-		close(responseClosed)
-		<-writerDone
+			eofBuf := make([]byte, 1)
+			_, err := arg3Reader.Read(eofBuf)
+			assert.Equal(t, io.EOF, err, "Response should EOF after request close")
+			assert.NoError(t, arg3Reader.Close(), "Close should succeed")
+			close(responseClosed)
+			<-writerDone
+		})
 	})
-
-	server.Close()
-	waitForChannelClose(t, server)
-	goroutines.VerifyNoLeaks(t, nil)
 }
