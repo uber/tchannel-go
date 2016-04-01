@@ -45,11 +45,16 @@ var _leakedGoroutine = atomic.NewInt32(0)
 type TestServer struct {
 	testing.TB
 
-	// Don't embed the server, since we'll soon want to introduce a relay.
-	server        *tchannel.Channel
-	serverInitial *tchannel.RuntimeState
-	verifyOpts    *goroutines.VerifyOpts
-	postFns       []func()
+	// channels is the list of channels created for this TestServer. The first
+	// element is always the initial server.
+	channels []*tchannel.Channel
+
+	// channelState the initial runtime state for all channels created
+	// as part of the TestServer (including the server).
+	channelStates map[*tchannel.Channel]*tchannel.RuntimeState
+
+	verifyOpts *goroutines.VerifyOpts
+	postFns    []func()
 }
 
 // NewTestServer constructs a TestServer.
@@ -58,10 +63,14 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	ch, err := NewServerChannel(opts)
 	require.NoError(t, err, "WithTestServer failed to create Server")
 
+	states := map[*tchannel.Channel]*tchannel.RuntimeState{
+		ch: comparableState(ch),
+	}
+
 	return &TestServer{
 		TB:            t,
-		server:        ch,
-		serverInitial: comparableState(ch),
+		channels:      []*tchannel.Channel{ch},
+		channelStates: states,
 		postFns:       opts.postFns,
 	}
 }
@@ -93,7 +102,7 @@ func (ts *TestServer) SetVerifyOpts(opts *goroutines.VerifyOpts) {
 // callers should use the Client(), HostPort(), ServiceName(), and Register()
 // methods instead of accessing the server channel explicitly.
 func (ts *TestServer) Server() *tchannel.Channel {
-	return ts.server
+	return ts.channels[0]
 }
 
 // HostPort returns the host:port for clients to connect to. Note that this may
@@ -101,46 +110,64 @@ func (ts *TestServer) Server() *tchannel.Channel {
 func (ts *TestServer) HostPort() string {
 	// Use this wrapper to enable registering handlers on the server, but
 	// connecting to a relay.
-	return ts.server.PeerInfo().HostPort
+	return ts.Server().PeerInfo().HostPort
 }
 
 // ServiceName returns the service name of the server channel.
 func (ts *TestServer) ServiceName() string {
-	return ts.server.PeerInfo().ServiceName
+	return ts.Server().PeerInfo().ServiceName
 }
 
 // Register registers a handler on the server channel.
 func (ts *TestServer) Register(h tchannel.Handler, methodName string) {
-	ts.server.Register(h, methodName)
+	ts.Server().Register(h, methodName)
 }
 
-// CloseAndVerify closes all channels, then verifies that no message exchanges
-// or goroutines were leaked.
+// CloseAndVerify closes all channels verifying each channel as it is closed.
+// It then verifies that no goroutines were leaked.
 func (ts *TestServer) CloseAndVerify() {
-	ts.close()
-	ts.verify()
+	for i := len(ts.channels) - 1; i >= 0; i-- {
+		ch := ts.channels[i]
+		ts.close(ch)
+		ts.verify(ch)
+	}
 }
 
 // NewClient returns a client that with log verification.
 // TODO: Verify message exchanges and leaks for client channels as well.
 func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
+	return ts.addChannel(NewClient, opts)
+}
+
+// NewServer returns a server with log and channel state verification.
+func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
+	return ts.addChannel(NewServer, opts)
+}
+
+func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelOpts) *tchannel.Channel, opts *ChannelOpts) *tchannel.Channel {
 	opts = getOptsForTest(ts, opts)
-	ch := NewClient(ts, opts)
+	ch := createChannel(ts, opts)
 	ts.postFns = append(ts.postFns, opts.postFns...)
 	return ch
 }
 
-func (ts *TestServer) close() {
-	ts.server.Close()
+// close closes all channels in most-recently-created order.
+// it waits for the channels to close.
+func (ts *TestServer) close(ch *tchannel.Channel) {
+	ch.Close()
+	ts.waitForChannelClose(ch)
 }
 
-func (ts *TestServer) verify() {
-	ts.waitForChannelClose(ts.server)
+func (ts *TestServer) verify(ch *tchannel.Channel) {
+	// For the main server channel, we want to ensure there's no goroutine leaks
+	// which will wait for all runnable goroutines. We cannot verify goroutines
+	// for all channels, as it would detect goroutines in the outer channels.
+	if ch == ts.channels[0] {
+		ts.verifyNoGoroutinesLeaked()
+	}
 
-	// Verify no goroutines leaked first, which will wait for all runnable goroutines.
-	ts.verifyNoGoroutinesLeaked()
-	ts.verifyExchangesCleared()
-	ts.verifyNoStateLeak()
+	ts.verifyExchangesCleared(ch)
+	ts.verifyNoStateLeak(ch)
 }
 
 func (ts *TestServer) post() {
@@ -175,17 +202,18 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 	ts.Errorf("Channel did not close after %v, last state: %v", sinceStart, state)
 }
 
-func (ts *TestServer) verifyNoStateLeak() {
-	serverFinal := comparableState(ts.server)
-	assert.Equal(ts.TB, ts.serverInitial, serverFinal, "Runtime state has leaks")
+func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
+	initial := ts.channelStates[ch]
+	final := comparableState(ch)
+	assert.Equal(ts.TB, initial, final, "Runtime state has leaks")
 }
 
-func (ts *TestServer) verifyExchangesCleared() {
+func (ts *TestServer) verifyExchangesCleared(ch *tchannel.Channel) {
 	if ts.Failed() {
 		return
 	}
 	// Ensure that all the message exchanges are empty.
-	serverState := ts.server.IntrospectState(&tchannel.IntrospectionOptions{
+	serverState := ch.IntrospectState(&tchannel.IntrospectionOptions{
 		IncludeExchanges: true,
 	})
 	if exchangesLeft := describeLeakedExchanges(serverState); exchangesLeft != "" {
