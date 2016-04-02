@@ -312,11 +312,11 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 	return setState
 }
 
-func getStacks() []byte {
+func getStacks(all bool) []byte {
 	var buf []byte
 	for n := 4096; n < 10*1024*1024; n *= 2 {
 		buf = make([]byte, n)
-		stackLen := runtime.Stack(buf, true /* all */)
+		stackLen := runtime.Stack(buf, all)
 		if stackLen < n {
 			return buf
 		}
@@ -357,7 +357,7 @@ func handleInternalRuntime(arg3 []byte) interface{} {
 	}
 	runtime.ReadMemStats(&state.MemStats)
 	if opts.IncludeGoStacks {
-		state.GoStacks = getStacks()
+		state.GoStacks = getStacks(true /* all */)
 	}
 
 	return state
