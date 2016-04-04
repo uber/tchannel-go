@@ -318,7 +318,7 @@ func getStacks(all bool) []byte {
 		buf = make([]byte, n)
 		stackLen := runtime.Stack(buf, all)
 		if stackLen < n {
-			return buf
+			return buf[:stackLen]
 		}
 	}
 
