@@ -99,23 +99,21 @@ func TestFramesReleased(t *testing.T) {
 		numGoroutines        = 10
 	)
 
-	var serverExchanges, clientExchanges string
 	pool := NewRecordingFramePool()
 	opts := testutils.NewOpts().
 		SetServiceName("swap-server").
 		SetFramePool(pool).
 		AddLogFilter("Couldn't find handler.", numGoroutines*requestsPerGoroutine)
-	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
-		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(&swapper{t}), "swap")
 
 		clientOpts := testutils.NewOpts().SetFramePool(pool)
-		clientCh := testutils.NewClient(t, clientOpts)
-		defer clientCh.Close()
+		clientCh := ts.NewClient(clientOpts)
 
 		// Create an active connection that can be shared by the goroutines by calling Ping.
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
-		require.NoError(t, clientCh.Ping(ctx, hostPort))
+		require.NoError(t, clientCh.Ping(ctx, ts.HostPort()))
 
 		var wg sync.WaitGroup
 		for i := 0; i < numGoroutines; i++ {
@@ -124,21 +122,13 @@ func TestFramesReleased(t *testing.T) {
 				defer wg.Done()
 
 				for i := 0; i < requestsPerGoroutine; i++ {
-					doPingAndCall(t, clientCh, hostPort)
-					doErrorCall(t, clientCh, hostPort)
+					doPingAndCall(t, clientCh, ts.HostPort())
+					doErrorCall(t, clientCh, ts.HostPort())
 				}
 			}()
 		}
 
 		wg.Wait()
-
-		serverExchanges = CheckEmptyExchanges(serverCh)
-		clientExchanges = CheckEmptyExchanges(clientCh)
-	})
-
-	// Since the test is still running, the timeout goroutine will be running and can be ignored.
-	goroutines.VerifyNoLeaks(t, &goroutines.VerifyOpts{
-		Exclude: "testutils.SetTimeout",
 	})
 
 	// TODO: The goroutines.GetAll is to debug test failures in Travis. Remove this once
@@ -147,14 +137,6 @@ func TestFramesReleased(t *testing.T) {
 	if unreleasedCount, isEmpty := pool.CheckEmpty(); isEmpty != "" || unreleasedCount > 0 {
 		t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\nStacks:%v",
 			unreleasedCount, isEmpty, stacks)
-	}
-
-	// Check the message exchanges and make sure they are all empty.
-	if serverExchanges != "" {
-		t.Errorf("Found uncleared message exchanges on server:\n%s", serverExchanges)
-	}
-	if clientExchanges != "" {
-		t.Errorf("Found uncleared message exchanges on client:\n%s", clientExchanges)
 	}
 }
 
@@ -178,16 +160,15 @@ func TestDirtyFrameRequests(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetServiceName("swap-server").
 		SetFramePool(dirtyFramePool{})
-	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
-		peerInfo := serverCh.PeerInfo()
-		serverCh.Register(raw.Wrap(&swapper{t}), "swap")
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(&swapper{t}), "swap")
 
 		for _, argSize := range argSizes {
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()
 
 			arg2, arg3 := testutils.RandBytes(argSize), testutils.RandBytes(argSize)
-			res2, res3, _, err := raw.Call(ctx, serverCh, hostPort, peerInfo.ServiceName, "swap", arg2, arg3)
+			res2, res3, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().ServiceName(), "swap", arg2, arg3)
 			if assert.NoError(t, err, "Call failed") {
 				assert.Equal(t, arg2, res3, "Result arg3 wrong")
 				assert.Equal(t, arg3, res2, "Result arg3 wrong")
