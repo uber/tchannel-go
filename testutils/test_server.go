@@ -86,6 +86,7 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 	defer ts.post()
 
 	f(ts)
+	ts.Server().Logger().Debugf("TEST: Test function complete")
 	ts.CloseAndVerify()
 }
 
@@ -128,6 +129,7 @@ func (ts *TestServer) Register(h tchannel.Handler, methodName string) {
 func (ts *TestServer) CloseAndVerify() {
 	for i := len(ts.channels) - 1; i >= 0; i-- {
 		ch := ts.channels[i]
+		ch.Logger().Debugf("TEST: TestServer is closing and verifying channel")
 		ts.close(ch)
 		ts.verify(ch)
 	}
