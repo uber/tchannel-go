@@ -150,6 +150,8 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 	opts = getOptsForTest(ts, opts)
 	ch := createChannel(ts, opts)
 	ts.postFns = append(ts.postFns, opts.postFns...)
+	ts.channels = append(ts.channels, ch)
+	ts.channelStates[ch] = comparableState(ch)
 	return ch
 }
 
