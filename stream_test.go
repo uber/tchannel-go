@@ -248,10 +248,9 @@ func TestStreamCancelled(t *testing.T) {
 
 		helper := streamHelper{t}
 		ch := ts.NewServer(nil)
-		callCtx, callCancel := context.WithCancel(ctx)
 		cancelContext := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(callCtx, ch, ts.HostPort(), ts.Server().ServiceName())
+		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.Server().ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
@@ -259,7 +258,7 @@ func TestStreamCancelled(t *testing.T) {
 
 			// Our reads and writes should fail now.
 			<-cancelContext
-			callCancel()
+			cancel()
 
 			_, err := arg3Writer.Write([]byte{1})
 			// The write will succeed since it's buffered.
