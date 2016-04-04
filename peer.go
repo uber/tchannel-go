@@ -262,9 +262,11 @@ func newPeerScore(p *Peer, score uint64) *peerScore {
 type Peer struct {
 	sync.RWMutex
 
-	channel             Connectable
-	hostPort            string
-	onClosedConnRemoved func(*Peer)
+	channel  Connectable
+	hostPort string
+
+	// TODO: We should use an interface (PeerEventListener) instead of funcs.
+	onClosedConnRemoved func(*Peer, *Connection)
 
 	// scCount is the number of subchannels that this peer is added to.
 	scCount uint32
@@ -278,7 +280,7 @@ type Peer struct {
 	onUpdate func(*Peer)
 }
 
-func newPeer(channel Connectable, hostPort string, onClosedConnRemoved func(*Peer)) *Peer {
+func newPeer(channel Connectable, hostPort string, onClosedConnRemoved func(*Peer, *Connection)) *Peer {
 	if hostPort == "" {
 		panic("Cannot create peer with blank hostPort")
 	}
@@ -432,7 +434,7 @@ func (p *Peer) connectionCloseStateChange(changed *Connection) {
 	p.Unlock()
 
 	if found {
-		p.onClosedConnRemoved(p)
+		p.onClosedConnRemoved(p, changed)
 	}
 }
 
