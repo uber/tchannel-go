@@ -92,7 +92,8 @@ func (l *RootPeerList) onClosedConnRemoved(peer *Peer) {
 	hostPort := peer.HostPort()
 	p, ok := l.Get(hostPort)
 	if !ok {
-		l.channel.Logger().Error("got connection state change for a peer not in the root peer list")
+		// It's possible that multiple connections were closed and removed at the same time,
+		// so multiple goroutines might be removing the peer from the root peer list.
 		return
 	}
 
