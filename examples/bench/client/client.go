@@ -26,10 +26,10 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
-	"sync/atomic"
 	"time"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/raw"
 	"golang.org/x/net/context"
 )
@@ -42,7 +42,7 @@ var (
 	getToSetRatio = flag.Int("getToSetRatio", 1, "The number of Gets to do per Set call")
 
 	// counter tracks the total number of requests completed in the past second.
-	counter int64
+	counter atomic.Int64
 )
 
 func main() {
@@ -70,7 +70,7 @@ func main() {
 func requestCountReporter() {
 	for {
 		time.Sleep(time.Second)
-		cur := atomic.SwapInt64(&counter, int64(0))
+		cur := counter.Swap(0)
 		log.Printf("%v requests", cur)
 	}
 }
@@ -82,14 +82,14 @@ func worker(ch *tchannel.Channel) {
 			log.Fatalf("set failed: %v", err)
 			continue
 		}
-		atomic.AddInt64(&counter, 1)
+		counter.Inc()
 
 		for i := 0; i < *getToSetRatio; i++ {
 			_, err := getRequest(ch, "key")
 			if err != nil {
 				log.Fatalf("get failed: %v", err)
 			}
-			atomic.AddInt64(&counter, 1)
+			counter.Inc()
 		}
 	}
 }

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")
@@ -48,6 +49,10 @@ type ChannelOpts struct {
 
 	// optFn is run with the channel options before creating the channel.
 	optFn func(*ChannelOpts)
+
+	// postFns is a list of functions that are run after the test.
+	// They are run even if the test fails.
+	postFns []func()
 }
 
 // LogVerification contains options to control the log verification.
@@ -141,6 +146,10 @@ func (o *ChannelOpts) AddLogFilter(filter string, maxCount uint, fields ...strin
 	return o
 }
 
+func (o *ChannelOpts) addPostFn(f func()) {
+	o.postFns = append(o.postFns, f)
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue
@@ -172,6 +181,6 @@ func DefaultOpts(opts *ChannelOpts) *ChannelOpts {
 // WrapLogger wraps the given logger with extra verification.
 func (v *LogVerification) WrapLogger(t testing.TB, l tchannel.Logger) tchannel.Logger {
 	return errorLogger{l, t, v, &errorLoggerState{
-		matchCount: make([]uint32, len(v.Filters)),
+		matchCount: make([]atomic.Uint32, len(v.Filters)),
 	}}
 }

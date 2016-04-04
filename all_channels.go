@@ -20,12 +20,7 @@
 
 package tchannel
 
-import (
-	"bytes"
-	"runtime"
-	"strconv"
-	"sync"
-)
+import "sync"
 
 // channelMap is used to ensure that applications don't create multiple channels with
 // the same service name in a single process.
@@ -36,32 +31,10 @@ var channelMap = struct {
 	existing: make(map[string][]*Channel),
 }
 
-func getCallerStack(skip int) string {
-	callers := make([]uintptr, 32)
-	n := runtime.Callers(skip+2 /* skip Callers and self */, callers)
-	callers = callers[:n]
-
-	buf := &bytes.Buffer{}
-	for _, pc := range callers {
-		f := runtime.FuncForPC(pc)
-		name := f.Name()
-		file, line := f.FileLine(pc)
-
-		buf.WriteString(name)
-		buf.WriteByte('\n')
-		buf.WriteString("   at ")
-		buf.WriteString(file)
-		buf.WriteByte(':')
-		buf.WriteString(strconv.Itoa(line))
-		buf.WriteByte('\n')
-	}
-
-	return buf.String()
-}
-
 func registerNewChannel(ch *Channel) {
 	serviceName := ch.ServiceName()
-	ch.createdStack = getCallerStack(1 /* skip self */)
+	ch.createdStack = string(getStacks(false /* all */))
+	ch.log.Debugf("NewChannel created at %s", ch.createdStack)
 
 	channelMap.Lock()
 	defer channelMap.Unlock()

@@ -1,9 +1,19 @@
 GODEPS := $(shell pwd)/Godeps/_workspace
 GO_VERSION := $(shell go version | awk '{ print $$3 }')
+GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
+LINTABLE_MINOR_VERSIONS := 5 6
+FMTABLE_MINOR_VERSIONS := 6
+ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+SHOULD_LINT := true
+endif
+ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+SHOULD_LINT_FMT := true
+endif
+
 OLDGOPATH := $(GOPATH)
 PATH := $(GODEPS)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
-PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
+PKGS := . ./atomic ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 2m
 BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release
@@ -22,7 +32,7 @@ export PATH := $(realpath $(THRIFT_REL)):$(PATH)
 # Separate packages that use testutils and don't, since they can have different flags.
 # This is especially useful for timeoutMultiplier and connectionLog
 TESTUTILS_TEST_PKGS := . hyperbahn testutils http json thrift pprof trace
-NO_TESTUTILS_PKGS := stats thrift/thrift-gen tnet typed
+NO_TESTUTILS_PKGS := atomic stats thrift/thrift-gen tnet typed
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -44,11 +54,19 @@ get_thrift:
 
 install:
 	GOPATH=$(GODEPS) go get github.com/tools/godep
-	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
 	GOPATH=$(GODEPS) godep restore -v
+ifdef SHOULD_LINT
+	@echo "Installing golint, since we expect to lint on" $(GO_VERSION)
+	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
+else
+	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
+endif
 
 install_ci: get_thrift install
 	go get -u github.com/mattn/goveralls
+
+install_test:
+	go test -i $(TEST_ARG) $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS) $(TESTUTILS_TEST_PKGS))
 
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
@@ -70,10 +88,10 @@ godep:
 
 test_ci: test
 
-test: clean setup
+test: clean setup install_test
 	@echo Testing packages:
-	go test $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS)) $(TEST_ARG) -parallel=4
-	go test $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS)) $(TEST_ARG) -timeoutMultiplier 10 -parallel=4
+	go test -parallel=4 $(TEST_ARG) $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS))
+	go test -parallel=4 -timeoutMultiplier=10 $(TEST_ARG) $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS))
 	@echo Running frame pool tests
 	go test -run TestFramesReleased -stressTest $(TEST_ARG) -timeoutMultiplier 10
 
@@ -90,18 +108,30 @@ cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
 cover_ci: cover_profile
-	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci
+	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 
-FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/'
+FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'Godeps/' -e 'vendor/'
 lint:
+ifdef SHOULD_LINT
+	@echo "Linters are enabled on" $(GO_VERSION)
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) 2>&1 | tee -a lint.log
+	-go vet $(PKGS) 2>&1 | tee -a lint.log
+ifdef SHOULD_LINT_FMT
 	@echo "Checking gofmt"
-	-[ $(GO_VERSION) != "go1.5" ] || gofmt -d . | tee -a lint.log
+	-gofmt -l . | $(FILTER) | tee -a lint.log
+else
+	@echo "Not checking gofmt on" $(GO_VERSION)
+endif
+	@echo "Checking for unresolved FIXMEs"
+	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
+else
+	@echo "Skipping linters on" $(GO_VERSION)
+endif
+
 
 thrift_example: thrift_gen
 	go build -o $(BUILD)/examples/thrift       ./examples/thrift/main.go

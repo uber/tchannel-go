@@ -1,6 +1,16 @@
 Changelog
 =========
 
+# 1.0.5
+
+* Use `context.Context` storage for headers so `thrift.Context` and
+  `tchannel.ContextWithHeaders` can be passed to functions that use
+  `context.Context`, and have them retain headers.
+* `thrift.Server` allows a custom factory to be used for `thrift.Context`
+  creation based on the underlying `context.Context` and headers map.
+* Store goroutine stack traces on channel creation that can be accessed
+  via introspection.
+
 # 1.0.4
 
 * Improve handling of network failures during pending calls. Previously, calls

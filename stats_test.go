@@ -59,7 +59,7 @@ func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map
 }
 
 func TestStatsCalls(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 
 	tests := []struct {
 		method  string
@@ -128,7 +128,7 @@ func TestStatsCalls(t *testing.T) {
 }
 
 func TestStatsWithRetries(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 	a := testutils.DurationArray
 
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)

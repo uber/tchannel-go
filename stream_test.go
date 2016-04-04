@@ -34,7 +34,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/goroutines"
 	"golang.org/x/net/context"
 )
 
@@ -241,18 +240,17 @@ func TestStreamSendError(t *testing.T) {
 }
 
 func TestStreamCancelled(t *testing.T) {
-	server := testutils.NewServer(t, nil)
-	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
-	ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
-	defer cancel()
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
 
-	helper := streamHelper{t}
-	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
-		callCtx, callCancel := context.WithCancel(ctx)
+		helper := streamHelper{t}
+		ch := ts.NewServer(nil)
 		cancelContext := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(callCtx, ch, server.PeerInfo().HostPort, server.ServiceName())
+		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.Server().ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
@@ -260,7 +258,7 @@ func TestStreamCancelled(t *testing.T) {
 
 			// Our reads and writes should fail now.
 			<-cancelContext
-			callCancel()
+			cancel()
 
 			_, err := arg3Writer.Write([]byte{1})
 			// The write will succeed since it's buffered.
@@ -283,30 +281,21 @@ func TestStreamCancelled(t *testing.T) {
 		assert.Error(t, err, "Read should fail after cancel")
 		assert.Error(t, arg3Reader.Close(), "reader.Close should fail after cancel")
 	})
-
-	// TODO(prashant): Once calls are cancelled when the connection is closed, this
-	// can be removed, since the calls should fail.
-
-	<-ctx.Done()
-
-	server.Close()
-	waitForChannelClose(t, server)
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestResponseClosedBeforeRequest(t *testing.T) {
-	server := testutils.NewServer(t, nil)
-	server.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
-	ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
-	defer cancel()
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
 
-	helper := streamHelper{t}
-	WithVerifiedServer(t, nil, func(ch *Channel, _ string) {
+		helper := streamHelper{t}
+		ch := ts.NewServer(nil)
 		responseClosed := make(chan struct{})
 		writerDone := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(ctx, ch, server.PeerInfo().HostPort, server.ServiceName())
+		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.Server().ServiceName())
 		go func() {
 			defer close(writerDone)
 
@@ -339,8 +328,4 @@ func TestResponseClosedBeforeRequest(t *testing.T) {
 		close(responseClosed)
 		<-writerDone
 	})
-
-	server.Close()
-	waitForChannelClose(t, server)
-	goroutines.VerifyNoLeaks(t, nil)
 }

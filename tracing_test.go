@@ -208,7 +208,7 @@ func TestTraceReportingEnabled(t *testing.T) {
 			expected := TraceData{Annotations: tt.expected, BinaryAnnotations: binaryAnnotations, Source: source, Target: target, Method: "echo"}
 			assert.Equal(t, expected, state.call, "%v: Report args mismatch", tt.name)
 			curSpan := CurrentSpan(ctx)
-			assert.Equal(t, NewSpan(curSpan.TraceID(), 0, curSpan.TraceID()), state.span, "Span mismatch")
+			assert.Equal(t, NewSpan(curSpan.TraceID(), curSpan.TraceID(), 0), state.span, "Span mismatch")
 		})
 	}
 }

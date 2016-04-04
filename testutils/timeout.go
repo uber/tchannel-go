@@ -57,20 +57,14 @@ func SetTimeout(t *testing.T, timeout time.Duration) func() {
 	timeout = Timeout(timeout)
 
 	caller := getCallerName()
-	c := make(chan struct{})
 
-	go func() {
-		select {
-		case <-c:
-			// Test is complete, don't need to do anything.
-		case <-time.After(timeout):
-			t.Logf("Test %s timed out after %v", caller, timeout)
-			// Unfortunately, tests cannot be failed from new goroutines, so use a panic.
-			panic(fmt.Errorf("Test %s timed out after %v", caller, timeout))
-		}
-	}()
+	timer := time.AfterFunc(timeout, func() {
+		t.Logf("Test %s timed out after %v", caller, timeout)
+		// Unfortunately, tests cannot be failed from new goroutines, so use a panic.
+		panic(fmt.Errorf("Test %s timed out after %v", caller, timeout))
+	})
 
 	return func() {
-		c <- struct{}{}
+		timer.Stop()
 	}
 }

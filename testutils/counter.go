@@ -22,16 +22,16 @@ package testutils
 
 import (
 	"sync"
-	"sync/atomic"
+
+	"github.com/uber/tchannel-go/atomic"
 )
 
 // Decrementor returns a function that can be called from multiple goroutines and ensures
 // it will only return true n times.
 func Decrementor(n int) func() bool {
-	n64 := int64(n)
+	n64 := atomic.NewInt64(int64(n))
 	return func() bool {
-		newN := atomic.AddInt64(&n64, -1)
-		return newN >= 0
+		return n64.Dec() >= 0
 	}
 }
 

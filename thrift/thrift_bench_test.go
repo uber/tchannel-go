@@ -30,16 +30,17 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -121,7 +122,7 @@ func BenchmarkInboundSerial(b *testing.B) {
 }
 
 func BenchmarkInboundParallel(b *testing.B) {
-	var reqCount int32
+	var reqCounter atomic.Int32
 	serverAddr, err := setupBenchServer()
 	require.NoError(b, err, "setupBenchServer failed")
 
@@ -135,7 +136,7 @@ func BenchmarkInboundParallel(b *testing.B) {
 
 		for pb.Next() {
 			client.CallAndWait()
-			atomic.AddInt32(&reqCount, int32(1))
+			reqCounter.Inc()
 		}
 		fmt.Println("Successful requests", client.numTimes, "Mean", client.mean)
 		for err, count := range client.errors {
@@ -144,7 +145,8 @@ func BenchmarkInboundParallel(b *testing.B) {
 	})
 
 	duration := time.Since(started)
-	fmt.Println("Requests", reqCount, "RPS: ", float64(reqCount)/duration.Seconds())
+	reqs := reqCounter.Load()
+	fmt.Println("Requests", reqs, "RPS: ", float64(reqs)/duration.Seconds())
 }
 
 type benchSecondHandler struct{}

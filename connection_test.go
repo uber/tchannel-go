@@ -155,12 +155,12 @@ func TestDefaultFormat(t *testing.T) {
 func TestRemotePeer(t *testing.T) {
 	tests := []struct {
 		name       string
-		remote     *Channel
+		remote     func() *Channel
 		expectedFn func(state *RuntimeState, serverHP string) PeerInfo
 	}{
 		{
 			name:   "ephemeral client",
-			remote: testutils.NewClient(t, nil),
+			remote: func() *Channel { return testutils.NewClient(t, nil) },
 			expectedFn: func(state *RuntimeState, serverHP string) PeerInfo {
 				hostPort := state.RootPeers[serverHP].OutboundConnections[0].LocalHostPort
 				return PeerInfo{
@@ -172,7 +172,7 @@ func TestRemotePeer(t *testing.T) {
 		},
 		{
 			name:   "listening server",
-			remote: testutils.NewServer(t, nil),
+			remote: func() *Channel { return testutils.NewServer(t, nil) },
 			expectedFn: func(state *RuntimeState, _ string) PeerInfo {
 				return PeerInfo{
 					HostPort:    state.LocalPeer.HostPort,
@@ -188,7 +188,8 @@ func TestRemotePeer(t *testing.T) {
 
 	for _, tt := range tests {
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-			defer tt.remote.Close()
+			remote := tt.remote()
+			defer remote.Close()
 
 			gotPeer := make(chan PeerInfo, 1)
 			testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -196,9 +197,9 @@ func TestRemotePeer(t *testing.T) {
 				return &raw.Res{}, nil
 			})
 
-			_, _, _, err := raw.Call(ctx, tt.remote, hostPort, ch.ServiceName(), "test", nil, nil)
+			_, _, _, err := raw.Call(ctx, remote, hostPort, ch.ServiceName(), "test", nil, nil)
 			assert.NoError(t, err, "%v: Call failed", tt.name)
-			expected := tt.expectedFn(tt.remote.IntrospectState(nil), hostPort)
+			expected := tt.expectedFn(remote.IntrospectState(nil), hostPort)
 			assert.Equal(t, expected, <-gotPeer, "%v: RemotePeer mismatch", tt.name)
 		})
 	}
@@ -209,48 +210,49 @@ func TestReuseConnection(t *testing.T) {
 	defer cancel()
 
 	s1Opts := &testutils.ChannelOpts{ServiceName: "s1"}
-	WithVerifiedServer(t, s1Opts, func(ch1 *Channel, hostPort1 string) {
-		s2Opts := &testutils.ChannelOpts{ServiceName: "s2"}
-		WithVerifiedServer(t, s2Opts, func(ch2 *Channel, hostPort2 string) {
-			ch1.Register(raw.Wrap(newTestHandler(t)), "echo")
-			ch2.Register(raw.Wrap(newTestHandler(t)), "echo")
+	testutils.WithTestServer(t, s1Opts, func(ts *testutils.TestServer) {
+		ch2 := ts.NewServer(&testutils.ChannelOpts{ServiceName: "s2"})
+		hostPort2 := ch2.PeerInfo().HostPort
+		defer ch2.Close()
 
-			outbound, err := ch1.BeginCall(ctx, hostPort2, "s2", "echo", nil)
-			require.NoError(t, err)
-			outboundConn, outboundNetConn := OutboundConnection(outbound)
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
+		ch2.Register(raw.Wrap(newTestHandler(t)), "echo")
 
-			// Try to make another call at the same time, should reuse the same connection.
-			outbound2, err := ch1.BeginCall(ctx, hostPort2, "s2", "echo", nil)
-			require.NoError(t, err)
-			outbound2Conn, _ := OutboundConnection(outbound)
-			assert.Equal(t, outboundConn, outbound2Conn)
+		outbound, err := ts.Server().BeginCall(ctx, hostPort2, "s2", "echo", nil)
+		require.NoError(t, err)
+		outboundConn, outboundNetConn := OutboundConnection(outbound)
 
-			// Wait for the connection to be marked as active in ch2.
-			assert.True(t, testutils.WaitFor(time.Second, func() bool {
-				return ch2.IntrospectState(nil).NumConnections > 0
-			}), "ch2 does not have any active connections")
+		// Try to make another call at the same time, should reuse the same connection.
+		outbound2, err := ts.Server().BeginCall(ctx, hostPort2, "s2", "echo", nil)
+		require.NoError(t, err)
+		outbound2Conn, _ := OutboundConnection(outbound)
+		assert.Equal(t, outboundConn, outbound2Conn)
 
-			// When ch2 tries to call ch1, it should reuse the inbound connection from ch1.
-			outbound3, err := ch2.BeginCall(ctx, hostPort1, "s1", "echo", nil)
-			require.NoError(t, err)
-			_, outbound3NetConn := OutboundConnection(outbound3)
-			assert.Equal(t, outboundNetConn.RemoteAddr(), outbound3NetConn.LocalAddr())
-			assert.Equal(t, outboundNetConn.LocalAddr(), outbound3NetConn.RemoteAddr())
+		// Wait for the connection to be marked as active in ch2.
+		assert.True(t, testutils.WaitFor(time.Second, func() bool {
+			return ch2.IntrospectState(nil).NumConnections > 0
+		}), "ch2 does not have any active connections")
 
-			// Ensure all calls can complete in parallel.
-			var wg sync.WaitGroup
-			for _, call := range []*OutboundCall{outbound, outbound2, outbound3} {
-				wg.Add(1)
-				go func(call *OutboundCall) {
-					defer wg.Done()
-					resp1, resp2, _, err := raw.WriteArgs(call, []byte("arg2"), []byte("arg3"))
-					require.NoError(t, err)
-					assert.Equal(t, resp1, []byte("arg2"), "result does match argument")
-					assert.Equal(t, resp2, []byte("arg3"), "result does match argument")
-				}(call)
-			}
-			wg.Wait()
-		})
+		// When ch2 tries to call ch1, it should reuse the inbound connection from ch1.
+		outbound3, err := ch2.BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
+		require.NoError(t, err)
+		_, outbound3NetConn := OutboundConnection(outbound3)
+		assert.Equal(t, outboundNetConn.RemoteAddr(), outbound3NetConn.LocalAddr())
+		assert.Equal(t, outboundNetConn.LocalAddr(), outbound3NetConn.RemoteAddr())
+
+		// Ensure all calls can complete in parallel.
+		var wg sync.WaitGroup
+		for _, call := range []*OutboundCall{outbound, outbound2, outbound3} {
+			wg.Add(1)
+			go func(call *OutboundCall) {
+				defer wg.Done()
+				resp1, resp2, _, err := raw.WriteArgs(call, []byte("arg2"), []byte("arg3"))
+				require.NoError(t, err)
+				assert.Equal(t, resp1, []byte("arg2"), "result does match argument")
+				assert.Equal(t, resp2, []byte("arg3"), "result does match argument")
+			}(call)
+		}
+		wg.Wait()
 	})
 }
 
@@ -353,7 +355,12 @@ func TestTimeout(t *testing.T) {
 		assert.Equal(t, ErrTimeout, err)
 
 		// Verify the server-side receives an error from the context.
-		assert.Equal(t, context.DeadlineExceeded, <-testHandler.blockErr)
+		select {
+		case err := <-testHandler.blockErr:
+			assert.Equal(t, context.DeadlineExceeded, err, "Server should have received timeout")
+		case <-time.After(time.Second):
+			t.Errorf("Server did not receive call, may need higher timeout")
+		}
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
@@ -555,7 +562,7 @@ func TestReadTimeout(t *testing.T) {
 		AddLogFilter("Connection error", 1, "site", "read frames").
 		AddLogFilter("Connection error", 1, "site", "write frames").
 		AddLogFilter("simpleHandler OnError", 1,
-		"error", "failed to send error frame, connection state connectionClosed")
+			"error", "failed to send error frame, connection state connectionClosed")
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
@@ -593,14 +600,16 @@ func TestWriteTimeout(t *testing.T) {
 }
 
 func TestGracefulClose(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch1 *Channel, hp1 string) {
-		WithVerifiedServer(t, nil, func(ch2 *Channel, hp2 string) {
-			ctx, cancel := NewContext(time.Second)
-			defer cancel()
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ch2 := ts.NewServer(nil)
+		hp2 := ch2.PeerInfo().HostPort
+		defer ch2.Close()
 
-			assert.NoError(t, ch1.Ping(ctx, hp2), "Ping from ch1 -> ch2 failed")
-			assert.NoError(t, ch2.Ping(ctx, hp1), "Ping from ch2 -> ch1 failed")
-		})
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		assert.NoError(t, ts.Server().Ping(ctx, hp2), "Ping from ch1 -> ch2 failed")
+		assert.NoError(t, ch2.Ping(ctx, ts.HostPort()), "Ping from ch2 -> ch1 failed")
 	})
 }
 

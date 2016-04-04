@@ -24,8 +24,9 @@ import (
 	"container/heap"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/uber/tchannel-go/atomic"
 
 	"golang.org/x/net/context"
 )
@@ -178,7 +179,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	}
 
 	l.peerHeap.pushPeer(ps)
-	atomic.AddUint64(&ps.chosenCount, 1)
+	ps.chosenCount.Inc()
 	return ps.Peer
 }
 
@@ -240,8 +241,12 @@ func (l *PeerList) updatePeer(p *Peer) {
 type peerScore struct {
 	*Peer
 
+	// score according to the current peer list's ScoreCalculator.
 	score uint64
+	// index of the peerScore in the peerHeap. Used to interact with container/heap.
 	index int
+	// order is the tiebreaker for when score is equal. It is set when a peer
+	// is pushed to the heap based on peerHeap.order with jitter.
 	order uint64
 }
 
@@ -267,7 +272,7 @@ type Peer struct {
 	// connections are mutable, and are protected by the mutex.
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
-	chosenCount         uint64
+	chosenCount         atomic.Uint64
 
 	// onUpdate is a test-only hook.
 	onUpdate func(*Peer)
@@ -348,11 +353,7 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 // AddInboundConnection adds an active inbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
 func (p *Peer) AddInboundConnection(c *Connection) error {
-	switch c.readState() {
-	case connectionActive, connectionStartClose:
-		// TODO(prashantv): Block inbound connections when the connection is not active.
-		break
-	default:
+	if c.readState() != connectionActive {
 		return ErrInvalidConnectionState
 	}
 

@@ -21,15 +21,25 @@
 package tchannel_test
 
 import (
+	"flag"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/uber/tchannel-go/testutils/goroutines"
 )
 
-// This file is named z_* so that it is the last test file compiled by Go, and so
-// is run after all the other tests.
+func TestMain(m *testing.M) {
+	flag.Parse()
+	exitCode := m.Run()
 
-// TestNoGoroutinesLeaked verifies that no tests have leaked goroutines.
-func TestNoGoroutinesLeaked(t *testing.T) {
-	goroutines.VerifyNoLeaks(t, nil)
+	// Only run the goroutine leak detector if the tests are successful.
+	if exitCode == 0 {
+		if err := goroutines.IdentifyLeaks(nil); err != nil {
+			fmt.Fprintf(os.Stderr, "Found goroutine leaks on successful test run: %v", err)
+			exitCode = 1
+		}
+	}
+
+	os.Exit(exitCode)
 }

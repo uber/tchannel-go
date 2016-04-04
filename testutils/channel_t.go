@@ -31,12 +31,16 @@ func getOptsForTest(t testing.TB, opts *ChannelOpts) *ChannelOpts {
 	if opts == nil {
 		opts = &ChannelOpts{}
 	}
-	if !opts.LogVerification.Disabled {
-		opts.optFn = func(opts *ChannelOpts) {
-			// Set a custom logger now.
-			if opts.Logger == nil {
-				opts.Logger = tchannel.NullLogger
-			}
+	opts.optFn = func(opts *ChannelOpts) {
+		// Set a custom logger now.
+		if opts.Logger == nil {
+			tl := newTestLogger(t)
+			opts.Logger = tl
+			opts.addPostFn(func() {
+				tl.report()
+			})
+		}
+		if !opts.LogVerification.Disabled {
 			opts.Logger = opts.LogVerification.WrapLogger(t, opts.Logger)
 		}
 	}
