@@ -88,11 +88,11 @@ func (l *RootPeerList) Get(hostPort string) (*Peer, bool) {
 	return p, ok
 }
 
-func (l *RootPeerList) onClosedConnRemoved(peer *Peer) {
+func (l *RootPeerList) onClosedConnRemoved(peer *Peer, conn *Connection) {
 	hostPort := peer.HostPort()
 	p, ok := l.Get(hostPort)
 	if !ok {
-		l.channel.Logger().Error("got connection state change for a peer not in the root peer list")
+		conn.log.WithFields(LogField{"peer", peer.HostPort()}).Error("closed connection removed for peer not in the root peer list")
 		return
 	}
 
