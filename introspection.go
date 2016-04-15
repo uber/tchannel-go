@@ -304,7 +304,7 @@ func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeStat
 	r.RLock()
 	defer r.RUnlock()
 	return RelayerRuntimeState{
-		NumItems: len(r.items),
+		NumItems: len(r.inbound) + len(r.outbound),
 	}
 }
 
