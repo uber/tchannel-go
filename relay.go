@@ -2,6 +2,7 @@ package tchannel
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,13 +21,30 @@ type relayItem struct {
 	destination *Relayer
 }
 
+type frameType int
+
+const (
+	requestFrame  frameType = 0
+	responseFrame frameType = 1
+)
+
 // A Relayer forwards frames.
 type Relayer struct {
 	sync.RWMutex
 
 	metrics StatsReporter
 	hosts   RelayHosts
-	items   map[uint32]relayItem
+
+	// outbound is the remapping for requests that originated on this
+	// connection, and are outbound towards some other connection.
+	// It stores remappings for all request frames read on this connection.
+	outbound map[uint32]relayItem
+
+	// inbound is the remapping for requests that originated on some other
+	// connection which was directed to this connection.
+	// It stores remappings for all response frames read on this connection.
+	inbound map[uint32]relayItem
+
 	peers   *PeerList
 	conn    *Connection
 	logger  Logger
@@ -36,12 +54,13 @@ type Relayer struct {
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
-		metrics: conn.statsReporter,
-		hosts:   ch.relayHosts,
-		items:   make(map[uint32]relayItem),
-		peers:   ch.Peers(),
-		conn:    conn,
-		logger:  ch.Logger(),
+		metrics:  conn.statsReporter,
+		hosts:    ch.relayHosts,
+		outbound: make(map[uint32]relayItem),
+		inbound:  make(map[uint32]relayItem),
+		peers:    ch.Peers(),
+		conn:     conn,
+		logger:   ch.Logger(),
 	}
 }
 
@@ -50,7 +69,7 @@ func (r *Relayer) Hosts() RelayHosts {
 	return r.hosts
 }
 
-// Relay forwards a frame.
+// Relay is called for each frame that is read on the connection.
 func (r *Relayer) Relay(f *Frame) error {
 	if f.messageType() != messageTypeCallReq {
 		return r.handleNonCallReq(f)
@@ -58,29 +77,40 @@ func (r *Relayer) Relay(f *Frame) error {
 	return r.handleCallReq(f)
 }
 
-// Receive accepts a relayed frame.
-func (r *Relayer) Receive(f *Frame) {
-	r.RLock()
-	_, ok := r.items[f.Header.ID]
-	r.RUnlock()
-	if !ok {
-		r.logger.WithFields(
-			LogField{"ID", f.Header.ID},
-		).Warn("Received a frame without a RelayItem.")
+// Receive receives frames intended for this connection.
+func (r *Relayer) Receive(f *Frame, fType frameType) {
+	{
+		// TODO: Since this block is only checking for safety, we should not
+		// enable this in production builds.
+
+		// If we receive a response frame, we expect to find that ID in our outbound.
+		// If we receive a request frame, we expect to find that ID in our inbound.
+		items := r.receiverItems(fType)
+
+		r.RLock()
+		_, ok := items[f.Header.ID]
+		r.RUnlock()
+		if !ok {
+			r.logger.WithFields(
+				LogField{"ID", f.Header.ID},
+			).Warn("Received a frame without a RelayItem.")
+		}
 	}
 
 	r.conn.sendCh <- f
 	if finishesCall(f) {
-		r.removeRelayItem(f.Header.ID)
+		items := r.receiverItems(fType)
+		r.removeRelayItem(items, f.Header.ID)
 	}
 }
 
 func (r *Relayer) handleCallReq(f *Frame) error {
 	r.RLock()
-	_, ok := r.items[f.Header.ID]
+	_, ok := r.outbound[f.Header.ID]
 	r.RUnlock()
 
 	if ok {
+		r.logger.WithFields(LogField{"id", f.Header.ID}).Warn("received duplicate callReq")
 		return errors.New("callReq with already active ID")
 	}
 
@@ -95,7 +125,7 @@ func (r *Relayer) handleCallReq(f *Frame) error {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	c, err := peer.GetConnection(ctx)
+	remoteConn, err := peer.GetConnection(ctx)
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),
@@ -105,49 +135,66 @@ func (r *Relayer) handleCallReq(f *Frame) error {
 		return nil
 	}
 
-	destinationID := c.NextMessageID()
-	c.relay.addRelayItem(destinationID, f.Header.ID, r)
+	// TODO: Is there a race for adding the same ID twice?
+	destinationID := remoteConn.NextMessageID()
+	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r)
 	r.metrics.IncCounter("relay", nil, 1)
-	relayToDest := r.addRelayItem(f.Header.ID, destinationID, c.relay)
+	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay)
 
 	f.Header.ID = destinationID
-	relayToDest.destination.Receive(f)
+	relayToDest.destination.Receive(f, requestFrame)
 	return nil
 }
 
 // Handle all frames except messageTypeCallReq.
 func (r *Relayer) handleNonCallReq(f *Frame) error {
+	frameType := frameTypeFor(f)
+
+	// If we read a request frame, we need to use the outbound map to decide
+	// the destination. Otherwise, we use the inbound map.
+	items := r.outbound
+	if frameType == responseFrame {
+		items = r.inbound
+	}
+
 	r.RLock()
-	item, ok := r.items[f.Header.ID]
+	item, ok := items[f.Header.ID]
 	r.RUnlock()
 	if !ok {
 		return errors.New("non-callReq for inactive ID")
 	}
 	originalID := f.Header.ID
 	f.Header.ID = item.remapID
-	item.destination.Receive(f)
+	item.destination.Receive(f, frameType)
 
 	if finishesCall(f) {
-		r.removeRelayItem(originalID)
+		r.removeRelayItem(items, originalID)
 	}
 	return nil
 }
 
-func (r *Relayer) addRelayItem(id, remapID uint32, destination *Relayer) relayItem {
+// addRelayItem adds a relay item to either outbound or inbound.
+func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer) relayItem {
 	item := relayItem{
 		remapID:     remapID,
 		destination: destination,
 	}
 	r.incPending()
+
+	items := r.inbound
+	if isOriginator {
+		items = r.outbound
+	}
+
 	r.Lock()
-	r.items[id] = item
+	items[id] = item
 	r.Unlock()
 	return item
 }
 
-func (r *Relayer) removeRelayItem(id uint32) {
+func (r *Relayer) removeRelayItem(items map[uint32]relayItem, id uint32) {
 	r.Lock()
-	delete(r.items, id)
+	delete(items, id)
 	r.Unlock()
 	r.decPending()
 	r.conn.checkExchanges()
@@ -170,6 +217,24 @@ func (r *Relayer) decPending() {
 
 func (r *Relayer) countPending() uint32 {
 	return atomic.LoadUint32(&r.pending)
+}
+
+func (r *Relayer) receiverItems(fType frameType) map[uint32]relayItem {
+	if fType == requestFrame {
+		return r.inbound
+	}
+	return r.outbound
+}
+
+func frameTypeFor(f *Frame) frameType {
+	switch t := f.Header.messageType; t {
+	case messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypePingRes:
+		return responseFrame
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypePingReq:
+		return requestFrame
+	default:
+		panic(fmt.Sprintf("unsupported frame type: %v", t))
+	}
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
