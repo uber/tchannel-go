@@ -146,20 +146,22 @@ func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
 }
 
 func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
-	withRelayedEcho(t, func(relay, server, client *Channel) {
+	withRelayTest(t, func(rt *relayTest) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		clientHP := client.PeerInfo().HostPort
-		testutils.RegisterEcho(server, func() {
-			// Handler should close the connection to the relay.
-			conn, err := relay.Peers().GetOrAdd(clientHP).GetConnection(ctx)
-			require.NoError(t, err, "Unexpected failure getting a connection to the client.")
+		s1 := rt.newServer("s1", nil)
+		s2 := rt.newServer("s2", nil)
+
+		s2HP := s2.PeerInfo().HostPort
+		testutils.RegisterEcho(s1, func() {
+			// When s1 gets called, it calls Close on the connection from the relay to s2.
+			conn, err := rt.relay.Peers().GetOrAdd(s2HP).GetConnection(ctx)
+			require.NoError(t, err, "Unexpected failure getting connection between s1 and relay")
 			conn.Close()
 		})
 
-		_, _, _, err := raw.CallSC(ctx, client.GetSubChannel("test"), "echo", []byte("fake-header"), []byte("fake-body"))
-		require.NoError(t, err, "Relayed call failed.")
+		testutils.AssertEcho(t, s2, rt.relay.PeerInfo().HostPort, "s1")
 	})
 
 	goroutines.VerifyNoLeaks(t, nil)
