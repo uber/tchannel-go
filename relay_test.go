@@ -181,18 +181,12 @@ func TestRelayIDClash(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				testutils.AssertEcho(t, s2, rt.relay.PeerInfo().HostPort, s1.ServiceName(), &raw.Args{
-					Arg2: testutils.RandBytes(100),
-					Arg3: testutils.RandBytes(100),
-				})
+				testutils.AssertEcho(t, s2, rt.relay.PeerInfo().HostPort, s1.ServiceName())
 			}()
 		}
 
 		for i := 0; i < 5; i++ {
-			testutils.AssertEcho(t, s1, rt.relay.PeerInfo().HostPort, s2.ServiceName(), &raw.Args{
-				Arg2: testutils.RandBytes(100),
-				Arg3: testutils.RandBytes(100),
-			})
+			testutils.AssertEcho(t, s1, rt.relay.PeerInfo().HostPort, s2.ServiceName())
 		}
 
 		close(unblock)
