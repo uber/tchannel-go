@@ -13,8 +13,17 @@ import (
 	"github.com/uber/tchannel-go/testutils/goroutines"
 )
 
-func assertRelaysReleased(t testing.TB, ch *Channel) {
-	for _, peerState := range ch.IntrospectState(nil).RootPeers {
+type relayTest struct {
+	testing.TB
+
+	relay      *Channel
+	relayHosts *SimpleRelayHosts
+	servers    []*Channel
+	clients    []*Channel
+}
+
+func (t *relayTest) checkRelaysEmpty() {
+	for _, peerState := range t.relay.IntrospectState(nil).RootPeers {
 		var connStates []ConnectionRuntimeState
 		connStates = append(connStates, peerState.InboundConnections...)
 		connStates = append(connStates, peerState.OutboundConnections...)
@@ -25,25 +34,75 @@ func assertRelaysReleased(t testing.TB, ch *Channel) {
 	}
 }
 
-func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel)) {
+func (t *relayTest) newServer(serviceName string, opts *testutils.ChannelOpts) *Channel {
+	if opts == nil {
+		opts = testutils.NewOpts()
+	}
+	opts.SetServiceName(serviceName)
+
+	server := testutils.NewServer(t, opts)
+	server.Peers().Add(t.relay.PeerInfo().HostPort)
+	t.relayHosts.Add(serviceName, server.PeerInfo().HostPort)
+	t.servers = append(t.servers, server)
+	return server
+}
+
+func (t *relayTest) newClient(clientName string, opts *testutils.ChannelOpts) *Channel {
+	if opts == nil {
+		opts = testutils.NewOpts()
+	}
+
+	opts.SetServiceName(clientName)
+
+	client := testutils.NewClient(t, opts)
+	client.Peers().Add(t.relay.PeerInfo().HostPort)
+	t.clients = append(t.clients, client)
+	return client
+}
+
+func (t *relayTest) closeChannels() {
+	t.relay.Close()
+	for _, ch := range t.servers {
+		ch.Close()
+	}
+	for _, ch := range t.clients {
+		ch.Close()
+	}
+	// TODO: we should find some way to validate the Close, similar to testutils.WithTestServer
+}
+
+func withRelayTest(t testing.TB, f func(rt *relayTest)) {
+	relayHosts := NewSimpleRelayHosts(map[string][]string{})
 	relay, err := NewChannel("relay", &ChannelOptions{
-		RelayHosts: NewSimpleRelayHosts(map[string][]string{}),
+		RelayHosts: relayHosts,
 	})
 	require.NoError(t, err, "Failed to create a relay channel.")
-	defer assertRelaysReleased(t, relay)
 	defer relay.Close()
 	require.NoError(t, relay.ListenAndServe("127.0.0.1:0"), "Relay failed to listen.")
 
-	server := testutils.NewServer(t, testutils.NewOpts().SetServiceName("test"))
-	defer server.Close()
-	server.Register(raw.Wrap(newTestHandler(t)), "echo")
-	relay.RelayHosts().(*SimpleRelayHosts).Add("test", server.PeerInfo().HostPort)
+	rt := &relayTest{
+		TB:         t,
+		relay:      relay,
+		relayHosts: relayHosts,
+	}
+	defer rt.closeChannels()
 
-	client := testutils.NewServer(t, nil)
-	defer client.Close()
-	client.Peers().Add(relay.PeerInfo().HostPort)
+	f(rt)
 
-	f(relay, server, client)
+	// Only check relays are empty if the test hasn't failed.
+	if !t.Failed() {
+		rt.checkRelaysEmpty()
+	}
+}
+
+func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel)) {
+	withRelayTest(t, func(rt *relayTest) {
+		server := rt.newServer("test", nil)
+		testutils.RegisterEcho(server, nil)
+
+		client := rt.newClient("client", nil)
+		f(rt.relay, server, client)
+	})
 }
 
 func TestRelay(t *testing.T) {
