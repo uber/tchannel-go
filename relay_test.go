@@ -2,6 +2,7 @@ package tchannel_test
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -162,4 +163,39 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 	})
 
 	goroutines.VerifyNoLeaks(t, nil)
+}
+
+func TestRelayIDClash(t *testing.T) {
+	withRelayTest(t, func(rt *relayTest) {
+		s1 := rt.newServer("s1", nil)
+		s2 := rt.newServer("s2", nil)
+
+		unblock := make(chan struct{})
+		testutils.RegisterEcho(s1, func() {
+			<-unblock
+		})
+		testutils.RegisterEcho(s2, nil)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				testutils.AssertEcho(t, s2, rt.relay.PeerInfo().HostPort, s1.ServiceName(), &raw.Args{
+					Arg2: testutils.RandBytes(100),
+					Arg3: testutils.RandBytes(100),
+				})
+			}()
+		}
+
+		for i := 0; i < 5; i++ {
+			testutils.AssertEcho(t, s1, rt.relay.PeerInfo().HostPort, s2.ServiceName(), &raw.Args{
+				Arg2: testutils.RandBytes(100),
+				Arg3: testutils.RandBytes(100),
+			})
+		}
+
+		close(unblock)
+		wg.Wait()
+	})
 }
