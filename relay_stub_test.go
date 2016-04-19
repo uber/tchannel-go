@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 
+	. "github.com/uber/tchannel-go"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +19,7 @@ type SimpleRelayHosts struct {
 func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 	// Use a known seed for repeatable tests.
 	return &SimpleRelayHosts{
-		r:     rand.New(rand.NewSource(1)),
+		r:     NewRand(1),
 		peers: peers,
 	}
 }
