@@ -639,3 +639,45 @@ func TestNetDialTimeout(t *testing.T) {
 	assert.Equal(t, ErrTimeout, err, "Ping expected to fail with timeout")
 	assert.True(t, d >= timeoutPeriod, "Timeout should take more than %v, took %v", timeoutPeriod, d)
 }
+
+func TestConnectTimeout(t *testing.T) {
+	opts := testutils.NewOpts().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		// Set up a relay that will delay the initial init req.
+		testComplete := make(chan struct{})
+
+		relayFunc := func(outgoing bool, f *Frame) *Frame {
+			select {
+			case <-time.After(200 * time.Millisecond):
+				return f
+			case <-testComplete:
+				// TODO: We should be able to forward the frame and have this test not fail.
+				// Currently, it fails since the sequence of events is:
+				// Server receives a TCP connection
+				// Channel.Close() is called on the server
+				// Server's TCP connection receives an init req
+				// Since we don't currently track pending connections, the open TCP connection is not closed, and
+				// we process the init req. This leaves an open connection at the end of the test.
+				return nil
+			}
+		}
+		relay, shutdown := testutils.FrameRelay(t, ts.HostPort(), relayFunc)
+		defer shutdown()
+
+		// Make a call with a long timeout, but short connect timeout.
+		// We expect the call to fall almost immediately with ErrTimeout.
+		ctx, cancel := NewContextBuilder(2 * time.Second).
+			SetConnectTimeout(time.Millisecond).
+			Build()
+		defer cancel()
+
+		client := ts.NewClient(opts)
+		err := client.Ping(ctx, relay)
+		assert.Equal(t, ErrTimeout, err, "Ping should timeout due to timeout relay")
+
+		// Note: we do not defer this, as we need to close(testComplete) before
+		// we call shutdown since shutdown waits for the relay to close, which
+		// is stuck waiting inside of our custom relay function.
+		close(testComplete)
+	})
+}

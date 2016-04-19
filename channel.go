@@ -461,7 +461,7 @@ func getTimeout(ctx context.Context) time.Duration {
 	return deadline.Sub(time.Now())
 }
 
-// Connect connects the channel.
+// Connect creates a new outbound connection to hostPort.
 func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, error) {
 	switch state := ch.State(); state {
 	case ChannelClient, ChannelListening:
@@ -472,6 +472,14 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	default:
 		ch.log.Debugf("Connect rejecting new connection as state is %v", state)
 		return nil, errInvalidStateForOp
+	}
+
+	// The context timeout applies to the whole call, but users may want a lower
+	// connect timeout (e.g. for streams).
+	if params := getTChannelParams(ctx); params != nil && params.connectTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, params.connectTimeout)
+		defer cancel()
 	}
 
 	events := connectionEvents{
