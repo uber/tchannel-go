@@ -111,6 +111,7 @@ func (r *Relayer) handleCallReq(f *Frame) error {
 
 	if ok {
 		r.logger.WithFields(LogField{"id", f.Header.ID}).Warn("received duplicate callReq")
+		// TODO: this is a protocol error, kill the connection.
 		return errors.New("callReq with already active ID")
 	}
 
@@ -118,7 +119,9 @@ func (r *Relayer) handleCallReq(f *Frame) error {
 	svc := f.Service()
 	hostPort := r.hosts.Get(svc)
 	if hostPort == "" {
-		return errors.New("no available peer for group")
+		// TODO: What is the span in the error frame actually used for, and do we need it?
+		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(svc))
+		return nil
 	}
 	peer := r.peers.GetOrAdd(hostPort)
 
@@ -248,4 +251,8 @@ func finishesCall(f *Frame) bool {
 	default:
 		return false
 	}
+}
+
+func errUnknownGroup(group string) error {
+	return NewSystemError(ErrCodeDeclined, "no peers for %q", group)
 }

@@ -195,3 +195,23 @@ func TestRelayIDClash(t *testing.T) {
 		wg.Wait()
 	})
 }
+
+func TestRelayErrorUnknownPeer(t *testing.T) {
+	withRelayTest(t, func(rt *relayTest) {
+		client := rt.newClient("client", nil)
+
+		err := testutils.CallEcho(client, rt.relay.PeerInfo().HostPort, "random-service", nil)
+		if !assert.Error(t, err, "Call to unknown service should fail") {
+			return
+		}
+
+		se, ok := err.(SystemError)
+		if !assert.True(t, ok, "err should be a SystemError, got %T", err) {
+			return
+		}
+
+		assert.Equal(t, ErrCodeDeclined, se.Code(), "Expected Declined error")
+		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
+	})
+
+}
