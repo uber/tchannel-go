@@ -18,7 +18,7 @@ type relayTest struct {
 	testing.TB
 
 	relay      *Channel
-	relayHosts *SimpleRelayHosts
+	relayHosts *testutils.SimpleRelayHosts
 	servers    []*Channel
 	clients    []*Channel
 }
@@ -73,7 +73,7 @@ func (t *relayTest) closeChannels() {
 }
 
 func withRelayTest(t testing.TB, f func(rt *relayTest)) {
-	relayHosts := NewSimpleRelayHosts(map[string][]string{})
+	relayHosts := testutils.NewSimpleRelayHosts(map[string][]string{})
 	relay, err := NewChannel("relay", &ChannelOptions{
 		RelayHosts: relayHosts,
 	})

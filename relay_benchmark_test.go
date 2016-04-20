@@ -20,7 +20,7 @@ func BenchmarkRelay(b *testing.B) {
 	data := testutils.RandBytes(1000)
 
 	ch, err := NewChannel("relay", &ChannelOptions{
-		RelayHosts: NewSimpleRelayHosts(map[string][]string{}),
+		RelayHosts: testutils.NewSimpleRelayHosts(map[string][]string{}),
 	})
 	require.NoError(b, err, "Failed to create relay")
 	require.NoError(b, ch.ListenAndServe("127.0.0.1:0"), "relay listen failed")
@@ -29,7 +29,7 @@ func BenchmarkRelay(b *testing.B) {
 	for i := 0; i < numServers; i++ {
 		servers[i] = testutils.NewServer(b, testutils.NewOpts().SetServiceName("test"))
 		servers[i].Register(raw.Wrap(newTestHandler(b)), "echo")
-		ch.RelayHosts().(*SimpleRelayHosts).Add("test", servers[i].PeerInfo().HostPort)
+		ch.RelayHosts().(*testutils.SimpleRelayHosts).Add("test", servers[i].PeerInfo().HostPort)
 	}
 
 	clients := make([]*Channel, numServers)
