@@ -23,7 +23,8 @@ package tchannel
 import (
 	"container/heap"
 	"math/rand"
-	"time"
+
+	"github.com/uber/tchannel-go/trand"
 )
 
 // peerHeap maintains a min-heap of peers based on the peers' score. All method
@@ -35,7 +36,7 @@ type peerHeap struct {
 }
 
 func newPeerHeap() *peerHeap {
-	return &peerHeap{rng: NewRand(time.Now().UnixNano())}
+	return &peerHeap{rng: trand.NewSeeded()}
 }
 
 func (ph peerHeap) Len() int { return len(ph.peerScores) }
