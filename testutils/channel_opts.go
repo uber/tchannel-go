@@ -51,6 +51,9 @@ type ChannelOpts struct {
 	// clients. It's ignored by other test helpers.
 	IncludeRelay bool
 
+	// OnlyRelay instructs TestServer the test must only be run with a relay.
+	OnlyRelay bool
+
 	// optFn is run with the channel options before creating the channel.
 	optFn func(*ChannelOpts)
 
@@ -143,8 +146,16 @@ func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
 	return o
 }
 
-// SetRelay instructs TestServer to put a relay in front of this channel.
+// SetRelay instructs TestServer to run the test twice, once without a relay
+// and once with a relay in front of this channel.
 func (o *ChannelOpts) SetRelay() *ChannelOpts {
+	o.IncludeRelay = true
+	return o
+}
+
+// SetRelayOnly instructs TestServer to only run with a relay in front of this channel.
+func (o *ChannelOpts) SetRelayOnly() *ChannelOpts {
+	o.OnlyRelay = true
 	o.IncludeRelay = true
 	return o
 }
