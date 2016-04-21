@@ -28,9 +28,7 @@ import (
 )
 
 func getOptsForTest(t testing.TB, opts *ChannelOpts) *ChannelOpts {
-	if opts == nil {
-		opts = &ChannelOpts{}
-	}
+	opts = opts.Copy()
 	opts.optFn = func(opts *ChannelOpts) {
 		// Set a custom logger now.
 		if opts.Logger == nil {
