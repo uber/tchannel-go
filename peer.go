@@ -24,9 +24,9 @@ import (
 	"container/heap"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/trand"
 
 	"golang.org/x/net/context"
 )
@@ -41,7 +41,7 @@ var (
 	// ErrPeerNotFound indicates that the specified peer was not found.
 	ErrPeerNotFound = errors.New("peer not found")
 
-	peerRng = NewRand(time.Now().UnixNano())
+	peerRng = trand.NewSeeded()
 )
 
 // Connectable is the interface used by peers to create connections.
