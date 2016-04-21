@@ -740,9 +740,8 @@ func (c *Connection) readFrames(_ uint32) {
 }
 
 func (c *Connection) handleFrameRelay(frame *Frame) bool {
-	// TODO: handle error frames.
 	switch frame.Header.messageType {
-	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue:
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
 		if err := c.relay.Relay(frame); err != nil {
 			c.log.WithFields(
 				LogField{"header", frame.Header},

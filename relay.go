@@ -244,10 +244,11 @@ func frameTypeFor(f *Frame) frameType {
 // this RPC req-res.
 func finishesCall(f *Frame) bool {
 	switch f.messageType() {
+	case messageTypeError:
+		return true
 	case messageTypeCallRes, messageTypeCallResContinue:
 		flags := f.Payload[_flagsIndex]
 		return flags&hasMoreFragmentsFlag == 0
-	// TODO: errors should also terminate an RPC.
 	default:
 		return false
 	}
