@@ -21,6 +21,7 @@
 package testutils
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"strings"
@@ -257,15 +258,29 @@ func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
 	if ts.Failed() {
 		return
 	}
-	for _, peerState := range ch.IntrospectState(nil).RootPeers {
+	var foundErrors bool
+	state := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true})
+	for _, peerState := range state.RootPeers {
 		var connStates []tchannel.ConnectionRuntimeState
 		connStates = append(connStates, peerState.InboundConnections...)
 		connStates = append(connStates, peerState.OutboundConnections...)
 		for _, connState := range connStates {
-			n := connState.Relayer.NumItems
-			assert.Equal(ts, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort)
+			n := connState.Relayer.Count
+			if assert.Equal(ts, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort) {
+				continue
+			}
+			foundErrors = true
 		}
 	}
+
+	if !foundErrors {
+		return
+	}
+
+	marshalled, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(ts, err, "Failed to marshal relayer state")
+	// Print out all the exchanges we found.
+	ts.Logf("Relayer state:\n%s", marshalled)
 }
 
 func (ts *TestServer) verifyNoGoroutinesLeaked() {

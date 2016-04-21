@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"runtime"
 	"sort"
+	"strconv"
 
 	"golang.org/x/net/context"
 )
@@ -126,20 +127,36 @@ type ConnectionRuntimeState struct {
 
 // RelayerRuntimeState is the runtime state for a single relayer.
 type RelayerRuntimeState struct {
-	NumItems int `json:"numItems"`
+	Count         int               `json:"count"`
+	InboundItems  RelayItemSetState `json:"inboundItems"`
+	OutboundItems RelayItemSetState `json:"outboundItems"`
 }
 
 // ExchangeSetRuntimeState is the runtime state for a message exchange set.
 type ExchangeSetRuntimeState struct {
-	Name      string                 `json:"name"`
-	Count     int                    `json:"count"`
-	Exchanges []ExchangeRuntimeState `json:"exchanges,omitempty"`
+	Name      string                          `json:"name"`
+	Count     int                             `json:"count"`
+	Exchanges map[string]ExchangeRuntimeState `json:"exchanges,omitempty"`
+}
+
+// RelayItemSetState is the runtime state for a list of relay items.
+type RelayItemSetState struct {
+	Name  string                    `json:"name"`
+	Count int                       `json:"count"`
+	Items map[string]RelayItemState `json:"items,omitempty"`
 }
 
 // ExchangeRuntimeState is the runtime state for a single message exchange.
 type ExchangeRuntimeState struct {
 	ID          uint32      `json:"id"`
 	MessageType messageType `json:"messageType"`
+}
+
+// RelayItemState is the runtime state for a single relay item.
+type RelayItemState struct {
+	ID                      uint32 `json:"id"`
+	RemapID                 uint32 `json:"remapID"`
+	DestinationConnectionID uint32 `json:"destinationConnectionID"`
 }
 
 // PeerRuntimeState is the runtime state for a single peer.
@@ -304,8 +321,31 @@ func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeStat
 	r.RLock()
 	defer r.RUnlock()
 	return RelayerRuntimeState{
-		NumItems: len(r.inbound) + len(r.outbound),
+		Count:         len(r.inbound) + len(r.outbound),
+		InboundItems:  r.IntrospectItems(opts, "inbound", r.inbound),
+		OutboundItems: r.IntrospectItems(opts, "outbound", r.outbound),
 	}
+}
+
+// IntrospectItems returns the runtime state for the given relay items.
+func (r *Relayer) IntrospectItems(opts *IntrospectionOptions, name string, items map[uint32]relayItem) RelayItemSetState {
+	setState := RelayItemSetState{
+		Name:  name,
+		Count: len(items),
+	}
+	if opts.IncludeExchanges {
+		setState.Items = make(map[string]RelayItemState, len(items))
+		for k, v := range items {
+			state := RelayItemState{
+				ID:                      k,
+				RemapID:                 v.remapID,
+				DestinationConnectionID: v.destination.conn.connID,
+			}
+			setState.Items[strconv.Itoa(int(k))] = state
+		}
+	}
+
+	return setState
 }
 
 // IntrospectState returns the runtime state for this messsage exchange set.
@@ -317,13 +357,13 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 	}
 
 	if opts.IncludeExchanges {
-		setState.Exchanges = make([]ExchangeRuntimeState, 0, len(mexset.exchanges))
+		setState.Exchanges = make(map[string]ExchangeRuntimeState, len(mexset.exchanges))
 		for k, v := range mexset.exchanges {
 			state := ExchangeRuntimeState{
 				ID:          k,
 				MessageType: v.msgType,
 			}
-			setState.Exchanges = append(setState.Exchanges, state)
+			setState.Exchanges[strconv.Itoa(int(k))] = state
 		}
 	}
 
