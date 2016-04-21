@@ -262,6 +262,7 @@ func TestPing(t *testing.T) {
 		defer cancel()
 
 		clientCh := testutils.NewClient(t, nil)
+		defer clientCh.Close()
 		require.NoError(t, clientCh.Ping(ctx, hostPort))
 	})
 }

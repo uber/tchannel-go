@@ -38,6 +38,7 @@ import (
 
 func TestGetPeerNoPeer(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	peer, err := ch.Peers().Get(nil)
 	assert.Equal(t, ErrNoPeers, err, "Empty peer list should return error")
 	assert.Nil(t, peer, "should not return peer")
@@ -45,6 +46,7 @@ func TestGetPeerNoPeer(t *testing.T) {
 
 func TestGetPeerSinglePeer(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	ch.Peers().Add("1.1.1.1:1234")
 
 	peer, err := ch.Peers().Get(nil)
@@ -61,6 +63,7 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 	)
 
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	a, m := testutils.StrArray, testutils.StrMap
 	tests := []struct {
 		msg          string
@@ -226,7 +229,10 @@ func TestOutboundPeerNotAdded(t *testing.T) {
 }
 
 func TestRemovePeerNotFound(t *testing.T) {
-	peers := testutils.NewClient(t, nil).Peers()
+	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+
+	peers := ch.Peers()
 	peers.Add("1.1.1.1:1")
 	assert.Error(t, peers.Remove("not-found"), "Remove should fa")
 	assert.NoError(t, peers.Remove("1.1.1.1:1"), "Remove shouldn't fail for existing peer")
@@ -526,6 +532,7 @@ func reverse(s []string) {
 func TestIsolatedPeerHeap(t *testing.T) {
 	const numPeers = 10
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 
 	ps1 := createSubChannelWNewStrategy(ch, "S1", numPeers, 1)
 	ps2 := createSubChannelWNewStrategy(ch, "S2", numPeers, -1, Isolated)
@@ -558,6 +565,7 @@ func TestPeerSelectionRanking(t *testing.T) {
 
 	for i := 0; i < numIterations; i++ {
 		ch := testutils.NewClient(t, nil)
+		defer ch.Close()
 		ch.SetRandomSeed(int64(i * 100))
 
 		for i := 0; i < numPeers; i++ {

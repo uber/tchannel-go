@@ -187,6 +187,7 @@ func TestHandleInitRes(t *testing.T) {
 
 	ch, err := NewChannel("test-svc", nil)
 	require.NoError(t, err, "NewChannel failed")
+	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -223,6 +224,7 @@ func TestInitReqGetsError(t *testing.T) {
 	logOut := &bytes.Buffer{}
 	ch, err := NewChannel("test-svc", &ChannelOptions{Logger: NewLevelLogger(NewLogger(logOut), LogLevelWarn)})
 	require.NoError(t, err, "NewClient failed")
+	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
