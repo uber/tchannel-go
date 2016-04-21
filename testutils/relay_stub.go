@@ -23,6 +23,8 @@ package testutils
 import (
 	"math/rand"
 	"sync"
+
+	"github.com/uber/tchannel-go/trand"
 )
 
 // SimpleRelayHosts is a simple stub that satisfies the RelayHosts interface.
@@ -36,7 +38,7 @@ type SimpleRelayHosts struct {
 func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 	// Use a known seed for repeatable tests.
 	return &SimpleRelayHosts{
-		r:     NewRand(1),
+		r:     trand.New(1),
 		peers: peers,
 	}
 }
