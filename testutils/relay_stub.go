@@ -23,16 +23,16 @@ package testutils
 import (
 	"math/rand"
 	"sync"
-
-	. "github.com/uber/tchannel-go"
 )
 
+// SimpleRelayHosts is a simple stub that satisfies the RelayHosts interface.
 type SimpleRelayHosts struct {
 	sync.RWMutex
 	r     *rand.Rand
 	peers map[string][]string
 }
 
+// NewSimpleRelayHosts wraps a map in the RelayHosts interface.
 func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 	// Use a known seed for repeatable tests.
 	return &SimpleRelayHosts{
@@ -41,6 +41,7 @@ func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 	}
 }
 
+// Get takes a routing key and returns the best host:port for that key.
 func (rh *SimpleRelayHosts) Get(service string) string {
 	rh.RLock()
 	defer rh.RUnlock()
@@ -53,6 +54,7 @@ func (rh *SimpleRelayHosts) Get(service string) string {
 	return available[i]
 }
 
+// Add adds a host:port to a routing key.
 func (rh *SimpleRelayHosts) Add(service, hostPort string) {
 	rh.Lock()
 	rh.peers[service] = append(rh.peers[service], hostPort)
