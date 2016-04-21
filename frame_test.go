@@ -135,44 +135,6 @@ func TestReservedBytes(t *testing.T) {
 		buf.Bytes(), "Unexpected bytes")
 }
 
-func TestServiceCallReq(t *testing.T) {
-	// TODO: This test doesn't work, since the initial flags byte is written in
-	// reqResWriter instead of callReq. We should instead handle that in
-	// callReq, which will allow tests to be sane.
-	if 1 == 2 { // go vet doesn't like unreachable code...
-		frame := NewFrame(MaxFramePayloadSize)
-		err := frame.write(&callReq{Service: "udr"})
-		require.NoError(t, err, "Error writing message to frame.")
-		assert.Equal(t, "udr", frame.Service(), "Failed to read service name from frame.")
-	}
-}
-
-func TestServiceCallReqTerrible(t *testing.T) {
-	// TODO: Delete in favor of TestServiceCallReq.
-	f := NewFrame(100)
-	fh := fakeHeader()
-	f.Header = fh
-	fh.write(typed.NewWriteBuffer(f.headerBuffer))
-
-	payload := typed.NewWriteBuffer(f.Payload)
-	payload.WriteSingleByte(0)           // flags
-	payload.WriteUint32(42)              // TTL
-	payload.WriteBytes(make([]byte, 25)) // tracing
-	payload.WriteLen8String("bankmoji")  // service
-	assert.Equal(t, "bankmoji", f.Service(), "Failed to read service name from frame.")
-}
-
-func TestServiceOtherMessages(t *testing.T) {
-	msg := &initReq{initMessage{id: 1, Version: 0x1, initParams: initParams{
-		InitParamHostPort:    "0.0.0.0:0",
-		InitParamProcessName: "test",
-	}}}
-	frame := NewFrame(MaxFramePayloadSize)
-	err := frame.write(msg)
-	require.NoError(t, err, "Error writing message to frame.")
-	assert.Panics(t, func() { frame.Service() }, "Should panic when getting service from non-callReq frame.")
-}
-
 func TestMessageType(t *testing.T) {
 	frame := NewFrame(MaxFramePayloadSize)
 	err := frame.write(&callReq{Service: "foo"})
