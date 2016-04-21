@@ -76,6 +76,15 @@ type LogFilter struct {
 	FieldFilters map[string]string
 }
 
+// Copy copies the channel options (so that they can be safely modified).
+func (o *ChannelOpts) Copy() *ChannelOpts {
+	if o == nil {
+		return NewOpts()
+	}
+	copiedOpts := *o
+	return &copiedOpts
+}
+
 // SetServiceName sets ServiceName.
 func (o *ChannelOpts) SetServiceName(svcName string) *ChannelOpts {
 	o.ServiceName = svcName
