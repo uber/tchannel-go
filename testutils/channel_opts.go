@@ -47,6 +47,10 @@ type ChannelOpts struct {
 	// LogVerification contains options for controlling the log verification.
 	LogVerification LogVerification
 
+	// IncludeRelay instructs TestServer to interpose a relay between servers and
+	// clients. It's ignored by other test helpers.
+	IncludeRelay bool
+
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
@@ -133,6 +137,12 @@ func (o *ChannelOpts) SetTraceSampleRate(sampleRate float64) *ChannelOpts {
 // DisableLogVerification disables log verification for this channel.
 func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
 	o.LogVerification.Disabled = true
+	return o
+}
+
+// SetRelay instructs TestServer to put a relay in front of this channel.
+func (o *ChannelOpts) SetRelay() *ChannelOpts {
+	o.IncludeRelay = true
 	return o
 }
 
