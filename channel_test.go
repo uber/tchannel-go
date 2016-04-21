@@ -42,6 +42,7 @@ func TestLoggers(t *testing.T) {
 		Logger: NewLogger(ioutil.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
+	defer ch.Close()
 
 	peerInfo := ch.PeerInfo()
 	fields := toMap(ch.Logger().Fields())
@@ -58,6 +59,7 @@ func TestStats(t *testing.T) {
 		Logger: NewLogger(ioutil.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
+	defer ch.Close()
 
 	hostname, err := os.Hostname()
 	require.NoError(t, err, "Hostname failed")
@@ -84,6 +86,7 @@ func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
 		Logger: NewLogger(ioutil.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
+	defer ch.Close()
 
 	sub := ch.GetSubChannel("svc-ringpop")
 	if ch.peers != sub.peers {

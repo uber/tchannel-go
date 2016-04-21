@@ -41,6 +41,7 @@ type chanSet struct {
 
 func withNewSet(t *testing.T, f func(*testing.T, chanSet)) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	f(t, chanSet{
 		main:     ch,
 		sub:      ch.GetSubChannel("hyperbahn"),
@@ -128,12 +129,12 @@ func TestSetHandler(t *testing.T) {
 
 	ch := testutils.NewServer(t, testutils.NewOpts().
 		AddLogFilter("Couldn't find handler", 1, "serviceName", "svc2", "method", "bar"))
+	defer ch.Close()
 
 	// Catch-all handler for the main channel that accepts foo, bar, and baz,
 	// and a single registered handler for a different subchannel.
 	ch.GetSubChannel("svc1").SetHandler(genHandler("foo", "bar", "baz"))
 	ch.GetSubChannel("svc2").Register(genHandler("foo"), "foo")
-	defer ch.Close()
 
 	client := testutils.NewClient(t, nil)
 	client.Peers().Add(ch.PeerInfo().HostPort)
@@ -178,6 +179,7 @@ func TestCannotRegisterAfterSetHandler(t *testing.T) {
 		Logger: tchannel.NewLogger(ioutil.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
+	defer ch.Close()
 
 	someHandler := tchannel.HandlerFunc(func(ctx context.Context, call *tchannel.InboundCall) {
 		panic("unexpected call")

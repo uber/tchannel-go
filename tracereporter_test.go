@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTraceReporterFactory(t *testing.T) {
@@ -36,7 +37,8 @@ func TestTraceReporterFactory(t *testing.T) {
 		TraceReporter:        NullReporter,
 		TraceReporterFactory: testTraceReporterFactory,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	defer tc.Close()
 	assert.Equal(t, tc, gotChannel, "TraceReporterFactory got wrong channel")
 	assert.Equal(t, tc.traceReporter, SimpleTraceReporter, "Wrong TraceReporter")
 }
