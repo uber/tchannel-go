@@ -1,7 +1,6 @@
 package tchannel_test
 
 import (
-	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -12,112 +11,23 @@ import (
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/goroutines"
 )
 
 type relayTest struct {
-	testing.TB
-
-	relay      *Channel
-	relayHosts *testutils.SimpleRelayHosts
-	servers    []*Channel
-	clients    []*Channel
+	testutils.TestServer
 }
 
-func (t *relayTest) checkRelaysEmpty() {
-	var foundErrors bool
-	state := t.relay.IntrospectState(&IntrospectionOptions{IncludeExchanges: true})
-	for _, peerState := range state.RootPeers {
-		var connStates []ConnectionRuntimeState
-		connStates = append(connStates, peerState.InboundConnections...)
-		connStates = append(connStates, peerState.OutboundConnections...)
-		for _, connState := range connStates {
-			n := connState.Relayer.Count
-			if assert.Equal(t, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort) {
-				continue
-			}
-			foundErrors = true
-		}
-	}
-
-	if !foundErrors {
-		return
-	}
-
-	marshalled, err := json.MarshalIndent(state, "", "  ")
-	require.NoError(t, err, "Failed to marshal relayer state")
-	// Print out all the exchanges we found.
-	t.Logf("Relayer state:\n%s", marshalled)
-}
-
-func (t *relayTest) newServer(serviceName string, opts *testutils.ChannelOpts) *Channel {
-	if opts == nil {
-		opts = testutils.NewOpts()
-	}
-	opts.SetServiceName(serviceName)
-
-	server := testutils.NewServer(t, opts)
-	server.Peers().Add(t.relay.PeerInfo().HostPort)
-	t.relayHosts.Add(serviceName, server.PeerInfo().HostPort)
-	t.servers = append(t.servers, server)
-	return server
-}
-
-func (t *relayTest) newClient(clientName string, opts *testutils.ChannelOpts) *Channel {
-	if opts == nil {
-		opts = testutils.NewOpts()
-	}
-
-	opts.SetServiceName(clientName)
-
-	client := testutils.NewClient(t, opts)
-	client.Peers().Add(t.relay.PeerInfo().HostPort)
-	t.clients = append(t.clients, client)
-	return client
-}
-
-func (t *relayTest) closeChannels() {
-	t.relay.Close()
-	for _, ch := range t.servers {
-		ch.Close()
-	}
-	for _, ch := range t.clients {
-		ch.Close()
-	}
-	// TODO: we should find some way to validate the Close, similar to testutils.WithTestServer
-}
-
-func withRelayTest(t testing.TB, f func(rt *relayTest)) {
-	relayHosts := testutils.NewSimpleRelayHosts(map[string][]string{})
-	relay, err := NewChannel("relay", &ChannelOptions{
-		RelayHosts: relayHosts,
-	})
-	require.NoError(t, err, "Failed to create a relay channel.")
-	defer relay.Close()
-	require.NoError(t, relay.ListenAndServe("127.0.0.1:0"), "Relay failed to listen.")
-
-	rt := &relayTest{
-		TB:         t,
-		relay:      relay,
-		relayHosts: relayHosts,
-	}
-	defer rt.closeChannels()
-
-	f(rt)
-
-	// Only check relays are empty if the test hasn't failed.
-	if !t.Failed() {
-		rt.checkRelaysEmpty()
-	}
+func serviceNameOpts(s string) *testutils.ChannelOpts {
+	return testutils.NewOpts().SetServiceName(s)
 }
 
 func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel)) {
-	withRelayTest(t, func(rt *relayTest) {
-		server := rt.newServer("test", nil)
-		testutils.RegisterEcho(server, nil)
-
-		client := rt.newClient("client", nil)
-		f(rt.relay, server, client)
+	opts := serviceNameOpts("test").SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+		client := ts.NewClient(serviceNameOpts("client"))
+		client.Peers().Add(ts.HostPort())
+		f(ts.Relay(), ts.Server(), client)
 	})
 }
 
@@ -161,31 +71,31 @@ func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
 }
 
 func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
-	withRelayTest(t, func(rt *relayTest) {
+	opts := serviceNameOpts("s1").SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		s1 := rt.newServer("s1", nil)
-		s2 := rt.newServer("s2", nil)
+		s1 := ts.Server()
+		s2 := ts.NewServer(serviceNameOpts("s2"))
 
 		s2HP := s2.PeerInfo().HostPort
 		testutils.RegisterEcho(s1, func() {
 			// When s1 gets called, it calls Close on the connection from the relay to s2.
-			conn, err := rt.relay.Peers().GetOrAdd(s2HP).GetConnection(ctx)
+			conn, err := ts.Relay().Peers().GetOrAdd(s2HP).GetConnection(ctx)
 			require.NoError(t, err, "Unexpected failure getting connection between s1 and relay")
 			conn.Close()
 		})
 
-		testutils.AssertEcho(t, s2, rt.relay.PeerInfo().HostPort, "s1")
+		testutils.AssertEcho(t, s2, ts.HostPort(), "s1")
 	})
-
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestRelayIDClash(t *testing.T) {
-	withRelayTest(t, func(rt *relayTest) {
-		s1 := rt.newServer("s1", nil)
-		s2 := rt.newServer("s2", nil)
+	opts := serviceNameOpts("s1").SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s1 := ts.Server()
+		s2 := ts.NewServer(serviceNameOpts("s2"))
 
 		unblock := make(chan struct{})
 		testutils.RegisterEcho(s1, func() {
@@ -198,12 +108,12 @@ func TestRelayIDClash(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				testutils.AssertEcho(t, s2, rt.relay.PeerInfo().HostPort, s1.ServiceName())
+				testutils.AssertEcho(t, s2, ts.HostPort(), s1.ServiceName())
 			}()
 		}
 
 		for i := 0; i < 5; i++ {
-			testutils.AssertEcho(t, s1, rt.relay.PeerInfo().HostPort, s2.ServiceName())
+			testutils.AssertEcho(t, s1, ts.HostPort(), s2.ServiceName())
 		}
 
 		close(unblock)
@@ -212,10 +122,11 @@ func TestRelayIDClash(t *testing.T) {
 }
 
 func TestRelayErrorUnknownPeer(t *testing.T) {
-	withRelayTest(t, func(rt *relayTest) {
-		client := rt.newClient("client", nil)
+	opts := testutils.NewOpts().SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		client := ts.NewClient(nil)
 
-		err := testutils.CallEcho(client, rt.relay.PeerInfo().HostPort, "random-service", nil)
+		err := testutils.CallEcho(client, ts.HostPort(), "random-service", nil)
 		if !assert.Error(t, err, "Call to unknown service should fail") {
 			return
 		}
@@ -231,12 +142,12 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 }
 
 func TestErrorFrameEndsRelay(t *testing.T) {
-	// withRelayTest validates that there are no relay items left after the given func.
-	withRelayTest(t, func(rt *relayTest) {
-		rt.newServer("svc", testutils.NewOpts().AddLogFilter("Couldn't find handler", 1))
-		client := rt.newClient("client", nil)
+	// TestServer validates that there are no relay items left after the given func.
+	opts := serviceNameOpts("svc").SetRelayOnly().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		client := ts.NewClient(nil)
 
-		err := testutils.CallEcho(client, rt.relay.PeerInfo().HostPort, "svc", nil)
+		err := testutils.CallEcho(client, ts.HostPort(), "svc", nil)
 		if !assert.Error(t, err, "Expected error due to unknown method") {
 			return
 		}
