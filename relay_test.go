@@ -213,5 +213,24 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 		assert.Equal(t, ErrCodeDeclined, se.Code(), "Expected Declined error")
 		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
 	})
+}
 
+func TestErrorFrameEndsRelay(t *testing.T) {
+	// withRelayTest validates that there are no relay items left after the given func.
+	withRelayTest(t, func(rt *relayTest) {
+		rt.newServer("svc", testutils.NewOpts().AddLogFilter("Couldn't find handler", 1))
+		client := rt.newClient("client", nil)
+
+		err := testutils.CallEcho(client, rt.relay.PeerInfo().HostPort, "svc", nil)
+		if !assert.Error(t, err, "Expected error due to unknown method") {
+			return
+		}
+
+		se, ok := err.(SystemError)
+		if !assert.True(t, ok, "err should be a SystemError, got %T", err) {
+			return
+		}
+
+		assert.Equal(t, ErrCodeBadRequest, se.Code(), "Expected BadRequest error")
+	})
 }
