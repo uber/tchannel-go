@@ -74,7 +74,7 @@ func (r *Relayer) Relay(f *Frame) error {
 	if f.messageType() != messageTypeCallReq {
 		return r.handleNonCallReq(f)
 	}
-	return r.handleCallReq(f)
+	return r.handleCallReq(newLazyCallReq(f))
 }
 
 // Receive receives frames intended for this connection.
@@ -104,7 +104,7 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 	}
 }
 
-func (r *Relayer) handleCallReq(f *Frame) error {
+func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	r.RLock()
 	_, ok := r.outbound[f.Header.ID]
 	r.RUnlock()
@@ -145,7 +145,7 @@ func (r *Relayer) handleCallReq(f *Frame) error {
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay)
 
 	f.Header.ID = destinationID
-	relayToDest.destination.Receive(f, requestFrame)
+	relayToDest.destination.Receive(f.Frame, requestFrame)
 	return nil
 }
 
@@ -237,20 +237,6 @@ func frameTypeFor(f *Frame) frameType {
 		return requestFrame
 	default:
 		panic(fmt.Sprintf("unsupported frame type: %v", t))
-	}
-}
-
-// finishesCall checks whether this frame is the last one we should expect for
-// this RPC req-res.
-func finishesCall(f *Frame) bool {
-	switch f.messageType() {
-	case messageTypeError:
-		return true
-	case messageTypeCallRes, messageTypeCallResContinue:
-		flags := f.Payload[_flagsIndex]
-		return flags&hasMoreFragmentsFlag == 0
-	default:
-		return false
 	}
 }
 
