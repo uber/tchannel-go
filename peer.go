@@ -33,7 +33,9 @@ import (
 
 var (
 	// ErrInvalidConnectionState indicates that the connection is not in a valid state.
-	ErrInvalidConnectionState = errors.New("connection is in an invalid state")
+	// This may be due to a race between selecting the connection and it closing, so
+	// it is a network failure that can be retried.
+	ErrInvalidConnectionState = NewSystemError(ErrCodeNetwork, "connection is in an invalid state")
 
 	// ErrNoPeers indicates that there are no peers.
 	ErrNoPeers = errors.New("no peers available")
