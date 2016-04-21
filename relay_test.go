@@ -1,6 +1,7 @@
 package tchannel_test
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -24,15 +25,29 @@ type relayTest struct {
 }
 
 func (t *relayTest) checkRelaysEmpty() {
-	for _, peerState := range t.relay.IntrospectState(nil).RootPeers {
+	var foundErrors bool
+	state := t.relay.IntrospectState(&IntrospectionOptions{IncludeExchanges: true})
+	for _, peerState := range state.RootPeers {
 		var connStates []ConnectionRuntimeState
 		connStates = append(connStates, peerState.InboundConnections...)
 		connStates = append(connStates, peerState.OutboundConnections...)
 		for _, connState := range connStates {
-			n := connState.Relayer.NumItems
-			assert.Equal(t, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort)
+			n := connState.Relayer.Count
+			if assert.Equal(t, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort) {
+				continue
+			}
+			foundErrors = true
 		}
 	}
+
+	if !foundErrors {
+		return
+	}
+
+	marshalled, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(t, err, "Failed to marshal relayer state")
+	// Print out all the exchanges we found.
+	t.Logf("Relayer state:\n%s", marshalled)
 }
 
 func (t *relayTest) newServer(serviceName string, opts *testutils.ChannelOpts) *Channel {
