@@ -42,6 +42,12 @@ var _leakedGoroutine = atomic.NewInt32(0)
 type TestServer struct {
 	testing.TB
 
+	// relayIdx is the index of the relay channel, if any, in the channels slice.
+	relayIdx int
+
+	// relayHosts is the relayer's SimpleRelayHosts (if any).
+	relayHosts *SimpleRelayHosts
+
 	// channels is the list of channels created for this TestServer. The first
 	// element is always the initial server.
 	channels []*tchannel.Channel
@@ -60,7 +66,11 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 		TB:            t,
 		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
 	}
+
 	ts.NewServer(opts)
+	if opts.IncludeRelay {
+		ts.addRelay()
+	}
 
 	return ts
 }
@@ -89,9 +99,20 @@ func (ts *TestServer) Server() *tchannel.Channel {
 	return ts.channels[0]
 }
 
+// Relay returns the relay channel, if one is present.
+func (ts *TestServer) Relay() *tchannel.Channel {
+	if ts.hasRelay() {
+		return ts.channels[ts.relayIdx]
+	}
+	return nil
+}
+
 // HostPort returns the host:port for clients to connect to. Note that this may
 // not be the same as the host:port of the server channel.
 func (ts *TestServer) HostPort() string {
+	if ts.hasRelay() {
+		return ts.Relay().PeerInfo().HostPort
+	}
 	return ts.Server().PeerInfo().HostPort
 }
 
@@ -125,7 +146,28 @@ func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
 // NewServer returns a server with log and channel state verification.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 	ch := ts.addChannel(newServer, opts.Copy())
+	if ts.hasRelay() {
+		ts.relayHosts.Add(ch.ServiceName(), ch.PeerInfo().HostPort)
+	}
 	return ch
+}
+
+// addRelay adds a relay in front of the test server, altering public methods as
+// necessary to route traffic through the relay.
+func (ts *TestServer) addRelay() {
+	ts.relayHosts = NewSimpleRelayHosts(map[string][]string{
+		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
+	})
+	opts := &ChannelOpts{
+		ServiceName:    "relay",
+		ChannelOptions: tchannel.ChannelOptions{RelayHosts: ts.relayHosts},
+	}
+	ts.addChannel(NewServer, opts)
+	ts.relayIdx = len(ts.channels) - 1
+}
+
+func (ts *TestServer) hasRelay() bool {
+	return ts.relayIdx > 0
 }
 
 func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelOpts) *tchannel.Channel, opts *ChannelOpts) *tchannel.Channel {
@@ -151,6 +193,7 @@ func (ts *TestServer) verify(ch *tchannel.Channel) {
 		ts.verifyNoGoroutinesLeaked()
 	}
 
+	ts.verifyRelaysEmpty(ch)
 	ts.verifyExchangesCleared(ch)
 }
 
@@ -207,6 +250,21 @@ func (ts *TestServer) verifyExchangesCleared(ch *tchannel.Channel) {
 	})
 	if exchangesLeft := describeLeakedExchanges(serverState); exchangesLeft != "" {
 		ts.Errorf("Found uncleared message exchanges on server:\n%v", exchangesLeft)
+	}
+}
+
+func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
+	if ts.Failed() {
+		return
+	}
+	for _, peerState := range ch.IntrospectState(nil).RootPeers {
+		var connStates []tchannel.ConnectionRuntimeState
+		connStates = append(connStates, peerState.InboundConnections...)
+		connStates = append(connStates, peerState.OutboundConnections...)
+		for _, connState := range connStates {
+			n := connState.Relayer.NumItems
+			assert.Equal(ts, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort)
+		}
 	}
 }
 
