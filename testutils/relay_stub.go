@@ -18,35 +18,47 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel
+package testutils
 
 import (
 	"math/rand"
 	"sync"
+
+	"github.com/uber/tchannel-go/trand"
 )
 
-// lockedSource allows a random number generator to be used by multiple goroutines concurrently.
-// The code is very similar to math/rand.lockedSource, which is unfortunately not exposed.
-type lockedSource struct {
-	sync.Mutex
-
-	src rand.Source
+// SimpleRelayHosts is a simple stub that satisfies the RelayHosts interface.
+type SimpleRelayHosts struct {
+	sync.RWMutex
+	r     *rand.Rand
+	peers map[string][]string
 }
 
-// NewRand returns a rand.Rand that is threadsafe.
-func NewRand(seed int64) *rand.Rand {
-	return rand.New(&lockedSource{src: rand.NewSource(seed)})
+// NewSimpleRelayHosts wraps a map in the RelayHosts interface.
+func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
+	// Use a known seed for repeatable tests.
+	return &SimpleRelayHosts{
+		r:     trand.New(1),
+		peers: peers,
+	}
 }
 
-func (r *lockedSource) Int63() (n int64) {
-	r.Lock()
-	n = r.src.Int63()
-	r.Unlock()
-	return
+// Get takes a routing key and returns the best host:port for that key.
+func (rh *SimpleRelayHosts) Get(service string) string {
+	rh.RLock()
+	defer rh.RUnlock()
+
+	available, ok := rh.peers[service]
+	if !ok || len(available) == 0 {
+		return ""
+	}
+	i := rh.r.Intn(len(available))
+	return available[i]
 }
 
-func (r *lockedSource) Seed(seed int64) {
-	r.Lock()
-	r.src.Seed(seed)
-	r.Unlock()
+// Add adds a host:port to a routing key.
+func (rh *SimpleRelayHosts) Add(service, hostPort string) {
+	rh.Lock()
+	rh.peers[service] = append(rh.peers[service], hostPort)
+	rh.Unlock()
 }
