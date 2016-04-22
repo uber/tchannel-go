@@ -82,11 +82,12 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 //
 // TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
-	withServer(t, chanOpts.Copy(), f)
+	noRelayOpts := chanOpts.Copy()
+	noRelayOpts.IncludeRelay = false
+	withServer(t, noRelayOpts, f)
+
 	if chanOpts != nil && chanOpts.IncludeRelay {
-		repeatOpts := chanOpts.Copy()
-		repeatOpts.IncludeRelay = false
-		withServer(t, repeatOpts, f)
+		withServer(t, chanOpts.Copy(), f)
 	}
 }
 
