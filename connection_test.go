@@ -209,7 +209,10 @@ func TestReuseConnection(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
+	// Since we're specifically testing that connections between hosts are re-used,
+	// we can't interpose a relay in this test.
 	s1Opts := &testutils.ChannelOpts{ServiceName: "s1"}
+
 	testutils.WithTestServer(t, s1Opts, func(ts *testutils.TestServer) {
 		ch2 := ts.NewServer(&testutils.ChannelOpts{ServiceName: "s2"})
 		hostPort2 := ch2.PeerInfo().HostPort
@@ -233,7 +236,9 @@ func TestReuseConnection(t *testing.T) {
 			return ch2.IntrospectState(nil).NumConnections > 0
 		}), "ch2 does not have any active connections")
 
-		// When ch2 tries to call ch1, it should reuse the inbound connection from ch1.
+		// When ch2 tries to call the test server, it should reuse the existing
+		// inbound connection the test server. Of course, this only works if the
+		// test server -> ch2 call wasn't relayed.
 		outbound3, err := ch2.BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
 		require.NoError(t, err)
 		_, outbound3NetConn := OutboundConnection(outbound3)
@@ -600,7 +605,8 @@ func TestWriteTimeout(t *testing.T) {
 }
 
 func TestGracefulClose(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ch2 := ts.NewServer(nil)
 		hp2 := ch2.PeerInfo().HostPort
 		defer ch2.Close()
