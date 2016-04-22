@@ -89,14 +89,12 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 //
 // TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
-	ts := NewTestServer(t, chanOpts)
-	// Note: We use defer, as we want the postFns to run even if the test
-	// goroutine exits (e.g. user calls t.Fatalf).
-	defer ts.post()
-
-	f(ts)
-	ts.Server().Logger().Debugf("TEST: Test function complete")
-	ts.CloseAndVerify()
+	withServer(t, chanOpts, f)
+	if chanOpts != nil && chanOpts.IncludeRelay {
+		repeatOpts := chanOpts.Copy()
+		repeatOpts.IncludeRelay = false
+		withServer(t, repeatOpts, f)
+	}
 }
 
 // SetVerifyOpts specifies the options we'll use during teardown to verify that
@@ -353,4 +351,15 @@ func describeLeakedExchangesSingleConn(cs *tchannel.ConnectionRuntimeState) stri
 	}
 
 	return fmt.Sprintf("Connection %d has leftover exchanges:\n\t%v", cs.ID, strings.Join(exchanges, "\n\t"))
+}
+
+func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
+	ts := NewTestServer(t, chanOpts)
+	// Note: We use defer, as we want the postFns to run even if the test
+	// goroutine exits (e.g. user calls t.Fatalf).
+	defer ts.post()
+
+	f(ts)
+	ts.Server().Logger().Debugf("TEST: Test function complete")
+	ts.CloseAndVerify()
 }
