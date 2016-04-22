@@ -28,11 +28,15 @@ import (
 	"golang.org/x/net/context"
 )
 
-var errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
+var (
+	// errInboundParseFailed = errors.New("failed to parse inbound frame")
+	errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
+	errNotReady                    = NewSystemError(ErrCodeDeclined, "connection not ready")
+)
 
-// handleCallReq handles an incoming call request, registering a message
-// exchange to receive further fragments for that call, and dispatching it in
-// another goroutine
+// handleCallReq handles an incoming call request frame; currently the only
+// path is to call handleInboundCall directly to dispatch an InboundCall; TODO:
+// add relaying path here
 func (c *Connection) handleCallReq(frame *Frame) bool {
 	now := c.timeNow()
 	switch state := c.readState(); state {
@@ -42,12 +46,19 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		c.SendSystemError(frame.Header.ID, nil, ErrChannelClosed)
 		return true
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
-		c.SendSystemError(frame.Header.ID, nil, NewSystemError(ErrCodeDeclined, "connection not ready"))
+		c.SendSystemError(frame.Header.ID, nil, errNotReady)
 		return true
 	default:
 		panic(fmt.Errorf("unknown connection state for call req: %v", state))
 	}
 
+	return c.handleInboundCall(frame)
+}
+
+// handleInboundCall handles an incoming call request, registering a message
+// exchange to receive further fragments for that call, and dispatching it in
+// another goroutine
+func (c *Connection) handleInboundCall(frame *Frame) bool {
 	callReq := new(callReq)
 	initialFragment, err := parseInboundFragment(c.framePool, frame, callReq)
 	if err != nil {
