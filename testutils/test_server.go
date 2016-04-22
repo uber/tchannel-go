@@ -33,6 +33,7 @@ import (
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Has a previous test already leaked a goroutine?
@@ -82,6 +83,11 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 // TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 	withServer(t, chanOpts.Copy(), f)
+	if chanOpts != nil && chanOpts.IncludeRelay {
+		repeatOpts := chanOpts.Copy()
+		repeatOpts.IncludeRelay = false
+		withServer(t, repeatOpts, f)
+	}
 }
 
 // SetVerifyOpts specifies the options we'll use during teardown to verify that
