@@ -103,7 +103,9 @@ func TestFramesReleased(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetServiceName("swap-server").
 		SetFramePool(pool).
-		AddLogFilter("Couldn't find handler.", numGoroutines*requestsPerGoroutine)
+		AddLogFilter("Couldn't find handler.", 2*numGoroutines*requestsPerGoroutine).
+		SetRelay()
+
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(&swapper{t}), "swap")
 
@@ -159,7 +161,9 @@ func TestDirtyFrameRequests(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		SetServiceName("swap-server").
-		SetFramePool(dirtyFramePool{})
+		SetFramePool(dirtyFramePool{}).
+		SetRelay()
+
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(&swapper{t}), "swap")
 
