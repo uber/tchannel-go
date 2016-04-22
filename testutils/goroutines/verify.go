@@ -23,18 +23,18 @@ package goroutines
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
 
-// At baseline, we expect to see one goroutine in the testing package's main
-// function and one in syscall.goexit.
-const _expectedRuntimeGoroutines = 2
-
 // filterStacks will filter any stacks excluded by the given VerifyOpts.
-func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
+func filterStacks(stacks []Stack, skipID int, opts *VerifyOpts) []Stack {
 	filtered := stacks[:0]
 	for _, stack := range stacks {
+		if stack.ID() == skipID || isTestStack(stack) {
+			continue
+		}
 		if opts.ShouldSkip(stack) {
 			continue
 		}
@@ -43,18 +43,29 @@ func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
 	return filtered
 }
 
+func isTestStack(s Stack) bool {
+	switch funcName := s.firstFunction; funcName {
+	case "testing.RunTests", "testing.(*T).Run":
+		return s.State() == "chan receive"
+	case "runtime.goexit":
+		return strings.HasPrefix(s.State(), "syscall")
+	default:
+		return false
+	}
+}
+
 // IdentifyLeaks looks for extra goroutines, and returns a descriptive error if
 // it finds any.
 func IdentifyLeaks(opts *VerifyOpts) error {
+	cur := GetCurrentStack().id
+
 	const maxAttempts = 50
 	var stacks []Stack
 	for i := 0; i < maxAttempts; i++ {
-		// Ignore the first stack, which is the current goroutine (the one
-		// that's doing the verification).
-		stacks = GetAll()[1:]
-		stacks = filterStacks(stacks, opts)
+		stacks = GetAll()
+		stacks = filterStacks(stacks, cur, opts)
 
-		if len(stacks) <= _expectedRuntimeGoroutines {
+		if len(stacks) == 0 {
 			return nil
 		}
 
@@ -65,7 +76,7 @@ func IdentifyLeaks(opts *VerifyOpts) error {
 		}
 	}
 
-	return fmt.Errorf("expected at most %v goroutines, found more:\n%s", _expectedRuntimeGoroutines, stacks)
+	return fmt.Errorf("found unexpected goroutines:\n%s", stacks)
 }
 
 // VerifyNoLeaks calls IdentifyLeaks and fails the test if it finds any leaked
