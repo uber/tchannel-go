@@ -179,6 +179,7 @@ func (o ChannelOpts) GetTChannelOptions() *tchannel.ChannelOptions {
 		o.optFn(&o)
 	}
 	return &o.ChannelOptions
+}
 
 // SetRelayHosts sets the channel's relay hosts, which enables relaying.
 func (o *ChannelOpts) SetRelayHosts(rh tchannel.RelayHosts) *ChannelOpts {
