@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	"log"
 	"math/rand"
 	"sync"
 	"testing"
@@ -102,8 +101,6 @@ func TestCloseAfterTimeout(t *testing.T) {
 }
 
 func TestRaceExchangesWithClose(t *testing.T) {
-	log.SetFlags(log.Lmicroseconds)
-
 	var wg sync.WaitGroup
 
 	ctx, cancel := NewContext(testutils.Timeout(70 * time.Millisecond))
@@ -124,7 +121,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 			<-completeCall
 		})
 
-		client := testutils.NewClient(t, nil)
+		client := ts.NewClient(opts)
 		defer client.Close()
 
 		callDone := make(chan struct{})
@@ -142,7 +139,8 @@ func TestRaceExchangesWithClose(t *testing.T) {
 			go func() {
 				defer wg.Done()
 
-				c := testutils.NewClient(t, nil)
+				// We don't use ts.NewClient here to avoid data races.
+				c := testutils.NewClient(t, opts)
 				defer c.Close()
 
 				c.Ping(ctx, ts.HostPort())
