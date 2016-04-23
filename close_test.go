@@ -493,7 +493,8 @@ func TestCloseSendError(t *testing.T) {
 		counter atomic.Uint32
 	)
 
-	serverCh := testutils.NewServer(t, nil)
+	opts := testutils.NewOpts().DisableLogVerification()
+	serverCh := testutils.NewServer(t, opts)
 	testutils.RegisterEcho(serverCh, func() {
 		if counter.Inc() > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
@@ -504,7 +505,7 @@ func TestCloseSendError(t *testing.T) {
 		}
 	})
 
-	clientCh := testutils.NewClient(t, nil)
+	clientCh := testutils.NewClient(t, opts)
 
 	// Create a connection that will be shared.
 	require.NoError(t, testutils.Ping(clientCh, serverCh), "Ping from client to server failed")
