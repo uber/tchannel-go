@@ -32,7 +32,6 @@ import (
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Has a previous test already leaked a goroutine?
@@ -40,8 +39,6 @@ var _leakedGoroutine = atomic.NewInt32(0)
 
 // A TestServer encapsulates a TChannel server, a client factory, and functions
 // to ensure that we're not leaking resources.
-//
-// TODO: Include an optional relay.
 type TestServer struct {
 	testing.TB
 
@@ -59,20 +56,13 @@ type TestServer struct {
 
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
-	opts = getOptsForTest(t, opts)
-	ch, err := NewServerChannel(opts)
-	require.NoError(t, err, "WithTestServer failed to create Server")
-
-	states := map[*tchannel.Channel]*tchannel.RuntimeState{
-		ch: comparableState(ch),
-	}
-
-	return &TestServer{
+	ts := &TestServer{
 		TB:            t,
-		channels:      []*tchannel.Channel{ch},
-		channelStates: states,
-		postFns:       opts.postFns,
+		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
 	}
+	ts.NewServer(opts)
+
+	return ts
 }
 
 // WithTestServer creates a new TestServer, runs the passed function, and then
@@ -80,14 +70,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 //
 // TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
-	ts := NewTestServer(t, chanOpts)
-	// Note: We use defer, as we want the postFns to run even if the test
-	// goroutine exits (e.g. user calls t.Fatalf).
-	defer ts.post()
-
-	f(ts)
-	ts.Server().Logger().Debugf("TEST: Test function complete")
-	ts.CloseAndVerify()
+	withServer(t, chanOpts.Copy(), f)
 }
 
 // SetVerifyOpts specifies the options we'll use during teardown to verify that
@@ -109,8 +92,6 @@ func (ts *TestServer) Server() *tchannel.Channel {
 // HostPort returns the host:port for clients to connect to. Note that this may
 // not be the same as the host:port of the server channel.
 func (ts *TestServer) HostPort() string {
-	// Use this wrapper to enable registering handlers on the server, but
-	// connecting to a relay.
 	return ts.Server().PeerInfo().HostPort
 }
 
@@ -138,16 +119,16 @@ func (ts *TestServer) CloseAndVerify() {
 // NewClient returns a client that with log verification.
 // TODO: Verify message exchanges and leaks for client channels as well.
 func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
-	return ts.addChannel(NewClient, opts)
+	return ts.addChannel(newClient, opts.Copy())
 }
 
 // NewServer returns a server with log and channel state verification.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
-	return ts.addChannel(NewServer, opts)
+	ch := ts.addChannel(newServer, opts.Copy())
+	return ch
 }
 
 func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelOpts) *tchannel.Channel, opts *ChannelOpts) *tchannel.Channel {
-	opts = getOptsForTest(ts, opts)
 	ch := createChannel(ts, opts)
 	ts.postFns = append(ts.postFns, opts.postFns...)
 	ts.channels = append(ts.channels, ch)
@@ -171,10 +152,14 @@ func (ts *TestServer) verify(ch *tchannel.Channel) {
 	}
 
 	ts.verifyExchangesCleared(ch)
-	ts.verifyNoStateLeak(ch)
 }
 
 func (ts *TestServer) post() {
+	if !ts.Failed() {
+		for _, ch := range ts.channels {
+			ts.verifyNoStateLeak(ch)
+		}
+	}
 	for _, fn := range ts.postFns {
 		fn()
 	}
@@ -297,4 +282,15 @@ func describeLeakedExchangesSingleConn(cs *tchannel.ConnectionRuntimeState) stri
 	}
 
 	return fmt.Sprintf("Connection %d has leftover exchanges:\n\t%v", cs.ID, strings.Join(exchanges, "\n\t"))
+}
+
+func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
+	ts := NewTestServer(t, chanOpts)
+	// Note: We use defer, as we want the postFns to run even if the test
+	// goroutine exits (e.g. user calls t.Fatalf).
+	defer ts.post()
+
+	f(ts)
+	ts.Server().Logger().Debugf("TEST: Test function complete")
+	ts.CloseAndVerify()
 }

@@ -159,21 +159,23 @@ func (o *ChannelOpts) addPostFn(f func()) {
 	o.postFns = append(o.postFns, f)
 }
 
+// GetTChannelOptions returns the tchannel.ChannelOptions to create a channel.
+// Note: we use a value receiver so this method does not mutate ChannelOpts.
+func (o ChannelOpts) GetTChannelOptions() *tchannel.ChannelOptions {
+	if o.Logger == nil && *connectionLog {
+		o.Logger = tchannel.SimpleLogger
+	}
+	if o.optFn != nil {
+		o.optFn(&o)
+	}
+	return &o.ChannelOptions
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue
 	}
 	return v
-}
-
-func getChannelOptions(opts *ChannelOpts) *tchannel.ChannelOptions {
-	if opts.Logger == nil && *connectionLog {
-		opts.Logger = tchannel.SimpleLogger
-	}
-	if opts.optFn != nil {
-		opts.optFn(opts)
-	}
-	return &opts.ChannelOptions
 }
 
 // NewOpts returns a new ChannelOpts that can be used in a chained fashion.
