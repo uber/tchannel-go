@@ -107,14 +107,15 @@ func writeFlushStr(w ArgWriter, d string) error {
 }
 
 func TestRoundTrip(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		handler := newTestHandler(t)
-		ch.Register(raw.Wrap(handler), "echo")
+		ts.Register(raw.Wrap(handler), "echo")
 
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		call, err := ch.BeginCall(ctx, hostPort, testServiceName, "echo", &CallOptions{Format: JSON})
+		call, err := ts.Server().BeginCall(ctx, ts.HostPort(), testServiceName, "echo", &CallOptions{Format: JSON})
 		require.NoError(t, err)
 
 		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(testArg2))
@@ -135,14 +136,15 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestDefaultFormat(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		handler := newTestHandler(t)
-		ch.Register(raw.Wrap(handler), "echo")
+		ts.Register(raw.Wrap(handler), "echo")
 
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		arg2, arg3, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", testArg2, testArg3)
+		arg2, arg3, resp, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "echo", testArg2, testArg3)
 		require.Nil(t, err)
 
 		require.Equal(t, testArg2, arg2)
@@ -262,43 +264,46 @@ func TestReuseConnection(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		clientCh := testutils.NewClient(t, nil)
+		clientCh := ts.NewClient(nil)
 		defer clientCh.Close()
-		require.NoError(t, clientCh.Ping(ctx, hostPort))
+		require.NoError(t, clientCh.Ping(ctx, ts.HostPort()))
 	})
 }
 
 func TestBadRequest(t *testing.T) {
 	// ch will log an error when it receives a request for an unknown handler.
-	opts := testutils.NewOpts().AddLogFilter("Couldn't find handler.", 1)
-	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().AddLogFilter("Couldn't find handler.", 1).SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, "Nowhere", "Noone", []byte("Headers"), []byte("Body"))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().ServiceName(), "Noone", []byte("Headers"), []byte("Body"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeBadRequest, GetSystemErrorCode(err))
 	})
 }
 
 func TestNoTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(raw.Wrap(newTestHandler(t)), "Echo")
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "Echo")
 
 		ctx := context.Background()
-		_, _, _, err := raw.Call(ctx, ch, hostPort, "svc", "Echo", []byte("Headers"), []byte("Body"))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), "svc", "Echo", []byte("Headers"), []byte("Body"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrTimeoutRequired, err)
 	})
 }
 
 func TestServerBusy(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
 			if _, err := raw.ReadArgs(call); err != nil {
 				return err
 			}
@@ -308,7 +313,7 @@ func TestServerBusy(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "busy", []byte("Arg2"), []byte("Arg3"))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "busy", []byte("Arg2"), []byte("Arg3"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeBusy, GetSystemErrorCode(err), "err: %v", err)
 	})
@@ -316,10 +321,11 @@ func TestServerBusy(t *testing.T) {
 
 func TestUnexpectedHandlerError(t *testing.T) {
 	opts := testutils.NewOpts().
-		AddLogFilter("Unexpected handler error", 1)
+		AddLogFilter("Unexpected handler error", 1).
+		SetRelay()
 
-	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
-		ch.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
 			if _, err := raw.ReadArgs(call); err != nil {
 				return err
 			}
@@ -329,7 +335,7 @@ func TestUnexpectedHandlerError(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "nope", []byte("Arg2"), []byte("Arg3"))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "nope", []byte("Arg2"), []byte("Arg3"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeUnexpected, GetSystemErrorCode(err), "err: %v", err)
 	})
@@ -368,36 +374,38 @@ func TestTimeout(t *testing.T) {
 			t.Errorf("Server did not receive call, may need higher timeout")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestLargeMethod(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
 		largeMethod := testutils.RandBytes(16*1024 + 1)
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, string(largeMethod), nil, nil)
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, string(largeMethod), nil, nil)
 		assert.Equal(t, ErrMethodTooLarge, err)
 	})
 }
 
 func TestLargeTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(raw.Wrap(newTestHandler(t)), "echo")
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		ctx, cancel := NewContext(1000 * time.Second)
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", testArg2, testArg3)
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "echo", testArg2, testArg3)
 		assert.NoError(t, err, "Call failed")
 	})
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestFragmentation(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ch.Register(raw.Wrap(newTestHandler(t)), "echo")
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		arg2 := make([]byte, MaxFramePayloadSize*2)
 		for i := 0; i < len(arg2); i++ {
@@ -412,7 +420,7 @@ func TestFragmentation(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		respArg2, respArg3, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
+		respArg2, respArg3, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "echo", arg2, arg3)
 		require.NoError(t, err)
 		assert.Equal(t, arg2, respArg2)
 		assert.Equal(t, arg3, respArg3)
@@ -531,11 +539,12 @@ func TestWriteAfterConnectionError(t *testing.T) {
 	defer cancel()
 
 	// Closing network connections can lead to warnings in many places.
-	opts := testutils.NewOpts().DisableLogVerification()
-	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
-		testutils.RegisterEcho(ch, nil)
+	opts := testutils.NewOpts().DisableLogVerification().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+		server := ts.Server()
 
-		call, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "echo", nil)
+		call, err := server.BeginCall(ctx, ts.HostPort(), server.ServiceName(), "echo", nil)
 		require.NoError(t, err, "Call failed")
 
 		w, err := call.Arg2Writer()
@@ -568,16 +577,18 @@ func TestReadTimeout(t *testing.T) {
 		AddLogFilter("Connection error", 1, "site", "read frames").
 		AddLogFilter("Connection error", 1, "site", "write frames").
 		AddLogFilter("simpleHandler OnError", 1,
-			"error", "failed to send error frame, connection state connectionClosed")
-	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+			"error", "failed to send error frame, connection state connectionClosed").
+		SetRelay()
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				defer cancel()
 				return nil, ErrTimeout
 			}
-			testutils.RegisterFunc(ch, "call", handler)
-			_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "call", nil, nil)
+			ts.RegisterFunc("call", handler)
+			_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "call", nil, nil)
 			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
 	})
@@ -585,11 +596,13 @@ func TestReadTimeout(t *testing.T) {
 }
 
 func TestWriteTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ch := ts.Server()
 		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
-		call, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "call", nil)
+		call, err := ch.BeginCall(ctx, ts.HostPort(), ch.ServiceName(), "call", nil)
 		require.NoError(t, err, "Call failed")
 
 		writer, err := call.Arg2Writer()
@@ -602,7 +615,6 @@ func TestWriteTimeout(t *testing.T) {
 		_, err = io.Copy(writer, testreader.Looper([]byte{1}))
 		assert.Equal(t, ErrTimeout, err, "Write should fail with timeout")
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestGracefulClose(t *testing.T) {
