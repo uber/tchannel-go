@@ -79,18 +79,27 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 
 // WithTestServer creates a new TestServer, runs the passed function, and then
 // verifies that no resources were leaked.
-//
-// TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
-	// Run without a relay unless OnlyRelay is set.
-	if chanOpts == nil || !chanOpts.OnlyRelay {
-		noRelayOpts := chanOpts.Copy()
-		noRelayOpts.IncludeRelay = false
-		withServer(t, noRelayOpts, f)
+	chanOpts = chanOpts.Copy()
+	runCount := chanOpts.RunCount
+	if runCount < 1 {
+		runCount = 1
 	}
 
-	if chanOpts != nil && chanOpts.IncludeRelay {
-		withServer(t, chanOpts.Copy(), f)
+	for i := 0; i < runCount; i++ {
+		if t.Failed() {
+			return
+		}
+
+		if !chanOpts.OnlyRelay {
+			noRelayOpts := chanOpts.Copy()
+			noRelayOpts.IncludeRelay = false
+			withServer(t, noRelayOpts, f)
+		}
+
+		if chanOpts.IncludeRelay {
+			withServer(t, chanOpts.Copy(), f)
+		}
 	}
 }
 
