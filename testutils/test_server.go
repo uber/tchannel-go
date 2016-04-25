@@ -30,10 +30,12 @@ import (
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
 )
 
 // Has a previous test already leaked a goroutine?
@@ -121,7 +123,7 @@ func (ts *TestServer) Server() *tchannel.Channel {
 
 // Relay returns the relay channel, if one is present.
 func (ts *TestServer) Relay() *tchannel.Channel {
-	if ts.hasRelay() {
+	if ts.HasRelay() {
 		return ts.channels[ts.relayIdx]
 	}
 	return nil
@@ -130,7 +132,7 @@ func (ts *TestServer) Relay() *tchannel.Channel {
 // HostPort returns the host:port for clients to connect to. Note that this may
 // not be the same as the host:port of the server channel.
 func (ts *TestServer) HostPort() string {
-	if ts.hasRelay() {
+	if ts.HasRelay() {
 		return ts.Relay().PeerInfo().HostPort
 	}
 	return ts.Server().PeerInfo().HostPort
@@ -144,6 +146,13 @@ func (ts *TestServer) ServiceName() string {
 // Register registers a handler on the server channel.
 func (ts *TestServer) Register(h tchannel.Handler, methodName string) {
 	ts.Server().Register(h, methodName)
+}
+
+// RegisterFunc registers a function as a handler for the given method name.
+//
+// TODO: Delete testutils.RegisterFunc in favor of this test server.
+func (ts *TestServer) RegisterFunc(name string, f func(context.Context, *raw.Args) (*raw.Res, error)) {
+	ts.Register(raw.Wrap(rawFuncHandler{ts.Server(), f}), name)
 }
 
 // CloseAndVerify closes all channels verifying each channel as it is closed.
@@ -166,7 +175,7 @@ func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
 // NewServer returns a server with log and channel state verification.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 	ch := ts.addChannel(newServer, opts.Copy())
-	if ts.hasRelay() {
+	if ts.HasRelay() {
 		ts.relayHosts.Add(ch.ServiceName(), ch.PeerInfo().HostPort)
 	}
 	return ch
@@ -186,7 +195,9 @@ func (ts *TestServer) addRelay() {
 	ts.relayIdx = len(ts.channels) - 1
 }
 
-func (ts *TestServer) hasRelay() bool {
+// HasRelay indicates whether this TestServer has a relay interposed between the
+// server and clients.
+func (ts *TestServer) HasRelay() bool {
 	return ts.relayIdx > 0
 }
 
