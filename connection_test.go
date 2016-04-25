@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/goroutines"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"golang.org/x/net/context"
 )
@@ -370,19 +369,21 @@ func (h onErrorTestHandler) OnError(ctx context.Context, err error) {
 }
 
 func TestTimeout(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// TODO: Add relaying.
+	opts := testutils.NewOpts()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// onError may be called when the block call tries to write the call response.
 		onError := func(ctx context.Context, err error) {
 			assert.Equal(t, ErrTimeout, err, "onError err should be ErrTimeout")
 			assert.Equal(t, context.DeadlineExceeded, ctx.Err(), "Context should timeout")
 		}
 		testHandler := onErrorTestHandler{newTestHandler(t), onError}
-		ch.Register(raw.Wrap(testHandler), "block")
+		ts.Register(raw.Wrap(testHandler), "block")
 
 		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "block", []byte("Arg2"), []byte("Arg3"))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "block", []byte("Arg2"), []byte("Arg3"))
 		assert.Equal(t, ErrTimeout, err)
 
 		// Verify the server-side receives an error from the context.
@@ -418,7 +419,6 @@ func TestLargeTimeout(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "echo", testArg2, testArg3)
 		assert.NoError(t, err, "Call failed")
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestFragmentation(t *testing.T) {
@@ -457,11 +457,13 @@ func TestFragmentationSlowReader(t *testing.T) {
 	}
 
 	// Inbound forward will timeout and cause a warning log.
+	// TODO: Add relay.
 	opts := testutils.NewOpts().
 		AddLogFilter("Unable to forward frame", 1).
 		AddLogFilter("Connection error", 1)
-	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
-		ch.Register(HandlerFunc(handler), "echo")
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(HandlerFunc(handler), "echo")
 
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
 		arg3 := testutils.RandBytes(MaxFramePayloadSize * (MexChannelBufferSize + 1))
@@ -469,7 +471,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", arg2, arg3)
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "echo", arg2, arg3)
 		assert.Error(t, err, "Call should timeout due to slow reader")
 
 		close(startReading)
@@ -479,13 +481,13 @@ func TestFragmentationSlowReader(t *testing.T) {
 			t.Errorf("Handler not called, context timeout may be too low")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteArg3AfterTimeout(t *testing.T) {
 	// The channel reads and writes during timeouts, causing warning logs.
+	// TODO: Add relay.
 	opts := testutils.NewOpts().DisableLogVerification()
-	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 
 		handler := func(ctx context.Context, call *InboundCall) {
@@ -505,11 +507,11 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 				runtime.Gosched()
 			}
 		}
-		ch.Register(HandlerFunc(handler), "call")
+		ts.Register(HandlerFunc(handler), "call")
 
 		ctx, cancel := NewContext(testutils.Timeout(20 * time.Millisecond))
 		defer cancel()
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, nil)
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "call", nil, nil)
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 
 		// Wait for the write to complete, make sure there's no errors.
@@ -519,12 +521,13 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		case <-timedOut:
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
 	// TODO: Make this test block at different points (e.g. before, during read/write).
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// TODO: Add relay.
+	opts := testutils.NewOpts()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 		done := make(chan struct{})
 		handler := func(ctx context.Context, call *InboundCall) {
@@ -536,11 +539,11 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 			assert.Equal(t, ErrTimeout, response.SendSystemError(ErrServerBusy), "SendSystemError should fail")
 			close(done)
 		}
-		ch.Register(HandlerFunc(handler), "call")
+		ts.Register(HandlerFunc(handler), "call")
 
 		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "call", nil, testutils.RandBytes(100000))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "call", nil, testutils.RandBytes(100000))
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 		close(timedOut)
 
@@ -550,7 +553,6 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 			t.Errorf("Handler not called, timeout may be too low")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteAfterConnectionError(t *testing.T) {
@@ -611,7 +613,6 @@ func TestReadTimeout(t *testing.T) {
 			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteTimeout(t *testing.T) {
