@@ -54,6 +54,10 @@ type ChannelOpts struct {
 	// OnlyRelay instructs TestServer the test must only be run with a relay.
 	OnlyRelay bool
 
+	// RunCount is the number of times the test should be run. Zero or
+	// negative values are treated as a single run.
+	RunCount int
+
 	// optFn is run with the channel options before creating the channel.
 	optFn func(*ChannelOpts)
 
@@ -157,6 +161,12 @@ func (o *ChannelOpts) SetRelay() *ChannelOpts {
 func (o *ChannelOpts) SetRelayOnly() *ChannelOpts {
 	o.OnlyRelay = true
 	o.IncludeRelay = true
+	return o
+}
+
+// SetRunCount sets the number of times run the test.
+func (o *ChannelOpts) SetRunCount(n int) *ChannelOpts {
+	o.RunCount = n
 	return o
 }
 
