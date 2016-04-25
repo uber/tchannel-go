@@ -84,10 +84,15 @@ func (r *frameRelay) relayConn(c net.Conn) {
 		return
 	}
 	r.Lock()
-	r.conns = append(r.conns, outC)
-	r.Unlock()
+	defer r.Unlock()
 
-	r.wg.Add(2)
+	r.conns = append(r.conns, outC)
+	if r.closed.Load() == 0 {
+		r.wg.Add(2)
+	} else {
+		return
+	}
+
 	go r.relayBetween(true /* outgoing */, c, outC)
 	go r.relayBetween(false /* outgoing */, outC, c)
 }
