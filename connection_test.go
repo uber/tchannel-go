@@ -369,7 +369,7 @@ func (h onErrorTestHandler) OnError(ctx context.Context, err error) {
 }
 
 func TestTimeout(t *testing.T) {
-	// TODO: Add relaying.
+	// TODO: Test with relay (once relays handle timeouts).
 	opts := testutils.NewOpts()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// onError may be called when the block call tries to write the call response.
@@ -457,7 +457,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 	}
 
 	// Inbound forward will timeout and cause a warning log.
-	// TODO: Add relay.
+	// TODO: Test with relay (once relays handle timeouts).
 	opts := testutils.NewOpts().
 		AddLogFilter("Unable to forward frame", 1).
 		AddLogFilter("Connection error", 1)
@@ -485,7 +485,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 
 func TestWriteArg3AfterTimeout(t *testing.T) {
 	// The channel reads and writes during timeouts, causing warning logs.
-	// TODO: Add relay.
+	// TODO: Test with relay (once relays handle timeouts).
 	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
@@ -525,7 +525,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
 	// TODO: Make this test block at different points (e.g. before, during read/write).
-	// TODO: Add relay.
+	// TODO: Test with relay (once relays handle timeouts).
 	opts := testutils.NewOpts()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
