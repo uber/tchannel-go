@@ -77,23 +77,43 @@ func (s *tchanSecondServiceServer) Methods() []string {
 }
 
 func (s *tchanSecondServiceServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanSecondServiceServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "Echo":
-		return s.handleEcho(ctx, protocol)
+		args, err = s.readEcho(protocol)
+	default:
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return
+}
 
+func (s *tchanSecondServiceServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "Echo":
+		return s.handleEcho(ctx, args.(SecondServiceEchoArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanSecondServiceServer) handleEcho(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanSecondServiceServer) readEcho(protocol athrift.TProtocol) (interface{}, error) {
 	var req SecondServiceEchoArgs
-	var res SecondServiceEchoResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanSecondServiceServer) handleEcho(ctx thrift.Context, req SecondServiceEchoArgs) (bool, athrift.TStruct, error) {
+	var res SecondServiceEchoResult
 	r, err :=
 		s.handler.Echo(ctx, req.Arg)
 
@@ -172,25 +192,47 @@ func (s *tchanSimpleServiceServer) Methods() []string {
 }
 
 func (s *tchanSimpleServiceServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanSimpleServiceServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "Call":
-		return s.handleCall(ctx, protocol)
+		args, err = s.readCall(protocol)
 	case "Simple":
-		return s.handleSimple(ctx, protocol)
+		args, err = s.readSimple(protocol)
+	default:
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return
+}
 
+func (s *tchanSimpleServiceServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "Call":
+		return s.handleCall(ctx, args.(SimpleServiceCallArgs))
+	case "Simple":
+		return s.handleSimple(ctx, args.(SimpleServiceSimpleArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanSimpleServiceServer) handleCall(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanSimpleServiceServer) readCall(protocol athrift.TProtocol) (interface{}, error) {
 	var req SimpleServiceCallArgs
-	var res SimpleServiceCallResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanSimpleServiceServer) handleCall(ctx thrift.Context, req SimpleServiceCallArgs) (bool, athrift.TStruct, error) {
+	var res SimpleServiceCallResult
 	r, err :=
 		s.handler.Call(ctx, req.Arg)
 
@@ -203,14 +245,17 @@ func (s *tchanSimpleServiceServer) handleCall(ctx thrift.Context, protocol athri
 	return err == nil, &res, nil
 }
 
-func (s *tchanSimpleServiceServer) handleSimple(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanSimpleServiceServer) readSimple(protocol athrift.TProtocol) (interface{}, error) {
 	var req SimpleServiceSimpleArgs
-	var res SimpleServiceSimpleResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanSimpleServiceServer) handleSimple(ctx thrift.Context, req SimpleServiceSimpleArgs) (bool, athrift.TStruct, error) {
+	var res SimpleServiceSimpleResult
 	err :=
 		s.handler.Simple(ctx)
 

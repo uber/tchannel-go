@@ -83,23 +83,43 @@ func (s *tchanBaseServer) Methods() []string {
 }
 
 func (s *tchanBaseServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanBaseServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "BaseCall":
-		return s.handleBaseCall(ctx, protocol)
+		args, err = s.readBaseCall(protocol)
+	default:
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return
+}
 
+func (s *tchanBaseServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "BaseCall":
+		return s.handleBaseCall(ctx, args.(BaseBaseCallArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanBaseServer) handleBaseCall(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanBaseServer) readBaseCall(protocol athrift.TProtocol) (interface{}, error) {
 	var req BaseBaseCallArgs
-	var res BaseBaseCallResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanBaseServer) handleBaseCall(ctx thrift.Context, req BaseBaseCallArgs) (bool, athrift.TStruct, error) {
+	var res BaseBaseCallResult
 	err :=
 		s.handler.BaseCall(ctx)
 
@@ -193,29 +213,55 @@ func (s *tchanFirstServer) Methods() []string {
 }
 
 func (s *tchanFirstServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanFirstServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "AppError":
-		return s.handleAppError(ctx, protocol)
+		args, err = s.readAppError(protocol)
 	case "Echo":
-		return s.handleEcho(ctx, protocol)
+		args, err = s.readEcho(protocol)
 	case "Healthcheck":
-		return s.handleHealthcheck(ctx, protocol)
-
+		args, err = s.readHealthcheck(protocol)
 	case "BaseCall":
-		return s.TChanServer.Handle(ctx, methodName, protocol)
+		args, err = s.readBaseCall(protocol)
+	default:
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return
+}
+
+func (s *tchanFirstServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "AppError":
+		return s.handleAppError(ctx, args.(FirstAppErrorArgs))
+	case "Echo":
+		return s.handleEcho(ctx, args.(FirstEchoArgs))
+	case "Healthcheck":
+		return s.handleHealthcheck(ctx, args.(FirstHealthcheckArgs))
+	case "BaseCall":
+		return s.handleBaseCall(ctx, args.(BaseBaseCallArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanFirstServer) handleAppError(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanFirstServer) readAppError(protocol athrift.TProtocol) (interface{}, error) {
 	var req FirstAppErrorArgs
-	var res FirstAppErrorResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanFirstServer) handleAppError(ctx thrift.Context, req FirstAppErrorArgs) (bool, athrift.TStruct, error) {
+	var res FirstAppErrorResult
 	err :=
 		s.handler.AppError(ctx)
 
@@ -227,14 +273,17 @@ func (s *tchanFirstServer) handleAppError(ctx thrift.Context, protocol athrift.T
 	return err == nil, &res, nil
 }
 
-func (s *tchanFirstServer) handleEcho(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanFirstServer) readEcho(protocol athrift.TProtocol) (interface{}, error) {
 	var req FirstEchoArgs
-	var res FirstEchoResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanFirstServer) handleEcho(ctx thrift.Context, req FirstEchoArgs) (bool, athrift.TStruct, error) {
+	var res FirstEchoResult
 	r, err :=
 		s.handler.Echo(ctx, req.Msg)
 
@@ -247,14 +296,17 @@ func (s *tchanFirstServer) handleEcho(ctx thrift.Context, protocol athrift.TProt
 	return err == nil, &res, nil
 }
 
-func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanFirstServer) readHealthcheck(protocol athrift.TProtocol) (interface{}, error) {
 	var req FirstHealthcheckArgs
-	var res FirstHealthcheckResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, req FirstHealthcheckArgs) (bool, athrift.TStruct, error) {
+	var res FirstHealthcheckResult
 	r, err :=
 		s.handler.Healthcheck(ctx)
 
@@ -262,6 +314,28 @@ func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, protocol athrif
 		return false, nil, err
 	} else {
 		res.Success = r
+	}
+
+	return err == nil, &res, nil
+}
+
+func (s *tchanFirstServer) readBaseCall(protocol athrift.TProtocol) (interface{}, error) {
+	var req BaseBaseCallArgs
+
+	if err := req.Read(protocol); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func (s *tchanFirstServer) handleBaseCall(ctx thrift.Context, req BaseBaseCallArgs) (bool, athrift.TStruct, error) {
+	var res BaseBaseCallResult
+	err :=
+		s.handler.BaseCall(ctx)
+
+	if err != nil {
+		return false, nil, err
+	} else {
 	}
 
 	return err == nil, &res, nil
@@ -317,23 +391,43 @@ func (s *tchanSecondServer) Methods() []string {
 }
 
 func (s *tchanSecondServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanSecondServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "Test":
-		return s.handleTest(ctx, protocol)
+		args, err = s.readTest(protocol)
+	default:
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return
+}
 
+func (s *tchanSecondServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "Test":
+		return s.handleTest(ctx, args.(SecondTestArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanSecondServer) handleTest(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanSecondServer) readTest(protocol athrift.TProtocol) (interface{}, error) {
 	var req SecondTestArgs
-	var res SecondTestResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanSecondServer) handleTest(ctx thrift.Context, req SecondTestArgs) (bool, athrift.TStruct, error) {
+	var res SecondTestResult
 	err :=
 		s.handler.Test(ctx)
 

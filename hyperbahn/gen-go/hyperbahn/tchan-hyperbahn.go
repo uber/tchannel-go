@@ -77,23 +77,43 @@ func (s *tchanHyperbahnServer) Methods() []string {
 }
 
 func (s *tchanHyperbahnServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	args, err := s.GetArgs(methodName, protocol)
+	if err != nil {
+		return false, nil, err
+	}
+	return s.HandleArgs(ctx, methodName, args)
+}
+
+func (s *tchanHyperbahnServer) GetArgs(methodName string, protocol athrift.TProtocol) (args interface{}, err error) {
 	switch methodName {
 	case "discover":
-		return s.handleDiscover(ctx, protocol)
+		args, err = s.readDiscover(protocol)
+	default:
+		err = fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+	return
+}
 
+func (s *tchanHyperbahnServer) HandleArgs(ctx thrift.Context, methodName string, args interface{}) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "discover":
+		return s.handleDiscover(ctx, args.(HyperbahnDiscoverArgs))
 	default:
 		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
 	}
 }
 
-func (s *tchanHyperbahnServer) handleDiscover(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanHyperbahnServer) readDiscover(protocol athrift.TProtocol) (interface{}, error) {
 	var req HyperbahnDiscoverArgs
-	var res HyperbahnDiscoverResult
 
 	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	return req, nil
+}
 
+func (s *tchanHyperbahnServer) handleDiscover(ctx thrift.Context, req HyperbahnDiscoverArgs) (bool, athrift.TStruct, error) {
+	var res HyperbahnDiscoverResult
 	r, err :=
 		s.handler.Discover(ctx, req.Query)
 
