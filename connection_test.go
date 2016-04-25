@@ -157,16 +157,25 @@ func TestDefaultFormat(t *testing.T) {
 func TestRemotePeer(t *testing.T) {
 	tests := []struct {
 		name       string
-		remote     func() *Channel
-		expectedFn func(state *RuntimeState, serverHP string) PeerInfo
+		remote     func(*testutils.TestServer) *Channel
+		expectedFn func(*RuntimeState, *testutils.TestServer) PeerInfo
 	}{
 		{
 			name:   "ephemeral client",
-			remote: func() *Channel { return testutils.NewClient(t, nil) },
-			expectedFn: func(state *RuntimeState, serverHP string) PeerInfo {
-				hostPort := state.RootPeers[serverHP].OutboundConnections[0].LocalHostPort
+			remote: func(ts *testutils.TestServer) *Channel { return ts.NewClient(nil) },
+			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
+				if ts.HasRelay() {
+					// The server should see a call from the relay. Connections from relays
+					// to the receiving service shouldn't be ephemeral.
+					relayInfo := ts.Relay().PeerInfo()
+					return PeerInfo{
+						HostPort:    relayInfo.HostPort,
+						IsEphemeral: false,
+						ProcessName: relayInfo.ProcessName,
+					}
+				}
 				return PeerInfo{
-					HostPort:    hostPort,
+					HostPort:    state.RootPeers[ts.HostPort()].OutboundConnections[0].LocalHostPort,
 					IsEphemeral: true,
 					ProcessName: state.LocalPeer.ProcessName,
 				}
@@ -174,8 +183,17 @@ func TestRemotePeer(t *testing.T) {
 		},
 		{
 			name:   "listening server",
-			remote: func() *Channel { return testutils.NewServer(t, nil) },
-			expectedFn: func(state *RuntimeState, _ string) PeerInfo {
+			remote: func(ts *testutils.TestServer) *Channel { return ts.NewServer(nil) },
+			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
+				if ts.HasRelay() {
+					// Same as above.
+					relayInfo := ts.Relay().PeerInfo()
+					return PeerInfo{
+						HostPort:    relayInfo.HostPort,
+						IsEphemeral: false,
+						ProcessName: relayInfo.ProcessName,
+					}
+				}
 				return PeerInfo{
 					HostPort:    state.LocalPeer.HostPort,
 					IsEphemeral: false,
@@ -189,19 +207,20 @@ func TestRemotePeer(t *testing.T) {
 	defer cancel()
 
 	for _, tt := range tests {
-		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-			remote := tt.remote()
+		opts := testutils.NewOpts().SetServiceName("fake-service").SetRelay()
+		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+			remote := tt.remote(ts)
 			defer remote.Close()
 
 			gotPeer := make(chan PeerInfo, 1)
-			testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				gotPeer <- CurrentCall(ctx).RemotePeer()
 				return &raw.Res{}, nil
 			})
 
-			_, _, _, err := raw.Call(ctx, remote, hostPort, ch.ServiceName(), "test", nil, nil)
+			_, _, _, err := raw.Call(ctx, remote, ts.HostPort(), ts.Server().ServiceName(), "test", nil, nil)
 			assert.NoError(t, err, "%v: Call failed", tt.name)
-			expected := tt.expectedFn(remote.IntrospectState(nil), hostPort)
+			expected := tt.expectedFn(remote.IntrospectState(nil), ts)
 			assert.Equal(t, expected, <-gotPeer, "%v: RemotePeer mismatch", tt.name)
 		})
 	}
