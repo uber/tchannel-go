@@ -27,19 +27,25 @@ import (
 	"github.com/uber/tchannel-go"
 )
 
+func updateOptsLogger(opts *ChannelOpts) {
+	if opts.Logger == nil && *connectionLog {
+		opts.Logger = tchannel.SimpleLogger
+	}
+}
+
 func updateOptsForTest(t testing.TB, opts *ChannelOpts) {
-	opts.optFn = func(opts *ChannelOpts) {
-		// Set a custom logger now.
-		if opts.Logger == nil {
-			tl := newTestLogger(t)
-			opts.Logger = tl
-			opts.addPostFn(func() {
-				tl.report()
-			})
-		}
-		if !opts.LogVerification.Disabled {
-			opts.Logger = opts.LogVerification.WrapLogger(t, opts.Logger)
-		}
+	updateOptsLogger(opts)
+
+	// If there's no logger, then register the test logger which will record
+	// everything to a buffer, and print out the buffer if the test fails.
+	if opts.Logger == nil {
+		tl := newTestLogger(t)
+		opts.Logger = tl
+		opts.addPostFn(tl.report)
+	}
+
+	if !opts.LogVerification.Disabled {
+		opts.Logger = opts.LogVerification.WrapLogger(t, opts.Logger)
 	}
 }
 

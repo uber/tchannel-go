@@ -47,9 +47,6 @@ type ChannelOpts struct {
 	// LogVerification contains options for controlling the log verification.
 	LogVerification LogVerification
 
-	// optFn is run with the channel options before creating the channel.
-	optFn func(*ChannelOpts)
-
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
@@ -157,18 +154,6 @@ func (o *ChannelOpts) AddLogFilter(filter string, maxCount uint, fields ...strin
 
 func (o *ChannelOpts) addPostFn(f func()) {
 	o.postFns = append(o.postFns, f)
-}
-
-// GetTChannelOptions returns the tchannel.ChannelOptions to create a channel.
-// Note: we use a value receiver so this method does not mutate ChannelOpts.
-func (o ChannelOpts) GetTChannelOptions() *tchannel.ChannelOptions {
-	if o.Logger == nil && *connectionLog {
-		o.Logger = tchannel.SimpleLogger
-	}
-	if o.optFn != nil {
-		o.optFn(&o)
-	}
-	return &o.ChannelOptions
 }
 
 func defaultString(v string, defaultValue string) string {

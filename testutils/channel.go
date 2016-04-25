@@ -34,9 +34,7 @@ import (
 // NewServerChannel creates a TChannel that is listening and returns the channel.
 // Passed in options may be mutated (for post-verification of state).
 func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
-	if opts == nil {
-		opts = &ChannelOpts{}
-	}
+	opts = opts.Copy()
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -49,7 +47,8 @@ func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 
 	serviceName := defaultString(opts.ServiceName, DefaultServerName)
 	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+port)
-	ch, err := tchannel.NewChannel(serviceName, opts.GetTChannelOptions())
+	updateOptsLogger(opts)
+	ch, err := tchannel.NewChannel(serviceName, &opts.ChannelOptions)
 	if err != nil {
 		return nil, fmt.Errorf("NewChannel failed: %v", err)
 	}
@@ -66,14 +65,13 @@ var totalClients atomic.Uint32
 // NewClientChannel creates a TChannel that is not listening.
 // Passed in options may be mutated (for post-verification of state).
 func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
-	if opts == nil {
-		opts = &ChannelOpts{}
-	}
+	opts = opts.Copy()
 
 	clientNum := totalClients.Inc()
 	serviceName := defaultString(opts.ServiceName, DefaultClientName)
 	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+fmt.Sprint(clientNum))
-	return tchannel.NewChannel(serviceName, opts.GetTChannelOptions())
+	updateOptsLogger(opts)
+	return tchannel.NewChannel(serviceName, &opts.ChannelOptions)
 }
 
 type rawFuncHandler struct {
