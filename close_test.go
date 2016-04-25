@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	"log"
 	"math/rand"
 	"sync"
 	"testing"
@@ -102,8 +101,6 @@ func TestCloseAfterTimeout(t *testing.T) {
 }
 
 func TestRaceExchangesWithClose(t *testing.T) {
-	log.SetFlags(log.Lmicroseconds)
-
 	var wg sync.WaitGroup
 
 	ctx, cancel := NewContext(testutils.Timeout(70 * time.Millisecond))
@@ -124,7 +121,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 			<-completeCall
 		})
 
-		client := testutils.NewClient(t, nil)
+		client := ts.NewClient(opts)
 		defer client.Close()
 
 		callDone := make(chan struct{})
@@ -142,7 +139,8 @@ func TestRaceExchangesWithClose(t *testing.T) {
 			go func() {
 				defer wg.Done()
 
-				c := testutils.NewClient(t, nil)
+				// We don't use ts.NewClient here to avoid data races.
+				c := testutils.NewClient(t, opts)
 				defer c.Close()
 
 				c.Ping(ctx, ts.HostPort())
@@ -495,7 +493,8 @@ func TestCloseSendError(t *testing.T) {
 		counter atomic.Uint32
 	)
 
-	serverCh := testutils.NewServer(t, nil)
+	opts := testutils.NewOpts().DisableLogVerification()
+	serverCh := testutils.NewServer(t, opts)
 	testutils.RegisterEcho(serverCh, func() {
 		if counter.Inc() > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
@@ -506,7 +505,7 @@ func TestCloseSendError(t *testing.T) {
 		}
 	})
 
-	clientCh := testutils.NewClient(t, nil)
+	clientCh := testutils.NewClient(t, opts)
 
 	// Create a connection that will be shared.
 	require.NoError(t, testutils.Ping(clientCh, serverCh), "Ping from client to server failed")

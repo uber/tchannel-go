@@ -27,8 +27,7 @@ import (
 	"github.com/uber/tchannel-go"
 )
 
-func getOptsForTest(t testing.TB, opts *ChannelOpts) *ChannelOpts {
-	opts = opts.Copy()
+func updateOptsForTest(t testing.TB, opts *ChannelOpts) {
 	opts.optFn = func(opts *ChannelOpts) {
 		// Set a custom logger now.
 		if opts.Logger == nil {
@@ -42,12 +41,12 @@ func getOptsForTest(t testing.TB, opts *ChannelOpts) *ChannelOpts {
 			opts.Logger = opts.LogVerification.WrapLogger(t, opts.Logger)
 		}
 	}
-	return opts
 }
 
 // WithServer sets up a TChannel that is listening and runs the given function with the channel.
 func WithServer(t testing.TB, opts *ChannelOpts, f func(ch *tchannel.Channel, hostPort string)) {
-	opts = getOptsForTest(t, opts)
+	opts = opts.Copy()
+	updateOptsForTest(t, opts)
 	ch := NewServer(t, opts)
 	f(ch, ch.PeerInfo().HostPort)
 	ch.Close()
@@ -55,7 +54,13 @@ func WithServer(t testing.TB, opts *ChannelOpts, f func(ch *tchannel.Channel, ho
 
 // NewServer returns a new TChannel server that listens on :0.
 func NewServer(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
-	opts = getOptsForTest(t, opts)
+	return newServer(t, opts.Copy())
+}
+
+// newServer must be passed non-nil opts that may be mutated to include
+// post-verification steps.
+func newServer(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
+	updateOptsForTest(t, opts)
 	ch, err := NewServerChannel(opts)
 	require.NoError(t, err, "NewServerChannel failed")
 	return ch
@@ -63,8 +68,14 @@ func NewServer(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
 
 // NewClient returns a new TChannel that is not listening.
 func NewClient(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
+	return newClient(t, opts.Copy())
+}
+
+// newClient must be passed non-nil opts that may be mutated to include
+// post-verification steps.
+func newClient(t testing.TB, opts *ChannelOpts) *tchannel.Channel {
+	updateOptsForTest(t, opts)
 	ch, err := NewClientChannel(opts)
 	require.NoError(t, err, "NewServerChannel failed")
 	return ch
-
 }
