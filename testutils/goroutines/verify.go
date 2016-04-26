@@ -46,7 +46,7 @@ func filterStacks(stacks []Stack, skipID int, opts *VerifyOpts) []Stack {
 func isTestStack(s Stack) bool {
 	switch funcName := s.firstFunction; funcName {
 	case "testing.RunTests", "testing.(*T).Run":
-		return s.State() == "chan receive"
+		return strings.HasPrefix(s.State(), "chan receive")
 	case "runtime.goexit":
 		return strings.HasPrefix(s.State(), "syscall")
 	default:
