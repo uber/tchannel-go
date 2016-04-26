@@ -96,16 +96,16 @@ func (p *SecondServiceClient) recvEcho() (value string, err error) {
 		return
 	}
 	if mTypeId == thrift.EXCEPTION {
-		error12 := thrift.NewTApplicationException(thrift.UNKNOWN_APPLICATION_EXCEPTION, "Unknown Exception")
-		var error13 error
-		error13, err = error12.Read(iprot)
+		error15 := thrift.NewTApplicationException(thrift.UNKNOWN_APPLICATION_EXCEPTION, "Unknown Exception")
+		var error16 error
+		error16, err = error15.Read(iprot)
 		if err != nil {
 			return
 		}
 		if err = iprot.ReadMessageEnd(); err != nil {
 			return
 		}
-		err = error13
+		err = error16
 		return
 	}
 	if mTypeId != thrift.REPLY {
@@ -143,9 +143,9 @@ func (p *SecondServiceProcessor) ProcessorMap() map[string]thrift.TProcessorFunc
 
 func NewSecondServiceProcessor(handler SecondService) *SecondServiceProcessor {
 
-	self14 := &SecondServiceProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
-	self14.processorMap["Echo"] = &secondServiceProcessorEcho{handler: handler}
-	return self14
+	self17 := &SecondServiceProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
+	self17.processorMap["Echo"] = &secondServiceProcessorEcho{handler: handler}
+	return self17
 }
 
 func (p *SecondServiceProcessor) Process(iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
@@ -158,12 +158,12 @@ func (p *SecondServiceProcessor) Process(iprot, oprot thrift.TProtocol) (success
 	}
 	iprot.Skip(thrift.STRUCT)
 	iprot.ReadMessageEnd()
-	x15 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
+	x18 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
 	oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
-	x15.Write(oprot)
+	x18.Write(oprot)
 	oprot.WriteMessageEnd()
 	oprot.Flush()
-	return false, x15
+	return false, x18
 
 }
 

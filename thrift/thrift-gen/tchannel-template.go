@@ -98,6 +98,8 @@ type {{ .ServerStruct }} struct {
 
 	{{ end }}
 	handler {{ .Interface }}
+
+	interceptorRunner thrift.InterceptorRunner
 }
 
 // {{ .ServerConstructor }} wraps a handler for {{ .Interface }} so it can be
@@ -105,9 +107,9 @@ type {{ .ServerStruct }} struct {
 func {{ .ServerConstructor }}(handler {{ .Interface }}) thrift.TChanServer {
 	return &{{ .ServerStruct }}{
 		{{ if .HasExtends }}
-			{{ .ExtendsServicePrefix }}{{ .ExtendsService.ServerConstructor }}(handler),
+			TChanServer: {{ .ExtendsServicePrefix }}{{ .ExtendsService.ServerConstructor }}(handler),
 		{{ end }}
-		handler,
+		handler: handler,
 	}
 }
 
@@ -118,12 +120,17 @@ func (s *{{ .ServerStruct }}) Service() string {
 func (s *{{ .ServerStruct }}) Methods() []string {
 	return []string{
 		{{ range .Methods }}
-			"{{ .ThriftName }}",
+			"{{ .ThriftName }}", 
 		{{ end }}
 		{{ range .InheritedMethods }}
 			"{{ . }}",
 		{{ end }}
 	}
+}
+
+// RegisterInterceptors registers the provided interceptors with the server.
+func (s *{{ .ServerStruct }}) RegisterInterceptorRunner(runner thrift.InterceptorRunner) {
+	s.interceptorRunner = runner
 }
 
 func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
@@ -142,46 +149,59 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 }
 
 {{ range .Methods }}
-	func (s *{{ $svc.ServerStruct }}) {{ .HandleFunc }}(ctx {{ contextType }}, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	func (s *{{ $svc.ServerStruct }}) {{ .HandleFunc }}(ctx {{ contextType }}, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 		var req {{ .ArgsType }}
 		var res {{ .ResultType }}
+		const serviceMethod = "{{ $svc.ThriftName }}::{{ .ThriftName }}"
 
-		if err := req.Read(protocol); err != nil {
-			return false, nil, err
+		if readErr := req.Read(protocol); readErr != nil {
+			return false, nil, readErr
+		}
+
+		postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+		defer func () {
+			resp = &res
+			retErr = postRun(resp, err)
+			handled = retErr == nil
+			if retErr != nil {
+				resp = nil
+				{{ if .HasExceptions }}
+				switch v := retErr.(type) {
+					{{ range .Exceptions }}
+					case {{ .ArgType }}:
+						if v == nil {
+							retErr = fmt.Errorf("Handler for {{ .Name }} returned non-nil error type {{ .ArgType }} but nil value")
+						} else {
+							res.{{ .ArgStructName }} = v
+							retErr = nil
+							resp = &res
+						}
+					{{ end }}
+				}
+				{{ end }}
+			}
+		}()
+
+		if err != nil {
+			return
 		}
 
 		{{ if .HasReturn }}
-			r, err :=
+		r, err :=
 		{{ else }}
-			err :=
+		err =
 		{{ end }}
-				s.handler.{{ .Name }}({{ .CallList "req" }})
+			s.handler.{{ .Name }}({{ .CallList "req" }})
 
-		if err != nil {
-			{{ if .HasExceptions }}
-			switch v := err.(type) {
-				{{ range .Exceptions }}
-					case {{ .ArgType }}:
-						if v == nil {
-							return false, nil, fmt.Errorf("Handler for {{ .Name }} returned non-nil error type {{ .ArgType }} but nil value")
-						}
-						res.{{ .ArgStructName }} = v
-				{{ end }}
-					default:
-						return false, nil, err
-			}
-			{{ else }}
-				return false, nil, err
-			{{ end }}
-		} else {
-    {{ if .HasReturn }}
-		  res.Success = {{ .WrapResult "r" }}
+		{{ if .HasReturn }}
+		if err == nil {
+			res.Success = {{ .WrapResult "r" }}
+		}
 		{{ end }}
-    }
 
-		return err == nil, &res, nil
+		return
 	}
-
 {{ end }}
 
 {{ end }}

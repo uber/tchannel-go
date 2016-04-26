@@ -33,6 +33,7 @@ import (
 	. "github.com/uber/tchannel-go/thrift"
 
 	"github.com/apache/thrift/lib/go/thrift"
+	athrift "github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -43,8 +44,9 @@ import (
 )
 
 // Generate the service mocks using go generate.
-//go:generate mockery -name TChanSimpleService
-//go:generate mockery -name TChanSecondService
+//go:generate mockery -name TChanSimpleService -recursive
+//go:generate mockery -name TChanSecondService -recursive
+//go:generate mockery -name Interceptor -recursive
 
 type testArgs struct {
 	server *Server
@@ -226,9 +228,11 @@ func TestClientHostPort(t *testing.T) {
 	assert.Equal(t, "call1", res)
 
 	// When we call using a client that specifies host:port, it should call that server.
-	c2 := gen.NewTChanSecondServiceClient(NewClient(s1ch, s1ch.PeerInfo().ServiceName, &ClientOptions{
-		HostPort: s1ch.PeerInfo().HostPort,
-	}))
+	c2 := gen.NewTChanSecondServiceClient(
+		NewClient(s1ch, s1ch.PeerInfo().ServiceName, &ClientOptions{
+			HostPort: s1ch.PeerInfo().HostPort,
+		}),
+	)
 	mock1.On("Echo", ctxArg(), "call2").Return("call2", nil)
 	res, err = c2.Echo(ctx, "call2")
 	assert.NoError(t, err, "call2 failed")
@@ -297,7 +301,9 @@ func TestThriftTimeout(t *testing.T) {
 
 func TestThriftContextFn(t *testing.T) {
 	withSetup(t, func(ctx Context, args testArgs) {
-		args.server.SetContextFn(func(ctx context.Context, method string, headers map[string]string) Context {
+		args.server.SetContextFn(func(
+			ctx context.Context, method string, headers map[string]string,
+		) Context {
 			return WithHeaders(ctx, map[string]string{"custom": "headers"})
 		})
 
@@ -307,6 +313,161 @@ func TestThriftContextFn(t *testing.T) {
 		})
 		_, err := args.c2.Echo(ctx, "test")
 		assert.NoError(t, err, "Echo failed")
+	})
+}
+
+type interceptor struct {
+	post func(
+		ctx Context, method string, args, response athrift.TStruct, err error,
+	) error
+	pre func(ctx Context, method string, args athrift.TStruct) error
+}
+
+func (i interceptor) Pre(ctx Context, method string, args athrift.TStruct) error {
+	if i.pre == nil {
+		return nil
+	}
+	return i.pre(ctx, method, args)
+}
+
+func (i interceptor) Post(
+	ctx Context, method string, args, response athrift.TStruct, err error,
+) error {
+	if i.post == nil {
+		return err
+	}
+	return i.post(ctx, method, args, response, err)
+}
+
+func TestPreInterceptorCallOrderAndArguments(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		serviceMethod := "SimpleService::Throws"
+		arg := "test"
+		ret := "return"
+
+		firstPreCalled := false
+		secondPreCalled := false
+
+		firstPostCalled := false
+		secondPostCalled := false
+
+		firstInterceptor := &mocks.Interceptor{}
+		secondInterceptor := &mocks.Interceptor{}
+
+		args.server.RegisterInterceptor(firstInterceptor)
+		args.server.RegisterInterceptor(secondInterceptor)
+
+		firstInterceptor.On(
+			"Pre", mock.Anything, serviceMethod, mock.Anything,
+		).Run(func(preArgs mock.Arguments) {
+			throwsArgs := preArgs.Get(2).(*gen.SimpleServiceThrowsArgs)
+			assert.Equal(t, arg, throwsArgs.Arg)
+			assert.False(t, secondPreCalled)
+			firstPreCalled = true
+		}).Return(nil)
+
+		secondInterceptor.On(
+			"Pre", mock.Anything, serviceMethod, mock.Anything,
+		).Run(func(preArgs mock.Arguments) {
+			assert.True(t, firstPreCalled)
+		}).Return(nil)
+
+		args.s1.On("Throws", mock.Anything, arg).Return(ret, nil)
+
+		firstInterceptor.On(
+			"Post", mock.Anything, serviceMethod, mock.Anything, mock.Anything, nil,
+		).Run(func(preArgs mock.Arguments) {
+			assert.True(t, firstPreCalled)
+			assert.True(t, secondPostCalled, "Second post was called first")
+			firstPostCalled = true
+			throwsResult := preArgs.Get(3).(*gen.SimpleServiceThrowsResult)
+			assert.Equal(t, ret, throwsResult.GetSuccess())
+		}).Return(nil)
+
+		secondInterceptor.On(
+			"Post", mock.Anything, serviceMethod, mock.Anything, mock.Anything, nil,
+		).Run(func(preArgs mock.Arguments) {
+			assert.False(t, firstPostCalled, "first post has not yet been called")
+			secondPostCalled = true
+		}).Return(nil)
+
+		_, err := args.c1.Throws(ctx, arg)
+
+		assert.NoError(t, err)
+		mock.AssertExpectationsForObjects(
+			t, firstInterceptor.Mock, secondInterceptor.Mock,
+		)
+	})
+}
+
+func TestPreInterceptorShortCircuiting(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		preError := fmt.Errorf("some error")
+
+		firstInterceptor := &mocks.Interceptor{}
+		errorInterceptor := &mocks.Interceptor{}
+		// This inteceptor should not get called so we call no .Ons on this mock
+		uncalledInterceptor := &mocks.Interceptor{}
+
+		firstInterceptor.On(
+			"Pre", mock.Anything, mock.Anything, mock.Anything,
+		).Return(nil)
+		errorInterceptor.On(
+			"Pre", mock.Anything, mock.Anything, mock.Anything,
+		).Return(preError)
+
+		firstTransformedError := fmt.Errorf("Tranformed")
+		secondTransformedError := &gen.SimpleErr{}
+
+		errorInterceptor.On(
+			"Post", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+			preError,
+		).Return(firstTransformedError)
+		firstInterceptor.On(
+			"Post", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+			firstTransformedError,
+		).Return(secondTransformedError)
+
+		args.server.RegisterInterceptor(firstInterceptor)
+		args.server.RegisterInterceptor(errorInterceptor)
+		args.server.RegisterInterceptor(uncalledInterceptor)
+
+		result, err := args.c1.Throws(ctx, "test")
+
+		assert.Equal(t, result, "")
+		assert.Equal(t, secondTransformedError, err)
+
+		mock.AssertExpectationsForObjects(
+			t, firstInterceptor.Mock, errorInterceptor.Mock, uncalledInterceptor.Mock,
+		)
+	})
+}
+
+func TestSuccessSetProperlyWhenPostAddsException(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		interceptor := &mocks.Interceptor{}
+		simpleError := &gen.SimpleErr{Message: "hey"}
+		interceptor.On(
+			"Pre", mock.Anything, mock.Anything, mock.Anything,
+		).Return(nil)
+		interceptor.On(
+			"Post", mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+			mock.Anything,
+		).Return(simpleError)
+		args.server.RegisterInterceptor(interceptor)
+		args.s1.On("Throws", mock.Anything, mock.Anything).Return("return", nil)
+		_, err := args.c1.Throws(ctx, "test")
+		assert.Equal(t, simpleError, err)
+		interceptor.AssertExpectations(t)
+	})
+}
+
+func TestErrorsHandledCorrectly(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		simpleError := &gen.SimpleErr{Message: "hey"}
+		args.s1.On("Simple", mock.Anything).Return(simpleError)
+		err := args.c1.Simple(ctx)
+		assert.Equal(t, simpleError, err)
 	})
 }
 
@@ -326,14 +487,15 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 
 	// Get client1
 	args.c1, args.c2 = getClients(t, ch)
-
 	f(ctx, args)
 
 	args.s1.AssertExpectations(t)
 	args.s2.AssertExpectations(t)
 }
 
-func setupServer(t *testing.T, h *mocks.TChanSimpleService, sh *mocks.TChanSecondService) (*tchannel.Channel, *Server) {
+func setupServer(
+	t *testing.T, h *mocks.TChanSimpleService, sh *mocks.TChanSecondService,
+) (*tchannel.Channel, *Server) {
 	ch := testutils.NewServer(t, nil)
 	server := NewServer(ch)
 	server.Register(gen.NewTChanSimpleServiceServer(h))

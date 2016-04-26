@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/apache/thrift/lib/go/thrift"
+	athrift "github.com/apache/thrift/lib/go/thrift"
 	tchannel "github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
 )
@@ -38,11 +39,12 @@ type handler struct {
 // Server handles incoming TChannel calls and forwards them to the matching TChanServer.
 type Server struct {
 	sync.RWMutex
-	ch          tchannel.Registrar
-	log         tchannel.Logger
-	handlers    map[string]handler
-	metaHandler *metaHandler
-	ctxFn       func(ctx context.Context, method string, headers map[string]string) Context
+	ch           tchannel.Registrar
+	log          tchannel.Logger
+	handlers     map[string]handler
+	metaHandler  *metaHandler
+	interceptors []Interceptor
+	ctxFn        func(ctx context.Context, method string, headers map[string]string) Context
 }
 
 // NewServer returns a server that can serve thrift services over TChannel.
@@ -79,11 +81,51 @@ func (s *Server) Register(svr TChanServer, opts ...RegisterOption) {
 	for _, m := range svr.Methods() {
 		s.ch.Register(s, service+"::"+m)
 	}
+	if registrar, ok := svr.(InterceptorRunnerRegistrar); ok {
+		registrar.RegisterInterceptorRunner(s)
+	}
 }
 
 // RegisterHealthHandler uses the user-specified function f for the Health endpoint.
 func (s *Server) RegisterHealthHandler(f HealthFunc) {
 	s.metaHandler.setHandler(f)
+}
+
+// RegisterInterceptor adds an interceptor to the server that will be
+// executed before and after each request
+func (s *Server) RegisterInterceptor(interceptor Interceptor) {
+	s.interceptors = append(s.interceptors, interceptor)
+}
+
+func defaultPostRunner(response athrift.TStruct, err error) error {
+	return err
+}
+
+// RunPre executes the pre function intercepters registered on the
+// server until one of them fails, and produces a
+// InterceptorPostRunner that will excute the Post methods of all
+// inteceptors whose Pre methods were executed.
+func (s *Server) RunPre(ctx Context, method string, args thrift.TStruct) (InterceptorPostRunner, error) {
+	if len(s.interceptors) == 0 {
+		return defaultPostRunner, nil
+	}
+	var retErr error
+	postInterceptors := make([]Interceptor, 0, len(s.interceptors))
+	for _, interceptor := range s.interceptors {
+		postInterceptors = append(postInterceptors, interceptor)
+		if retErr = interceptor.Pre(ctx, method, args); retErr != nil {
+			break
+		}
+	}
+
+	postFn := func(response thrift.TStruct, err error) error {
+		for i := len(postInterceptors) - 1; i >= 0; i-- {
+			err = postInterceptors[i].Post(ctx, method, args, response, err)
+		}
+		return err
+	}
+
+	return postFn, retErr
 }
 
 // SetContextFn sets the function used to convert a context.Context to a thrift.Context.
