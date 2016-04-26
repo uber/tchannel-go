@@ -61,6 +61,7 @@ func (r *frameRelay) listen() (listenHostPort string, cancel func()) {
 			r.Lock()
 			r.conns = append(r.conns, c)
 			r.Unlock()
+
 			r.relayConn(c)
 		}
 	}()
@@ -84,8 +85,14 @@ func (r *frameRelay) relayConn(c net.Conn) {
 		return
 	}
 	r.Lock()
+	defer r.Unlock()
+
+	if r.closed.Load() > 0 {
+		outC.Close()
+		return
+	}
+
 	r.conns = append(r.conns, outC)
-	r.Unlock()
 
 	r.wg.Add(2)
 	go r.relayBetween(true /* outgoing */, c, outC)

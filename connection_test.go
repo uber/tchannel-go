@@ -649,7 +649,7 @@ func TestConnectTimeout(t *testing.T) {
 
 		relayFunc := func(outgoing bool, f *Frame) *Frame {
 			select {
-			case <-time.After(200 * time.Millisecond):
+			case <-time.After(testutils.Timeout(200 * time.Millisecond)):
 				return f
 			case <-testComplete:
 				// TODO: We should be able to forward the frame and have this test not fail.
@@ -668,7 +668,7 @@ func TestConnectTimeout(t *testing.T) {
 		// Make a call with a long timeout, but short connect timeout.
 		// We expect the call to fall almost immediately with ErrTimeout.
 		ctx, cancel := NewContextBuilder(2 * time.Second).
-			SetConnectTimeout(time.Millisecond).
+			SetConnectTimeout(testutils.Timeout(100 * time.Millisecond)).
 			Build()
 		defer cancel()
 
