@@ -70,7 +70,7 @@ func TestCloseOnlyListening(t *testing.T) {
 }
 
 func TestCloseNewClient(t *testing.T) {
-	ch := testutils.NewServer(t, nil)
+	ch := testutils.NewClient(t, nil)
 
 	// If there are no connections, then the channel should close immediately.
 	ch.Close()
