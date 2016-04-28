@@ -21,19 +21,31 @@
 package testutils
 
 import (
-	"flag"
 	"fmt"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-var timeoutMultiplier = flag.Float64("timeoutMultiplier", 1, "All calls to {Get,Set}Timeout have their timeout multiplied by this value")
+var timeoutScaleFactor = 1.0
+
+func init() {
+	if v := os.Getenv("TEST_TIMEOUT_SCALE"); v != "" {
+		fv, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			panic(err)
+		}
+		timeoutScaleFactor = fv
+		fmt.Println("Scaling timeouts by factor", timeoutScaleFactor)
+	}
+}
 
 // Timeout returns the timeout multiplied by any set multiplier.
 func Timeout(timeout time.Duration) time.Duration {
-	return time.Duration(*timeoutMultiplier * float64(timeout))
+	return time.Duration(timeoutScaleFactor * float64(timeout))
 }
 
 // getCallerName returns the test name that called this function.
