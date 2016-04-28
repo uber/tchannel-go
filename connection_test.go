@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/goroutines"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"golang.org/x/net/context"
 )
@@ -363,7 +362,6 @@ func TestTimeout(t *testing.T) {
 			t.Errorf("Server did not receive call, may need higher timeout")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestLargeMethod(t *testing.T) {
@@ -387,7 +385,6 @@ func TestLargeTimeout(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", testArg2, testArg3)
 		assert.NoError(t, err, "Call failed")
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestFragmentation(t *testing.T) {
@@ -447,7 +444,6 @@ func TestFragmentationSlowReader(t *testing.T) {
 			t.Errorf("Handler not called, context timeout may be too low")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteArg3AfterTimeout(t *testing.T) {
@@ -487,7 +483,6 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		case <-timedOut:
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
@@ -518,7 +513,6 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 			t.Errorf("Handler not called, timeout may be too low")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteAfterConnectionError(t *testing.T) {
@@ -576,7 +570,6 @@ func TestReadTimeout(t *testing.T) {
 			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
 		}
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestWriteTimeout(t *testing.T) {
@@ -597,7 +590,6 @@ func TestWriteTimeout(t *testing.T) {
 		_, err = io.Copy(writer, testreader.Looper([]byte{1}))
 		assert.Equal(t, ErrTimeout, err, "Write should fail with timeout")
 	})
-	goroutines.VerifyNoLeaks(t, nil)
 }
 
 func TestGracefulClose(t *testing.T) {
