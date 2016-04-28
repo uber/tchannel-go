@@ -8,6 +8,9 @@ go:
   - 1.6
   - tip
 install: make install_ci
+env:
+ # Set higher timeouts for Travis
+ - TEST_TIMEOUT_SCALE=20
 script:
  - make test_ci
  - make cover_ci
