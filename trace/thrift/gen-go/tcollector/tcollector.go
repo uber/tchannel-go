@@ -478,7 +478,7 @@ func (p *tCollectorProcessorGetSamplingStrategy) Process(seqId int32, iprot, opr
 // Attributes:
 //  - Span
 type TCollectorSubmitArgs struct {
-	Span *Span `thrift:"span,1" json:"span"`
+	Span *Span `thrift:"span,1" db:"span" json:"span"`
 }
 
 func NewTCollectorSubmitArgs() *TCollectorSubmitArgs {
@@ -512,7 +512,7 @@ func (p *TCollectorSubmitArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -530,7 +530,7 @@ func (p *TCollectorSubmitArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *TCollectorSubmitArgs) readField1(iprot thrift.TProtocol) error {
+func (p *TCollectorSubmitArgs) ReadField1(iprot thrift.TProtocol) error {
 	p.Span = &Span{}
 	if err := p.Span.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Span), err)
@@ -577,7 +577,7 @@ func (p *TCollectorSubmitArgs) String() string {
 // Attributes:
 //  - Success
 type TCollectorSubmitResult struct {
-	Success *Response `thrift:"success,0" json:"success,omitempty"`
+	Success *Response `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewTCollectorSubmitResult() *TCollectorSubmitResult {
@@ -611,7 +611,7 @@ func (p *TCollectorSubmitResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -629,7 +629,7 @@ func (p *TCollectorSubmitResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *TCollectorSubmitResult) readField0(iprot thrift.TProtocol) error {
+func (p *TCollectorSubmitResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &Response{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)
@@ -678,7 +678,7 @@ func (p *TCollectorSubmitResult) String() string {
 // Attributes:
 //  - Spans
 type TCollectorSubmitBatchArgs struct {
-	Spans []*Span `thrift:"spans,1" json:"spans"`
+	Spans []*Span `thrift:"spans,1" db:"spans" json:"spans"`
 }
 
 func NewTCollectorSubmitBatchArgs() *TCollectorSubmitBatchArgs {
@@ -703,7 +703,7 @@ func (p *TCollectorSubmitBatchArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -721,7 +721,7 @@ func (p *TCollectorSubmitBatchArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *TCollectorSubmitBatchArgs) readField1(iprot thrift.TProtocol) error {
+func (p *TCollectorSubmitBatchArgs) ReadField1(iprot thrift.TProtocol) error {
 	_, size, err := iprot.ReadListBegin()
 	if err != nil {
 		return thrift.PrependError("error reading list begin: ", err)
@@ -788,7 +788,7 @@ func (p *TCollectorSubmitBatchArgs) String() string {
 // Attributes:
 //  - Success
 type TCollectorSubmitBatchResult struct {
-	Success []*Response `thrift:"success,0" json:"success,omitempty"`
+	Success []*Response `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewTCollectorSubmitBatchResult() *TCollectorSubmitBatchResult {
@@ -819,7 +819,7 @@ func (p *TCollectorSubmitBatchResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -837,7 +837,7 @@ func (p *TCollectorSubmitBatchResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *TCollectorSubmitBatchResult) readField0(iprot thrift.TProtocol) error {
+func (p *TCollectorSubmitBatchResult) ReadField0(iprot thrift.TProtocol) error {
 	_, size, err := iprot.ReadListBegin()
 	if err != nil {
 		return thrift.PrependError("error reading list begin: ", err)
@@ -906,7 +906,7 @@ func (p *TCollectorSubmitBatchResult) String() string {
 // Attributes:
 //  - ServiceName
 type TCollectorGetSamplingStrategyArgs struct {
-	ServiceName string `thrift:"serviceName,1" json:"serviceName"`
+	ServiceName string `thrift:"serviceName,1" db:"serviceName" json:"serviceName"`
 }
 
 func NewTCollectorGetSamplingStrategyArgs() *TCollectorGetSamplingStrategyArgs {
@@ -931,7 +931,7 @@ func (p *TCollectorGetSamplingStrategyArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -949,7 +949,7 @@ func (p *TCollectorGetSamplingStrategyArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *TCollectorGetSamplingStrategyArgs) readField1(iprot thrift.TProtocol) error {
+func (p *TCollectorGetSamplingStrategyArgs) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -997,7 +997,7 @@ func (p *TCollectorGetSamplingStrategyArgs) String() string {
 // Attributes:
 //  - Success
 type TCollectorGetSamplingStrategyResult struct {
-	Success *SamplingStrategyResponse `thrift:"success,0" json:"success,omitempty"`
+	Success *SamplingStrategyResponse `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewTCollectorGetSamplingStrategyResult() *TCollectorGetSamplingStrategyResult {
@@ -1031,7 +1031,7 @@ func (p *TCollectorGetSamplingStrategyResult) Read(iprot thrift.TProtocol) error
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -1049,7 +1049,7 @@ func (p *TCollectorGetSamplingStrategyResult) Read(iprot thrift.TProtocol) error
 	return nil
 }
 
-func (p *TCollectorGetSamplingStrategyResult) readField0(iprot thrift.TProtocol) error {
+func (p *TCollectorGetSamplingStrategyResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &SamplingStrategyResponse{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)

@@ -5,6 +5,8 @@ package tcollector
 
 import (
 	"bytes"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"github.com/apache/thrift/lib/go/thrift"
 )
@@ -83,6 +85,22 @@ func (p *AnnotationType) UnmarshalText(text []byte) error {
 	return nil
 }
 
+func (p *AnnotationType) Scan(value interface{}) error {
+	v, ok := value.(int64)
+	if !ok {
+		return errors.New("Scan value is not int64")
+	}
+	*p = AnnotationType(v)
+	return nil
+}
+
+func (p *AnnotationType) Value() (driver.Value, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return int64(*p), nil
+}
+
 type SamplingStrategyType int64
 
 const (
@@ -125,14 +143,30 @@ func (p *SamplingStrategyType) UnmarshalText(text []byte) error {
 	return nil
 }
 
+func (p *SamplingStrategyType) Scan(value interface{}) error {
+	v, ok := value.(int64)
+	if !ok {
+		return errors.New("Scan value is not int64")
+	}
+	*p = SamplingStrategyType(v)
+	return nil
+}
+
+func (p *SamplingStrategyType) Value() (driver.Value, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return int64(*p), nil
+}
+
 // Attributes:
 //  - Ipv4
 //  - Port
 //  - ServiceName
 type Endpoint struct {
-	Ipv4        int32  `thrift:"ipv4,1,required" json:"ipv4"`
-	Port        int32  `thrift:"port,2,required" json:"port"`
-	ServiceName string `thrift:"serviceName,3,required" json:"serviceName"`
+	Ipv4        int32  `thrift:"ipv4,1,required" db:"ipv4" json:"ipv4"`
+	Port        int32  `thrift:"port,2,required" db:"port" json:"port"`
+	ServiceName string `thrift:"serviceName,3,required" db:"serviceName" json:"serviceName"`
 }
 
 func NewEndpoint() *Endpoint {
@@ -169,17 +203,17 @@ func (p *Endpoint) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetIpv4 = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetPort = true
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 			issetServiceName = true
@@ -207,7 +241,7 @@ func (p *Endpoint) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Endpoint) readField1(iprot thrift.TProtocol) error {
+func (p *Endpoint) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -216,7 +250,7 @@ func (p *Endpoint) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Endpoint) readField2(iprot thrift.TProtocol) error {
+func (p *Endpoint) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -225,7 +259,7 @@ func (p *Endpoint) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Endpoint) readField3(iprot thrift.TProtocol) error {
+func (p *Endpoint) ReadField3(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 3: ", err)
 	} else {
@@ -307,9 +341,9 @@ func (p *Endpoint) String() string {
 //  - Value
 //  - Duration
 type Annotation struct {
-	Timestamp float64 `thrift:"timestamp,1,required" json:"timestamp"`
-	Value     string  `thrift:"value,2,required" json:"value"`
-	Duration  *int32  `thrift:"duration,3" json:"duration,omitempty"`
+	Timestamp float64 `thrift:"timestamp,1,required" db:"timestamp" json:"timestamp"`
+	Value     string  `thrift:"value,2,required" db:"value" json:"value"`
+	Duration  *int32  `thrift:"duration,3" db:"duration" json:"duration,omitempty"`
 }
 
 func NewAnnotation() *Annotation {
@@ -354,17 +388,17 @@ func (p *Annotation) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetTimestamp = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetValue = true
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 		default:
@@ -388,7 +422,7 @@ func (p *Annotation) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Annotation) readField1(iprot thrift.TProtocol) error {
+func (p *Annotation) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadDouble(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -397,7 +431,7 @@ func (p *Annotation) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Annotation) readField2(iprot thrift.TProtocol) error {
+func (p *Annotation) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -406,7 +440,7 @@ func (p *Annotation) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Annotation) readField3(iprot thrift.TProtocol) error {
+func (p *Annotation) ReadField3(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 3: ", err)
 	} else {
@@ -494,13 +528,13 @@ func (p *Annotation) String() string {
 //  - IntValue
 //  - AnnotationType
 type BinaryAnnotation struct {
-	Key            string         `thrift:"key,1,required" json:"key"`
-	StringValue    *string        `thrift:"stringValue,2" json:"stringValue,omitempty"`
-	DoubleValue    *float64       `thrift:"doubleValue,3" json:"doubleValue,omitempty"`
-	BoolValue      *bool          `thrift:"boolValue,4" json:"boolValue,omitempty"`
-	BytesValue     []byte         `thrift:"bytesValue,5" json:"bytesValue,omitempty"`
-	IntValue       *int64         `thrift:"intValue,6" json:"intValue,omitempty"`
-	AnnotationType AnnotationType `thrift:"annotationType,7,required" json:"annotationType"`
+	Key            string         `thrift:"key,1,required" db:"key" json:"key"`
+	StringValue    *string        `thrift:"stringValue,2" db:"stringValue" json:"stringValue,omitempty"`
+	DoubleValue    *float64       `thrift:"doubleValue,3" db:"doubleValue" json:"doubleValue,omitempty"`
+	BoolValue      *bool          `thrift:"boolValue,4" db:"boolValue" json:"boolValue,omitempty"`
+	BytesValue     []byte         `thrift:"bytesValue,5" db:"bytesValue" json:"bytesValue,omitempty"`
+	IntValue       *int64         `thrift:"intValue,6" db:"intValue" json:"intValue,omitempty"`
+	AnnotationType AnnotationType `thrift:"annotationType,7,required" db:"annotationType" json:"annotationType"`
 }
 
 func NewBinaryAnnotation() *BinaryAnnotation {
@@ -594,32 +628,32 @@ func (p *BinaryAnnotation) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetKey = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 		case 4:
-			if err := p.readField4(iprot); err != nil {
+			if err := p.ReadField4(iprot); err != nil {
 				return err
 			}
 		case 5:
-			if err := p.readField5(iprot); err != nil {
+			if err := p.ReadField5(iprot); err != nil {
 				return err
 			}
 		case 6:
-			if err := p.readField6(iprot); err != nil {
+			if err := p.ReadField6(iprot); err != nil {
 				return err
 			}
 		case 7:
-			if err := p.readField7(iprot); err != nil {
+			if err := p.ReadField7(iprot); err != nil {
 				return err
 			}
 			issetAnnotationType = true
@@ -644,7 +678,7 @@ func (p *BinaryAnnotation) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField1(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -653,7 +687,7 @@ func (p *BinaryAnnotation) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField2(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -662,7 +696,7 @@ func (p *BinaryAnnotation) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField3(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField3(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadDouble(); err != nil {
 		return thrift.PrependError("error reading field 3: ", err)
 	} else {
@@ -671,7 +705,7 @@ func (p *BinaryAnnotation) readField3(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField4(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField4(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBool(); err != nil {
 		return thrift.PrependError("error reading field 4: ", err)
 	} else {
@@ -680,7 +714,7 @@ func (p *BinaryAnnotation) readField4(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField5(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField5(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBinary(); err != nil {
 		return thrift.PrependError("error reading field 5: ", err)
 	} else {
@@ -689,7 +723,7 @@ func (p *BinaryAnnotation) readField5(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField6(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField6(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI64(); err != nil {
 		return thrift.PrependError("error reading field 6: ", err)
 	} else {
@@ -698,7 +732,7 @@ func (p *BinaryAnnotation) readField6(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BinaryAnnotation) readField7(iprot thrift.TProtocol) error {
+func (p *BinaryAnnotation) ReadField7(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 7: ", err)
 	} else {
@@ -861,15 +895,15 @@ func (p *BinaryAnnotation) String() string {
 //  - Debug
 //  - SpanHost
 type Span struct {
-	TraceId           []byte              `thrift:"traceId,1,required" json:"traceId"`
-	Host              *Endpoint           `thrift:"host,2,required" json:"host"`
-	Name              string              `thrift:"name,3,required" json:"name"`
-	ID                []byte              `thrift:"id,4,required" json:"id"`
-	ParentId          []byte              `thrift:"parentId,5,required" json:"parentId"`
-	Annotations       []*Annotation       `thrift:"annotations,6,required" json:"annotations"`
-	BinaryAnnotations []*BinaryAnnotation `thrift:"binaryAnnotations,7,required" json:"binaryAnnotations"`
-	Debug             bool                `thrift:"debug,8" json:"debug,omitempty"`
-	SpanHost          *Endpoint           `thrift:"spanHost,9" json:"spanHost,omitempty"`
+	TraceId           []byte              `thrift:"traceId,1,required" db:"traceId" json:"traceId"`
+	Host              *Endpoint           `thrift:"host,2,required" db:"host" json:"host"`
+	Name              string              `thrift:"name,3,required" db:"name" json:"name"`
+	ID                []byte              `thrift:"id,4,required" db:"id" json:"id"`
+	ParentId          []byte              `thrift:"parentId,5,required" db:"parentId" json:"parentId"`
+	Annotations       []*Annotation       `thrift:"annotations,6,required" db:"annotations" json:"annotations"`
+	BinaryAnnotations []*BinaryAnnotation `thrift:"binaryAnnotations,7,required" db:"binaryAnnotations" json:"binaryAnnotations"`
+	Debug             bool                `thrift:"debug,8" db:"debug" json:"debug,omitempty"`
+	SpanHost          *Endpoint           `thrift:"spanHost,9" db:"spanHost" json:"spanHost,omitempty"`
 }
 
 func NewSpan() *Span {
@@ -958,46 +992,46 @@ func (p *Span) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetTraceId = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetHost = true
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 			issetName = true
 		case 4:
-			if err := p.readField4(iprot); err != nil {
+			if err := p.ReadField4(iprot); err != nil {
 				return err
 			}
 			issetID = true
 		case 5:
-			if err := p.readField5(iprot); err != nil {
+			if err := p.ReadField5(iprot); err != nil {
 				return err
 			}
 			issetParentId = true
 		case 6:
-			if err := p.readField6(iprot); err != nil {
+			if err := p.ReadField6(iprot); err != nil {
 				return err
 			}
 			issetAnnotations = true
 		case 7:
-			if err := p.readField7(iprot); err != nil {
+			if err := p.ReadField7(iprot); err != nil {
 				return err
 			}
 			issetBinaryAnnotations = true
 		case 8:
-			if err := p.readField8(iprot); err != nil {
+			if err := p.ReadField8(iprot); err != nil {
 				return err
 			}
 		case 9:
-			if err := p.readField9(iprot); err != nil {
+			if err := p.ReadField9(iprot); err != nil {
 				return err
 			}
 		default:
@@ -1036,7 +1070,7 @@ func (p *Span) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField1(iprot thrift.TProtocol) error {
+func (p *Span) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBinary(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -1045,7 +1079,7 @@ func (p *Span) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField2(iprot thrift.TProtocol) error {
+func (p *Span) ReadField2(iprot thrift.TProtocol) error {
 	p.Host = &Endpoint{}
 	if err := p.Host.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Host), err)
@@ -1053,7 +1087,7 @@ func (p *Span) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField3(iprot thrift.TProtocol) error {
+func (p *Span) ReadField3(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 3: ", err)
 	} else {
@@ -1062,7 +1096,7 @@ func (p *Span) readField3(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField4(iprot thrift.TProtocol) error {
+func (p *Span) ReadField4(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBinary(); err != nil {
 		return thrift.PrependError("error reading field 4: ", err)
 	} else {
@@ -1071,7 +1105,7 @@ func (p *Span) readField4(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField5(iprot thrift.TProtocol) error {
+func (p *Span) ReadField5(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBinary(); err != nil {
 		return thrift.PrependError("error reading field 5: ", err)
 	} else {
@@ -1080,7 +1114,7 @@ func (p *Span) readField5(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField6(iprot thrift.TProtocol) error {
+func (p *Span) ReadField6(iprot thrift.TProtocol) error {
 	_, size, err := iprot.ReadListBegin()
 	if err != nil {
 		return thrift.PrependError("error reading list begin: ", err)
@@ -1100,7 +1134,7 @@ func (p *Span) readField6(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField7(iprot thrift.TProtocol) error {
+func (p *Span) ReadField7(iprot thrift.TProtocol) error {
 	_, size, err := iprot.ReadListBegin()
 	if err != nil {
 		return thrift.PrependError("error reading list begin: ", err)
@@ -1120,7 +1154,7 @@ func (p *Span) readField7(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField8(iprot thrift.TProtocol) error {
+func (p *Span) ReadField8(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBool(); err != nil {
 		return thrift.PrependError("error reading field 8: ", err)
 	} else {
@@ -1129,7 +1163,7 @@ func (p *Span) readField8(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Span) readField9(iprot thrift.TProtocol) error {
+func (p *Span) ReadField9(iprot thrift.TProtocol) error {
 	p.SpanHost = &Endpoint{}
 	if err := p.SpanHost.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.SpanHost), err)
@@ -1324,7 +1358,7 @@ func (p *Span) String() string {
 // Attributes:
 //  - Ok
 type Response struct {
-	Ok bool `thrift:"ok,1,required" json:"ok"`
+	Ok bool `thrift:"ok,1,required" db:"ok" json:"ok"`
 }
 
 func NewResponse() *Response {
@@ -1351,7 +1385,7 @@ func (p *Response) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetOk = true
@@ -1373,7 +1407,7 @@ func (p *Response) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Response) readField1(iprot thrift.TProtocol) error {
+func (p *Response) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBool(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -1421,7 +1455,7 @@ func (p *Response) String() string {
 // Attributes:
 //  - SamplingRate
 type ProbabilisticSamplingStrategy struct {
-	SamplingRate float64 `thrift:"samplingRate,1,required" json:"samplingRate"`
+	SamplingRate float64 `thrift:"samplingRate,1,required" db:"samplingRate" json:"samplingRate"`
 }
 
 func NewProbabilisticSamplingStrategy() *ProbabilisticSamplingStrategy {
@@ -1448,7 +1482,7 @@ func (p *ProbabilisticSamplingStrategy) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetSamplingRate = true
@@ -1470,7 +1504,7 @@ func (p *ProbabilisticSamplingStrategy) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *ProbabilisticSamplingStrategy) readField1(iprot thrift.TProtocol) error {
+func (p *ProbabilisticSamplingStrategy) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadDouble(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -1518,7 +1552,7 @@ func (p *ProbabilisticSamplingStrategy) String() string {
 // Attributes:
 //  - MaxTracesPerSecond
 type RateLimitingSamplingStrategy struct {
-	MaxTracesPerSecond int16 `thrift:"maxTracesPerSecond,1,required" json:"maxTracesPerSecond"`
+	MaxTracesPerSecond int16 `thrift:"maxTracesPerSecond,1,required" db:"maxTracesPerSecond" json:"maxTracesPerSecond"`
 }
 
 func NewRateLimitingSamplingStrategy() *RateLimitingSamplingStrategy {
@@ -1545,7 +1579,7 @@ func (p *RateLimitingSamplingStrategy) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetMaxTracesPerSecond = true
@@ -1567,7 +1601,7 @@ func (p *RateLimitingSamplingStrategy) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *RateLimitingSamplingStrategy) readField1(iprot thrift.TProtocol) error {
+func (p *RateLimitingSamplingStrategy) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI16(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -1617,9 +1651,9 @@ func (p *RateLimitingSamplingStrategy) String() string {
 //  - ProbabilisticSampling
 //  - RateLimitingSampling
 type SamplingStrategyResponse struct {
-	StrategyType          SamplingStrategyType           `thrift:"strategyType,1,required" json:"strategyType"`
-	ProbabilisticSampling *ProbabilisticSamplingStrategy `thrift:"probabilisticSampling,2" json:"probabilisticSampling,omitempty"`
-	RateLimitingSampling  *RateLimitingSamplingStrategy  `thrift:"rateLimitingSampling,3" json:"rateLimitingSampling,omitempty"`
+	StrategyType          SamplingStrategyType           `thrift:"strategyType,1,required" db:"strategyType" json:"strategyType"`
+	ProbabilisticSampling *ProbabilisticSamplingStrategy `thrift:"probabilisticSampling,2" db:"probabilisticSampling" json:"probabilisticSampling,omitempty"`
+	RateLimitingSampling  *RateLimitingSamplingStrategy  `thrift:"rateLimitingSampling,3" db:"rateLimitingSampling" json:"rateLimitingSampling,omitempty"`
 }
 
 func NewSamplingStrategyResponse() *SamplingStrategyResponse {
@@ -1672,16 +1706,16 @@ func (p *SamplingStrategyResponse) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetStrategyType = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 		default:
@@ -1702,7 +1736,7 @@ func (p *SamplingStrategyResponse) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SamplingStrategyResponse) readField1(iprot thrift.TProtocol) error {
+func (p *SamplingStrategyResponse) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -1712,7 +1746,7 @@ func (p *SamplingStrategyResponse) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SamplingStrategyResponse) readField2(iprot thrift.TProtocol) error {
+func (p *SamplingStrategyResponse) ReadField2(iprot thrift.TProtocol) error {
 	p.ProbabilisticSampling = &ProbabilisticSamplingStrategy{}
 	if err := p.ProbabilisticSampling.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.ProbabilisticSampling), err)
@@ -1720,7 +1754,7 @@ func (p *SamplingStrategyResponse) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SamplingStrategyResponse) readField3(iprot thrift.TProtocol) error {
+func (p *SamplingStrategyResponse) ReadField3(iprot thrift.TProtocol) error {
 	p.RateLimitingSampling = &RateLimitingSamplingStrategy{}
 	if err := p.RateLimitingSampling.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.RateLimitingSampling), err)

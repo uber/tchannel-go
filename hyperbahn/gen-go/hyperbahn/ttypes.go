@@ -20,8 +20,8 @@ var GoUnusedProtection__ int
 //  - Message
 //  - ServiceName
 type NoPeersAvailable struct {
-	Message     string `thrift:"message,1,required" json:"message"`
-	ServiceName string `thrift:"serviceName,2,required" json:"serviceName"`
+	Message     string `thrift:"message,1,required" db:"message" json:"message"`
+	ServiceName string `thrift:"serviceName,2,required" db:"serviceName" json:"serviceName"`
 }
 
 func NewNoPeersAvailable() *NoPeersAvailable {
@@ -53,12 +53,12 @@ func (p *NoPeersAvailable) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetMessage = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetServiceName = true
@@ -83,7 +83,7 @@ func (p *NoPeersAvailable) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *NoPeersAvailable) readField1(iprot thrift.TProtocol) error {
+func (p *NoPeersAvailable) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -92,7 +92,7 @@ func (p *NoPeersAvailable) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *NoPeersAvailable) readField2(iprot thrift.TProtocol) error {
+func (p *NoPeersAvailable) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -161,8 +161,8 @@ func (p *NoPeersAvailable) Error() string {
 //  - Message
 //  - ServiceName
 type InvalidServiceName struct {
-	Message     string `thrift:"message,1,required" json:"message"`
-	ServiceName string `thrift:"serviceName,2,required" json:"serviceName"`
+	Message     string `thrift:"message,1,required" db:"message" json:"message"`
+	ServiceName string `thrift:"serviceName,2,required" db:"serviceName" json:"serviceName"`
 }
 
 func NewInvalidServiceName() *InvalidServiceName {
@@ -194,12 +194,12 @@ func (p *InvalidServiceName) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetMessage = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetServiceName = true
@@ -224,7 +224,7 @@ func (p *InvalidServiceName) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *InvalidServiceName) readField1(iprot thrift.TProtocol) error {
+func (p *InvalidServiceName) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -233,7 +233,7 @@ func (p *InvalidServiceName) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *InvalidServiceName) readField2(iprot thrift.TProtocol) error {
+func (p *InvalidServiceName) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -301,7 +301,7 @@ func (p *InvalidServiceName) Error() string {
 // Attributes:
 //  - ServiceName
 type DiscoveryQuery struct {
-	ServiceName string `thrift:"serviceName,1,required" json:"serviceName"`
+	ServiceName string `thrift:"serviceName,1,required" db:"serviceName" json:"serviceName"`
 }
 
 func NewDiscoveryQuery() *DiscoveryQuery {
@@ -328,7 +328,7 @@ func (p *DiscoveryQuery) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetServiceName = true
@@ -350,7 +350,7 @@ func (p *DiscoveryQuery) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *DiscoveryQuery) readField1(iprot thrift.TProtocol) error {
+func (p *DiscoveryQuery) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -398,7 +398,7 @@ func (p *DiscoveryQuery) String() string {
 // Attributes:
 //  - Ipv4
 type IpAddress struct {
-	Ipv4 *int32 `thrift:"ipv4,1" json:"ipv4,omitempty"`
+	Ipv4 *int32 `thrift:"ipv4,1" db:"ipv4" json:"ipv4,omitempty"`
 }
 
 func NewIpAddress() *IpAddress {
@@ -441,7 +441,7 @@ func (p *IpAddress) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -459,7 +459,7 @@ func (p *IpAddress) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *IpAddress) readField1(iprot thrift.TProtocol) error {
+func (p *IpAddress) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -513,8 +513,8 @@ func (p *IpAddress) String() string {
 //  - IP
 //  - Port
 type ServicePeer struct {
-	IP   *IpAddress `thrift:"ip,1,required" json:"ip"`
-	Port int32      `thrift:"port,2,required" json:"port"`
+	IP   *IpAddress `thrift:"ip,1,required" db:"ip" json:"ip"`
+	Port int32      `thrift:"port,2,required" db:"port" json:"port"`
 }
 
 func NewServicePeer() *ServicePeer {
@@ -555,12 +555,12 @@ func (p *ServicePeer) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetIP = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetPort = true
@@ -585,7 +585,7 @@ func (p *ServicePeer) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *ServicePeer) readField1(iprot thrift.TProtocol) error {
+func (p *ServicePeer) ReadField1(iprot thrift.TProtocol) error {
 	p.IP = &IpAddress{}
 	if err := p.IP.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.IP), err)
@@ -593,7 +593,7 @@ func (p *ServicePeer) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *ServicePeer) readField2(iprot thrift.TProtocol) error {
+func (p *ServicePeer) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -657,7 +657,7 @@ func (p *ServicePeer) String() string {
 // Attributes:
 //  - Peers
 type DiscoveryResult_ struct {
-	Peers []*ServicePeer `thrift:"peers,1,required" json:"peers"`
+	Peers []*ServicePeer `thrift:"peers,1,required" db:"peers" json:"peers"`
 }
 
 func NewDiscoveryResult_() *DiscoveryResult_ {
@@ -684,7 +684,7 @@ func (p *DiscoveryResult_) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetPeers = true
@@ -706,7 +706,7 @@ func (p *DiscoveryResult_) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *DiscoveryResult_) readField1(iprot thrift.TProtocol) error {
+func (p *DiscoveryResult_) ReadField1(iprot thrift.TProtocol) error {
 	_, size, err := iprot.ReadListBegin()
 	if err != nil {
 		return thrift.PrependError("error reading list begin: ", err)

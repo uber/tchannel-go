@@ -226,7 +226,7 @@ func (p *AdminClearAllArgs) String() string {
 // Attributes:
 //  - NotAuthorized
 type AdminClearAllResult struct {
-	NotAuthorized *NotAuthorized `thrift:"notAuthorized,1" json:"notAuthorized,omitempty"`
+	NotAuthorized *NotAuthorized `thrift:"notAuthorized,1" db:"notAuthorized" json:"notAuthorized,omitempty"`
 }
 
 func NewAdminClearAllResult() *AdminClearAllResult {
@@ -260,7 +260,7 @@ func (p *AdminClearAllResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -278,7 +278,7 @@ func (p *AdminClearAllResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *AdminClearAllResult) readField1(iprot thrift.TProtocol) error {
+func (p *AdminClearAllResult) ReadField1(iprot thrift.TProtocol) error {
 	p.NotAuthorized = &NotAuthorized{}
 	if err := p.NotAuthorized.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.NotAuthorized), err)

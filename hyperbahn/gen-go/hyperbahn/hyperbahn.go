@@ -234,7 +234,7 @@ func (p *hyperbahnProcessorDiscover) Process(seqId int32, iprot, oprot thrift.TP
 // Attributes:
 //  - Query
 type HyperbahnDiscoverArgs struct {
-	Query *DiscoveryQuery `thrift:"query,1,required" json:"query"`
+	Query *DiscoveryQuery `thrift:"query,1,required" db:"query" json:"query"`
 }
 
 func NewHyperbahnDiscoverArgs() *HyperbahnDiscoverArgs {
@@ -270,7 +270,7 @@ func (p *HyperbahnDiscoverArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetQuery = true
@@ -292,7 +292,7 @@ func (p *HyperbahnDiscoverArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HyperbahnDiscoverArgs) readField1(iprot thrift.TProtocol) error {
+func (p *HyperbahnDiscoverArgs) ReadField1(iprot thrift.TProtocol) error {
 	p.Query = &DiscoveryQuery{}
 	if err := p.Query.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Query), err)
@@ -341,9 +341,9 @@ func (p *HyperbahnDiscoverArgs) String() string {
 //  - NoPeersAvailable
 //  - InvalidServiceName
 type HyperbahnDiscoverResult struct {
-	Success            *DiscoveryResult_   `thrift:"success,0" json:"success,omitempty"`
-	NoPeersAvailable   *NoPeersAvailable   `thrift:"noPeersAvailable,1" json:"noPeersAvailable,omitempty"`
-	InvalidServiceName *InvalidServiceName `thrift:"invalidServiceName,2" json:"invalidServiceName,omitempty"`
+	Success            *DiscoveryResult_   `thrift:"success,0" db:"success" json:"success,omitempty"`
+	NoPeersAvailable   *NoPeersAvailable   `thrift:"noPeersAvailable,1" db:"noPeersAvailable" json:"noPeersAvailable,omitempty"`
+	InvalidServiceName *InvalidServiceName `thrift:"invalidServiceName,2" db:"invalidServiceName" json:"invalidServiceName,omitempty"`
 }
 
 func NewHyperbahnDiscoverResult() *HyperbahnDiscoverResult {
@@ -403,15 +403,15 @@ func (p *HyperbahnDiscoverResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		default:
@@ -429,7 +429,7 @@ func (p *HyperbahnDiscoverResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HyperbahnDiscoverResult) readField0(iprot thrift.TProtocol) error {
+func (p *HyperbahnDiscoverResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &DiscoveryResult_{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)
@@ -437,7 +437,7 @@ func (p *HyperbahnDiscoverResult) readField0(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HyperbahnDiscoverResult) readField1(iprot thrift.TProtocol) error {
+func (p *HyperbahnDiscoverResult) ReadField1(iprot thrift.TProtocol) error {
 	p.NoPeersAvailable = &NoPeersAvailable{}
 	if err := p.NoPeersAvailable.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.NoPeersAvailable), err)
@@ -445,7 +445,7 @@ func (p *HyperbahnDiscoverResult) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HyperbahnDiscoverResult) readField2(iprot thrift.TProtocol) error {
+func (p *HyperbahnDiscoverResult) ReadField2(iprot thrift.TProtocol) error {
 	p.InvalidServiceName = &InvalidServiceName{}
 	if err := p.InvalidServiceName.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.InvalidServiceName), err)
