@@ -23,92 +23,106 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/benchmark"
+	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 )
 
 var (
-	requestSize = flag.Int("requestSize", 10000, "The number of bytes of each request")
-	serviceName = flag.String("serviceName", "bench-server", "The benchmark server's service name")
+	serviceName = flag.String("service", "bench-server", "The benchmark server's service name")
 	timeout     = flag.Duration("timeout", time.Second, "Timeout for each request")
+	requestSize = flag.Int("request-size", 10000, "The number of bytes of each request")
 )
 
 func main() {
 	flag.Parse()
 
-	ch, err := testutils.NewClientChannel(nil)
-	if err != nil {
-		log.Fatalf("Failed to create client channel: %v", err)
-	}
-
-	for _, host := range flag.Args() {
-		ch.Peers().Add(host)
-	}
-	thriftClient := thrift.NewClient(ch, *serviceName, nil)
-	client := gen.NewTChanSecondServiceClient(thriftClient)
-
+	client := benchmark.NewClient(flag.Args(),
+		benchmark.WithServiceName(*serviceName),
+		benchmark.WithTimeout(*timeout),
+		benchmark.WithRequestSize(*requestSize))
 	fmt.Println("bench-client started")
 
-	rdr := bufio.NewReader(os.Stdin)
-	for {
-		line, err := rdr.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			log.Fatalf("stdin read failed: %v", err)
-		}
+	rdr := bufio.NewScanner(os.Stdin)
+	for rdr.Scan() {
+		var (
+			d   time.Duration
+			err error
+		)
 
-		line = strings.TrimSuffix(line, "\n")
-		switch line {
-		case "call":
-			makeCall(client)
+		switch line := rdr.Text(); line {
+		case "warmup":
+			if err := client.Warmup(); err != nil {
+				log.Fatalf("warmup failed: %v", err)
+			}
+			fmt.Println("success")
+			continue
+		case "rcall":
+			d, err = client.RawCall()
+		case "tcall":
+			d, err = client.ThriftCall()
 		case "quit":
 			return
 		default:
 			log.Fatalf("unrecognized command: %v", line)
 		}
+
+		if err != nil {
+			log.Printf("Call failed: %v", err)
+			continue
+		}
+		fmt.Println(d)
+	}
+
+	if err := rdr.Err(); err != nil {
+		log.Fatalf("Reader failed: %v", err)
 	}
 }
 
-var arg string
+func makeRawCall(ch *tchannel.Channel) {
+	ctx, cancel := tchannel.NewContext(*timeout)
+	defer cancel()
 
-func makeArg() string {
-	if len(arg) > 0 {
-		return arg
-	}
+	arg := testutils.RandBytes(*requestSize)
+	started := time.Now()
 
-	bs := []byte{}
-	for i := 0; i < *requestSize; i++ {
-		bs = append(bs, byte(i%26+'A'))
+	sc := ch.GetSubChannel(*serviceName)
+	rArg2, rArg3, _, err := raw.CallSC(ctx, sc, "echo", arg, arg)
+	if err != nil {
+		fmt.Println("failed:", err)
+		return
 	}
-	arg = string(bs)
-	return arg
+	duration := time.Since(started)
+	if !bytes.Equal(rArg2, arg) || !bytes.Equal(rArg3, arg) {
+		log.Fatalf("Echo gave different string!")
+	}
+	fmt.Println(duration)
 }
 
 func makeCall(client gen.TChanSecondService) {
 	ctx, cancel := thrift.NewContext(*timeout)
 	defer cancel()
 
-	arg := makeArg()
+	arg := testutils.RandString(*requestSize)
 	started := time.Now()
 	res, err := client.Echo(ctx, arg)
 	if err != nil {
 		fmt.Println("failed:", err)
 		return
 	}
+	duration := time.Since(started)
 	if res != arg {
 		log.Fatalf("Echo gave different string!")
 	}
-	duration := time.Since(started)
 	fmt.Println(duration)
 }
