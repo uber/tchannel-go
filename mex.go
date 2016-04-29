@@ -44,7 +44,7 @@ const (
 	messageExchangeSetOutbound = "outbound"
 
 	// mexChannelBufferSize is the size of the message exchange channel buffer.
-	mexChannelBufferSize = 2
+	mexChannelBufferSize = 10
 )
 
 type errNotifier struct {
