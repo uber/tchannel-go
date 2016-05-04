@@ -1,4 +1,4 @@
-GODEPS := $(shell pwd)/Godeps/_workspace
+export GO15VENDOREXPERIMENT=1
 GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
@@ -10,8 +10,7 @@ ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT_FMT := true
 endif
 
-OLDGOPATH := $(GOPATH)
-PATH := $(GODEPS)/bin:$(PATH)
+PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
 PKGS := . ./atomic ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
@@ -20,7 +19,6 @@ THRIFT_GEN_RELEASE := ./thrift-gen-release
 THRIFT_GEN_RELEASE_LINUX := $(THRIFT_GEN_RELEASE)/linux-x86_64
 THRIFT_GEN_RELEASE_DARWIN := $(THRIFT_GEN_RELEASE)/darwin-x86_64
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
-export GOPATH = $(GODEPS):$(OLDGOPATH)
 
 PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
@@ -47,20 +45,23 @@ get_thrift:
 	scripts/travis/get-thrift.sh
 
 install:
-	GOPATH=$(GODEPS) go get github.com/tools/godep
-	GOPATH=$(GODEPS) godep restore -v
+	glide --debug install --cache --cache-gopath
+	rm -rf vendor
 ifdef SHOULD_LINT
 	@echo "Installing golint, since we expect to lint on" $(GO_VERSION)
-	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
+	go get -u -f github.com/golang/lint/golint
 else
 	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
 endif
 
-install_ci: get_thrift install
+install_glide:
+	go get -u github.com/Masterminds/glide
+
+install_ci: install_glide get_thrift install
 	go get -u github.com/mattn/goveralls
 
 install_test:
-	go test -i $(TEST_ARG) github.com/uber/tchannel-go/...
+	go test -i $(TEST_ARG) $(shell glide nv)
 
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
@@ -76,15 +77,11 @@ fmt format:
 	go fmt $(PKGS)
 	echo
 
-godep:
-	rm -rf Godeps
-	godep save ./...
-
 test_ci: test
 
 test: clean setup install_test
 	@echo Testing packages:
-	go test -parallel=4 $(TEST_ARG) github.com/uber/tchannel-go/...
+	go test -parallel=4 $(TEST_ARG) $(shell glide nv)
 	@echo Running frame pool tests
 	go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
@@ -104,7 +101,7 @@ cover_ci: cover_profile
 	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 
-FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'Godeps/' -e 'vendor/'
+FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
 lint:
 ifdef SHOULD_LINT
 	@echo "Linters are enabled on" $(GO_VERSION)
@@ -151,8 +148,8 @@ thrift_gen:
 	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift --outputDir trace/thrift/gen-go/
 
 release_thrift_gen: clean setup
-	GOOS=linux GOARCH=amd64 godep go build -o $(THRIFT_GEN_RELEASE_LINUX)/thrift-gen ./thrift/thrift-gen
-	GOOS=darwin GOARCH=amd64 godep go build -o $(THRIFT_GEN_RELEASE_DARWIN)/thrift-gen ./thrift/thrift-gen
+	GOOS=linux GOARCH=amd64 go build -o $(THRIFT_GEN_RELEASE_LINUX)/thrift-gen ./thrift/thrift-gen
+	GOOS=darwin GOARCH=amd64 go build -o $(THRIFT_GEN_RELEASE_DARWIN)/thrift-gen ./thrift/thrift-gen
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 
