@@ -21,28 +21,18 @@ package tchannel
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/typed"
 )
 
-func TestCallReqService(t *testing.T) {
-	// TODO: This test doesn't work, since the initial flags byte is written in
-	// reqResWriter instead of callReq. We should instead handle that in
-	// callReq, which will allow tests to be sane.
-	if 1 == 2 { // go vet doesn't like unreachable code...
-		frame := NewFrame(MaxFramePayloadSize)
-		err := frame.write(&callReq{Service: "udr"})
-		require.NoError(t, err, "Error writing message to frame.")
-
-		callReq := newLazyCallReq(frame)
-		assert.Equal(t, "udr", callReq.Service(), "Failed to read service name from frame.")
-	}
-}
-
-func TestCallReqServiceTerrible(t *testing.T) {
-	// TODO: Delete in favor of TestCallReqService.
+// fakeLazyCallReq is a small helper for testing our lazy message wrappers.
+func fakeLazyCallReq() lazyCallReq {
+	// TODO: Constructing a frame is ugly because the initial flags byte is
+	// written in reqResWriter instead of callReq. We should instead handle that
+	// in callReq, which will allow our tests to be sane.
 	f := NewFrame(100)
 	fh := fakeHeader()
 	f.Header = fh
@@ -54,11 +44,10 @@ func TestCallReqServiceTerrible(t *testing.T) {
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
 
-	callReq := newLazyCallReq(f)
-	assert.Equal(t, "bankmoji", callReq.Service(), "Failed to read service name from frame.")
+	return newLazyCallReq(f)
 }
 
-func TestServiceOtherMessages(t *testing.T) {
+func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 	msg := &initReq{initMessage{id: 1, Version: 0x1, initParams: initParams{
 		InitParamHostPort:    "0.0.0.0:0",
 		InitParamProcessName: "test",
@@ -68,5 +57,15 @@ func TestServiceOtherMessages(t *testing.T) {
 	require.NoError(t, err, "Error writing message to frame.")
 	assert.Panics(t, func() {
 		newLazyCallReq(frame)
-	}, "Should panic when creating callReq from non-callReq frame.")
+	}, "Should panic when creating lazyCallReq from non-callReq frame.")
+}
+
+func TestLazyCallReqService(t *testing.T) {
+	cr := fakeLazyCallReq()
+	assert.Equal(t, "bankmoji", cr.Service(), "Failed to read service name from frame.")
+}
+
+func TestLazyCallReqTTL(t *testing.T) {
+	cr := fakeLazyCallReq()
+	assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Failed to parse TTL from frame.")
 }

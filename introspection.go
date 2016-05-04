@@ -36,6 +36,9 @@ type IntrospectionOptions struct {
 
 	// IncludeEmptyPeers will include peers, even if they have no connections.
 	IncludeEmptyPeers bool `json:"includeEmptyPeers"`
+
+	// IncludeTombstones will include tombstones when introspecting relays.
+	IncludeTombstones bool `json:"includeTombstones"`
 }
 
 // RuntimeState is a snapshot of the runtime state for a channel.
@@ -157,6 +160,7 @@ type RelayItemState struct {
 	ID                      uint32 `json:"id"`
 	RemapID                 uint32 `json:"remapID"`
 	DestinationConnectionID uint32 `json:"destinationConnectionID"`
+	Tomb                    bool   `json:"tomb"`
 }
 
 // PeerRuntimeState is the runtime state for a single peer.
@@ -318,28 +322,34 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 
 // IntrospectState returns the runtime state for this relayer.
 func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeState {
-	r.RLock()
-	defer r.RUnlock()
+	count := r.inbound.Count() + r.outbound.Count()
 	return RelayerRuntimeState{
-		Count:         len(r.inbound) + len(r.outbound),
-		InboundItems:  r.IntrospectItems(opts, "inbound", r.inbound),
-		OutboundItems: r.IntrospectItems(opts, "outbound", r.outbound),
+		Count:         count,
+		InboundItems:  r.inbound.IntrospectState(opts, "inbound"),
+		OutboundItems: r.outbound.IntrospectState(opts, "outbound"),
 	}
 }
 
-// IntrospectItems returns the runtime state for the given relay items.
-func (r *Relayer) IntrospectItems(opts *IntrospectionOptions, name string, items map[uint32]relayItem) RelayItemSetState {
+// IntrospectState returns the runtime state for this relayItems.
+func (ri *relayItems) IntrospectState(opts *IntrospectionOptions, name string) RelayItemSetState {
+	ri.RLock()
+	defer ri.RUnlock()
+
 	setState := RelayItemSetState{
 		Name:  name,
-		Count: len(items),
+		Count: ri.Count(),
 	}
 	if opts.IncludeExchanges {
-		setState.Items = make(map[string]RelayItemState, len(items))
-		for k, v := range items {
+		setState.Items = make(map[string]RelayItemState, len(ri.items))
+		for k, v := range ri.items {
+			if !opts.IncludeTombstones && v.tomb {
+				continue
+			}
 			state := RelayItemState{
 				ID:                      k,
 				RemapID:                 v.remapID,
 				DestinationConnectionID: v.destination.conn.connID,
+				Tomb: v.tomb,
 			}
 			setState.Items[strconv.Itoa(int(k))] = state
 		}

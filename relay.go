@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// _maxRelayTombs is the maximum number of tombs we'll accumulate in a single
+// relayItems.
+const _maxRelayTombs = 1e4
+
+// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
+const _relayTombTTL = time.Second
+
 // RelayHosts allows external wrappers to inject peer selection logic for
 // relaying.
 type RelayHosts interface {
@@ -17,8 +24,101 @@ type RelayHosts interface {
 }
 
 type relayItem struct {
+	*time.Timer
+
 	remapID     uint32
 	destination *Relayer
+	tomb        bool
+}
+
+type relayItems struct {
+	sync.RWMutex
+
+	logger Logger
+	tombs  uint64
+	items  map[uint32]relayItem
+}
+
+func newRelayItems(logger Logger) *relayItems {
+	return &relayItems{
+		items: make(map[uint32]relayItem),
+	}
+}
+
+// Count returns the number of non-tombstone items in the relay.
+func (r *relayItems) Count() int {
+	r.RLock()
+	n := len(r.items) - int(r.tombs)
+	r.RUnlock()
+	return n
+}
+
+// Get checks for a relay item by ID, returning the item and a bool indicating
+// whether the item was found.
+func (r *relayItems) Get(id uint32) (relayItem, bool) {
+	r.RLock()
+	item, ok := r.items[id]
+	r.RUnlock()
+
+	return item, ok
+}
+
+// Add adds a relay item.
+func (r *relayItems) Add(id uint32, item relayItem) {
+	r.Lock()
+	r.items[id] = item
+	r.Unlock()
+}
+
+// Delete removes a relayItem completely (without leaving a tombstone). It returns
+// a bool indicating whether we completed a relayed call.
+func (r *relayItems) Delete(id uint32) bool {
+	r.Lock()
+	item, ok := r.items[id]
+	if !ok {
+		r.Unlock()
+		r.logger.WithFields(LogField{"id", id}).Warn("Attempted to delete non-existent relay item.")
+		return false
+	}
+	delete(r.items, id)
+	if item.tomb {
+		r.tombs--
+	}
+	r.Unlock()
+
+	item.Stop()
+	return !item.tomb
+}
+
+// Entomb sets the tomb bit on a relayItem and schedules a garbage collection. It
+// returns a bool indicating whether we completed a relayed call.
+func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) bool {
+	r.Lock()
+	if r.tombs > _maxRelayTombs {
+		r.Unlock()
+		r.logger.WithFields(LogField{"id", id}).Warn("Too many tombstones, deleting relay item immediately.")
+		return false
+	}
+	item, ok := r.items[id]
+	if !ok {
+		r.Unlock()
+		r.logger.WithFields(LogField{"id", id}).Warn("Can't find relay item to entomb.")
+		return false
+	}
+	if item.tomb {
+		r.Unlock()
+		r.logger.WithFields(LogField{"id", id}).Warn("Re-entombing a tombstone.")
+		return false
+	}
+	r.tombs++
+	item.tomb = true
+	r.items[id] = item
+	r.Unlock()
+
+	// TODO: We should be clearing these out in batches, rather than creating
+	// individual timers for each item.
+	time.AfterFunc(deleteAfter, func() { r.Delete(id) })
+	return true
 }
 
 type frameType int
@@ -30,20 +130,18 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	sync.RWMutex
-
 	metrics StatsReporter
 	hosts   RelayHosts
 
 	// outbound is the remapping for requests that originated on this
 	// connection, and are outbound towards some other connection.
 	// It stores remappings for all request frames read on this connection.
-	outbound map[uint32]relayItem
+	outbound *relayItems
 
 	// inbound is the remapping for requests that originated on some other
 	// connection which was directed to this connection.
 	// It stores remappings for all response frames read on this connection.
-	inbound map[uint32]relayItem
+	inbound *relayItems
 
 	peers   *PeerList
 	conn    *Connection
@@ -56,8 +154,8 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
 		metrics:  conn.statsReporter,
 		hosts:    ch.relayHosts,
-		outbound: make(map[uint32]relayItem),
-		inbound:  make(map[uint32]relayItem),
+		outbound: newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
+		inbound:  newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
 		peers:    ch.Peers(),
 		conn:     conn,
 		logger:   ch.Logger(),
@@ -87,10 +185,7 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 		// If we receive a request frame, we expect to find that ID in our inbound.
 		items := r.receiverItems(fType)
 
-		r.RLock()
-		_, ok := items[f.Header.ID]
-		r.RUnlock()
-		if !ok {
+		if _, ok := items.Get(f.Header.ID); !ok {
 			r.logger.WithFields(
 				LogField{"ID", f.Header.ID},
 			).Warn("Received a frame without a RelayItem.")
@@ -100,16 +195,12 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 	r.conn.sendCh <- f
 	if finishesCall(f) {
 		items := r.receiverItems(fType)
-		r.removeRelayItem(items, f.Header.ID)
+		r.finishRelayItem(items, f.Header.ID)
 	}
 }
 
 func (r *Relayer) handleCallReq(f lazyCallReq) error {
-	r.RLock()
-	_, ok := r.outbound[f.Header.ID]
-	r.RUnlock()
-
-	if ok {
+	if _, ok := r.outbound.Get(f.Header.ID); ok {
 		r.logger.WithFields(LogField{"id", f.Header.ID}).Warn("received duplicate callReq")
 		// TODO: this is a protocol error, kill the connection.
 		return errors.New("callReq with already active ID")
@@ -134,15 +225,16 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 			ErrField(err),
 			LogField{"hostPort", hostPort},
 		).Warn("Failed to connect to relay host.")
-		// TODO : return an error frame.
+		// TODO: return an error frame.
 		return nil
 	}
 
 	// TODO: Is there a race for adding the same ID twice?
 	destinationID := remoteConn.NextMessageID()
-	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r)
+	ttl := f.TTL()
+	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl)
 	r.metrics.IncCounter("relay", nil, 1)
-	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay)
+	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl)
 
 	f.Header.ID = destinationID
 	relayToDest.destination.Receive(f.Frame, requestFrame)
@@ -160,24 +252,27 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		items = r.inbound
 	}
 
-	r.RLock()
-	item, ok := items[f.Header.ID]
-	r.RUnlock()
+	item, ok := items.Get(f.Header.ID)
 	if !ok {
 		return errors.New("non-callReq for inactive ID")
+	}
+	if item.tomb {
+		// Call timed out, ignore this frame.
+		// TODO: Add metrics for this case.
+		return nil
 	}
 	originalID := f.Header.ID
 	f.Header.ID = item.remapID
 	item.destination.Receive(f, frameType)
 
 	if finishesCall(f) {
-		r.removeRelayItem(items, originalID)
+		r.finishRelayItem(items, originalID)
 	}
 	return nil
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
-func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer) relayItem {
+func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration) relayItem {
 	item := relayItem{
 		remapID:     remapID,
 		destination: destination,
@@ -188,17 +283,28 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	if isOriginator {
 		items = r.outbound
 	}
-
-	r.Lock()
-	items[id] = item
-	r.Unlock()
+	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(items, id, isOriginator) })
+	items.Add(id, item)
 	return item
 }
 
-func (r *Relayer) removeRelayItem(items map[uint32]relayItem, id uint32) {
-	r.Lock()
-	delete(items, id)
-	r.Unlock()
+func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bool) {
+	if ok := items.Entomb(id, _relayTombTTL); !ok {
+		return
+	}
+	if isOriginator {
+		// TODO: As above. What's the span in the error frame for?
+		r.conn.SendSystemError(id, nil, ErrTimeout)
+	}
+	r.decPending()
+	r.conn.checkExchanges()
+}
+
+func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
+	if ok := items.Delete(id); !ok {
+		return
+	}
+
 	r.decPending()
 	r.conn.checkExchanges()
 }
@@ -222,7 +328,7 @@ func (r *Relayer) countPending() uint32 {
 	return atomic.LoadUint32(&r.pending)
 }
 
-func (r *Relayer) receiverItems(fType frameType) map[uint32]relayItem {
+func (r *Relayer) receiverItems(fType frameType) *relayItems {
 	if fType == requestFrame {
 		return r.inbound
 	}
