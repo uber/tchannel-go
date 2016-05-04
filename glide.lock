@@ -1,10 +1,14 @@
-hash: a9c0c0c80c08c0bdc301a87ec7924e4b216f289fda20c3988678a90d46e180c2
-updated: 2016-05-04T14:00:45.033833178-07:00
+hash: 94cf21a5f9069d934bbf173edaba5721096530c263582703175cc660f776e76e
+updated: 2016-05-04T15:58:15.151222656-07:00
 imports:
 - name: github.com/apache/thrift
   version: 6ee1a0bd263b0dc3b863285763342fb3ddc3ede4
   subpackages:
   - lib/go/thrift
+- name: github.com/bmizerany/perks
+  version: d9a9656a3a4b1c2864fdb44db2ef8619772d92aa
+  subpackages:
+  - quantile
 - name: github.com/cactus/go-statsd-client
   version: 53fcd3082b7e2cfc3df66e83e492bccda879936e
   subpackages:
