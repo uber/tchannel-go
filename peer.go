@@ -24,6 +24,7 @@ import (
 	"container/heap"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/trand"
@@ -345,11 +346,20 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 	}
 
 	// No active connections, make a new outgoing connection.
-	c, err := p.Connect(ctx)
-	if err != nil {
-		return nil, err
+	return p.Connect(ctx)
+}
+
+// getConnectionTimeout gets a connection, and uses the given timeout if a new
+// connection is required.
+func (p *Peer) getConnectionTimeout(timeout time.Duration) (*Connection, error) {
+	if conn, ok := p.getActiveConn(); ok {
+		return conn, nil
 	}
-	return c, nil
+
+	ctx, cancel := NewContext(timeout)
+	defer cancel()
+
+	return p.Connect(ctx)
 }
 
 // AddInboundConnection adds an active inbound connection to the peer's connection list.
