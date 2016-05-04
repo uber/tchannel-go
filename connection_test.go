@@ -369,8 +369,7 @@ func (h onErrorTestHandler) OnError(ctx context.Context, err error) {
 }
 
 func TestTimeout(t *testing.T) {
-	// TODO: Test with relay (once relays handle timeouts).
-	opts := testutils.NewOpts()
+	opts := testutils.NewOpts().SetRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// onError may be called when the block call tries to write the call response.
 		onError := func(ctx context.Context, err error) {
@@ -447,22 +446,22 @@ func TestFragmentation(t *testing.T) {
 }
 
 func TestFragmentationSlowReader(t *testing.T) {
-	startReading, handlerComplete := make(chan struct{}), make(chan struct{})
-	handler := func(ctx context.Context, call *InboundCall) {
-		<-startReading
-		<-ctx.Done()
-		_, err := raw.ReadArgs(call)
-		assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
-		close(handlerComplete)
-	}
-
 	// Inbound forward will timeout and cause a warning log.
-	// TODO: Test with relay (once relays handle timeouts).
 	opts := testutils.NewOpts().
 		AddLogFilter("Unable to forward frame", 1).
-		AddLogFilter("Connection error", 1)
+		AddLogFilter("Connection error", 1).
+		SetRelay()
 
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		startReading, handlerComplete := make(chan struct{}), make(chan struct{})
+		handler := func(ctx context.Context, call *InboundCall) {
+			<-startReading
+			<-ctx.Done()
+			_, err := raw.ReadArgs(call)
+			assert.Error(t, err, "ReadArgs should fail since frames will be dropped due to slow reading")
+			close(handlerComplete)
+		}
+
 		ts.Register(HandlerFunc(handler), "echo")
 
 		arg2 := testutils.RandBytes(MaxFramePayloadSize * MexChannelBufferSize)
@@ -485,8 +484,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 
 func TestWriteArg3AfterTimeout(t *testing.T) {
 	// The channel reads and writes during timeouts, causing warning logs.
-	// TODO: Test with relay (once relays handle timeouts).
-	opts := testutils.NewOpts().DisableLogVerification()
+	opts := testutils.NewOpts().DisableLogVerification().SetRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 
@@ -525,8 +523,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
 	// TODO: Make this test block at different points (e.g. before, during read/write).
-	// TODO: Test with relay (once relays handle timeouts).
-	opts := testutils.NewOpts()
+	opts := testutils.NewOpts().SetRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 		done := make(chan struct{})
@@ -680,7 +677,7 @@ func TestNetDialTimeout(t *testing.T) {
 }
 
 func TestConnectTimeout(t *testing.T) {
-	opts := testutils.NewOpts().DisableLogVerification()
+	opts := testutils.NewOpts().DisableLogVerification().SetRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// Set up a relay that will delay the initial init req.
 		testComplete := make(chan struct{})

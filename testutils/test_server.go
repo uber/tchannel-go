@@ -60,15 +60,17 @@ type TestServer struct {
 	// as part of the TestServer (including the server).
 	channelStates map[*tchannel.Channel]*tchannel.RuntimeState
 
-	verifyOpts *goroutines.VerifyOpts
-	postFns    []func()
+	introspectOpts *tchannel.IntrospectionOptions
+	verifyOpts     *goroutines.VerifyOpts
+	postFns        []func()
 }
 
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	ts := &TestServer{
-		TB:            t,
-		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
+		TB:             t,
+		channelStates:  make(map[*tchannel.Channel]*tchannel.RuntimeState),
+		introspectOpts: &tchannel.IntrospectionOptions{IncludeExchanges: true},
 	}
 
 	ts.NewServer(opts)
@@ -205,7 +207,7 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 	ch := createChannel(ts, opts)
 	ts.postFns = append(ts.postFns, opts.postFns...)
 	ts.channels = append(ts.channels, ch)
-	ts.channelStates[ch] = comparableState(ch)
+	ts.channelStates[ch] = comparableState(ch, ts.introspectOpts)
 	return ch
 }
 
@@ -267,7 +269,7 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 
 func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
 	initial := ts.channelStates[ch]
-	final := comparableState(ch)
+	final := comparableState(ch, ts.introspectOpts)
 	assert.Equal(ts.TB, initial, final, "Runtime state has leaks")
 }
 
@@ -276,9 +278,7 @@ func (ts *TestServer) verifyExchangesCleared(ch *tchannel.Channel) {
 		return
 	}
 	// Ensure that all the message exchanges are empty.
-	serverState := ch.IntrospectState(&tchannel.IntrospectionOptions{
-		IncludeExchanges: true,
-	})
+	serverState := ch.IntrospectState(ts.introspectOpts)
 	if exchangesLeft := describeLeakedExchanges(serverState); exchangesLeft != "" {
 		ts.Errorf("Found uncleared message exchanges on server:\n%v", exchangesLeft)
 	}
@@ -289,7 +289,7 @@ func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
 		return
 	}
 	var foundErrors bool
-	state := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true})
+	state := ch.IntrospectState(ts.introspectOpts)
 	for _, peerState := range state.RootPeers {
 		var connStates []tchannel.ConnectionRuntimeState
 		connStates = append(connStates, peerState.InboundConnections...)
@@ -335,10 +335,8 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 	ts.Error(err.Error())
 }
 
-func comparableState(ch *tchannel.Channel) *tchannel.RuntimeState {
-	s := ch.IntrospectState(&tchannel.IntrospectionOptions{
-		IncludeExchanges: true,
-	})
+func comparableState(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) *tchannel.RuntimeState {
+	s := ch.IntrospectState(opts)
 	s.OtherChannels = nil
 	s.SubChannels = nil
 	s.Peers = nil

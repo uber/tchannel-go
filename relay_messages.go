@@ -20,12 +20,18 @@
 
 package tchannel
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+	"time"
+)
 
 const (
-	_serviceLenIndex  = 1 /* flags */ + 4 /* ttl */ + 25 /* tracing */
-	_serviceNameIndex = _serviceLenIndex + 1
 	_flagsIndex       = 0
+	_ttlIndex         = 1
+	_ttlLen           = 4
+	_serviceLenIndex  = 1 /* flags */ + _ttlLen + 25 /* tracing */
+	_serviceNameIndex = _serviceLenIndex + 1
 )
 
 type lazyCallReq struct {
@@ -43,6 +49,12 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 func (f lazyCallReq) Service() string {
 	l := f.Payload[_serviceLenIndex]
 	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
+}
+
+// TTL returns the time to live for this callReq.
+func (f lazyCallReq) TTL() time.Duration {
+	ttl := binary.BigEndian.Uint32(f.Payload[_ttlIndex : _ttlIndex+_ttlLen])
+	return time.Duration(ttl) * time.Millisecond
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
