@@ -38,3 +38,7 @@ import:
   - context
 - package: gopkg.in/yaml.v2
   version: master
+- package: github.com/bmizerany/perks
+  version: master
+  subpackages:
+  - quantile
