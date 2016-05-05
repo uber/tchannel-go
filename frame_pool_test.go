@@ -93,7 +93,7 @@ func doErrorCall(t *testing.T, clientCh *Channel, hostPort string) {
 func TestFramesReleased(t *testing.T) {
 	CheckStress(t)
 
-	defer testutils.SetTimeout(t, 10*time.Second)()
+	defer testutils.SetTimeout(t, 30*time.Second)()
 	const (
 		requestsPerGoroutine = 10
 		numGoroutines        = 10
