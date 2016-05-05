@@ -68,9 +68,12 @@ type TestServer struct {
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	ts := &TestServer{
-		TB:             t,
-		channelStates:  make(map[*tchannel.Channel]*tchannel.RuntimeState),
-		introspectOpts: &tchannel.IntrospectionOptions{IncludeExchanges: true},
+		TB:            t,
+		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
+		introspectOpts: &tchannel.IntrospectionOptions{
+			IncludeExchanges:  true,
+			IncludeTombstones: true,
+		},
 	}
 
 	ts.NewServer(opts)
