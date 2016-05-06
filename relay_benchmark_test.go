@@ -166,24 +166,24 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	fmt.Println()
 }
 
-func BenchmarkRelay2Servers2Clients1k(b *testing.B) {
+func BenchmarkRelay2Servers5Clients1k(b *testing.B) {
 	p := defaultParams()
-	p.clients = 2
+	p.clients = 5
 	p.servers = 2
 	benchmarkRelay(b, p)
 }
 
-func BenchmarkRelay2Servers4Clients1k(b *testing.B) {
+func BenchmarkRelay2Servers10Clients1k(b *testing.B) {
 	p := defaultParams()
-	p.clients = 2
+	p.clients = 10
 	p.servers = 2
 	benchmarkRelay(b, p)
 }
 
-func BenchmarkRelay2Servers2Clients4k(b *testing.B) {
+func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 	p := defaultParams()
 	p.requestSize = 4 * 1024
-	p.clients = 2
+	p.clients = 5
 	p.servers = 2
 	benchmarkRelay(b, p)
 }
