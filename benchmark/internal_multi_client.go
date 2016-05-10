@@ -20,7 +20,11 @@
 
 package benchmark
 
-import "time"
+import (
+	"time"
+
+	"github.com/uber/tchannel-go/testutils"
+)
 
 type internalMultiClient struct {
 	clients []inProcClient
@@ -69,18 +73,13 @@ type callFunc func([]time.Duration) error
 type clientToCallFunc func(c inProcClient) callFunc
 
 func (c *internalMultiClient) makeCalls(n int, f clientToCallFunc) ([]time.Duration, error) {
-	perClient := n / len(c.clients)
-	remaining := n - perClient*len(c.clients)
-
+	buckets := testutils.Buckets(n, len(c.clients))
 	errCs := make([]chan error, len(c.clients))
 
 	var start int
 	latencies := make([]time.Duration, n)
 	for i := range c.clients {
-		calls := perClient
-		if i == 0 {
-			calls += remaining
-		}
+		calls := buckets[i]
 
 		end := start + calls
 		errCs[i] = c.callUsingClient(latencies[start:end], f(c.clients[i]))

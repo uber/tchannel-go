@@ -79,6 +79,20 @@ func Batch(n, batchSize int) []int {
 	return batches
 }
 
+// Buckets splits n over the specified number of buckets.
+func Buckets(n int, numBuckets int) []int {
+	perBucket := n / numBuckets
+
+	buckets := make([]int, numBuckets)
+	for i := range buckets {
+		buckets[i] = perBucket
+		if i == 0 {
+			buckets[i] += n % numBuckets
+		}
+	}
+	return buckets
+}
+
 // RunN runs the given f n times (and passes the run's index) and waits till they complete.
 // It starts n-1 goroutines, and runs one instance in the current goroutine.
 func RunN(n int, f func(i int)) {
