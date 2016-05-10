@@ -70,8 +70,8 @@ func newInternalClient(hosts []string, opts *options) inProcClient {
 		ch:       ch,
 		sc:       ch.GetSubChannel(opts.svcName),
 		tClient:  client,
-		argBytes: randomBytes(opts.reqSize),
-		argStr:   string(randomBytes(opts.reqSize)),
+		argBytes: getRequestBytes(opts.reqSize),
+		argStr:   getRequestString(opts.reqSize),
 		opts:     opts,
 	}
 }
