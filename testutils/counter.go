@@ -26,12 +26,43 @@ import (
 	"github.com/uber/tchannel-go/atomic"
 )
 
+// Decrement is the interface returned by Decrementor.
+type Decrement interface {
+	// Single returns whether any more tokens are remaining.
+	Single() bool
+
+	// Multiple tries to get n tokens. It returns the actual amount of tokens
+	// available to use. If this is 0, it means there are no tokens left.
+	Multiple(n int) int
+}
+
+type decrementor struct {
+	n atomic.Int64
+}
+
+func (d *decrementor) Single() bool {
+	return d.n.Dec() >= 0
+}
+
+func (d *decrementor) Multiple(n int) int {
+	decBy := -1 * int64(n)
+	decremented := d.n.Add(decBy)
+	if decremented <= decBy {
+		// Already out of tokens before this decrement.
+		return 0
+	} else if decremented < 0 {
+		// Not enough tokens, return how many tokens we actually could decrement.
+		return n + int(decremented)
+	}
+
+	return n
+}
+
 // Decrementor returns a function that can be called from multiple goroutines and ensures
 // it will only return true n times.
-func Decrementor(n int) func() bool {
-	n64 := atomic.NewInt64(int64(n))
-	return func() bool {
-		return n64.Dec() >= 0
+func Decrementor(n int) Decrement {
+	return &decrementor{
+		n: *atomic.NewInt64(int64(n)),
 	}
 }
 
