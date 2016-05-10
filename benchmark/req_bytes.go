@@ -20,32 +20,20 @@
 
 package benchmark
 
-import (
-	"io"
-	"math/rand"
-	"time"
-)
-
-type randReader struct {
-	src rand.Source
-}
-
-func newRandReader() io.Reader {
-	return randReader{rand.NewSource(time.Now().UnixNano())}
-}
-
-func (r randReader) Read(p []byte) (n int, err error) {
-	for i := range p {
-		p[i] = byte(r.src.Int63() & 0xff)
-	}
-	return len(p), nil
-}
-
-func randomBytes(n int) []byte {
-	reader := newRandReader()
+func getRequestBytes(n int) []byte {
 	bs := make([]byte, n)
-	if _, err := io.ReadFull(reader, bs); err != nil {
-		panic("failed to read random bytes: " + err.Error())
+	for i := range bs {
+		bs[i] = byte(i)
 	}
 	return bs
+}
+
+func getRequestString(n int) string {
+	// TODO: we should replace this with base64 once we drop go1.4 support.
+	chars := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcedefghijklmnopqrstuvwxyz")
+	bs := make([]byte, n)
+	for i := range bs {
+		bs[i] = chars[i%len(chars)]
+	}
+	return string(bs)
 }
