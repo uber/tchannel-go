@@ -87,3 +87,20 @@ func TestBatch(t *testing.T) {
 		assert.Equal(t, tt.want, got, "Batch(%v, %v) unexpected result", tt.n, tt.batch)
 	}
 }
+
+func TestBuckets(t *testing.T) {
+	tests := []struct {
+		n       int
+		buckets int
+		want    []int
+	}{
+		{2, 3, []int{2, 0, 0}},
+		{3, 3, []int{1, 1, 1}},
+		{4, 3, []int{2, 1, 1}},
+	}
+
+	for _, tt := range tests {
+		got := Buckets(tt.n, tt.buckets)
+		assert.Equal(t, tt.want, got, "Buckets(%v, %v) unexpected result", tt.n, tt.buckets)
+	}
+}
