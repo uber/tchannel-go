@@ -70,3 +70,20 @@ func TestDecrementMultiple(t *testing.T) {
 		return count
 	})
 }
+
+func TestBatch(t *testing.T) {
+	tests := []struct {
+		n     int
+		batch int
+		want  []int
+	}{
+		{40, 10, []int{10, 10, 10, 10}},
+		{5, 10, []int{5}},
+		{45, 10, []int{10, 10, 10, 10, 5}},
+	}
+
+	for _, tt := range tests {
+		got := Batch(tt.n, tt.batch)
+		assert.Equal(t, tt.want, got, "Batch(%v, %v) unexpected result", tt.n, tt.batch)
+	}
+}

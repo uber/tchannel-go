@@ -23,19 +23,15 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/benchmark"
-	"github.com/uber/tchannel-go/raw"
-	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/thrift"
-	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 )
 
 var (
@@ -55,12 +51,18 @@ func main() {
 
 	rdr := bufio.NewScanner(os.Stdin)
 	for rdr.Scan() {
-		var (
-			d   time.Duration
-			err error
-		)
+		line := rdr.Text()
+		parts := strings.Split(line, " ")
+		var n int
+		var err error
+		if len(parts) >= 2 {
+			n, err = strconv.Atoi(parts[1])
+			if err != nil {
+				log.Fatalf("unrecognized number %q: %v", parts[1], err)
+			}
+		}
 
-		switch line := rdr.Text(); line {
+		switch cmd := parts[0]; cmd {
 		case "warmup":
 			if err := client.Warmup(); err != nil {
 				log.Fatalf("warmup failed: %v", err)
@@ -68,20 +70,14 @@ func main() {
 			fmt.Println("success")
 			continue
 		case "rcall":
-			d, err = client.RawCall()
+			makeCalls(n, client.RawCall)
 		case "tcall":
-			d, err = client.ThriftCall()
+			makeCalls(n, client.ThriftCall)
 		case "quit":
 			return
 		default:
 			log.Fatalf("unrecognized command: %v", line)
 		}
-
-		if err != nil {
-			log.Printf("Call failed: %v", err)
-			continue
-		}
-		fmt.Println(d)
 	}
 
 	if err := rdr.Err(); err != nil {
@@ -89,40 +85,16 @@ func main() {
 	}
 }
 
-func makeRawCall(ch *tchannel.Channel) {
-	ctx, cancel := tchannel.NewContext(*timeout)
-	defer cancel()
-
-	arg := testutils.RandBytes(*requestSize)
-	started := time.Now()
-
-	sc := ch.GetSubChannel(*serviceName)
-	rArg2, rArg3, _, err := raw.CallSC(ctx, sc, "echo", arg, arg)
+func makeCalls(n int, f func(n int) ([]time.Duration, error)) {
+	durations, err := f(n)
 	if err != nil {
-		fmt.Println("failed:", err)
-		return
+		log.Fatalf("Call failed: %v", err)
 	}
-	duration := time.Since(started)
-	if !bytes.Equal(rArg2, arg) || !bytes.Equal(rArg3, arg) {
-		log.Fatalf("Echo gave different string!")
+	for i, d := range durations {
+		if i > 0 {
+			fmt.Printf(" ")
+		}
+		fmt.Printf("%v", d)
 	}
-	fmt.Println(duration)
-}
-
-func makeCall(client gen.TChanSecondService) {
-	ctx, cancel := thrift.NewContext(*timeout)
-	defer cancel()
-
-	arg := testutils.RandString(*requestSize)
-	started := time.Now()
-	res, err := client.Echo(ctx, arg)
-	if err != nil {
-		fmt.Println("failed:", err)
-		return
-	}
-	duration := time.Since(started)
-	if res != arg {
-		log.Fatalf("Echo gave different string!")
-	}
-	fmt.Println(duration)
+	fmt.Println()
 }

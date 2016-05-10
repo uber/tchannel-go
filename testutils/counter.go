@@ -66,6 +66,19 @@ func Decrementor(n int) Decrement {
 	}
 }
 
+// Batch returns a slice with n broken into batches of size batchSize.
+func Batch(n, batchSize int) []int {
+	fullBatches := n / batchSize
+	batches := make([]int, 0, fullBatches+1)
+	for i := 0; i < fullBatches; i++ {
+		batches = append(batches, batchSize)
+	}
+	if remaining := n % batchSize; remaining > 0 {
+		batches = append(batches, remaining)
+	}
+	return batches
+}
+
 // RunN runs the given f n times (and passes the run's index) and waits till they complete.
 // It starts n-1 goroutines, and runs one instance in the current goroutine.
 func RunN(n int, f func(i int)) {
