@@ -66,3 +66,12 @@ type Server interface {
 	// ThriftCalls returns the number of Thrift calls the server has received.
 	ThriftCalls() int
 }
+
+// Relay represents a relay for benchmarking.
+type Relay interface {
+	// HostPort is the host:port that the relay is listening on.
+	HostPort() string
+
+	// Close clsoes the relay.
+	Close()
+}
