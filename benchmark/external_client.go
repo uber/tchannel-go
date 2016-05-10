@@ -39,6 +39,9 @@ func newExternalClient(hosts []string, opts *options) Client {
 		"--timeout", opts.timeout.String(),
 		"--request-size", strconv.Itoa(opts.reqSize),
 	}
+	if opts.noLibrary {
+		benchArgs = append(benchArgs, "--no-library")
+	}
 	benchArgs = append(benchArgs, hosts...)
 
 	cmd, initial := newExternalCmd("benchclient/main.go", benchArgs)

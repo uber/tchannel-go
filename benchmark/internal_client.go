@@ -52,6 +52,9 @@ func NewClient(hosts []string, optFns ...Option) Client {
 }
 
 func newClient(hosts []string, opts *options) inProcClient {
+	if opts.noLibrary {
+		return newInternalTCPClient(hosts, opts)
+	}
 	return newInternalClient(hosts, opts)
 }
 

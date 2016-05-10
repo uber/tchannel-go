@@ -38,15 +38,22 @@ var (
 	serviceName = flag.String("service", "bench-server", "The benchmark server's service name")
 	timeout     = flag.Duration("timeout", time.Second, "Timeout for each request")
 	requestSize = flag.Int("request-size", 10000, "The number of bytes of each request")
+	noLibrary   = flag.Bool("no-library", false, "Whether to use the template based library instead of TChannel's client library")
 )
 
 func main() {
 	flag.Parse()
 
-	client := benchmark.NewClient(flag.Args(),
+	opts := []benchmark.Option{
 		benchmark.WithServiceName(*serviceName),
 		benchmark.WithTimeout(*timeout),
-		benchmark.WithRequestSize(*requestSize))
+		benchmark.WithRequestSize(*requestSize),
+	}
+	if *noLibrary {
+		opts = append(opts, benchmark.WithNoLibrary())
+	}
+
+	client := benchmark.NewClient(flag.Args(), opts...)
 	fmt.Println("bench-client started")
 
 	rdr := bufio.NewScanner(os.Stdin)

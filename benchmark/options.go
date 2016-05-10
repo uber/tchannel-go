@@ -23,8 +23,9 @@ package benchmark
 import "time"
 
 type options struct {
-	external bool
-	svcName  string
+	external  bool
+	svcName   string
+	noLibrary bool
 
 	// Following options only make sense for clients.
 	timeout time.Duration
@@ -62,6 +63,14 @@ func WithServiceName(svcName string) Option {
 func WithExternalProcess() Option {
 	return func(opts *options) {
 		opts.external = true
+	}
+}
+
+// WithNoLibrary uses the fast TCP-template based approach for generating
+// TChannel frames rather than the TChannel client library.
+func WithNoLibrary() Option {
+	return func(opts *options) {
+		opts.noLibrary = true
 	}
 }
 
