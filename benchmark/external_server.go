@@ -22,6 +22,7 @@ package benchmark
 
 import (
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -51,4 +52,26 @@ func newExternalServer(opts *options) Server {
 
 func (s *externalServer) HostPort() string {
 	return s.hostPort
+}
+
+func (s *externalServer) RawCalls() int {
+	return s.writeAndReadInt("count-raw")
+}
+
+func (s *externalServer) ThriftCalls() int {
+	return s.writeAndReadInt("count-thrift")
+}
+
+func (s *externalServer) writeAndReadInt(cmd string) int {
+	v, err := s.writeAndRead(cmd)
+	if err != nil {
+		panic(err)
+	}
+
+	vInt, err := strconv.Atoi(v)
+	if err != nil {
+		panic(err)
+	}
+
+	return vInt
 }

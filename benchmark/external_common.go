@@ -56,7 +56,7 @@ func newExternalCmd(mainFile string, benchArgs []string) (*externalCmd, string) 
 	}
 
 	if err := cmd.Start(); err != nil {
-		panic("failed ot start external process: " + err.Error())
+		panic("failed to start external process: " + err.Error())
 	}
 
 	stdoutScanner := bufio.NewScanner(stdout)

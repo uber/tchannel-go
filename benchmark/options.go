@@ -72,7 +72,7 @@ func WithAdvertiseHosts(hosts []string) Option {
 	}
 }
 
-func getOptions(optFns ...Option) *options {
+func getOptions(optFns []Option) *options {
 	opts := &options{
 		timeout: time.Second,
 		svcName: "bench-server",
