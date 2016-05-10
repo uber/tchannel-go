@@ -40,6 +40,7 @@ var (
 	requestSize = flag.Int("request-size", 10000, "The number of bytes of each request")
 	noLibrary   = flag.Bool("no-library", false, "Whether to use the template based library instead of TChannel's client library")
 	numClients  = flag.Int("num-clients", 1, "Number of concurrent clients to run in process")
+	noDurations = flag.Bool("no-durations", false, "Disable printing of latencies to stdout")
 )
 
 func main() {
@@ -99,11 +100,13 @@ func makeCalls(n int, f func(n int) ([]time.Duration, error)) {
 	if err != nil {
 		log.Fatalf("Call failed: %v", err)
 	}
-	for i, d := range durations {
-		if i > 0 {
-			fmt.Printf(" ")
+	if !*noDurations {
+		for i, d := range durations {
+			if i > 0 {
+				fmt.Printf(" ")
+			}
+			fmt.Printf("%v", d)
 		}
-		fmt.Printf("%v", d)
 	}
 	fmt.Println()
 }

@@ -40,6 +40,9 @@ func newExternalClient(hosts []string, opts *options) Client {
 		"--request-size", strconv.Itoa(opts.reqSize),
 		"--num-clients", strconv.Itoa(opts.numClients),
 	}
+	if opts.noDurations {
+		benchArgs = append(benchArgs, "--no-durations")
+	}
 	if opts.noLibrary {
 		benchArgs = append(benchArgs, "--no-library")
 	}
