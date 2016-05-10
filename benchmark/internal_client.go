@@ -48,10 +48,17 @@ func NewClient(hosts []string, optFns ...Option) Client {
 	if opts.external {
 		return newExternalClient(hosts, opts)
 	}
+	if opts.numClients > 1 {
+		return newInternalMultiClient(hosts, opts)
+	}
 	return newClient(hosts, opts)
 }
 
 func newClient(hosts []string, opts *options) inProcClient {
+	if opts.external || opts.numClients > 1 {
+		panic("newClient got options that should be handled by NewClient")
+	}
+
 	if opts.noLibrary {
 		return newInternalTCPClient(hosts, opts)
 	}

@@ -30,6 +30,7 @@ type options struct {
 	// Following options only make sense for clients.
 	timeout time.Duration
 	reqSize int
+	numClients int
 
 	// Following options only make sense for servers.
 	advertiseHosts []string
@@ -71,6 +72,17 @@ func WithExternalProcess() Option {
 func WithNoLibrary() Option {
 	return func(opts *options) {
 		opts.noLibrary = true
+	}
+}
+
+// WithNumClients sets the number of concurrent TChannel clients to use
+// internally under a single benchmark.Client. This is used to generate
+// generate a large amount of traffic, as a single TChannel client will
+// not saturate a CPU since it will spend most of the time blocking and
+// waiting for the remote side to respond.
+func WithNumClients(numClients int) Option {
+	return func(opts *options) {
+		opts.numClients = numClients
 	}
 }
 
