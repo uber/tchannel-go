@@ -38,6 +38,7 @@ func newExternalClient(hosts []string, opts *options) Client {
 		"--service", opts.svcName,
 		"--timeout", opts.timeout.String(),
 		"--request-size", strconv.Itoa(opts.reqSize),
+		"--num-clients", strconv.Itoa(opts.numClients),
 	}
 	if opts.noLibrary {
 		benchArgs = append(benchArgs, "--no-library")

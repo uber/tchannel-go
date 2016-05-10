@@ -39,6 +39,7 @@ var (
 	timeout     = flag.Duration("timeout", time.Second, "Timeout for each request")
 	requestSize = flag.Int("request-size", 10000, "The number of bytes of each request")
 	noLibrary   = flag.Bool("no-library", false, "Whether to use the template based library instead of TChannel's client library")
+	numClients  = flag.Int("num-clients", 1, "Number of concurrent clients to run in process")
 )
 
 func main() {
@@ -48,6 +49,7 @@ func main() {
 		benchmark.WithServiceName(*serviceName),
 		benchmark.WithTimeout(*timeout),
 		benchmark.WithRequestSize(*requestSize),
+		benchmark.WithNumClients(*numClients),
 	}
 	if *noLibrary {
 		opts = append(opts, benchmark.WithNoLibrary())
