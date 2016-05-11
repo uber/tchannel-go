@@ -40,6 +40,19 @@ func TestLogFilterMatches(t *testing.T) {
 		},
 	}
 
+	// fields takes a varargs list of strings which it reads as:
+	// key, value, key, value...
+	fields := func(vals ...string) []tchannel.LogField {
+		fs := make([]tchannel.LogField, len(vals)/2)
+		for i := 0; i < len(vals); i += 2 {
+			fs[i/2] = tchannel.LogField{
+				Key:   vals[i],
+				Value: vals[i+1],
+			}
+		}
+		return fs
+	}
+
 	tests := []struct {
 		Filter  LogFilter
 		Message string
@@ -70,34 +83,34 @@ func TestLogFilterMatches(t *testing.T) {
 		{
 			Filter:  fieldsFilter,
 			Message: "random message",
-			Fields:  tchannel.LogFields{{"f1", "v1"}, {"f2", "v2"}},
+			Fields:  fields("f1", "v1", "f2", "v2"),
 			Match:   false,
 		},
 		{
 			Filter:  fieldsFilter,
 			Message: "msgFilter",
-			Fields:  tchannel.LogFields{{"f1", "v1"}, {"f2", "v2"}},
+			Fields:  fields("f1", "v1", "f2", "v2"),
 			Match:   true,
 		},
 		{
 			// Field mismatch should not match.
 			Filter:  fieldsFilter,
 			Message: "msgFilter",
-			Fields:  tchannel.LogFields{{"f1", "v0"}, {"f2", "v2"}},
+			Fields:  fields("f1", "v0", "f2", "v2"),
 			Match:   false,
 		},
 		{
 			// Missing field should not match.
 			Filter:  fieldsFilter,
 			Message: "msgFilter",
-			Fields:  tchannel.LogFields{{"f2", "v2"}},
+			Fields:  fields("f2", "v2"),
 			Match:   false,
 		},
 		{
 			// Extra fields are OK.
 			Filter:  fieldsFilter,
 			Message: "msgFilter",
-			Fields:  tchannel.LogFields{{"f1", "v0"}, {"f2", "v2"}, {"f3", "v3"}},
+			Fields:  fields("f1", "v0", "f2", "v2", "f3", "v3"),
 			Match:   false,
 		},
 	}

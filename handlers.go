@@ -74,33 +74,54 @@ func (f ErrorHandlerFunc) getLogFields() LogFields {
 type handlerMap struct {
 	sync.RWMutex
 
-	handlers map[string]map[string]Handler
+	handlers map[string]Handler
 }
 
 // Registers a handler
-func (hmap *handlerMap) register(h Handler, serviceName, method string) {
+func (hmap *handlerMap) register(h Handler, method string) {
 	hmap.Lock()
 	defer hmap.Unlock()
 
 	if hmap.handlers == nil {
-		hmap.handlers = make(map[string]map[string]Handler)
+		hmap.handlers = make(map[string]Handler)
 	}
 
-	methods := hmap.handlers[serviceName]
-	if methods == nil {
-		methods = make(map[string]Handler)
-		hmap.handlers[serviceName] = methods
-	}
-
-	methods[method] = h
+	hmap.handlers[method] = h
 }
 
 // Finds the handler matching the given service and method.  See https://github.com/golang/go/issues/3512
 // for the reason that method is []byte instead of a string
-func (hmap *handlerMap) find(serviceName string, method []byte) Handler {
+func (hmap *handlerMap) find(method []byte) Handler {
 	hmap.RLock()
-	handler := hmap.handlers[serviceName][string(method)]
+	handler := hmap.handlers[string(method)]
 	hmap.RUnlock()
 
 	return handler
+}
+
+func (hmap *handlerMap) Handle(ctx context.Context, call *InboundCall) {
+	c := call.conn
+	h := hmap.find(call.Method())
+	if h == nil {
+		c.log.WithFields(
+			LogField{"serviceName", call.ServiceName()},
+			LogField{"method", call.MethodString()},
+		).Error("Couldn't find handler.")
+		call.Response().SendSystemError(
+			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
+		return
+	}
+
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Method(), c.remotePeerInfo)
+	}
+	h.Handle(ctx, call)
+}
+
+// channelHandler is a Handler that wraps a Channel and delegates requests
+// to SubChannels based on the inbound call's service name.
+type channelHandler struct{ ch *Channel }
+
+func (c channelHandler) Handle(ctx context.Context, call *InboundCall) {
+	c.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
 }

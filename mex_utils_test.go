@@ -58,6 +58,9 @@ func CheckEmptyExchangesConns(connections []*ConnectionRuntimeState) string {
 }
 
 // CheckEmptyExchanges checks that all exchanges for the given channel are empty.
+//
+// TODO: Remove CheckEmptyExchanges and friends in favor of
+// testutils.TestServer's verification.
 func CheckEmptyExchanges(ch *Channel) string {
 	state := ch.IntrospectState(&IntrospectionOptions{IncludeExchanges: true})
 	var connections []*ConnectionRuntimeState

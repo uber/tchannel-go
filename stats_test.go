@@ -59,67 +59,76 @@ func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map
 }
 
 func TestStatsCalls(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 
-	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-	clientNow, clientNowFn := testutils.NowStub(initialTime)
-	serverNow, serverNowFn := testutils.NowStub(initialTime)
-	clientNowFn(100 * time.Millisecond)
-	serverNowFn(50 * time.Millisecond)
+	tests := []struct {
+		method  string
+		wantErr bool
+	}{
+		{
+			method: "echo",
+		},
+		{
+			method:  "app-error",
+			wantErr: true,
+		},
+	}
 
-	clientStats := newRecordingStatsReporter()
-	serverStats := newRecordingStatsReporter()
-	serverOpts := testutils.NewOpts().
-		SetStatsReporter(serverStats).
-		SetTimeNow(serverNow)
-	WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
-		handler := raw.Wrap(newTestHandler(t))
-		serverCh.Register(handler, "echo")
-		serverCh.Register(handler, "app-error")
+	for _, tt := range tests {
+		initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
+		clientNow, clientNowFn := testutils.NowStub(initialTime)
+		serverNow, serverNowFn := testutils.NowStub(initialTime)
+		clientNowFn(100 * time.Millisecond)
+		serverNowFn(50 * time.Millisecond)
 
-		ch := testutils.NewClient(t, testutils.NewOpts().
-			SetStatsReporter(clientStats).
-			SetTimeNow(clientNow))
-		defer ch.Close()
+		clientStats := newRecordingStatsReporter()
+		serverStats := newRecordingStatsReporter()
+		serverOpts := testutils.NewOpts().
+			SetStatsReporter(serverStats).
+			SetTimeNow(serverNow)
+		WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
+			handler := raw.Wrap(newTestHandler(t))
+			serverCh.Register(handler, "echo")
+			serverCh.Register(handler, "app-error")
 
-		ctx, cancel := NewContext(time.Second * 5)
-		defer cancel()
+			ch := testutils.NewClient(t, testutils.NewOpts().
+				SetStatsReporter(clientStats).
+				SetTimeNow(clientNow))
+			defer ch.Close()
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, testServiceName, "echo", []byte("Headers"), []byte("Body"))
-		require.NoError(t, err)
+			ctx, cancel := NewContext(time.Second * 5)
+			defer cancel()
 
-		outboundTags := tagsForOutboundCall(serverCh, ch, "echo")
-		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
-		clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
-		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
-		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
-		inboundTags := tagsForInboundCall(serverCh, ch, "echo")
-		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
-		serverStats.Expected.IncCounter("inbound.calls.success", inboundTags, 1)
-		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
+			_, _, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, tt.method, nil, nil)
+			require.NoError(t, err, "Call(%v) should fail", tt.method)
+			assert.Equal(t, tt.wantErr, resp.ApplicationError(), "Call(%v) check application error")
 
-		_, _, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, "app-error", nil, nil)
-		require.NoError(t, err)
-		require.True(t, resp.ApplicationError(), "expected application error")
+			outboundTags := tagsForOutboundCall(serverCh, ch, tt.method)
+			inboundTags := tagsForInboundCall(serverCh, ch, tt.method)
 
-		outboundTags = tagsForOutboundCall(serverCh, ch, "app-error")
-		clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
-		clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
-		clientStats.Expected.IncCounter("outbound.calls.app-errors", outboundTags, 1)
-		clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
-		clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
-		inboundTags = tagsForInboundCall(serverCh, ch, "app-error")
-		serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
-		serverStats.Expected.IncCounter("inbound.calls.app-errors", inboundTags, 1)
-		serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
-	})
+			clientStats.Expected.IncCounter("outbound.calls.send", outboundTags, 1)
+			clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
+			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
+			serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
+			serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
 
-	clientStats.Validate(t)
-	serverStats.Validate(t)
+			if tt.wantErr {
+				clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
+				clientStats.Expected.IncCounter("outbound.calls.app-errors", outboundTags, 1)
+				serverStats.Expected.IncCounter("inbound.calls.app-errors", inboundTags, 1)
+			} else {
+				clientStats.Expected.IncCounter("outbound.calls.success", outboundTags, 1)
+				serverStats.Expected.IncCounter("inbound.calls.success", inboundTags, 1)
+			}
+		})
+
+		clientStats.Validate(t)
+		serverStats.Validate(t)
+	}
 }
 
 func TestStatsWithRetries(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 	a := testutils.DurationArray
 
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)

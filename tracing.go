@@ -23,8 +23,8 @@ package tchannel
 import (
 	"fmt"
 	"math/rand"
-	"time"
 
+	"github.com/uber/tchannel-go/trand"
 	"github.com/uber/tchannel-go/typed"
 )
 
@@ -36,7 +36,7 @@ const (
 )
 
 // traceRng is a thread-safe random number generator for generating trace IDs.
-var traceRng = NewRand(time.Now().UnixNano())
+var traceRng = trand.NewSeeded()
 
 // Span represents Zipkin-style span.
 type Span struct {
@@ -119,5 +119,18 @@ func (s *Span) sampleRootSpan(sampleRate float64) {
 
 	if rand.Float64() > sampleRate {
 		s.EnableTracing(false)
+	}
+}
+
+func newSpan(traceID, spanID, parentID uint64, tracingEnabled bool) *Span {
+	flags := byte(0)
+	if tracingEnabled {
+		flags = tracingFlagEnabled
+	}
+	return &Span{
+		traceID:  traceID,
+		spanID:   spanID,
+		parentID: parentID,
+		flags:    flags,
 	}
 }

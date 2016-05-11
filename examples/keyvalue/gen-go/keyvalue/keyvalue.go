@@ -325,7 +325,7 @@ func (p *keyValueProcessorSet) Process(seqId int32, iprot, oprot thrift.TProtoco
 // Attributes:
 //  - Key
 type KeyValueGetArgs struct {
-	Key string `thrift:"key,1" json:"key"`
+	Key string `thrift:"key,1" db:"key" json:"key"`
 }
 
 func NewKeyValueGetArgs() *KeyValueGetArgs {
@@ -350,7 +350,7 @@ func (p *KeyValueGetArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -368,7 +368,7 @@ func (p *KeyValueGetArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueGetArgs) readField1(iprot thrift.TProtocol) error {
+func (p *KeyValueGetArgs) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -418,9 +418,9 @@ func (p *KeyValueGetArgs) String() string {
 //  - NotFound
 //  - InvalidKey
 type KeyValueGetResult struct {
-	Success    *string      `thrift:"success,0" json:"success,omitempty"`
-	NotFound   *KeyNotFound `thrift:"notFound,1" json:"notFound,omitempty"`
-	InvalidKey *InvalidKey  `thrift:"invalidKey,2" json:"invalidKey,omitempty"`
+	Success    *string      `thrift:"success,0" db:"success" json:"success,omitempty"`
+	NotFound   *KeyNotFound `thrift:"notFound,1" db:"notFound" json:"notFound,omitempty"`
+	InvalidKey *InvalidKey  `thrift:"invalidKey,2" db:"invalidKey" json:"invalidKey,omitempty"`
 }
 
 func NewKeyValueGetResult() *KeyValueGetResult {
@@ -480,15 +480,15 @@ func (p *KeyValueGetResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		default:
@@ -506,7 +506,7 @@ func (p *KeyValueGetResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueGetResult) readField0(iprot thrift.TProtocol) error {
+func (p *KeyValueGetResult) ReadField0(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 0: ", err)
 	} else {
@@ -515,7 +515,7 @@ func (p *KeyValueGetResult) readField0(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueGetResult) readField1(iprot thrift.TProtocol) error {
+func (p *KeyValueGetResult) ReadField1(iprot thrift.TProtocol) error {
 	p.NotFound = &KeyNotFound{}
 	if err := p.NotFound.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.NotFound), err)
@@ -523,7 +523,7 @@ func (p *KeyValueGetResult) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueGetResult) readField2(iprot thrift.TProtocol) error {
+func (p *KeyValueGetResult) ReadField2(iprot thrift.TProtocol) error {
 	p.InvalidKey = &InvalidKey{}
 	if err := p.InvalidKey.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.InvalidKey), err)
@@ -609,8 +609,8 @@ func (p *KeyValueGetResult) String() string {
 //  - Key
 //  - Value
 type KeyValueSetArgs struct {
-	Key   string `thrift:"key,1" json:"key"`
-	Value string `thrift:"value,2" json:"value"`
+	Key   string `thrift:"key,1" db:"key" json:"key"`
+	Value string `thrift:"value,2" db:"value" json:"value"`
 }
 
 func NewKeyValueSetArgs() *KeyValueSetArgs {
@@ -639,11 +639,11 @@ func (p *KeyValueSetArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		default:
@@ -661,7 +661,7 @@ func (p *KeyValueSetArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueSetArgs) readField1(iprot thrift.TProtocol) error {
+func (p *KeyValueSetArgs) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -670,7 +670,7 @@ func (p *KeyValueSetArgs) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueSetArgs) readField2(iprot thrift.TProtocol) error {
+func (p *KeyValueSetArgs) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -734,7 +734,7 @@ func (p *KeyValueSetArgs) String() string {
 // Attributes:
 //  - InvalidKey
 type KeyValueSetResult struct {
-	InvalidKey *InvalidKey `thrift:"invalidKey,1" json:"invalidKey,omitempty"`
+	InvalidKey *InvalidKey `thrift:"invalidKey,1" db:"invalidKey" json:"invalidKey,omitempty"`
 }
 
 func NewKeyValueSetResult() *KeyValueSetResult {
@@ -768,7 +768,7 @@ func (p *KeyValueSetResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -786,7 +786,7 @@ func (p *KeyValueSetResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *KeyValueSetResult) readField1(iprot thrift.TProtocol) error {
+func (p *KeyValueSetResult) ReadField1(iprot thrift.TProtocol) error {
 	p.InvalidKey = &InvalidKey{}
 	if err := p.InvalidKey.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.InvalidKey), err)

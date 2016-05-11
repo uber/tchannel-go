@@ -229,7 +229,7 @@ type testArgs struct {
 }
 
 func ctxArg() mock.AnythingOfTypeArgument {
-	return mock.AnythingOfType("*tchannel.headerCtx")
+	return mock.AnythingOfType("tchannel.headerCtx")
 }
 
 func TestSubmit(t *testing.T) {

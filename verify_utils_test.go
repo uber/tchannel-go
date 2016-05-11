@@ -31,10 +31,11 @@ import (
 )
 
 func waitForChannelClose(t *testing.T, ch *Channel) bool {
+	// TODO: remove standalone use (outside testutils.TestServer).
 	started := time.Now()
 
 	var state ChannelState
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 50; i++ {
 		if state = ch.State(); state == ChannelClosed {
 			return true
 		}
@@ -57,18 +58,7 @@ func waitForChannelClose(t *testing.T, ch *Channel) bool {
 // WithVerifiedServer runs the given test function with a server channel that is verified
 // at the end to make sure there are no leaks (e.g. no exchanges leaked).
 func WithVerifiedServer(t *testing.T, opts *testutils.ChannelOpts, f func(serverCh *Channel, hostPort string)) {
-	var ch *Channel
-	testutils.WithServer(t, opts, func(serverCh *Channel, hostPort string) {
-		f(serverCh, hostPort)
-		ch = serverCh
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		f(ts.Server(), ts.HostPort())
 	})
-
-	if !waitForChannelClose(t, ch) {
-		return
-	}
-
-	// Check the message exchanges and make sure they are all empty.
-	if exchangesLeft := CheckEmptyExchanges(ch); exchangesLeft != "" {
-		t.Errorf("Found uncleared message exchanges:\n%v", exchangesLeft)
-	}
 }

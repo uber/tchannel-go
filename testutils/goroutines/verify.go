@@ -21,54 +21,20 @@
 package goroutines
 
 import (
-	"bufio"
-	"bytes"
-	"io"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
-// isLeak returns whether the given stack contains a stack frame that is considered a leak.
-func (s Stack) isLeak() bool {
-	isLeakLine := func(line string) bool {
-		return strings.Contains(line, "(*Channel).Serve") ||
-			strings.Contains(line, "(*Connection).readFrames") ||
-			strings.Contains(line, "(*Connection).writeFrames") ||
-			strings.Contains(line, "(*Connection).dispatchInbound.func")
-	}
-
-	lineReader := bufio.NewReader(bytes.NewReader(s.fullStack.Bytes()))
-	for {
-		line, err := lineReader.ReadString('\n')
-		if err == io.EOF {
-			return false
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		if isLeakLine(line) {
-			return true
-		}
-	}
-}
-
-func getLeakStacks(stacks []Stack) []Stack {
-	var leakStacks []Stack
-	for _, s := range stacks {
-		if s.isLeak() {
-			leakStacks = append(leakStacks, s)
-		}
-	}
-	return leakStacks
-}
-
 // filterStacks will filter any stacks excluded by the given VerifyOpts.
-func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
+func filterStacks(stacks []Stack, skipID int, opts *VerifyOpts) []Stack {
 	filtered := stacks[:0]
 	for _, stack := range stacks {
+		if stack.ID() == skipID || isTestStack(stack) {
+			continue
+		}
 		if opts.ShouldSkip(stack) {
 			continue
 		}
@@ -77,57 +43,46 @@ func filterStacks(stacks []Stack, opts *VerifyOpts) []Stack {
 	return filtered
 }
 
-// VerifyNoLeaks verifies that there are no goroutines running that are stuck
-// inside of readFrames or writeFrames.
-// Since some goroutines may still be performing work in the background, we retry the
-// checks if any goroutines are fine in a running state a finite number of times.
-func VerifyNoLeaks(t *testing.T, opts *VerifyOpts) {
-	retryStates := map[string]struct{}{
-		"runnable": struct{}{},
-		"running":  struct{}{},
-		"syscall":  struct{}{},
+func isTestStack(s Stack) bool {
+	switch funcName := s.firstFunction; funcName {
+	case "testing.RunTests", "testing.(*T).Run":
+		return strings.HasPrefix(s.State(), "chan receive")
+	case "runtime.goexit":
+		return strings.HasPrefix(s.State(), "syscall")
+	default:
+		return false
 	}
+}
+
+// IdentifyLeaks looks for extra goroutines, and returns a descriptive error if
+// it finds any.
+func IdentifyLeaks(opts *VerifyOpts) error {
+	cur := GetCurrentStack().id
+
 	const maxAttempts = 50
-	var leakAttempts int
 	var stacks []Stack
-
-retry:
 	for i := 0; i < maxAttempts; i++ {
-		// Ignore the first stack which is the current goroutine that is doing the verification.
-		stacks = GetAll()[1:]
-		stacks = filterStacks(stacks, opts)
-		for _, stack := range stacks {
-			if _, ok := retryStates[stack.State()]; ok {
-				runtime.Gosched()
-				if i > maxAttempts/2 {
-					time.Sleep(time.Millisecond)
-				}
-				continue retry
-			}
+		stacks = GetAll()
+		stacks = filterStacks(stacks, cur, opts)
+
+		if len(stacks) == 0 {
+			return nil
 		}
 
-		// There are no running/runnable goroutines, so check for bad leaks.
-		leakStacks := getLeakStacks(stacks)
-
-		// If there are leaks found, retry 3 times since the goroutine's state
-		// may not yet have updated.
-		if len(leakStacks) > 0 && leakAttempts < 3 {
-			leakAttempts++
-			i--
-			continue
+		if i > maxAttempts/2 {
+			time.Sleep(time.Duration(i) * time.Millisecond)
+		} else {
+			runtime.Gosched()
 		}
-
-		for _, v := range leakStacks {
-			t.Errorf("Found leaked goroutine: %v", v)
-		}
-
-		// Note: we cannot use NumGoroutine here as it includes system goroutines
-		// while runtime.Stack does not: https://github.com/golang/go/issues/11706
-		if len(stacks) > 2 {
-			t.Errorf("Expect at most 2 goroutines, found more:\n%s", stacks)
-		}
-		return
 	}
 
-	t.Errorf("VerifyNoBlockedGoroutines failed: too many retries. Stacks:\n%s", stacks)
+	return fmt.Errorf("found unexpected goroutines:\n%s", stacks)
+}
+
+// VerifyNoLeaks calls IdentifyLeaks and fails the test if it finds any leaked
+// goroutines.
+func VerifyNoLeaks(t testing.TB, opts *VerifyOpts) {
+	if err := IdentifyLeaks(opts); err != nil {
+		t.Error(err.Error())
+	}
 }

@@ -20,8 +20,8 @@ var GoUnusedProtection__ int
 //  - Healthy
 //  - Msg
 type HealthCheckRes struct {
-	Healthy bool   `thrift:"healthy,1" json:"healthy"`
-	Msg     string `thrift:"msg,2" json:"msg"`
+	Healthy bool   `thrift:"healthy,1" db:"healthy" json:"healthy"`
+	Msg     string `thrift:"msg,2" db:"msg" json:"msg"`
 }
 
 func NewHealthCheckRes() *HealthCheckRes {
@@ -50,11 +50,11 @@ func (p *HealthCheckRes) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		default:
@@ -72,7 +72,7 @@ func (p *HealthCheckRes) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HealthCheckRes) readField1(iprot thrift.TProtocol) error {
+func (p *HealthCheckRes) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBool(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -81,7 +81,7 @@ func (p *HealthCheckRes) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HealthCheckRes) readField2(iprot thrift.TProtocol) error {
+func (p *HealthCheckRes) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {

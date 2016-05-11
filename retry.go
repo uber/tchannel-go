@@ -139,7 +139,12 @@ var requestStatePool = sync.Pool{
 }
 
 func getRetryOptions(ctx context.Context) *RetryOptions {
-	opts := getTChannelParams(ctx).retryOptions
+	params := getTChannelParams(ctx)
+	if params == nil {
+		return defaultRetryOptions
+	}
+
+	opts := params.retryOptions
 	if opts == nil {
 		return defaultRetryOptions
 	}
@@ -226,6 +231,9 @@ func (ch *Channel) RunWithRetry(runCtx context.Context, f RetriableFunc) error {
 			return nil
 		}
 		if !opts.RetryOn.CanRetry(err) {
+			if ch.log.Enabled(LogLevelInfo) {
+				ch.log.Infof("Failed after non-retriable error: %v", err)
+			}
 			return err
 		}
 

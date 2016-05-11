@@ -1,0 +1,46 @@
+hash: 94cf21a5f9069d934bbf173edaba5721096530c263582703175cc660f776e76e
+updated: 2016-05-04T15:58:15.151222656-07:00
+imports:
+- name: github.com/apache/thrift
+  version: 6ee1a0bd263b0dc3b863285763342fb3ddc3ede4
+  subpackages:
+  - lib/go/thrift
+- name: github.com/bmizerany/perks
+  version: d9a9656a3a4b1c2864fdb44db2ef8619772d92aa
+  subpackages:
+  - quantile
+- name: github.com/cactus/go-statsd-client
+  version: 53fcd3082b7e2cfc3df66e83e492bccda879936e
+  subpackages:
+  - statsd
+- name: github.com/davecgh/go-spew
+  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  subpackages:
+  - spew
+- name: github.com/jessevdk/go-flags
+  version: 6b9493b3cb60367edd942144879646604089e3f7
+- name: github.com/pmezard/go-difflib
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
+  subpackages:
+  - difflib
+- name: github.com/samuel/go-thrift
+  version: e9042807f4f5bf47563df6992d3ea0857313e2be
+  subpackages:
+  - parser
+- name: github.com/streadway/quantile
+  version: b0c588724d25ae13f5afb3d90efec0edc636432b
+- name: github.com/stretchr/objx
+  version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
+- name: github.com/stretchr/testify
+  version: 6cb3b85ef5a0efef77caef88363ec4d4b5c0976d
+  subpackages:
+  - assert
+  - mock
+  - require
+- name: golang.org/x/net
+  version: 35ec611a141ee705590b9eb64d673f9e6dfeb1ac
+  subpackages:
+  - context
+- name: gopkg.in/yaml.v2
+  version: a83829b6f1293c91addabc89d0571c246397bbf4
+devImports: []

@@ -59,16 +59,12 @@ const (
 
 const hyperbahnServiceName = "hyperbahn"
 
-// UnmarshalYAML implements the yaml.UnmarshalYAML interface. This allows FailStrategy
-// to be specified as a string (e.g. "fatal") in configuration files.
-func (f *FailStrategy) UnmarshalYAML(unmarshal func(v interface{}) error) error {
-	var strategy string
-	if err := unmarshal(&strategy); err != nil {
-		return err
-	}
-
-	switch strategy {
-	case "fatal":
+// UnmarshalText implements encoding/text.Unmarshaler.
+// This allows FailStrategy to be specified as a string in many
+// file formats (e.g. JSON, YAML, TOML).
+func (f *FailStrategy) UnmarshalText(text []byte) error {
+	switch strategy := string(text); strategy {
+	case "", "fatal":
 		*f = FailStrategyFatal
 	case "ignore":
 		*f = FailStrategyIgnore
@@ -86,6 +82,10 @@ type ClientOptions struct {
 	TimeoutPerAttempt time.Duration
 	Handler           Handler
 	FailStrategy      FailStrategy
+
+	// The following are variables for stubbing in unit tests.
+	// They are not part of the stable API and may change.
+	TimeSleep func(d time.Duration)
 }
 
 // NewClient creates a new Hyperbahn client using the given channel.
@@ -104,6 +104,9 @@ func NewClient(ch *tchannel.Channel, config Configuration, opts *ClientOptions) 
 	}
 	if client.opts.Handler == nil {
 		client.opts.Handler = nullHandler{}
+	}
+	if client.opts.TimeSleep == nil {
+		client.opts.TimeSleep = time.Sleep
 	}
 
 	if err := parseConfig(&config); err != nil {

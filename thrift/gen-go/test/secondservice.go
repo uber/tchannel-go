@@ -220,7 +220,7 @@ func (p *secondServiceProcessorEcho) Process(seqId int32, iprot, oprot thrift.TP
 // Attributes:
 //  - Arg
 type SecondServiceEchoArgs struct {
-	Arg string `thrift:"arg,1" json:"arg"`
+	Arg string `thrift:"arg,1" db:"arg" json:"arg"`
 }
 
 func NewSecondServiceEchoArgs() *SecondServiceEchoArgs {
@@ -245,7 +245,7 @@ func (p *SecondServiceEchoArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -263,7 +263,7 @@ func (p *SecondServiceEchoArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SecondServiceEchoArgs) readField1(iprot thrift.TProtocol) error {
+func (p *SecondServiceEchoArgs) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -311,7 +311,7 @@ func (p *SecondServiceEchoArgs) String() string {
 // Attributes:
 //  - Success
 type SecondServiceEchoResult struct {
-	Success *string `thrift:"success,0" json:"success,omitempty"`
+	Success *string `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewSecondServiceEchoResult() *SecondServiceEchoResult {
@@ -345,7 +345,7 @@ func (p *SecondServiceEchoResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -363,7 +363,7 @@ func (p *SecondServiceEchoResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SecondServiceEchoResult) readField0(iprot thrift.TProtocol) error {
+func (p *SecondServiceEchoResult) ReadField0(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 0: ", err)
 	} else {

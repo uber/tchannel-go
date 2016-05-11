@@ -20,7 +20,11 @@
 
 package main
 
-import "github.com/samuel/go-thrift/parser"
+import (
+	"strings"
+
+	"github.com/samuel/go-thrift/parser"
+)
 
 // Include represents a single include statement in the Thrift file.
 type Include struct {
@@ -33,12 +37,12 @@ func (i *Include) Import() string {
 	// TODO(prashant): Rename imports so they don't clash with standard imports.
 	// This is not high priority since Apache thrift clashes already with "bytes" and "fmt".
 	// which are the same imports we would clash with.
-	return *packagePrefix + i.key
+	return *packagePrefix + i.Package()
 }
 
 // Package returns the package selector for this package.
 func (i *Include) Package() string {
-	return i.key
+	return strings.ToLower(i.key)
 }
 
 func createIncludes(parsed *parser.Thrift) map[string]*Include {

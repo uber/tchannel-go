@@ -13,3 +13,5 @@ lint.log
 *.swp
 .DS_Store
 .idea
+tchannel-go.iml
+.vscode

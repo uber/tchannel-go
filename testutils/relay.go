@@ -21,24 +21,30 @@
 package testutils
 
 import (
+	"io"
 	"net"
-	"sync/atomic"
+	"sync"
 	"testing"
+
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go"
 )
 
 type frameRelay struct {
+	sync.Mutex // protects conns
+
 	t           *testing.T
 	destination string
 	relayFunc   func(outgoing bool, f *tchannel.Frame) *tchannel.Frame
+	closed      atomic.Uint32
+	conns       []net.Conn
+	wg          sync.WaitGroup
 }
 
-func (r frameRelay) listen() (listenHostPort string, cancel func()) {
-	closed := uint32(0)
-
+func (r *frameRelay) listen() (listenHostPort string, cancel func()) {
 	conn, err := net.Listen("tcp", ":0")
 	require.NoError(r.t, err, "net.Listen failed")
 
@@ -46,40 +52,82 @@ func (r frameRelay) listen() (listenHostPort string, cancel func()) {
 		for {
 			c, err := conn.Accept()
 			if err != nil {
-				if atomic.LoadUint32(&closed) == 0 {
+				if r.closed.Load() == 0 {
 					r.t.Errorf("Accept failed: %v", err)
 				}
 				return
 			}
+
+			r.Lock()
+			r.conns = append(r.conns, c)
+			r.Unlock()
 
 			r.relayConn(c)
 		}
 	}()
 
 	return conn.Addr().String(), func() {
-		atomic.AddUint32(&closed, 1)
+		r.closed.Inc()
 		conn.Close()
+		r.Lock()
+		for _, c := range r.conns {
+			c.Close()
+		}
+		r.Unlock()
+		// Wait for all the outbound connections we created to close.
+		r.wg.Wait()
 	}
 }
 
-func (r frameRelay) relayConn(c net.Conn) {
+func (r *frameRelay) relayConn(c net.Conn) {
 	outC, err := net.Dial("tcp", r.destination)
-
-	if assert.NoError(r.t, err, "relay connection failed") {
-		go r.relayBetween(true /* outgoing */, c, outC)
-		go r.relayBetween(false /* outgoing */, outC, c)
+	if !assert.NoError(r.t, err, "relay connection failed") {
+		return
 	}
+	r.Lock()
+	defer r.Unlock()
+
+	if r.closed.Load() > 0 {
+		outC.Close()
+		return
+	}
+
+	r.conns = append(r.conns, outC)
+
+	r.wg.Add(2)
+	go r.relayBetween(true /* outgoing */, c, outC)
+	go r.relayBetween(false /* outgoing */, outC, c)
 }
 
-func (r frameRelay) relayBetween(outgoing bool, c net.Conn, outC net.Conn) {
+func (r *frameRelay) relayBetween(outgoing bool, c net.Conn, outC net.Conn) {
+	defer r.wg.Done()
+
 	frame := tchannel.NewFrame(tchannel.MaxFramePayloadSize)
 	for {
-		if !assert.NoError(r.t, frame.ReadIn(c), "read frame failed") {
+		err := frame.ReadIn(c)
+		if err == io.EOF {
+			// Connection gracefully closed.
+			return
+		}
+		if err != nil && r.closed.Load() > 0 {
+			// Once the relay is shutdown, we expect connection errors.
+			return
+		}
+		if !assert.NoError(r.t, err, "read frame failed") {
 			return
 		}
 
-		frame = r.relayFunc(outgoing, frame)
-		if !assert.NoError(r.t, frame.WriteOut(outC), "write frame failed") {
+		outFrame := r.relayFunc(outgoing, frame)
+		if outFrame == nil {
+			continue
+		}
+
+		err = outFrame.WriteOut(outC)
+		if err != nil && r.closed.Load() > 0 {
+			// Once the relay is shutdown, we expect connection errors.
+			return
+		}
+		if !assert.NoError(r.t, err, "write frame failed") {
 			return
 		}
 	}
@@ -87,5 +135,10 @@ func (r frameRelay) relayBetween(outgoing bool, c net.Conn, outC net.Conn) {
 
 // FrameRelay sets up a relay that can modify frames using relayFunc.
 func FrameRelay(t *testing.T, destination string, relayFunc func(outgoing bool, f *tchannel.Frame) *tchannel.Frame) (listenHostPort string, cancel func()) {
-	return frameRelay{t, destination, relayFunc}.listen()
+	relay := &frameRelay{
+		t:           t,
+		destination: destination,
+		relayFunc:   relayFunc,
+	}
+	return relay.listen()
 }

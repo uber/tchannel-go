@@ -1,6 +1,33 @@
 Changelog
 =========
 
+# 1.0.5
+
+* Use `context.Context` storage for headers so `thrift.Context` and
+  `tchannel.ContextWithHeaders` can be passed to functions that use
+  `context.Context`, and have them retain headers.
+* `thrift.Server` allows a custom factory to be used for `thrift.Context`
+  creation based on the underlying `context.Context` and headers map.
+* Store goroutine stack traces on channel creation that can be accessed
+  via introspection.
+
+# 1.0.4
+
+* Improve handling of network failures during pending calls. Previously, calls
+  would timeout, but now they fail as soon as the network failure is detected.
+* Remove ephemeral peers with closed outbound connections.
+* #233: Ensure errors returned from Thrift handlers have a non-nil value.
+* #228: Add registered methods to the introspection output.
+* Add ability to set a global handler for a SubChannel.
+
+# 1.0.3
+
+* Improved performance when writing Thrift structs
+* Make closing message exchanges less disruptive, changes a panic due to
+  closing a channel twice to an error log.
+* Introspection now includes information about all channels created
+  in the current process.
+
 # 1.0.2
 
 * Extend the `ContextBuilder` API to support setting the transport-level

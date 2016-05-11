@@ -21,19 +21,31 @@
 package testutils
 
 import (
-	"flag"
 	"fmt"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-var timeoutMultiplier = flag.Float64("timeoutMultiplier", 1, "All calls to {Get,Set}Timeout have their timeout multiplied by this value")
+var timeoutScaleFactor = 1.0
+
+func init() {
+	if v := os.Getenv("TEST_TIMEOUT_SCALE"); v != "" {
+		fv, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			panic(err)
+		}
+		timeoutScaleFactor = fv
+		fmt.Fprintln(os.Stderr, "Scaling timeouts by factor", timeoutScaleFactor)
+	}
+}
 
 // Timeout returns the timeout multiplied by any set multiplier.
 func Timeout(timeout time.Duration) time.Duration {
-	return time.Duration(*timeoutMultiplier * float64(timeout))
+	return time.Duration(timeoutScaleFactor * float64(timeout))
 }
 
 // getCallerName returns the test name that called this function.
@@ -57,20 +69,14 @@ func SetTimeout(t *testing.T, timeout time.Duration) func() {
 	timeout = Timeout(timeout)
 
 	caller := getCallerName()
-	c := make(chan struct{})
 
-	go func() {
-		select {
-		case <-c:
-			// Test is complete, don't need to do anything.
-		case <-time.After(timeout):
-			t.Logf("Test %s timed out after %v", caller, timeout)
-			// Unfortunately, tests cannot be failed from new goroutines, so use a panic.
-			panic(fmt.Errorf("Test %s timed out after %v", caller, timeout))
-		}
-	}()
+	timer := time.AfterFunc(timeout, func() {
+		t.Logf("Test %s timed out after %v", caller, timeout)
+		// Unfortunately, tests cannot be failed from new goroutines, so use a panic.
+		panic(fmt.Errorf("Test %s timed out after %v", caller, timeout))
+	})
 
 	return func() {
-		c <- struct{}{}
+		timer.Stop()
 	}
 }

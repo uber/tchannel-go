@@ -41,9 +41,6 @@ const (
 	advertiseRetryInterval = 1 * time.Second
 )
 
-// timeSleep is a variable for stubbing in unit tests.
-var timeSleep = time.Sleep
-
 // ErrAdvertiseFailed is triggered when advertise fails.
 type ErrAdvertiseFailed struct {
 	// WillRetry is set to true if advertise will be retried.
@@ -84,7 +81,7 @@ func (c *Client) advertiseLoop() {
 	consecutiveFailures := uint(0)
 
 	for {
-		timeSleep(sleepFor)
+		c.sleep(sleepFor)
 		if c.IsClosed() {
 			c.tchan.Logger().Infof("Hyperbahn client closed")
 			return
@@ -129,7 +126,11 @@ func (c *Client) initialAdvertise() error {
 
 		// Back off for a while.
 		sleepFor := fuzzInterval(advertiseRetryInterval * time.Duration(1<<attempt))
-		timeSleep(sleepFor)
+		c.sleep(sleepFor)
 	}
 	return err
+}
+
+func (c *Client) sleep(d time.Duration) {
+	c.opts.TimeSleep(d)
 }

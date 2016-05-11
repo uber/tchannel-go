@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	// Test is in a separate package to avoid circular dependencies.
 	. "github.com/uber/tchannel-go/thrift"
 
@@ -53,7 +55,7 @@ type testArgs struct {
 }
 
 func ctxArg() mock.AnythingOfTypeArgument {
-	return mock.AnythingOfType("*tchannel.headerCtx")
+	return mock.AnythingOfType("tchannel.headerCtx")
 }
 
 func TestThriftArgs(t *testing.T) {
@@ -88,8 +90,8 @@ func TestRetryRequest(t *testing.T) {
 		count := 0
 		args.s1.On("Simple", ctxArg()).Return(tchannel.ErrServerBusy).
 			Run(func(args mock.Arguments) {
-			count++
-		})
+				count++
+			})
 		require.Error(t, args.c1.Simple(ctx), "Simple expected to fail")
 		assert.Equal(t, 5, count, "Expected Simple to be retried 5 times")
 	})
@@ -148,6 +150,17 @@ func TestThriftError(t *testing.T) {
 		got := args.c1.Simple(ctx)
 		require.Error(t, got)
 		require.Equal(t, thriftErr, got)
+	})
+}
+
+func TestThriftNilErr(t *testing.T) {
+	var thriftErr *gen.SimpleErr
+	withSetup(t, func(ctx Context, args testArgs) {
+		args.s1.On("Simple", ctxArg()).Return(thriftErr)
+		got := args.c1.Simple(ctx)
+		require.Error(t, got)
+		require.Contains(t, got.Error(), "non-nil error type")
+		require.Contains(t, got.Error(), "nil value")
 	})
 }
 
@@ -279,6 +292,21 @@ func TestThriftTimeout(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Echo handler did not run")
 		}
+	})
+}
+
+func TestThriftContextFn(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		args.server.SetContextFn(func(ctx context.Context, method string, headers map[string]string) Context {
+			return WithHeaders(ctx, map[string]string{"custom": "headers"})
+		})
+
+		args.s2.On("Echo", ctxArg(), "test").Return("test", nil).Run(func(args mock.Arguments) {
+			ctx := args.Get(0).(Context)
+			assert.Equal(t, "headers", ctx.Headers()["custom"], "Custom header is missing")
+		})
+		_, err := args.c2.Echo(ctx, "test")
+		assert.NoError(t, err, "Echo failed")
 	})
 }
 

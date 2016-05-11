@@ -36,8 +36,29 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 )
 
+func fakePeer(t *testing.T, ch *Channel, hostPort string) *Peer {
+	ch.Peers().Add(hostPort)
+
+	peer, err := ch.Peers().Get(nil)
+	require.NoError(t, err, "Unexpected error getting peer from heap.")
+	require.Equal(t, hostPort, peer.HostPort(), "Got unexpected peer.")
+
+	in, out := peer.NumConnections()
+	require.Equal(t, 0, in, "Expected new peer to have no incoming connections.")
+	require.Equal(t, 0, out, "Expected new peer to have no outgoing connections.")
+
+	return peer
+}
+
+func assertNumConnections(t *testing.T, peer *Peer, in, out int) {
+	actualIn, actualOut := peer.NumConnections()
+	assert.Equal(t, actualIn, in, "Expected %v incoming connection.", in)
+	assert.Equal(t, actualOut, out, "Expected %v outgoing connection.", out)
+}
+
 func TestGetPeerNoPeer(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	peer, err := ch.Peers().Get(nil)
 	assert.Equal(t, ErrNoPeers, err, "Empty peer list should return error")
 	assert.Nil(t, peer, "should not return peer")
@@ -45,6 +66,7 @@ func TestGetPeerNoPeer(t *testing.T) {
 
 func TestGetPeerSinglePeer(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	ch.Peers().Add("1.1.1.1:1234")
 
 	peer, err := ch.Peers().Get(nil)
@@ -61,6 +83,7 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 	)
 
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 	a, m := testutils.StrArray, testutils.StrMap
 	tests := []struct {
 		msg          string
@@ -136,6 +159,31 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 	}
 }
 
+func TestPeerRemoveClosedConnection(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		p := client.Peers().Add(hostPort)
+
+		c1, err := p.Connect(ctx)
+		require.NoError(t, err, "Failed to connect")
+		c2, err := p.Connect(ctx)
+		require.NoError(t, err, "Failed to connect")
+
+		require.NoError(t, c1.Close(), "Failed to close first connection")
+		_, outConns := p.NumConnections()
+		assert.Equal(t, 1, outConns, "Expected 1 remaining outgoing connection")
+
+		c, err := p.GetConnection(ctx)
+		require.NoError(t, err, "GetConnection failed")
+		assert.Equal(t, c2, c, "Expected second active connection")
+	})
+}
+
 func TestInboundEphemeralPeerRemoved(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -161,6 +209,26 @@ func TestInboundEphemeralPeerRemoved(t *testing.T) {
 	})
 }
 
+func TestOutboundEphemeralPeerRemoved(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		outbound := testutils.NewServer(t, testutils.NewOpts().SetServiceName("asd	"))
+		assert.NoError(t, ch.Ping(ctx, outbound.PeerInfo().HostPort), "Ping to outbound failed")
+		outboundHP := outbound.PeerInfo().HostPort
+
+		// Server should have a peer for hostPort that should be gone.
+		waitTillNConnections(t, ch, outboundHP, 0, 0, func() {
+			outbound.Close()
+		})
+		assert.Equal(t, ChannelClosed, outbound.State(), "Outbound should be closed")
+
+		_, ok := ch.RootPeers().Get(outboundHP)
+		assert.False(t, ok, "server's root peers should remove outbound peer")
+	})
+}
+
 func TestOutboundPeerNotAdded(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -181,7 +249,10 @@ func TestOutboundPeerNotAdded(t *testing.T) {
 }
 
 func TestRemovePeerNotFound(t *testing.T) {
-	peers := testutils.NewClient(t, nil).Peers()
+	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+
+	peers := ch.Peers()
 	peers.Add("1.1.1.1:1")
 	assert.Error(t, peers.Remove("not-found"), "Remove should fa")
 	assert.NoError(t, peers.Remove("1.1.1.1:1"), "Remove shouldn't fail for existing peer")
@@ -235,6 +306,33 @@ func TestPeerRemovedFromRootPeers(t *testing.T) {
 			assert.Equal(t, tt.expectFound, found, "Peer found mismatch, addHostPort: %v", tt.addHostPort)
 		})
 	}
+}
+
+func TestPeerSelectionConnClosed(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(server *Channel, hostPort string) {
+		client := testutils.NewServer(t, nil)
+		defer client.Close()
+
+		// Ping will create an outbound connection from client -> server.
+		require.NoError(t, testutils.Ping(client, server), "Ping failed")
+
+		waitTillInboundEmpty(t, server, client.PeerInfo().HostPort, func() {
+			peer, ok := client.RootPeers().Get(server.PeerInfo().HostPort)
+			require.True(t, ok, "Client has no peer for %v", server.PeerInfo())
+
+			conn, err := peer.GetConnection(ctx)
+			require.NoError(t, err, "Failed to get a connection")
+			conn.Close()
+		})
+
+		// Make sure the closed connection is not used.
+		for i := 0; i < 10; i++ {
+			require.NoError(t, testutils.Ping(client, server), "Ping failed")
+		}
+	})
 }
 
 func TestPeerSelectionPreferIncoming(t *testing.T) {
@@ -415,10 +513,12 @@ func TestPeerSelection(t *testing.T) {
 
 		strategy, count := createScoreStrategy(0, 1)
 		s2, _ := pt.NewService(t, "S2", "S2")
+		defer s2.Close()
+
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
-		assert.EqualValues(t, 4, *count, "Expect exchange update from init resp, ping, pong")
+		assert.EqualValues(t, 4, atomic.LoadUint64(count), "Expect exchange update from init resp, ping, pong")
 	})
 }
 
@@ -452,6 +552,7 @@ func reverse(s []string) {
 func TestIsolatedPeerHeap(t *testing.T) {
 	const numPeers = 10
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 
 	ps1 := createSubChannelWNewStrategy(ch, "S1", numPeers, 1)
 	ps2 := createSubChannelWNewStrategy(ch, "S2", numPeers, -1, Isolated)
@@ -484,6 +585,7 @@ func TestPeerSelectionRanking(t *testing.T) {
 
 	for i := 0; i < numIterations; i++ {
 		ch := testutils.NewClient(t, nil)
+		defer ch.Close()
 		ch.SetRandomSeed(int64(i * 100))
 
 		for i := 0; i < numPeers; i++ {
@@ -503,15 +605,17 @@ func TestPeerSelectionRanking(t *testing.T) {
 	}
 }
 
-func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, count *int64) {
-	var score uint64
-	count = new(int64)
+func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, retCount *uint64) {
+	var (
+		count uint64
+		score uint64
+	)
 
 	return ScoreCalculatorFunc(func(p *Peer) uint64 {
-		atomic.AddInt64(count, 1)
+		atomic.AddUint64(&count, 1)
 		atomic.AddUint64(&score, uint64(delta))
 		return atomic.LoadUint64(&score)
-	}), count
+	}), &count
 }
 
 func createSubChannelWNewStrategy(ch *Channel, name string, initial, delta int64, opts ...SubChannelOption) *PeerList {
@@ -530,18 +634,25 @@ func testDistribution(t testing.TB, counts map[string]int, min, max float64) {
 	}
 }
 
-// waitTillInboundEmpty will run f which should end up causing the peer with hostPort in ch
-// to have 0 inbound connections. It will fail the test after a second.
-func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string, f func()) {
+// waitTillNConnetions will run f which should end up causing the peer with hostPort in ch
+// to have the specified number of inbound and outbound connections.
+// If the number of connections does not match after a second, the test is failed.
+func waitTillNConnections(t *testing.T, ch *Channel, hostPort string, inbound, outbound int, f func()) {
 	peer, ok := ch.RootPeers().Get(hostPort)
 	if !ok {
 		return
 	}
 
+	var (
+		i = -1
+		o = -1
+	)
+
 	inboundEmpty := make(chan struct{})
 	var onUpdateOnce sync.Once
 	onUpdate := func(p *Peer) {
-		if inbound, _ := p.NumConnections(); inbound == 0 {
+		if i, o = p.NumConnections(); (i == inbound || inbound == -1) &&
+			(o == outbound || outbound == -1) {
 			onUpdateOnce.Do(func() {
 				close(inboundEmpty)
 			})
@@ -555,8 +666,15 @@ func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string, f func()) 
 	case <-inboundEmpty:
 		return
 	case <-time.After(time.Second):
-		t.Errorf("Timed out waiting for peer %v to have no inbound connections", hostPort)
+		t.Errorf("Timed out waiting for peer %v to have (in: %v, out: %v) connections, got (in: %v, out: %v)",
+			hostPort, inbound, outbound, i, o)
 	}
+}
+
+// waitTillInboundEmpty will run f which should end up causing the peer with hostPort in ch
+// to have 0 inbound connections. It will fail the test after a second.
+func waitTillInboundEmpty(t *testing.T, ch *Channel, hostPort string, f func()) {
+	waitTillNConnections(t, ch, hostPort, 0, -1, f)
 }
 
 type peerSelectionTest struct {

@@ -40,3 +40,30 @@ func GetClosedHostPort(t testing.TB) string {
 
 	return listener.Addr().String()
 }
+
+// GetAcceptCloseHostPort returns a host:port that will accept a connection then
+// immediately close it. The returned function can be used to stop the listener.
+func GetAcceptCloseHostPort(t testing.TB) (string, func()) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen failed: %v", err)
+		return "", nil
+	}
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+
+			conn.Close()
+		}
+	}()
+
+	return listener.Addr().String(), func() {
+		if err := listener.Close(); err != nil {
+			t.Fatalf("listener.Close failed")
+		}
+	}
+}

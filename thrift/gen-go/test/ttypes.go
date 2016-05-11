@@ -21,9 +21,9 @@ var GoUnusedProtection__ int
 //  - S2
 //  - I3
 type Data struct {
-	B1 bool   `thrift:"b1,1" json:"b1"`
-	S2 string `thrift:"s2,2" json:"s2"`
-	I3 int32  `thrift:"i3,3" json:"i3"`
+	B1 bool   `thrift:"b1,1" db:"b1" json:"b1"`
+	S2 string `thrift:"s2,2" db:"s2" json:"s2"`
+	I3 int32  `thrift:"i3,3" db:"i3" json:"i3"`
 }
 
 func NewData() *Data {
@@ -56,15 +56,15 @@ func (p *Data) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 		default:
@@ -82,7 +82,7 @@ func (p *Data) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Data) readField1(iprot thrift.TProtocol) error {
+func (p *Data) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBool(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -91,7 +91,7 @@ func (p *Data) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Data) readField2(iprot thrift.TProtocol) error {
+func (p *Data) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -100,7 +100,7 @@ func (p *Data) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *Data) readField3(iprot thrift.TProtocol) error {
+func (p *Data) ReadField3(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 3: ", err)
 	} else {
@@ -180,7 +180,7 @@ func (p *Data) String() string {
 // Attributes:
 //  - Message
 type SimpleErr struct {
-	Message string `thrift:"message,1" json:"message"`
+	Message string `thrift:"message,1" db:"message" json:"message"`
 }
 
 func NewSimpleErr() *SimpleErr {
@@ -205,7 +205,7 @@ func (p *SimpleErr) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -223,7 +223,7 @@ func (p *SimpleErr) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SimpleErr) readField1(iprot thrift.TProtocol) error {
+func (p *SimpleErr) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {

@@ -36,38 +36,49 @@ func TestRequestStateRetry(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	server := testutils.NewServer(t, nil)
-	defer server.Close()
-	server.Register(raw.Wrap(newTestHandler(t)), "echo")
+	opts := testutils.NewOpts().SetRelay()
 
-	client := testutils.NewClient(t, nil)
-	defer client.Close()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
-	counter := 0
-	sc := client.GetSubChannel(server.PeerInfo().ServiceName)
-	err := client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
-		defer func() { counter++ }()
-
-		expectedPeers := counter
-		if expectedPeers > 0 {
-			// An entry is also added for each host.
-			expectedPeers++
+		closedHostPorts := make([]string, 4)
+		for i := range closedHostPorts {
+			hostPort, close := testutils.GetAcceptCloseHostPort(t)
+			defer close()
+			closedHostPorts[i] = hostPort
 		}
 
-		assert.Equal(t, expectedPeers, len(rs.SelectedPeers), "SelectedPeers should not be reused")
+		// Since we close connections remotely, there will be some warnings that we can ignore.
+		opts := testutils.NewOpts().DisableLogVerification()
+		client := ts.NewClient(opts)
+		defer client.Close()
+		counter := 0
 
-		if counter < 4 {
-			client.Peers().Add(testutils.GetClosedHostPort(t))
-		} else {
-			client.Peers().Add(server.PeerInfo().HostPort)
-		}
+		sc := client.GetSubChannel(ts.Server().ServiceName())
+		err := client.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
+			defer func() { counter++ }()
 
-		_, err := raw.CallV2(ctx, sc, raw.CArgs{
-			Method:      "echo",
-			CallOptions: &CallOptions{RequestState: rs},
+			expectedPeers := counter
+			if expectedPeers > 0 {
+				// An entry is also added for each host.
+				expectedPeers++
+			}
+
+			assert.Equal(t, expectedPeers, len(rs.SelectedPeers), "SelectedPeers should not be reused")
+
+			if counter < 4 {
+				client.Peers().Add(closedHostPorts[counter])
+			} else {
+				client.Peers().Add(ts.HostPort())
+			}
+
+			_, err := raw.CallV2(ctx, sc, raw.CArgs{
+				Method:      "echo",
+				CallOptions: &CallOptions{RequestState: rs},
+			})
+			return err
 		})
-		return err
+		assert.NoError(t, err, "RunWithRetry should succeed")
+		assert.Equal(t, 5, counter, "RunWithRetry should retry 5 times")
 	})
-	assert.NoError(t, err, "RunWithRetry should succeed")
-	assert.Equal(t, 5, counter, "RunWithRetry should retry 5 times")
 }

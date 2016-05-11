@@ -32,15 +32,13 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
-
-	"gopkg.in/yaml.v2"
 )
 
 func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 
-	sleepArgs, sleepBlock, sleepClose := testutils.SleepStub(&timeSleep)
-	defer testutils.ResetSleepStub(&timeSleep)
+	clientOpts := stubbedSleep()
+	sleepArgs, sleepBlock, sleepClose := testutils.SleepStub(&clientOpts.TimeSleep)
 
 	// We expect to retry 5 times,
 	go func() {
@@ -58,7 +56,7 @@ func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
 		serverCh := testutils.NewServer(t, nil)
 		defer serverCh.Close()
 
-		client, err := NewClient(serverCh, configFor(hostPort), nil)
+		client, err := NewClient(serverCh, configFor(hostPort), clientOpts)
 		require.NoError(t, err, "NewClient")
 		defer client.Close()
 		assert.Error(t, client.Advertise(), "Advertise without handler should fail")
@@ -66,9 +64,6 @@ func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {
 }
 
 func TestInitialAdvertiseFailedRetryTimeout(t *testing.T) {
-	timeSleep = func(d time.Duration) {}
-	defer testutils.ResetSleepStub(&timeSleep)
-
 	withSetup(t, func(hypCh *tchannel.Channel, hyperbahnHostPort string) {
 		started := time.Now()
 		count := 0
@@ -86,7 +81,7 @@ func TestInitialAdvertiseFailedRetryTimeout(t *testing.T) {
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
 		ch := testutils.NewServer(t, nil)
-		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
+		client, err := NewClient(ch, configFor(hyperbahnHostPort), stubbedSleep())
 		assert.NoError(t, err, "hyperbahn NewClient failed")
 		defer client.Close()
 
@@ -104,7 +99,7 @@ func TestNotListeningChannel(t *testing.T) {
 		json.Register(hypCh, json.Handlers{"ad": adHandler}, nil)
 
 		ch := testutils.NewClient(t, nil)
-		client, err := NewClient(ch, configFor(hyperbahnHostPort), nil)
+		client, err := NewClient(ch, configFor(hyperbahnHostPort), stubbedSleep())
 		assert.NoError(t, err, "hyperbahn NewClient failed")
 		defer client.Close()
 
@@ -122,6 +117,7 @@ type retryTest struct {
 	sleepArgs  <-chan time.Duration
 	sleepBlock chan<- struct{}
 	sleepClose func()
+	timeSleep  func(time.Duration)
 
 	ch     *tchannel.Channel
 	client *Client
@@ -147,7 +143,7 @@ func (r *retryTest) adHandler(ctx json.Context, req *AdRequest) (*AdResponse, er
 func (r *retryTest) setup() {
 	r.respCh = make(chan int, 1)
 	r.reqCh = make(chan *AdRequest, 1)
-	r.sleepArgs, r.sleepBlock, r.sleepClose = testutils.SleepStub(&timeSleep)
+	r.sleepArgs, r.sleepBlock, r.sleepClose = testutils.SleepStub(&r.timeSleep)
 }
 
 func (r *retryTest) setAdvertiseSuccess() {
@@ -160,9 +156,8 @@ func (r *retryTest) setAdvertiseFailure() {
 
 func runRetryTest(t *testing.T, f func(r *retryTest)) {
 	r := &retryTest{}
-	defer testutils.SetTimeout(t, time.Second)()
+	defer testutils.SetTimeout(t, 2*time.Second)()
 	r.setup()
-	defer testutils.ResetSleepStub(&timeSleep)
 
 	withSetup(t, func(hypCh *tchannel.Channel, hostPort string) {
 		json.Register(hypCh, json.Handlers{"ad": r.adHandler}, nil)
@@ -179,6 +174,7 @@ func runRetryTest(t *testing.T, f func(r *retryTest)) {
 		r.client, err = NewClient(serverCh, configFor(hostPort), &ClientOptions{
 			Handler:      r,
 			FailStrategy: FailStrategyIgnore,
+			TimeSleep:    r.timeSleep,
 		})
 		require.NoError(t, err, "NewClient")
 		defer r.client.Close()
@@ -343,46 +339,6 @@ func TestRetryFailure(t *testing.T) {
 	})
 }
 
-func TestCanUnmarshalYAMLFailStrategy(t *testing.T) {
-	tests := []struct {
-		strategy string
-		expected FailStrategy
-		wantErr  bool
-	}{
-		{
-			strategy: "fatal",
-			expected: FailStrategyFatal,
-		},
-		{
-			strategy: "ignore",
-			expected: FailStrategyIgnore,
-		},
-		{
-			strategy: "unknown",
-			wantErr:  true,
-		},
-		{
-			// YAML uses type default when parsing an empty string which is 0 == FailStrategyFatal.
-			strategy: "",
-			expected: FailStrategyFatal,
-		},
-	}
-
-	for _, tt := range tests {
-		var fs FailStrategy
-		err := yaml.Unmarshal([]byte(tt.strategy), &fs)
-		if tt.wantErr {
-			assert.Error(t, err, "Unmarshal %v should fail", tt.strategy)
-		} else {
-			assert.NoError(t, err, "Unmarshal %v shouldn't fail", tt.strategy)
-		}
-		if err != nil {
-			continue
-		}
-		assert.Equal(t, tt.expected, fs, "FailStrategy mismatch")
-	}
-}
-
 func checkAdvertiseInterval(t *testing.T, sleptFor time.Duration) {
 	assert.True(t, sleptFor >= advertiseInterval,
 		"advertise interval should be > advertiseInterval")
@@ -399,6 +355,12 @@ func checkRetryInterval(t *testing.T, sleptFor time.Duration, retryNum int) {
 func configFor(node string) Configuration {
 	return Configuration{
 		InitialNodes: []string{node},
+	}
+}
+
+func stubbedSleep() *ClientOptions {
+	return &ClientOptions{
+		TimeSleep: func(_ time.Duration) {},
 	}
 }
 

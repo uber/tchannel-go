@@ -23,17 +23,17 @@ package tchannel_test
 import (
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	. "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 )
 
 func benchmarkUsing(b *testing.B, pool FramePool) {
 	const numGoroutines = 1000
 	const maxHoldFrames = 1000
 
-	var gotFrames uint64
+	var gotFrames atomic.Uint64
 
 	var wg sync.WaitGroup
 	for i := 0; i < numGoroutines; i++ {
@@ -41,12 +41,12 @@ func benchmarkUsing(b *testing.B, pool FramePool) {
 		go func() {
 
 			for {
-				if atomic.LoadUint64(&gotFrames) > uint64(b.N) {
+				if gotFrames.Load() > uint64(b.N) {
 					break
 				}
 
 				framesToHold := rand.Intn(maxHoldFrames)
-				atomic.AddUint64(&gotFrames, uint64(framesToHold))
+				gotFrames.Add(uint64(framesToHold))
 
 				frames := make([]*Frame, framesToHold)
 				for i := 0; i < framesToHold; i++ {

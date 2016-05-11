@@ -1,27 +1,30 @@
-GODEPS := $(shell pwd)/Godeps/_workspace
-OLDGOPATH := $(GOPATH)
-PATH := $(GODEPS)/bin:$(PATH)
+export GO15VENDOREXPERIMENT=1
+GO_VERSION := $(shell go version | awk '{ print $$3 }')
+GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
+LINTABLE_MINOR_VERSIONS := 5 6
+FMTABLE_MINOR_VERSIONS := 6
+ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+SHOULD_LINT := true
+endif
+ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
+SHOULD_LINT_FMT := true
+endif
+
+PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
-PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
-TEST_ARG ?= -race -v -timeout 2m
+PKGS := . ./atomic ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
+TEST_ARG ?= -race -v -timeout 5m
 BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release
 THRIFT_GEN_RELEASE_LINUX := $(THRIFT_GEN_RELEASE)/linux-x86_64
 THRIFT_GEN_RELEASE_DARWIN := $(THRIFT_GEN_RELEASE)/darwin-x86_64
 SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
-export GOPATH = $(GODEPS):$(OLDGOPATH)
 
 PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
 THRIFT_REL := ./scripts/travis/thrift-release/$(PLATFORM)-$(ARCH)
 
 export PATH := $(realpath $(THRIFT_REL)):$(PATH)
-
-
-# Separate packages that use testutils and don't, since they can have different flags.
-# This is especially useful for timeoutMultiplier and connectionLog
-TESTUTILS_TEST_PKGS := . hyperbahn testutils http json thrift pprof trace
-NO_TESTUTILS_PKGS := stats thrift/thrift-gen tnet typed
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -42,12 +45,23 @@ get_thrift:
 	scripts/travis/get-thrift.sh
 
 install:
-	GOPATH=$(GODEPS) go get github.com/tools/godep
-	GOPATH=$(GODEPS) go get github.com/golang/lint/golint
-	GOPATH=$(GODEPS) godep restore -v
+	glide --debug install --cache --cache-gopath
+	rm -rf vendor
+ifdef SHOULD_LINT
+	@echo "Installing golint, since we expect to lint on" $(GO_VERSION)
+	go get -u -f github.com/golang/lint/golint
+else
+	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
+endif
 
-install_ci: get_thrift install
+install_glide:
+	go get -u github.com/Masterminds/glide
+
+install_ci: install_glide get_thrift install
 	go get -u github.com/mattn/goveralls
+
+install_test:
+	go test -i $(TEST_ARG) $(shell glide nv)
 
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
@@ -63,18 +77,13 @@ fmt format:
 	go fmt $(PKGS)
 	echo
 
-godep:
-	rm -rf Godeps
-	godep save ./...
-
 test_ci: test
 
-test: clean setup
+test: clean setup install_test
 	@echo Testing packages:
-	go test $(addprefix github.com/uber/tchannel-go/,$(NO_TESTUTILS_PKGS)) $(TEST_ARG) -parallel=4
-	go test $(addprefix github.com/uber/tchannel-go/,$(TESTUTILS_TEST_PKGS)) $(TEST_ARG) -timeoutMultiplier 10 -parallel=4
+	go test -parallel=4 $(TEST_ARG) $(shell glide nv)
 	@echo Running frame pool tests
-	go test -run TestFramesReleased -stressTest $(TEST_ARG) -timeoutMultiplier 10
+	go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
 benchmark: clean setup
 	echo Running benchmarks:
@@ -89,18 +98,30 @@ cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
 cover_ci: cover_profile
-	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci
+	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
 
 
-FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/'
+FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
 lint:
+ifdef SHOULD_LINT
+	@echo "Linters are enabled on" $(GO_VERSION)
 	@echo "Running golint"
 	-golint ./... | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go tool vet $(PKGS) | tee -a lint.log
+	-go vet $(PKGS) 2>&1 | tee -a lint.log
+ifdef SHOULD_LINT_FMT
 	@echo "Checking gofmt"
-	-gofmt -d . | tee -a lint.log
+	-gofmt -l . | $(FILTER) | tee -a lint.log
+else
+	@echo "Not checking gofmt on" $(GO_VERSION)
+endif
+	@echo "Checking for unresolved FIXMEs"
+	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
+else
+	@echo "Skipping linters on" $(GO_VERSION)
+endif
+
 
 thrift_example: thrift_gen
 	go build -o $(BUILD)/examples/thrift       ./examples/thrift/main.go
@@ -127,8 +148,8 @@ thrift_gen:
 	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift --outputDir trace/thrift/gen-go/
 
 release_thrift_gen: clean setup
-	GOOS=linux GOARCH=amd64 godep go build -o $(THRIFT_GEN_RELEASE_LINUX)/thrift-gen ./thrift/thrift-gen
-	GOOS=darwin GOARCH=amd64 godep go build -o $(THRIFT_GEN_RELEASE_DARWIN)/thrift-gen ./thrift/thrift-gen
+	GOOS=linux GOARCH=amd64 go build -o $(THRIFT_GEN_RELEASE_LINUX)/thrift-gen ./thrift/thrift-gen
+	GOOS=darwin GOARCH=amd64 go build -o $(THRIFT_GEN_RELEASE_DARWIN)/thrift-gen ./thrift/thrift-gen
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 

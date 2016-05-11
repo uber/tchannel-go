@@ -24,15 +24,18 @@ import (
 	"container/heap"
 	"errors"
 	"sync"
-	"sync/atomic"
-	"time"
+
+	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/trand"
 
 	"golang.org/x/net/context"
 )
 
 var (
 	// ErrInvalidConnectionState indicates that the connection is not in a valid state.
-	ErrInvalidConnectionState = errors.New("connection is in an invalid state")
+	// This may be due to a race between selecting the connection and it closing, so
+	// it is a network failure that can be retried.
+	ErrInvalidConnectionState = NewSystemError(ErrCodeNetwork, "connection is in an invalid state")
 
 	// ErrNoPeers indicates that there are no peers.
 	ErrNoPeers = errors.New("no peers available")
@@ -40,7 +43,7 @@ var (
 	// ErrPeerNotFound indicates that the specified peer was not found.
 	ErrPeerNotFound = errors.New("peer not found")
 
-	peerRng = NewRand(time.Now().UnixNano())
+	peerRng = trand.NewSeeded()
 )
 
 // Connectable is the interface used by peers to create connections.
@@ -178,7 +181,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	}
 
 	l.peerHeap.pushPeer(ps)
-	atomic.AddUint64(&ps.chosenCount, 1)
+	ps.chosenCount.Inc()
 	return ps.Peer
 }
 
@@ -240,8 +243,12 @@ func (l *PeerList) updatePeer(p *Peer) {
 type peerScore struct {
 	*Peer
 
+	// score according to the current peer list's ScoreCalculator.
 	score uint64
+	// index of the peerScore in the peerHeap. Used to interact with container/heap.
 	index int
+	// order is the tiebreaker for when score is equal. It is set when a peer
+	// is pushed to the heap based on peerHeap.order with jitter.
 	order uint64
 }
 
@@ -257,9 +264,9 @@ func newPeerScore(p *Peer, score uint64) *peerScore {
 type Peer struct {
 	sync.RWMutex
 
-	channel      Connectable
-	hostPort     string
-	onConnChange func(*Peer)
+	channel             Connectable
+	hostPort            string
+	onClosedConnRemoved func(*Peer)
 
 	// scCount is the number of subchannels that this peer is added to.
 	scCount uint32
@@ -267,20 +274,20 @@ type Peer struct {
 	// connections are mutable, and are protected by the mutex.
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
-	chosenCount         uint64
+	chosenCount         atomic.Uint64
 
 	// onUpdate is a test-only hook.
 	onUpdate func(*Peer)
 }
 
-func newPeer(channel Connectable, hostPort string, onConnChange func(*Peer)) *Peer {
+func newPeer(channel Connectable, hostPort string, onClosedConnRemoved func(*Peer)) *Peer {
 	if hostPort == "" {
 		panic("Cannot create peer with blank hostPort")
 	}
 	return &Peer{
-		channel:      channel,
-		hostPort:     hostPort,
-		onConnChange: onConnChange,
+		channel:             channel,
+		hostPort:            hostPort,
+		onClosedConnRemoved: onClosedConnRemoved,
 	}
 }
 
@@ -289,28 +296,52 @@ func (p *Peer) HostPort() string {
 	return p.hostPort
 }
 
-// getActive returns a list of active connections.
-// TODO(prashant): Should we clear inactive connections?
-func (p *Peer) getActive() []*Connection {
-	var active []*Connection
-	p.runWithConnections(func(c *Connection) {
-		if c.IsActive() {
-			active = append(active, c)
-		}
-	})
-	return active
+// getConn treats inbound and outbound connections as a single virtual list
+// that can be indexed. The peer must be read-locked.
+func (p *Peer) getConn(i int) *Connection {
+	inboundLen := len(p.inboundConnections)
+	if i < inboundLen {
+		return p.inboundConnections[i]
+	}
+
+	return p.outboundConnections[i-inboundLen]
 }
 
-func randConn(conns []*Connection) *Connection {
-	return conns[peerRng.Intn(len(conns))]
+func (p *Peer) getActiveConnLocked() (*Connection, bool) {
+	allConns := len(p.inboundConnections) + len(p.outboundConnections)
+	if allConns == 0 {
+		return nil, false
+	}
+
+	// We cycle through the connection list, starting at a random point
+	// to avoid always choosing the same connection.
+	startOffset := peerRng.Intn(allConns)
+	for i := 0; i < allConns; i++ {
+		connIndex := (i + startOffset) % allConns
+		if conn := p.getConn(connIndex); conn.IsActive() {
+			return conn, true
+		}
+	}
+
+	return nil, false
+}
+
+// getActiveConn will randomly select an active connection.
+// TODO(prashant): Should we clear inactive connections?
+// TODO(prashant): Do we want some sort of scoring for connections?
+func (p *Peer) getActiveConn() (*Connection, bool) {
+	p.RLock()
+	conn, ok := p.getActiveConnLocked()
+	p.RUnlock()
+
+	return conn, ok
 }
 
 // GetConnection returns an active connection to this peer. If no active connections
 // are found, it will create a new outbound connection and return it.
 func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
-	// TODO(prashant): Use some sort of scoring to pick a connection.
-	if activeConns := p.getActive(); len(activeConns) > 0 {
-		return randConn(activeConns), nil
+	if activeConn, ok := p.getActiveConn(); ok {
+		return activeConn, nil
 	}
 
 	// No active connections, make a new outgoing connection.
@@ -324,19 +355,13 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 // AddInboundConnection adds an active inbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
 func (p *Peer) AddInboundConnection(c *Connection) error {
-	switch c.readState() {
-	case connectionActive, connectionStartClose:
-		// TODO(prashantv): Block inbound connections when the connection is not active.
-		break
-	default:
+	if c.readState() != connectionActive {
 		return ErrInvalidConnectionState
 	}
 
 	p.Lock()
 	p.inboundConnections = append(p.inboundConnections, c)
 	p.Unlock()
-
-	p.connectionStateChanged(c)
 	return nil
 }
 
@@ -375,41 +400,41 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	p.Lock()
 	p.outboundConnections = append(p.outboundConnections, c)
 	p.Unlock()
-
-	p.connectionStateChanged(c)
 	return nil
 }
 
-// checkInboundConnection will check whether the changed connection is an inbound
-// connection, and will remove any closed connections.
-func (p *Peer) checkInboundConnection(changed *Connection) (updated bool, isInbound bool) {
-	newConns := p.inboundConnections[:0]
-	for _, c := range p.inboundConnections {
+// removeConnection will check remove the connection if it exists on connsPtr
+// and returns whether it removed the connection.
+func (p *Peer) removeConnection(connsPtr *[]*Connection, changed *Connection) bool {
+	conns := *connsPtr
+	for i, c := range conns {
 		if c == changed {
-			isInbound = true
-		}
-
-		if c.readState() != connectionClosed {
-			newConns = append(newConns, c)
-		} else {
-			updated = true
+			// Remove the connection by moving to the end and slicing the list.
+			last := len(conns) - 1
+			conns[i], conns[last] = conns[last], conns[i]
+			*connsPtr = conns[:last]
+			return true
 		}
 	}
-	if updated {
-		p.inboundConnections = newConns
-	}
 
-	return updated, isInbound
+	return false
 }
 
 // connectionStateChanged is called when one of the peers' connections states changes.
-func (p *Peer) connectionStateChanged(changed *Connection) {
+func (p *Peer) connectionCloseStateChange(changed *Connection) {
+	if changed.readState() != connectionClosed {
+		return
+	}
+
 	p.Lock()
-	updated, _ := p.checkInboundConnection(changed)
+	found := p.removeConnection(&p.inboundConnections, changed)
+	if !found {
+		found = p.removeConnection(&p.outboundConnections, changed)
+	}
 	p.Unlock()
 
-	if updated {
-		p.onConnChange(p)
+	if found {
+		p.onClosedConnRemoved(p)
 	}
 }
 

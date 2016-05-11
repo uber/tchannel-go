@@ -44,16 +44,30 @@ type ContextBuilder struct {
 	// RetryOptions are the retry options for this call.
 	RetryOptions *RetryOptions
 
+	// ConnectTimeout is the timeout for creating a TChannel connection.
+	ConnectTimeout time.Duration
+
+	// ParentContext to build the new context from. If empty, context.Background() is used.
+	// The new (child) context inherits a number of properties from the parent context:
+	//   - the tracing Span, unless replaced via SetExternalSpan()
+	//   - context fields, accessible via `ctx.Value(key)`
+	//   - headers if parent is a ContextWithHeaders, unless replaced via SetHeaders()
+	ParentContext context.Context
+
 	// Hidden fields: we do not want users outside of tchannel to set these.
 	incomingCall IncomingCall
 	span         *Span
+
+	// replaceParentHeaders is set to true when SetHeaders() method is called.
+	// It forces headers from ParentContext to be ignored. When false, parent
+	// headers will be merged with headers accumulated by the builder.
+	replaceParentHeaders bool
 }
 
 // NewContextBuilder returns a builder that can be used to create a Context.
 func NewContextBuilder(timeout time.Duration) *ContextBuilder {
 	return &ContextBuilder{
 		Timeout: timeout,
-		span:    NewRootSpan(),
 	}
 }
 
@@ -74,8 +88,10 @@ func (cb *ContextBuilder) AddHeader(key, value string) *ContextBuilder {
 }
 
 // SetHeaders sets the application headers for this Context.
+// If there is a ParentContext, its headers will be ignored after the call to this method.
 func (cb *ContextBuilder) SetHeaders(headers map[string]string) *ContextBuilder {
 	cb.Headers = headers
+	cb.replaceParentHeaders = true
 	return cb
 }
 
@@ -103,6 +119,14 @@ func (cb *ContextBuilder) SetRoutingDelegate(rd string) *ContextBuilder {
 		cb.CallOptions = new(CallOptions)
 	}
 	cb.CallOptions.RoutingDelegate = rd
+	return cb
+}
+
+// SetConnectTimeout sets the ConnectionTimeout for this context.
+// The context timeout applies to the whole call, while the connect
+// timeout only applies to creating a new connection.
+func (cb *ContextBuilder) SetConnectTimeout(d time.Duration) *ContextBuilder {
+	cb.ConnectTimeout = d
 	return cb
 }
 
@@ -139,6 +163,20 @@ func (cb *ContextBuilder) SetTimeoutPerAttempt(timeoutPerAttempt time.Duration) 
 	return cb
 }
 
+// SetParentContext sets the parent for the Context.
+func (cb *ContextBuilder) SetParentContext(ctx context.Context) *ContextBuilder {
+	cb.ParentContext = ctx
+	return cb
+}
+
+// SetExternalSpan creates a new TChannel tracing Span from externally provided IDs
+// and sets it as the current span for the context.
+// Intended for integration with other Zipkin-like tracers.
+func (cb *ContextBuilder) SetExternalSpan(traceID, spanID, parentID uint64, traced bool) *ContextBuilder {
+	span := newSpan(traceID, spanID, parentID, traced)
+	return cb.setSpan(span)
+}
+
 func (cb *ContextBuilder) setSpan(span *Span) *ContextBuilder {
 	cb.span = span
 	return cb
@@ -149,22 +187,62 @@ func (cb *ContextBuilder) setIncomingCall(call IncomingCall) *ContextBuilder {
 	return cb
 }
 
+func (cb *ContextBuilder) getSpan() *Span {
+	if cb.span != nil {
+		return cb.span
+	}
+	if cb.ParentContext != nil {
+		if span := CurrentSpan(cb.ParentContext); span != nil {
+			return span
+		}
+	}
+	return NewRootSpan()
+}
+
+func (cb *ContextBuilder) getHeaders() map[string]string {
+	if cb.ParentContext == nil || cb.replaceParentHeaders {
+		return cb.Headers
+	}
+
+	parent, ok := cb.ParentContext.Value(contextKeyHeaders).(*headersContainer)
+	if !ok || len(parent.reqHeaders) == 0 {
+		return cb.Headers
+	}
+
+	mergedHeaders := make(map[string]string, len(cb.Headers)+len(parent.reqHeaders))
+	for k, v := range parent.reqHeaders {
+		mergedHeaders[k] = v
+	}
+	for k, v := range cb.Headers {
+		mergedHeaders[k] = v
+	}
+	return mergedHeaders
+}
+
 // Build returns a ContextWithHeaders that can be used to make calls.
 func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
-	timeout := cb.Timeout
-
+	span := cb.getSpan()
 	if cb.TracingDisabled {
-		cb.span.EnableTracing(false)
+		span.EnableTracing(false)
 	}
 
 	params := &tchannelCtxParams{
-		options:      cb.CallOptions,
-		span:         cb.span,
-		call:         cb.incomingCall,
-		retryOptions: cb.RetryOptions,
+		options:        cb.CallOptions,
+		span:           span,
+		call:           cb.incomingCall,
+		retryOptions:   cb.RetryOptions,
+		connectTimeout: cb.ConnectTimeout,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	parent := cb.ParentContext
+	if parent == nil {
+		parent = context.Background()
+	} else if headerCtx, ok := parent.(headerCtx); ok {
+		// Unwrap any headerCtx, since we'll be rewrapping anyway.
+		parent = headerCtx.Context
+	}
+	ctx, cancel := context.WithTimeout(parent, cb.Timeout)
+
 	ctx = context.WithValue(ctx, contextKeyTChannel, params)
-	return WrapWithHeaders(ctx, cb.Headers), cancel
+	return WrapWithHeaders(ctx, cb.getHeaders()), cancel
 }

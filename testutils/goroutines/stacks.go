@@ -30,6 +30,86 @@ import (
 	"strings"
 )
 
+// Stack represents a single Goroutine's stack.
+type Stack struct {
+	id            int
+	state         string
+	firstFunction string
+	fullStack     *bytes.Buffer
+}
+
+// ID returns the goroutine ID.
+func (s Stack) ID() int {
+	return s.id
+}
+
+// State returns the Goroutine's state.
+func (s Stack) State() string {
+	return s.state
+}
+
+// Full returns the full stack trace for this goroutine.
+func (s Stack) Full() []byte {
+	return s.fullStack.Bytes()
+}
+
+func (s Stack) String() string {
+	return fmt.Sprintf(
+		"Goroutine %v in state %v, with %v on top of the stack:\n%s",
+		s.id, s.state, s.firstFunction, s.Full())
+}
+
+func getStacks(all bool) []Stack {
+	var stacks []Stack
+
+	var curStack *Stack
+	stackReader := bufio.NewReader(bytes.NewReader(getStackBuffer(all)))
+	for {
+		line, err := stackReader.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			panic("stack reader failed")
+		}
+
+		// If we see the goroutine header, start a new stack.
+		isFirstLine := false
+		if strings.HasPrefix(line, "goroutine ") {
+			// flush any previous stack
+			if curStack != nil {
+				stacks = append(stacks, *curStack)
+			}
+			id, goState := parseGoStackHeader(line)
+			curStack = &Stack{
+				id:        id,
+				state:     goState,
+				fullStack: &bytes.Buffer{},
+			}
+			isFirstLine = true
+		}
+		curStack.fullStack.WriteString(line)
+		if !isFirstLine && curStack.firstFunction == "" {
+			curStack.firstFunction = parseFirstFunc(line)
+		}
+	}
+
+	if curStack != nil {
+		stacks = append(stacks, *curStack)
+	}
+	return stacks
+}
+
+// GetAll returns the stacks for all running goroutines.
+func GetAll() []Stack {
+	return getStacks(true)
+}
+
+// GetCurrentStack returns the stack for the current goroutine.
+func GetCurrentStack() Stack {
+	return getStacks(false)[0]
+}
+
 func getStackBuffer(all bool) []byte {
 	for i := 4096; ; i *= 2 {
 		buf := make([]byte, i)
@@ -37,6 +117,14 @@ func getStackBuffer(all bool) []byte {
 			return buf
 		}
 	}
+}
+
+func parseFirstFunc(line string) string {
+	line = strings.TrimSpace(line)
+	if idx := strings.LastIndex(line, "("); idx > 0 {
+		return line[:idx]
+	}
+	return line
 }
 
 // parseGoStackHeader parses a stack header that looks like:
@@ -56,67 +144,4 @@ func parseGoStackHeader(line string) (goroutineID int, state string) {
 
 	state = strings.TrimSuffix(strings.TrimPrefix(parts[2], "["), "]")
 	return id, state
-}
-
-// Stack represents a single Goroutine's stack.
-type Stack struct {
-	id        int
-	state     string
-	fullStack *bytes.Buffer
-}
-
-// ID returns the goroutine ID.
-func (s Stack) ID() int {
-	return s.id
-}
-
-// State returns the Goroutine's state.
-func (s Stack) State() string {
-	return s.state
-}
-
-// Full returns the full stack trace for this goroutine.
-func (s Stack) Full() []byte {
-	return s.fullStack.Bytes()
-}
-
-func (s Stack) String() string {
-	return fmt.Sprintf("Goroutine %v in state %v:\n%s", s.id, s.state, s.Full())
-}
-
-// GetAll returns the stacks for all running goroutines.
-func GetAll() []Stack {
-	var stacks []Stack
-
-	var curStack *Stack
-	stackReader := bufio.NewReader(bytes.NewReader(getStackBuffer(true /* all */)))
-	for {
-		line, err := stackReader.ReadString('\n')
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			panic("stack reader failed")
-		}
-
-		// If we see the goroutine header, start a new stack.
-		if strings.HasPrefix(line, "goroutine ") {
-			// flush any previous stack
-			if curStack != nil {
-				stacks = append(stacks, *curStack)
-			}
-			id, goState := parseGoStackHeader(line)
-			curStack = &Stack{
-				id:        id,
-				state:     goState,
-				fullStack: &bytes.Buffer{},
-			}
-		}
-		curStack.fullStack.WriteString(line)
-	}
-
-	if curStack != nil {
-		stacks = append(stacks, *curStack)
-	}
-	return stacks
 }

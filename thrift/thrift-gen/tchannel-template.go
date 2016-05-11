@@ -162,6 +162,9 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 			switch v := err.(type) {
 				{{ range .Exceptions }}
 					case {{ .ArgType }}:
+						if v == nil {
+							return false, nil, fmt.Errorf("Handler for {{ .Name }} returned non-nil error type {{ .ArgType }} but nil value")
+						}
 						res.{{ .ArgStructName }} = v
 				{{ end }}
 					default:

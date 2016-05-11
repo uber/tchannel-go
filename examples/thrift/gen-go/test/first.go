@@ -416,7 +416,7 @@ func (p *firstProcessorAppError) Process(seqId int32, iprot, oprot thrift.TProto
 // Attributes:
 //  - Msg
 type FirstEchoArgs struct {
-	Msg string `thrift:"msg,1" json:"msg"`
+	Msg string `thrift:"msg,1" db:"msg" json:"msg"`
 }
 
 func NewFirstEchoArgs() *FirstEchoArgs {
@@ -441,7 +441,7 @@ func (p *FirstEchoArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -459,7 +459,7 @@ func (p *FirstEchoArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *FirstEchoArgs) readField1(iprot thrift.TProtocol) error {
+func (p *FirstEchoArgs) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -507,7 +507,7 @@ func (p *FirstEchoArgs) String() string {
 // Attributes:
 //  - Success
 type FirstEchoResult struct {
-	Success *string `thrift:"success,0" json:"success,omitempty"`
+	Success *string `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewFirstEchoResult() *FirstEchoResult {
@@ -541,7 +541,7 @@ func (p *FirstEchoResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -559,7 +559,7 @@ func (p *FirstEchoResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *FirstEchoResult) readField0(iprot thrift.TProtocol) error {
+func (p *FirstEchoResult) ReadField0(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 0: ", err)
 	} else {
@@ -662,7 +662,7 @@ func (p *FirstHealthcheckArgs) String() string {
 // Attributes:
 //  - Success
 type FirstHealthcheckResult struct {
-	Success *HealthCheckRes `thrift:"success,0" json:"success,omitempty"`
+	Success *HealthCheckRes `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewFirstHealthcheckResult() *FirstHealthcheckResult {
@@ -696,7 +696,7 @@ func (p *FirstHealthcheckResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -714,7 +714,7 @@ func (p *FirstHealthcheckResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *FirstHealthcheckResult) readField0(iprot thrift.TProtocol) error {
+func (p *FirstHealthcheckResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &HealthCheckRes{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)

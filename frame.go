@@ -167,6 +167,11 @@ func (f *Frame) SizedPayload() []byte {
 	return f.Payload[:f.Header.PayloadSize()]
 }
 
+// messageType returns the message type.
+func (f *Frame) messageType() messageType {
+	return f.Header.messageType
+}
+
 func (f *Frame) write(msg message) error {
 	var wbuf typed.WriteBuffer
 	wbuf.Wrap(f.Payload[:])

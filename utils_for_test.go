@@ -69,6 +69,6 @@ func InboundConnection(call IncomingCall) (*Connection, net.Conn) {
 }
 
 // NewSpan returns a Span for testing.
-func NewSpan(traceID uint64, parentID uint64, spanID uint64) Span {
-	return Span{traceID: traceID, parentID: parentID, spanID: spanID, flags: defaultTracingFlags}
+func NewSpan(traceID uint64, spanID uint64, parentID uint64) Span {
+	return Span{traceID: traceID, spanID: spanID, parentID: parentID, flags: defaultTracingFlags}
 }

@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// benchclient is used to make requests to a specific server.
+// benchserver is used to receive requests for benchmarks.
 package main
 
 import (
@@ -29,34 +29,29 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/thrift"
-	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
+	"github.com/uber/tchannel-go/benchmark"
 )
 
 var (
-	requestSize = flag.Int("requestSize", 10000, "The number of bytes of each request")
-	serviceName = flag.String("serviceName", "bench-server", "The benchmark server's service name")
-	timeout     = flag.Duration("timeout", time.Second, "Timeout for each request")
+	serviceName    = flag.String("service", "bench-server", "The benchmark server's service name")
+	advertiseHosts = flag.String("advertise-hosts", "", "Comma-separated list of hosts to advertise to")
 )
 
 func main() {
 	flag.Parse()
 
-	ch, err := testutils.NewClientChannel(nil)
-	if err != nil {
-		log.Fatalf("Failed to create client channel: %v", err)
+	var adHosts []string
+	if len(*advertiseHosts) > 0 {
+		adHosts = strings.Split(*advertiseHosts, ",")
 	}
 
-	for _, host := range flag.Args() {
-		ch.Peers().Add(host)
-	}
-	thriftClient := thrift.NewClient(ch, *serviceName, nil)
-	client := gen.NewTChanSecondServiceClient(thriftClient)
+	server := benchmark.NewServer(
+		benchmark.WithServiceName(*serviceName),
+		benchmark.WithAdvertiseHosts(adHosts),
+	)
 
-	fmt.Println("bench-client started")
+	fmt.Println(server.HostPort())
 
 	rdr := bufio.NewReader(os.Stdin)
 	for {
@@ -70,45 +65,14 @@ func main() {
 
 		line = strings.TrimSuffix(line, "\n")
 		switch line {
-		case "call":
-			makeCall(client)
+		case "count-raw":
+			fmt.Println(server.RawCalls())
+		case "count-thrift":
+			fmt.Println(server.ThriftCalls())
 		case "quit":
 			return
 		default:
 			log.Fatalf("unrecognized command: %v", line)
 		}
 	}
-}
-
-var arg string
-
-func makeArg() string {
-	if len(arg) > 0 {
-		return arg
-	}
-
-	bs := []byte{}
-	for i := 0; i < *requestSize; i++ {
-		bs = append(bs, byte(i%26+'A'))
-	}
-	arg = string(bs)
-	return arg
-}
-
-func makeCall(client gen.TChanSecondService) {
-	ctx, cancel := thrift.NewContext(*timeout)
-	defer cancel()
-
-	arg := makeArg()
-	started := time.Now()
-	res, err := client.Echo(ctx, arg)
-	if err != nil {
-		fmt.Println("failed:", err)
-		return
-	}
-	if res != arg {
-		log.Fatalf("Echo gave different string!")
-	}
-	duration := time.Since(started)
-	fmt.Println(duration)
 }

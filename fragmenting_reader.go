@@ -44,7 +44,16 @@ type readableFragment struct {
 	checksumType ChecksumType
 	checksum     []byte
 	contents     *typed.ReadBuffer
-	done         func()
+	onDone       func()
+	isDone       bool
+}
+
+func (f *readableFragment) done() {
+	if f.isDone {
+		return
+	}
+	f.onDone()
+	f.isDone = true
 }
 
 type fragmentReceiver interface {

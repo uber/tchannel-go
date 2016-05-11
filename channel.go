@@ -64,6 +64,9 @@ type ChannelOptions struct {
 	// The logger to use for this channel
 	Logger Logger
 
+	// The host:port selection implementation to use for relaying.
+	RelayHosts RelayHosts
+
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
@@ -117,8 +120,8 @@ type Channel struct {
 	createdStack      string
 	commonStatsTags   map[string]string
 	connectionOptions ConnectionOptions
-	handlers          *handlerMap
 	peers             *PeerList
+	relayHosts        RelayHosts
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -190,7 +193,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,
-		handlers:          &handlerMap{},
+		relayHosts:        opts.RelayHosts,
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
@@ -297,9 +300,16 @@ type Registrar interface {
 	Peers() *PeerList
 }
 
-// Register registers a handler for a service+method pair
+// Register registers a handler for a method.
+//
+// The handler is registered with the service name used when the Channel was
+// created. To register a handler with a different service name, obtain a
+// SubChannel for that service with GetSubChannel, and Register a handler
+// under that. You may also use SetHandler on a SubChannel to set up a
+// catch-all Handler for that service. See the docs for SetHandler for more
+// information.
 func (ch *Channel) Register(h Handler, methodName string) {
-	ch.handlers.register(h, ch.PeerInfo().ServiceName, methodName)
+	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
 }
 
 // PeerInfo returns the current peer info for the channel
@@ -456,7 +466,7 @@ func getTimeout(ctx context.Context) time.Duration {
 	return deadline.Sub(time.Now())
 }
 
-// Connect connects the channel.
+// Connect creates a new outbound connection to hostPort.
 func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, error) {
 	switch state := ch.State(); state {
 	case ChannelClient, ChannelListening:
@@ -467,6 +477,14 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	default:
 		ch.log.Debugf("Connect rejecting new connection as state is %v", state)
 		return nil, errInvalidStateForOp
+	}
+
+	// The context timeout applies to the whole call, but users may want a lower
+	// connect timeout (e.g. for streams).
+	if params := getTChannelParams(ctx); params != nil && params.connectTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, params.connectTimeout)
+		defer cancel()
 	}
 
 	events := connectionEvents{
@@ -550,7 +568,7 @@ func (ch *Channel) removeClosedConn(c *Connection) {
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	ch.removeClosedConn(c)
 	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
-		peer.connectionStateChanged(c)
+		peer.connectionCloseStateChange(c)
 		ch.updatePeer(peer)
 	}
 
@@ -626,4 +644,9 @@ func (ch *Channel) Close() {
 		c.Close()
 	}
 	removeClosedChannel(ch)
+}
+
+// RelayHosts returns the channel's relay hosts, if any.
+func (ch *Channel) RelayHosts() RelayHosts {
+	return ch.relayHosts
 }

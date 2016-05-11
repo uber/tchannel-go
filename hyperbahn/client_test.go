@@ -21,6 +21,7 @@
 package hyperbahn
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
+	"gopkg.in/yaml.v2"
 )
 
 func getPeers(ch *tchannel.Channel) []string {
@@ -117,5 +119,78 @@ func TestParseConfiguration(t *testing.T) {
 		}
 
 		assert.Equal(t, tt.wantPeers, getPeers(ch), "%v: got unexpected peers", tt.name)
+	}
+}
+
+func TestUnmarshalFailStrategyFormats(t *testing.T) {
+	type appConfig struct {
+		Name string       `json:"name" yaml:"name"`
+		FS   FailStrategy `json:"strategy" yaml:"strategy"`
+	}
+	expected := appConfig{
+		Name: "test",
+		FS:   FailStrategyIgnore,
+	}
+	jsonTest := `
+		{
+			"name": "test",
+			"strategy": "ignore"
+		}
+	`
+	yamlTest := `
+name: test
+strategy: ignore
+`
+
+	var jsonConfig appConfig
+	err := json.Unmarshal([]byte(jsonTest), &jsonConfig)
+	if assert.NoError(t, err, "JSON unmarshal failed") {
+		assert.Equal(t, expected, jsonConfig, "JSON config mismatch")
+	}
+
+	var yamlConfig appConfig
+	err = yaml.Unmarshal([]byte(yamlTest), &yamlConfig)
+	if assert.NoError(t, err, "YAML unmarshal failed") {
+		assert.Equal(t, expected, yamlConfig, "YAML config mismatch")
+	}
+}
+
+func TestUnmarshalText(t *testing.T) {
+	tests := []struct {
+		strategy string
+		expected FailStrategy
+		wantErr  bool
+	}{
+		{
+			strategy: "fatal",
+			expected: FailStrategyFatal,
+		},
+		{
+			strategy: "ignore",
+			expected: FailStrategyIgnore,
+		},
+		{
+			strategy: "unknown",
+			wantErr:  true,
+		},
+		{
+			// Empty string should use the default which is FailStrategyFatal.
+			strategy: "",
+			expected: FailStrategyFatal,
+		},
+	}
+
+	for _, tt := range tests {
+		var fs FailStrategy
+		err := fs.UnmarshalText([]byte(tt.strategy))
+		if tt.wantErr {
+			assert.Error(t, err, "Unmarshal %v should fail", tt.strategy)
+		} else {
+			assert.NoError(t, err, "Unmarshal %v shouldn't fail", tt.strategy)
+		}
+		if err != nil {
+			continue
+		}
+		assert.Equal(t, tt.expected, fs, "FailStrategy mismatch")
 	}
 }

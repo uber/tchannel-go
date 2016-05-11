@@ -63,6 +63,12 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.conn = c
 	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
 
+	if !c.pendingExchangeMethodAdd() {
+		// Connection is closed, no need to do anything.
+		return true
+	}
+	defer c.pendingExchangeMethodDone()
+
 	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
 	if err != nil {
 		if err == errDuplicateMex {
@@ -80,6 +86,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	}
 
 	response := new(InboundCallResponse)
+	response.call = call
 	response.calledAt = now
 	response.Annotations = Annotations{
 		reporter: c.traceReporter,
@@ -164,10 +171,6 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, frame *Frame) {
-	releaseFrame := func() {
-		c.framePool.Release(frame)
-	}
-
 	if c.log.Enabled(LogLevelDebug) {
 		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
@@ -177,7 +180,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 			LogField{"remotePeer", c.remotePeerInfo},
 			ErrField(err),
 		).Error("Couldn't read method.")
-		releaseFrame()
+		c.framePool.Release(frame)
 		return
 	}
 
@@ -185,41 +188,21 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	call.statsReporter.IncCounter("inbound.calls.recvd", call.commonStatsTags, 1)
 	call.response.SetMethod(string(call.method))
 
-	// NB(mmihic): Don't cast method name to string here - this will
-	// create a copy of the byte array, where as aliasing to string in the
-	// map look up can be optimized by the compiler to avoid the copy.  See
-	// https://github.com/golang/go/issues/3512
-	h := c.handlers.find(call.ServiceName(), call.Method())
-	if h == nil {
-		// Check the subchannel map to see if we find one there
-		if c.log.Enabled(LogLevelDebug) {
-			c.log.Debugf("Checking the subchannel's handlers for %s:%s", call.ServiceName(), call.Method())
-		}
-
-		h = c.subChannels.find(call.ServiceName(), call.Method())
-	}
-	if h == nil {
-		c.log.WithFields(
-			LogField{"serviceName", call.ServiceName()},
-			LogField{"method", call.MethodString()},
-		).Error("Couldn't find handler.")
-		call.Response().SendSystemError(
-			NewSystemError(ErrCodeBadRequest, "no handler for service %q and method %q", call.ServiceName(), call.Method()))
-		releaseFrame()
-		return
-	}
-
 	// TODO(prashant): This is an expensive way to check for cancellation. Use a heap for timeouts.
 	go func() {
-		if <-call.mex.ctx.Done(); call.mex.ctx.Err() == context.DeadlineExceeded {
-			call.mex.inboundTimeout()
+		select {
+		case <-call.mex.ctx.Done():
+			if call.mex.ctx.Err() == context.DeadlineExceeded {
+				call.mex.inboundTimeout()
+			}
+		case <-call.mex.errCh.c:
+			if c.log.Enabled(LogLevelDebug) {
+				c.log.Debugf("Wait for timeout/cancellation interrupted by error: %v", call.mex.errCh.err)
+			}
 		}
 	}()
 
-	if c.log.Enabled(LogLevelDebug) {
-		c.log.Debugf("Dispatching %s:%s from %s", call.ServiceName(), call.Method(), c.remotePeerInfo)
-	}
-	h.Handle(call.mex.ctx, call)
+	c.handler.Handle(call.mex.ctx, call)
 }
 
 // An InboundCall is an incoming call from a peer
@@ -321,6 +304,7 @@ type InboundCallResponse struct {
 	reqResWriter
 	Annotations
 
+	call   *InboundCall
 	cancel context.CancelFunc
 	// calledAt is the time the inbound call was routed to the application.
 	calledAt         time.Time
@@ -342,6 +326,7 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	response.state = reqResWriterComplete
 	response.systemError = true
 	response.doneSending()
+	response.call.releasePreviousFragment()
 	return response.conn.SendSystemError(response.mex.msgID, CurrentSpan(response.mex.ctx), err)
 }
 

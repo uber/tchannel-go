@@ -22,14 +22,39 @@ package tchannel_test
 
 import (
 	"testing"
+	"time"
 
-	"github.com/uber/tchannel-go/testutils/goroutines"
+	. "github.com/uber/tchannel-go"
+
+	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/testutils"
 )
 
-// This file is named z_* so that it is the last test file compiled by Go, and so
-// is run after all the other tests.
+func benchmarkGetConnection(b *testing.B, numIncoming, numOutgoing int) {
+	ctx, cancel := NewContext(10 * time.Second)
+	defer cancel()
 
-// TestNoGoroutinesLeaked verifies that no tests have leaked goroutines.
-func TestNoGoroutinesLeaked(t *testing.T) {
-	goroutines.VerifyNoLeaks(t, nil)
+	s1 := testutils.NewServer(b, nil)
+	s2 := testutils.NewServer(b, nil)
+	defer s1.Close()
+	defer s2.Close()
+
+	for i := 0; i < numOutgoing; i++ {
+		_, err := s1.Connect(ctx, s2.PeerInfo().HostPort)
+		require.NoError(b, err, "Connect from s1 -> s2 failed")
+	}
+	for i := 0; i < numIncoming; i++ {
+		_, err := s2.Connect(ctx, s1.PeerInfo().HostPort)
+		require.NoError(b, err, "Connect from s2 -> s1 failed")
+	}
+
+	peer := s1.Peers().GetOrAdd(s2.PeerInfo().HostPort)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		peer.GetConnection(ctx)
+	}
 }
+
+func BenchmarkGetConnection0In1Out(b *testing.B) { benchmarkGetConnection(b, 0, 1) }
+func BenchmarkGetConnection1In0Out(b *testing.B) { benchmarkGetConnection(b, 1, 0) }
+func BenchmarkGetConnection5In5Out(b *testing.B) { benchmarkGetConnection(b, 5, 5) }

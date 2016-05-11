@@ -348,7 +348,7 @@ func (p *simpleServiceProcessorSimple) Process(seqId int32, iprot, oprot thrift.
 // Attributes:
 //  - Arg
 type SimpleServiceCallArgs struct {
-	Arg *Data `thrift:"arg,1" json:"arg"`
+	Arg *Data `thrift:"arg,1" db:"arg" json:"arg"`
 }
 
 func NewSimpleServiceCallArgs() *SimpleServiceCallArgs {
@@ -382,7 +382,7 @@ func (p *SimpleServiceCallArgs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -400,7 +400,7 @@ func (p *SimpleServiceCallArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SimpleServiceCallArgs) readField1(iprot thrift.TProtocol) error {
+func (p *SimpleServiceCallArgs) ReadField1(iprot thrift.TProtocol) error {
 	p.Arg = &Data{}
 	if err := p.Arg.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Arg), err)
@@ -447,7 +447,7 @@ func (p *SimpleServiceCallArgs) String() string {
 // Attributes:
 //  - Success
 type SimpleServiceCallResult struct {
-	Success *Data `thrift:"success,0" json:"success,omitempty"`
+	Success *Data `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewSimpleServiceCallResult() *SimpleServiceCallResult {
@@ -481,7 +481,7 @@ func (p *SimpleServiceCallResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -499,7 +499,7 @@ func (p *SimpleServiceCallResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SimpleServiceCallResult) readField0(iprot thrift.TProtocol) error {
+func (p *SimpleServiceCallResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &Data{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)
@@ -601,7 +601,7 @@ func (p *SimpleServiceSimpleArgs) String() string {
 // Attributes:
 //  - SimpleErr
 type SimpleServiceSimpleResult struct {
-	SimpleErr *SimpleErr `thrift:"simpleErr,1" json:"simpleErr,omitempty"`
+	SimpleErr *SimpleErr `thrift:"simpleErr,1" db:"simpleErr" json:"simpleErr,omitempty"`
 }
 
 func NewSimpleServiceSimpleResult() *SimpleServiceSimpleResult {
@@ -635,7 +635,7 @@ func (p *SimpleServiceSimpleResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 		default:
@@ -653,7 +653,7 @@ func (p *SimpleServiceSimpleResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *SimpleServiceSimpleResult) readField1(iprot thrift.TProtocol) error {
+func (p *SimpleServiceSimpleResult) ReadField1(iprot thrift.TProtocol) error {
 	p.SimpleErr = &SimpleErr{}
 	if err := p.SimpleErr.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.SimpleErr), err)
