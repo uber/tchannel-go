@@ -21,31 +21,59 @@
 package benchmark
 
 import (
-	"io"
-	"math/rand"
-	"time"
+	"log"
+	"net"
 )
+import "github.com/uber/tchannel-go"
 
-type randReader struct {
-	src rand.Source
+type tcpFrameRelay struct {
+	*tcpRelay
+	modifier func(bool, *tchannel.Frame) *tchannel.Frame
 }
 
-func newRandReader() io.Reader {
-	return randReader{rand.NewSource(time.Now().UnixNano())}
-}
+// NewTCPFrameRelay relays frames from one connection to another. It reads
+// and writes frames using the TChannel frame functions.
+func NewTCPFrameRelay(dests []string, modifier func(bool, *tchannel.Frame) *tchannel.Frame) (Relay, error) {
+	var err error
+	r := &tcpFrameRelay{modifier: modifier}
 
-func (r randReader) Read(p []byte) (n int, err error) {
-	for i := range p {
-		p[i] = byte(r.src.Int63() & 0xff)
+	r.tcpRelay, err = newTCPRelay(dests, r.handleConnFrameRelay)
+	if err != nil {
+		return nil, err
 	}
-	return len(p), nil
+
+	return r, nil
 }
 
-func randomBytes(n int) []byte {
-	reader := newRandReader()
-	bs := make([]byte, n)
-	if _, err := io.ReadFull(reader, bs); err != nil {
-		panic("failed to read random bytes: " + err.Error())
+func (r *tcpFrameRelay) handleConnFrameRelay(fromClient bool, src, dst net.Conn) {
+	pool := tchannel.NewSyncFramePool()
+	frameCh := make(chan *tchannel.Frame, 100)
+	defer close(frameCh)
+
+	go func() {
+		for f := range frameCh {
+			if err := f.WriteOut(dst); err != nil {
+				log.Printf("Failed to write out frame: %v", err)
+				return
+			}
+			pool.Release(f)
+		}
+	}()
+
+	for {
+		f := pool.Get()
+		if err := f.ReadIn(src); err != nil {
+			return
+		}
+
+		if r.modifier != nil {
+			f = r.modifier(fromClient, f)
+		}
+
+		select {
+		case frameCh <- f:
+		default:
+			panic("frame buffer full")
+		}
 	}
-	return bs
 }

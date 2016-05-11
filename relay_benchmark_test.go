@@ -8,7 +8,6 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/benchmark"
 	"github.com/uber/tchannel-go/testutils"
 
@@ -81,13 +80,7 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	b.SetBytes(int64(p.requestSize))
 	b.ReportAllocs()
 
-	relayHosts := testutils.NewSimpleRelayHosts(map[string][]string{})
-	ch, err := NewChannel("relay", &ChannelOptions{
-		RelayHosts: relayHosts,
-	})
-	defer closeAndVerify(b, ch)
-	require.NoError(b, err, "Failed to create relay")
-	require.NoError(b, ch.ListenAndServe("127.0.0.1:0"), "relay listen failed")
+	services := make(map[string][]string)
 
 	servers := make([]benchmark.Server, p.servers)
 	for i := range servers {
@@ -97,17 +90,23 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 			benchmark.WithExternalProcess(),
 		)
 		defer servers[i].Close()
-		relayHosts.Add("svc", servers[i].HostPort())
+		services["svc"] = append(services["svc]"], servers[i].HostPort())
 	}
+
+	relay, err := benchmark.NewRealRelay(services)
+	require.NoError(b, err, "Failed to create relay")
+	defer relay.Close()
 
 	clients := make([]benchmark.Client, p.clients)
 	for i := range clients {
-		clients[i] = benchmark.NewClient([]string{ch.PeerInfo().HostPort},
+		clients[i] = benchmark.NewClient([]string{relay.HostPort()},
 			benchmark.WithServiceName("svc"),
 			benchmark.WithRequestSize(p.requestSize),
 			benchmark.WithExternalProcess(),
+			benchmark.WithTimeout(10*time.Second),
 		)
 		defer clients[i].Close()
+		require.NoError(b, clients[i].Warmup(), "Warmup failed")
 	}
 
 	quantileVals := []float64{0.50, 0.95, 0.99, 1.0}
@@ -116,27 +115,30 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 		quantiles[i] = quantile.NewTargeted(quantileVals...)
 	}
 
-	var errors atomic.Int64
-	var success atomic.Int64
-
 	wc := newWorkerControl(p.clients)
-	benchMore := testutils.Decrementor(b.N)
+	dec := testutils.Decrementor(b.N)
 
 	for i, c := range clients {
 		go func(i int, c benchmark.Client) {
 			// Do a warm up call.
-			c.RawCall()
+			c.RawCall(1)
 
 			wc.WorkerStart()
 			defer wc.WorkerDone()
 
-			for benchMore() {
-				d, err := c.RawCall()
-				if err == nil {
+			for {
+				tokens := dec.Multiple(200)
+				if tokens == 0 {
+					break
+				}
+
+				durations, err := c.RawCall(tokens)
+				if err != nil {
+					b.Fatalf("Call failed: %v", err)
+				}
+
+				for _, d := range durations {
 					quantiles[i].Insert(float64(d))
-					success.Inc()
-				} else {
-					errors.Inc()
 				}
 			}
 		}(i, c)
@@ -149,11 +151,8 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	})
 	wc.WaitForEnd()
 	duration := time.Since(started)
-	if errors.Load() > 0 {
-		b.Errorf("Errors during benchmarl: %v", errors.Load())
-	}
 
-	fmt.Printf("\nb.N: %v Duration: %v Requests = %v RPS = %0.2f\n", b.N, duration, success.Load(), float64(success.Load())/duration.Seconds())
+	fmt.Printf("\nb.N: %v Duration: %v RPS = %0.0f\n", b.N, duration, float64(b.N)/duration.Seconds())
 
 	// Merge all the quantiles into 1
 	for _, q := range quantiles[1:] {
@@ -166,24 +165,61 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	fmt.Println()
 }
 
-func BenchmarkRelay2Servers2Clients1k(b *testing.B) {
+func BenchmarkRelayNoLatencies(b *testing.B) {
+	server := benchmark.NewServer(
+		benchmark.WithServiceName("svc"),
+		benchmark.WithExternalProcess(),
+		benchmark.WithNoLibrary(),
+	)
+	defer server.Close()
+
+	hostMapping := map[string][]string{"svc": {server.HostPort()}}
+	relay, err := benchmark.NewRealRelay(hostMapping)
+	require.NoError(b, err, "NewRealRelay failed")
+	defer relay.Close()
+
+	client := benchmark.NewClient([]string{relay.HostPort()},
+		benchmark.WithServiceName("svc"),
+		benchmark.WithExternalProcess(),
+		benchmark.WithNoLibrary(),
+		benchmark.WithNumClients(10),
+		benchmark.WithNoChecking(),
+		benchmark.WithNoDurations(),
+		benchmark.WithTimeout(10*time.Second),
+	)
+	defer client.Close()
+	require.NoError(b, err, client.Warmup(), "client.Warmup failed")
+
+	b.ResetTimer()
+	started := time.Now()
+	for _, calls := range testutils.Batch(b.N, 10000) {
+		if _, err := client.RawCall(calls); err != nil {
+			b.Fatalf("Calls failed: %v", err)
+		}
+	}
+
+	duration := time.Since(started)
+	fmt.Printf("\nb.N: %v Duration: %v RPS = %0.0f\n", b.N, duration, float64(b.N)/duration.Seconds())
+}
+
+func BenchmarkRelay2Servers5Clients1k(b *testing.B) {
 	p := defaultParams()
-	p.clients = 2
+	p.clients = 5
 	p.servers = 2
 	benchmarkRelay(b, p)
 }
 
-func BenchmarkRelay2Servers4Clients1k(b *testing.B) {
+func BenchmarkRelay4Servers20Clients1k(b *testing.B) {
 	p := defaultParams()
-	p.clients = 2
-	p.servers = 2
+	p.clients = 20
+	p.servers = 4
 	benchmarkRelay(b, p)
 }
 
-func BenchmarkRelay2Servers2Clients4k(b *testing.B) {
+func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 	p := defaultParams()
 	p.requestSize = 4 * 1024
-	p.clients = 2
+	p.clients = 5
 	p.servers = 2
 	benchmarkRelay(b, p)
 }

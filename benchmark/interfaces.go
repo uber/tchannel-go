@@ -31,13 +31,25 @@ type Client interface {
 	Warmup() error
 
 	// RawCall makes an echo call using raw.
-	RawCall() (time.Duration, error)
+	RawCall(n int) ([]time.Duration, error)
 
 	// ThriftCall makes an echo call using thrift.
-	ThriftCall() (time.Duration, error)
+	ThriftCall(n int) ([]time.Duration, error)
 
 	// Close closes the benchmark client.
 	Close()
+}
+
+// inProcClient represents a client that is running in the same process.
+// It adds methods to reduce allocations.
+type inProcClient interface {
+	Client
+
+	// RawCallBuffer will make n raw calls and store the latencies in the specified buffer.
+	RawCallBuffer(latencies []time.Duration) error
+
+	// ThriftCallBuffer will make n thrift calls and store the latencies in the specified buffer.
+	ThriftCallBuffer(latencies []time.Duration) error
 }
 
 // Server is a benchmark server that can receive requests.
@@ -46,5 +58,20 @@ type Server interface {
 	HostPort() string
 
 	// Close closes the benchmark server.
+	Close()
+
+	// RawCalls returns the number of raw calls the server has received.
+	RawCalls() int
+
+	// ThriftCalls returns the number of Thrift calls the server has received.
+	ThriftCalls() int
+}
+
+// Relay represents a relay for benchmarking.
+type Relay interface {
+	// HostPort is the host:port that the relay is listening on.
+	HostPort() string
+
+	// Close clsoes the relay.
 	Close()
 }

@@ -20,58 +20,20 @@
 
 package benchmark
 
-import (
-	"net"
-	"strconv"
-	"strings"
-)
-
-// externalServer represents a benchmark server running out-of-process.
-type externalServer struct {
-	*externalCmd
-	hostPort string
-	opts     *options
+func getRequestBytes(n int) []byte {
+	bs := make([]byte, n)
+	for i := range bs {
+		bs[i] = byte(i)
+	}
+	return bs
 }
 
-func newExternalServer(opts *options) Server {
-	benchArgs := []string{
-		"--service", opts.svcName,
+func getRequestString(n int) string {
+	// TODO: we should replace this with base64 once we drop go1.4 support.
+	chars := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcedefghijklmnopqrstuvwxyz")
+	bs := make([]byte, n)
+	for i := range bs {
+		bs[i] = chars[i%len(chars)]
 	}
-	if len(opts.advertiseHosts) > 0 {
-		benchArgs = append(benchArgs,
-			"--advertise-hosts", strings.Join(opts.advertiseHosts, ","))
-	}
-
-	cmd, hostPortStr := newExternalCmd("benchserver/main.go", benchArgs)
-	if _, _, err := net.SplitHostPort(hostPortStr); err != nil {
-		panic("bench-server did not print host:port on startup: " + err.Error())
-	}
-
-	return &externalServer{cmd, hostPortStr, opts}
-}
-
-func (s *externalServer) HostPort() string {
-	return s.hostPort
-}
-
-func (s *externalServer) RawCalls() int {
-	return s.writeAndReadInt("count-raw")
-}
-
-func (s *externalServer) ThriftCalls() int {
-	return s.writeAndReadInt("count-thrift")
-}
-
-func (s *externalServer) writeAndReadInt(cmd string) int {
-	v, err := s.writeAndRead(cmd)
-	if err != nil {
-		panic(err)
-	}
-
-	vInt, err := strconv.Atoi(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return vInt
+	return string(bs)
 }

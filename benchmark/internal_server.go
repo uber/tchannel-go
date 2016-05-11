@@ -21,9 +21,10 @@
 package benchmark
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/thrift"
@@ -34,13 +35,15 @@ import (
 
 // internalServer represents a benchmark server.
 type internalServer struct {
-	ch   *tchannel.Channel
-	opts *options
+	ch          *tchannel.Channel
+	opts        *options
+	rawCalls    atomic.Int64
+	thriftCalls atomic.Int64
 }
 
 // NewServer returns a new Server that can recieve Thrift calls or raw calls.
 func NewServer(optFns ...Option) Server {
-	opts := getOptions(optFns...)
+	opts := getOptions(optFns)
 	if opts.external {
 		return newExternalServer(opts)
 	}
@@ -53,14 +56,14 @@ func NewServer(optFns ...Option) Server {
 		panic("failed to listen on port 0: " + err.Error())
 	}
 
-	tServer := thrift.NewServer(ch)
-	tServer.Register(gen.NewTChanSecondServiceServer(handler{}))
-	ch.Register(raw.Wrap(rawHandler{}), "echo")
-
 	s := &internalServer{
 		ch:   ch,
 		opts: opts,
 	}
+
+	tServer := thrift.NewServer(ch)
+	tServer.Register(gen.NewTChanSecondServiceServer(handler{calls: &s.thriftCalls}))
+	ch.Register(raw.Wrap(rawHandler{calls: &s.rawCalls}), "echo")
 
 	if len(opts.advertiseHosts) > 0 {
 		if err := s.Advertise(opts.advertiseHosts); err != nil {
@@ -90,21 +93,35 @@ func (s *internalServer) Close() {
 	s.ch.Close()
 }
 
-type rawHandler struct{}
-
-func (rawHandler) OnError(ctx context.Context, err error) {
-	log.Printf("Server error: %v", err)
+func (s *internalServer) RawCalls() int {
+	return int(s.rawCalls.Load())
 }
 
-func (rawHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+func (s *internalServer) ThriftCalls() int {
+	return int(s.thriftCalls.Load())
+}
+
+type rawHandler struct {
+	calls *atomic.Int64
+}
+
+func (rawHandler) OnError(ctx context.Context, err error) {
+	fmt.Println("benchmark.Server error:", err)
+}
+
+func (h rawHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	h.calls.Inc()
 	return &raw.Res{
 		Arg2: args.Arg2,
 		Arg3: args.Arg3,
 	}, nil
 }
 
-type handler struct{}
+type handler struct {
+	calls *atomic.Int64
+}
 
-func (handler) Echo(ctx thrift.Context, arg1 string) (string, error) {
+func (h handler) Echo(ctx thrift.Context, arg1 string) (string, error) {
+	h.calls.Inc()
 	return arg1, nil
 }

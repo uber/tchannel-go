@@ -27,9 +27,12 @@ import (
 
 	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/benchmark"
+	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/require"
 )
+
+const callBatch = 100
 
 var (
 	useHyperbahn   = flag.Bool("useHyperbahn", false, "Whether to advertise and route requests through Hyperbahn")
@@ -51,9 +54,9 @@ func BenchmarkBothSerial(b *testing.B) {
 	)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
 
-		if _, err := client.ThriftCall(); err != nil {
+	for _, calls := range testutils.Batch(b.N, callBatch) {
+		if _, err := client.ThriftCall(calls); err != nil {
 			b.Errorf("Call failed: %v", err)
 		}
 	}
@@ -71,8 +74,8 @@ func BenchmarkInboundSerial(b *testing.B) {
 	require.NoError(b, client.Warmup(), "Warmup failed")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := client.ThriftCall(); err != nil {
+	for _, calls := range testutils.Batch(b.N, callBatch) {
+		if _, err := client.ThriftCall(calls); err != nil {
 			b.Errorf("Call failed: %v", err)
 		}
 	}
@@ -95,10 +98,10 @@ func BenchmarkInboundParallel(b *testing.B) {
 		require.NoError(b, client.Warmup(), "Warmup failed")
 
 		for pb.Next() {
-			if _, err := client.ThriftCall(); err != nil {
+			if _, err := client.ThriftCall(100); err != nil {
 				b.Errorf("Call failed: %v", err)
 			}
-			reqCounter.Inc()
+			reqCounter.Add(100)
 		}
 	})
 

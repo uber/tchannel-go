@@ -65,6 +65,10 @@ func main() {
 
 		line = strings.TrimSuffix(line, "\n")
 		switch line {
+		case "count-raw":
+			fmt.Println(server.RawCalls())
+		case "count-thrift":
+			fmt.Println(server.ThriftCalls())
 		case "quit":
 			return
 		default:

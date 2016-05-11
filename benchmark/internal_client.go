@@ -22,6 +22,7 @@ package benchmark
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/uber/tchannel-go"
@@ -32,21 +33,39 @@ import (
 
 // internalClient represents a benchmark client.
 type internalClient struct {
-	ch       *tchannel.Channel
-	sc       *tchannel.SubChannel
-	tClient  gen.TChanSecondService
-	argStr   string
-	argBytes []byte
-	opts     *options
+	ch          *tchannel.Channel
+	sc          *tchannel.SubChannel
+	tClient     gen.TChanSecondService
+	argStr      string
+	argBytes    []byte
+	checkResult bool
+	opts        *options
 }
 
 // NewClient returns a new Client that can make calls to a benchmark server.
 func NewClient(hosts []string, optFns ...Option) Client {
-	opts := getOptions(optFns...)
+	opts := getOptions(optFns)
 	if opts.external {
 		return newExternalClient(hosts, opts)
 	}
+	if opts.numClients > 1 {
+		return newInternalMultiClient(hosts, opts)
+	}
+	return newClient(hosts, opts)
+}
 
+func newClient(hosts []string, opts *options) inProcClient {
+	if opts.external || opts.numClients > 1 {
+		panic("newClient got options that should be handled by NewClient")
+	}
+
+	if opts.noLibrary {
+		return newInternalTCPClient(hosts, opts)
+	}
+	return newInternalClient(hosts, opts)
+}
+
+func newInternalClient(hosts []string, opts *options) inProcClient {
 	ch, err := tchannel.NewChannel(opts.svcName, nil)
 	if err != nil {
 		panic("failed to create channel: " + err.Error())
@@ -57,13 +76,12 @@ func NewClient(hosts []string, optFns ...Option) Client {
 	thriftClient := thrift.NewClient(ch, opts.svcName, nil)
 	client := gen.NewTChanSecondServiceClient(thriftClient)
 
-	argBytes := randomBytes(opts.reqSize)
 	return &internalClient{
 		ch:       ch,
 		sc:       ch.GetSubChannel(opts.svcName),
 		tClient:  client,
-		argBytes: argBytes,
-		argStr:   string(argBytes),
+		argBytes: getRequestBytes(opts.reqSize),
+		argStr:   getRequestString(opts.reqSize),
 		opts:     opts,
 	}
 }
@@ -82,38 +100,69 @@ func (c *internalClient) Warmup() error {
 	return nil
 }
 
-func (c *internalClient) RawCall() (time.Duration, error) {
-	ctx, cancel := tchannel.NewContext(c.opts.timeout)
-	defer cancel()
-
-	started := time.Now()
-	rArg2, rArg3, _, err := raw.CallSC(ctx, c.sc, "echo", c.argBytes, c.argBytes)
-	duration := time.Since(started)
-
-	if err != nil {
-		return 0, err
+func (c *internalClient) makeCalls(latencies []time.Duration, f func() (time.Duration, error)) error {
+	for i := range latencies {
+		var err error
+		latencies[i], err = f()
+		if err != nil {
+			return err
+		}
 	}
-	if !bytes.Equal(rArg2, c.argBytes) || !bytes.Equal(rArg3, c.argBytes) {
-		panic("echo call returned wrong results")
-	}
-	return duration, nil
+	return nil
 }
 
-func (c *internalClient) ThriftCall() (time.Duration, error) {
-	ctx, cancel := thrift.NewContext(c.opts.timeout)
-	defer cancel()
+func (c *internalClient) RawCallBuffer(latencies []time.Duration) error {
+	return c.makeCalls(latencies, func() (time.Duration, error) {
+		ctx, cancel := tchannel.NewContext(c.opts.timeout)
+		defer cancel()
 
-	started := time.Now()
-	res, err := c.tClient.Echo(ctx, c.argStr)
-	duration := time.Since(started)
+		started := time.Now()
+		rArg2, rArg3, _, err := raw.CallSC(ctx, c.sc, "echo", c.argBytes, c.argBytes)
+		duration := time.Since(started)
 
-	if err != nil {
-		return 0, err
-	}
-	if res != c.argStr {
-		panic("thrift Echo returned wrong result")
-	}
-	return duration, nil
+		if err != nil {
+			return 0, err
+		}
+		if c.checkResult {
+			if !bytes.Equal(rArg2, c.argBytes) || !bytes.Equal(rArg3, c.argBytes) {
+				fmt.Println("Arg2", rArg2, "Expect", c.argBytes)
+				fmt.Println("Arg3", rArg3, "Expect", c.argBytes)
+				panic("echo call returned wrong results")
+			}
+		}
+		return duration, nil
+	})
+}
+
+func (c *internalClient) RawCall(n int) ([]time.Duration, error) {
+	latencies := make([]time.Duration, n)
+	return latencies, c.RawCallBuffer(latencies)
+}
+
+func (c *internalClient) ThriftCallBuffer(latencies []time.Duration) error {
+	return c.makeCalls(latencies, func() (time.Duration, error) {
+		ctx, cancel := thrift.NewContext(c.opts.timeout)
+		defer cancel()
+
+		started := time.Now()
+		res, err := c.tClient.Echo(ctx, c.argStr)
+		duration := time.Since(started)
+
+		if err != nil {
+			return 0, err
+		}
+		if c.checkResult {
+			if res != c.argStr {
+				panic("thrift Echo returned wrong result")
+			}
+		}
+		return duration, nil
+	})
+}
+
+func (c *internalClient) ThriftCall(n int) ([]time.Duration, error) {
+	latencies := make([]time.Duration, n)
+	return latencies, c.ThriftCallBuffer(latencies)
 }
 
 func (c *internalClient) Close() {

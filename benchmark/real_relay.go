@@ -21,57 +21,54 @@
 package benchmark
 
 import (
-	"net"
-	"strconv"
-	"strings"
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/atomic"
 )
 
-// externalServer represents a benchmark server running out-of-process.
-type externalServer struct {
-	*externalCmd
-	hostPort string
-	opts     *options
+type fixedHosts struct {
+	hosts map[string][]string
+	pickI atomic.Int32
 }
 
-func newExternalServer(opts *options) Server {
-	benchArgs := []string{
-		"--service", opts.svcName,
-	}
-	if len(opts.advertiseHosts) > 0 {
-		benchArgs = append(benchArgs,
-			"--advertise-hosts", strings.Join(opts.advertiseHosts, ","))
+func (fh *fixedHosts) Get(svc string) string {
+	peers := fh.hosts[svc]
+	if len(peers) == 0 {
+		return ""
 	}
 
-	cmd, hostPortStr := newExternalCmd("benchserver/main.go", benchArgs)
-	if _, _, err := net.SplitHostPort(hostPortStr); err != nil {
-		panic("bench-server did not print host:port on startup: " + err.Error())
-	}
-
-	return &externalServer{cmd, hostPortStr, opts}
+	pickI := int(fh.pickI.Inc()-1) % len(peers)
+	return peers[pickI]
 }
 
-func (s *externalServer) HostPort() string {
-	return s.hostPort
+type realRelay struct {
+	ch    *tchannel.Channel
+	hosts *fixedHosts
 }
 
-func (s *externalServer) RawCalls() int {
-	return s.writeAndReadInt("count-raw")
-}
-
-func (s *externalServer) ThriftCalls() int {
-	return s.writeAndReadInt("count-thrift")
-}
-
-func (s *externalServer) writeAndReadInt(cmd string) int {
-	v, err := s.writeAndRead(cmd)
+// NewRealRelay creates a TChannel relay.
+func NewRealRelay(services map[string][]string) (Relay, error) {
+	hosts := &fixedHosts{hosts: services}
+	ch, err := tchannel.NewChannel("relay", &tchannel.ChannelOptions{
+		RelayHosts: hosts,
+	})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	vInt, err := strconv.Atoi(v)
-	if err != nil {
-		panic(err)
+	if err := ch.ListenAndServe("127.0.0.1:0"); err != nil {
+		return nil, err
 	}
 
-	return vInt
+	return &realRelay{
+		ch:    ch,
+		hosts: hosts,
+	}, nil
+}
+
+func (r *realRelay) HostPort() string {
+	return r.ch.PeerInfo().HostPort
+}
+
+func (r *realRelay) Close() {
+	r.ch.Close()
 }

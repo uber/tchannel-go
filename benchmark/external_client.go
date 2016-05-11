@@ -38,6 +38,13 @@ func newExternalClient(hosts []string, opts *options) Client {
 		"--service", opts.svcName,
 		"--timeout", opts.timeout.String(),
 		"--request-size", strconv.Itoa(opts.reqSize),
+		"--num-clients", strconv.Itoa(opts.numClients),
+	}
+	if opts.noDurations {
+		benchArgs = append(benchArgs, "--no-durations")
+	}
+	if opts.noLibrary {
+		benchArgs = append(benchArgs, "--no-library")
 	}
 	benchArgs = append(benchArgs, hosts...)
 
@@ -60,18 +67,34 @@ func (c *externalClient) Warmup() error {
 	return nil
 }
 
-func (c *externalClient) callAndParse(cmd string) (time.Duration, error) {
+func (c *externalClient) callAndParse(cmd string) ([]time.Duration, error) {
 	out, err := c.writeAndRead(cmd)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return time.ParseDuration(out)
+
+	if out == "" {
+		return nil, nil
+	}
+
+	durationStrs := strings.Split(out, " ")
+	durations := make([]time.Duration, len(durationStrs))
+	for i, s := range durationStrs {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return nil, fmt.Errorf("calls failed: %v", out)
+		}
+
+		durations[i] = d
+	}
+
+	return durations, nil
 }
 
-func (c *externalClient) RawCall() (time.Duration, error) {
-	return c.callAndParse("rcall")
+func (c *externalClient) RawCall(n int) ([]time.Duration, error) {
+	return c.callAndParse(fmt.Sprintf("rcall %v", n))
 }
 
-func (c *externalClient) ThriftCall() (time.Duration, error) {
-	return c.callAndParse("tcall")
+func (c *externalClient) ThriftCall(n int) ([]time.Duration, error) {
+	return c.callAndParse(fmt.Sprintf("tcall %v", n))
 }
