@@ -23,12 +23,19 @@ package benchmark
 import "time"
 
 type options struct {
-	external bool
-	svcName  string
+	external  bool
+	svcName   string
+	noLibrary bool
 
 	// Following options only make sense for clients.
-	timeout time.Duration
-	reqSize int
+	noChecking bool
+	timeout    time.Duration
+	reqSize    int
+	numClients int
+
+	// noDurations disables printing of durations to stdout.
+	// This only applies to clients running out-of-process.
+	noDurations bool
 
 	// Following options only make sense for servers.
 	advertiseHosts []string
@@ -65,6 +72,41 @@ func WithExternalProcess() Option {
 	}
 }
 
+// WithNoLibrary uses the fast TCP-template based approach for generating
+// TChannel frames rather than the TChannel client library.
+func WithNoLibrary() Option {
+	return func(opts *options) {
+		opts.noLibrary = true
+	}
+}
+
+// WithNoChecking disables result verification on the client side, which
+// may slow down the client (as it compares all request bytes against the
+// response bytes).
+func WithNoChecking() Option {
+	return func(opts *options) {
+		opts.noChecking = true
+	}
+}
+
+// WithNumClients sets the number of concurrent TChannel clients to use
+// internally under a single benchmark.Client. This is used to generate
+// generate a large amount of traffic, as a single TChannel client will
+// not saturate a CPU since it will spend most of the time blocking and
+// waiting for the remote side to respond.
+func WithNumClients(numClients int) Option {
+	return func(opts *options) {
+		opts.numClients = numClients
+	}
+}
+
+// WithNoDurations disables printing of latencies to standard out.
+func WithNoDurations() Option {
+	return func(opts *options) {
+		opts.noDurations = true
+	}
+}
+
 // WithAdvertiseHosts sets the hosts to advertise with on startup.
 func WithAdvertiseHosts(hosts []string) Option {
 	return func(opts *options) {
@@ -72,7 +114,7 @@ func WithAdvertiseHosts(hosts []string) Option {
 	}
 }
 
-func getOptions(optFns ...Option) *options {
+func getOptions(optFns []Option) *options {
 	opts := &options{
 		timeout: time.Second,
 		svcName: "bench-server",

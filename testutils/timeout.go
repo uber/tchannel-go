@@ -39,7 +39,7 @@ func init() {
 			panic(err)
 		}
 		timeoutScaleFactor = fv
-		fmt.Println("Scaling timeouts by factor", timeoutScaleFactor)
+		fmt.Fprintln(os.Stderr, "Scaling timeouts by factor", timeoutScaleFactor)
 	}
 }
 

@@ -18,60 +18,44 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package benchmark
+// Package trand provides a thread-safe random number generator.
+package trand
 
 import (
-	"net"
-	"strconv"
-	"strings"
+	"math/rand"
+	"sync"
+	"time"
 )
 
-// externalServer represents a benchmark server running out-of-process.
-type externalServer struct {
-	*externalCmd
-	hostPort string
-	opts     *options
+// lockedSource allows a random number generator to be used by multiple goroutines
+// concurrently. The code is very similar to math/rand.lockedSource, which is
+// unfortunately not exposed.
+type lockedSource struct {
+	sync.Mutex
+
+	src rand.Source
 }
 
-func newExternalServer(opts *options) Server {
-	benchArgs := []string{
-		"--service", opts.svcName,
-	}
-	if len(opts.advertiseHosts) > 0 {
-		benchArgs = append(benchArgs,
-			"--advertise-hosts", strings.Join(opts.advertiseHosts, ","))
-	}
-
-	cmd, hostPortStr := newExternalCmd("benchserver/main.go", benchArgs)
-	if _, _, err := net.SplitHostPort(hostPortStr); err != nil {
-		panic("bench-server did not print host:port on startup: " + err.Error())
-	}
-
-	return &externalServer{cmd, hostPortStr, opts}
+// New returns a rand.Rand that is threadsafe.
+func New(seed int64) *rand.Rand {
+	return rand.New(&lockedSource{src: rand.NewSource(seed)})
 }
 
-func (s *externalServer) HostPort() string {
-	return s.hostPort
+// NewSeeded returns a rand.Rand that's threadsafe and seeded with the current
+// time.
+func NewSeeded() *rand.Rand {
+	return New(time.Now().UnixNano())
 }
 
-func (s *externalServer) RawCalls() int {
-	return s.writeAndReadInt("count-raw")
+func (r *lockedSource) Int63() (n int64) {
+	r.Lock()
+	n = r.src.Int63()
+	r.Unlock()
+	return
 }
 
-func (s *externalServer) ThriftCalls() int {
-	return s.writeAndReadInt("count-thrift")
-}
-
-func (s *externalServer) writeAndReadInt(cmd string) int {
-	v, err := s.writeAndRead(cmd)
-	if err != nil {
-		panic(err)
-	}
-
-	vInt, err := strconv.Atoi(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return vInt
+func (r *lockedSource) Seed(seed int64) {
+	r.Lock()
+	r.src.Seed(seed)
+	r.Unlock()
 }

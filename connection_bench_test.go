@@ -148,7 +148,7 @@ func benchmarkCallsN(b *testing.B, c benchmarkConfig) {
 	reqsLeft := testutils.Decrementor(c.numCalls)
 	clientWorker := func(client *Channel, clientNum, workerNum int) {
 		sc := client.GetSubChannel(benchService)
-		for reqsLeft() {
+		for reqsLeft.Single() {
 			call(sc)
 		}
 	}

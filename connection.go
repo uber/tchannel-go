@@ -154,6 +154,7 @@ type Connection struct {
 	nextMessageID   atomic.Uint32
 	events          connectionEvents
 	commonStatsTags map[string]string
+	relay           *Relayer
 
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
@@ -274,6 +275,9 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 	c.inbound.onAdded = c.onExchangeAdded
 	c.outbound.onAdded = c.onExchangeAdded
 
+	if ch.relayHosts != nil {
+		c.relay = NewRelayer(ch, c)
+	}
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
 	return c
@@ -723,39 +727,66 @@ func (c *Connection) readFrames(_ uint32) {
 			return
 		}
 
-		// call req and call res messages may not want the frame released immediately.
-		releaseFrame := true
-		switch frame.Header.messageType {
-		case messageTypeCallReq:
-			releaseFrame = c.handleCallReq(frame)
-		case messageTypeCallReqContinue:
-			releaseFrame = c.handleCallReqContinue(frame)
-		case messageTypeCallRes:
-			releaseFrame = c.handleCallRes(frame)
-		case messageTypeCallResContinue:
-			releaseFrame = c.handleCallResContinue(frame)
-		case messageTypeInitReq:
-			c.handleInitReq(frame)
-		case messageTypeInitRes:
-			releaseFrame = c.handleInitRes(frame)
-		case messageTypePingReq:
-			c.handlePingReq(frame)
-		case messageTypePingRes:
-			releaseFrame = c.handlePingRes(frame)
-		case messageTypeError:
-			releaseFrame = c.handleError(frame)
-		default:
-			// TODO(mmihic): Log and close connection with protocol error
-			c.log.WithFields(
-				LogField{"header", frame.Header},
-				LogField{"remotePeer", c.remotePeerInfo},
-			).Error("Received unexpected frame.")
+		var releaseFrame bool
+		if c.relay == nil {
+			releaseFrame = c.handleFrameNoRelay(frame)
+		} else {
+			releaseFrame = c.handleFrameRelay(frame)
 		}
-
 		if releaseFrame {
 			c.framePool.Release(frame)
 		}
 	}
+}
+
+func (c *Connection) handleFrameRelay(frame *Frame) bool {
+	switch frame.Header.messageType {
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
+		if err := c.relay.Relay(frame); err != nil {
+			c.log.WithFields(
+				ErrField(err),
+				LogField{"header", frame.Header},
+				LogField{"remotePeer", c.remotePeerInfo},
+			).Error("Failed to relay frame.")
+		}
+		return false
+	default:
+		return c.handleFrameNoRelay(frame)
+	}
+}
+
+func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
+	releaseFrame := true
+
+	// call req and call res messages may not want the frame released immediately.
+	switch frame.Header.messageType {
+	case messageTypeCallReq:
+		releaseFrame = c.handleCallReq(frame)
+	case messageTypeCallReqContinue:
+		releaseFrame = c.handleCallReqContinue(frame)
+	case messageTypeCallRes:
+		releaseFrame = c.handleCallRes(frame)
+	case messageTypeCallResContinue:
+		releaseFrame = c.handleCallResContinue(frame)
+	case messageTypeInitReq:
+		c.handleInitReq(frame)
+	case messageTypeInitRes:
+		releaseFrame = c.handleInitRes(frame)
+	case messageTypePingReq:
+		c.handlePingReq(frame)
+	case messageTypePingRes:
+		releaseFrame = c.handlePingRes(frame)
+	case messageTypeError:
+		releaseFrame = c.handleError(frame)
+	default:
+		// TODO(mmihic): Log and close connection with protocol error
+		c.log.WithFields(
+			LogField{"header", frame.Header},
+			LogField{"remotePeer", c.remotePeerInfo},
+		).Error("Received unexpected frame.")
+	}
+
+	return releaseFrame
 }
 
 // writeFrames is the main loop that pulls frames from the send channel and
@@ -811,6 +842,7 @@ func (c *Connection) closeSendCh(connID uint32) {
 // checkExchanges is called whenever an exchange is removed, and when Close is called.
 func (c *Connection) checkExchanges() {
 	c.callOnExchangeChange()
+
 	moveState := func(fromState, toState connectionState) bool {
 		err := c.withStateLock(func() error {
 			if c.state != fromState {
@@ -824,6 +856,9 @@ func (c *Connection) checkExchanges() {
 
 	var updated connectionState
 	if c.readState() == connectionStartClose {
+		if !c.relay.canClose() {
+			return
+		}
 		if c.inbound.count() == 0 && moveState(connectionStartClose, connectionInboundClosed) {
 			updated = connectionInboundClosed
 		}

@@ -18,61 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// benchserver is used to receive requests for benchmarks.
-package main
+package testutils
 
 import (
-	"bufio"
-	"flag"
-	"fmt"
-	"io"
-	"log"
-	"os"
-	"strings"
+	"testing"
 
-	"github.com/uber/tchannel-go/benchmark"
+	"github.com/stretchr/testify/assert"
 )
 
-var (
-	serviceName    = flag.String("service", "bench-server", "The benchmark server's service name")
-	advertiseHosts = flag.String("advertise-hosts", "", "Comma-separated list of hosts to advertise to")
-)
-
-func main() {
-	flag.Parse()
-
-	var adHosts []string
-	if len(*advertiseHosts) > 0 {
-		adHosts = strings.Split(*advertiseHosts, ",")
+func TestSimpleRelayHosts(t *testing.T) {
+	hosts := map[string][]string{
+		"foo":        {"1.1.1.1:1234", "1.1.1.1:1235"},
+		"foo-canary": {},
 	}
-
-	server := benchmark.NewServer(
-		benchmark.WithServiceName(*serviceName),
-		benchmark.WithAdvertiseHosts(adHosts),
-	)
-
-	fmt.Println(server.HostPort())
-
-	rdr := bufio.NewReader(os.Stdin)
-	for {
-		line, err := rdr.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			log.Fatalf("stdin read failed: %v", err)
-		}
-
-		line = strings.TrimSuffix(line, "\n")
-		switch line {
-		case "count-raw":
-			fmt.Println(server.RawCalls())
-		case "count-thrift":
-			fmt.Println(server.ThriftCalls())
-		case "quit":
-			return
-		default:
-			log.Fatalf("unrecognized command: %v", line)
-		}
-	}
+	rh := NewSimpleRelayHosts(hosts)
+	assert.Equal(t, "", rh.Get("foo-canary"), "Expected no canary hosts.")
+	assert.Equal(t, "1.1.1.1:1235", rh.Get("foo"), "Unexpected peer chosen.")
 }

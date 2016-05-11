@@ -27,7 +27,6 @@ import (
 	"time"
 
 	. "github.com/uber/tchannel-go"
-
 	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
@@ -70,7 +69,7 @@ func TestCloseOnlyListening(t *testing.T) {
 }
 
 func TestCloseNewClient(t *testing.T) {
-	ch := testutils.NewServer(t, nil)
+	ch := testutils.NewClient(t, nil)
 
 	// If there are no connections, then the channel should close immediately.
 	ch.Close()
@@ -79,7 +78,8 @@ func TestCloseNewClient(t *testing.T) {
 }
 
 func TestCloseAfterTimeout(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	opts := testutils.NewOpts().SetRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testHandler := onErrorTestHandler{newTestHandler(t), func(_ context.Context, err error) {}}
 		ts.Register(raw.Wrap(testHandler), "block")
 

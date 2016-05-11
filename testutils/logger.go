@@ -177,12 +177,13 @@ func (l errorLogger) checkFilters(msg string) bool {
 	matchCount := l.s.matchCount[match].Inc()
 	return uint(matchCount) <= l.v.Filters[match].Count
 }
+
 func (l errorLogger) checkErr(prefix, msg string) {
 	if l.checkFilters(msg) {
 		return
 	}
 
-	l.t.Errorf("%v: %s %v", prefix, msg, l.Logger.Fields())
+	l.t.Errorf("Unexpected log: %v: %s %v", prefix, msg, l.Logger.Fields())
 }
 
 func (l errorLogger) Fatal(msg string) {
