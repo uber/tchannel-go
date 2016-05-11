@@ -103,8 +103,10 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 			benchmark.WithServiceName("svc"),
 			benchmark.WithRequestSize(p.requestSize),
 			benchmark.WithExternalProcess(),
+			benchmark.WithTimeout(10*time.Second),
 		)
 		defer clients[i].Close()
+		require.NoError(b, clients[i].Warmup(), "Warmup failed")
 	}
 
 	quantileVals := []float64{0.50, 0.95, 0.99, 1.0}
@@ -150,7 +152,7 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	wc.WaitForEnd()
 	duration := time.Since(started)
 
-	fmt.Printf("\nb.N: %v Duration: %v RPS = %0.2f\n", b.N, duration, float64(b.N)/duration.Seconds())
+	fmt.Printf("\nb.N: %v Duration: %v RPS = %0.0f\n", b.N, duration, float64(b.N)/duration.Seconds())
 
 	// Merge all the quantiles into 1
 	for _, q := range quantiles[1:] {
@@ -161,6 +163,43 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 		fmt.Printf("  %0.4f = %v\n", q, time.Duration(quantiles[0].Query(q)))
 	}
 	fmt.Println()
+}
+
+func BenchmarkRelayNoLatencies(b *testing.B) {
+	server := benchmark.NewServer(
+		benchmark.WithServiceName("svc"),
+		benchmark.WithExternalProcess(),
+		benchmark.WithNoLibrary(),
+	)
+	defer server.Close()
+
+	hostMapping := map[string][]string{"svc": {server.HostPort()}}
+	relay, err := benchmark.NewRealRelay(hostMapping)
+	require.NoError(b, err, "NewRealRelay failed")
+	defer relay.Close()
+
+	client := benchmark.NewClient([]string{relay.HostPort()},
+		benchmark.WithServiceName("svc"),
+		benchmark.WithExternalProcess(),
+		benchmark.WithNoLibrary(),
+		benchmark.WithNumClients(10),
+		benchmark.WithNoChecking(),
+		benchmark.WithNoDurations(),
+		benchmark.WithTimeout(10*time.Second),
+	)
+	defer client.Close()
+	require.NoError(b, err, client.Warmup(), "client.Warmup failed")
+
+	b.ResetTimer()
+	started := time.Now()
+	for _, calls := range testutils.Batch(b.N, 10000) {
+		if _, err := client.RawCall(calls); err != nil {
+			b.Fatalf("Calls failed: %v", err)
+		}
+	}
+
+	duration := time.Since(started)
+	fmt.Printf("\nb.N: %v Duration: %v RPS = %0.0f\n", b.N, duration, float64(b.N)/duration.Seconds())
 }
 
 func BenchmarkRelay2Servers5Clients1k(b *testing.B) {
