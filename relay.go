@@ -41,7 +41,8 @@ type relayItems struct {
 
 func newRelayItems(logger Logger) *relayItems {
 	return &relayItems{
-		items: make(map[uint32]relayItem),
+		items:  make(map[uint32]relayItem),
+		logger: logger,
 	}
 }
 
