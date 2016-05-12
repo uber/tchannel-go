@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"sync"
 
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/trand"
 )
 
@@ -44,11 +45,11 @@ func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 }
 
 // Get takes a routing key and returns the best host:port for that key.
-func (rh *SimpleRelayHosts) Get(service string) string {
+func (rh *SimpleRelayHosts) Get(frame tchannel.CallFrame) string {
 	rh.RLock()
 	defer rh.RUnlock()
 
-	available, ok := rh.peers[service]
+	available, ok := rh.peers[frame.Service()]
 	if !ok || len(available) == 0 {
 		return ""
 	}

@@ -65,3 +65,18 @@ func (f *FakeIncomingCall) RemotePeer() tchannel.PeerInfo {
 func NewIncomingCall(callerName string) tchannel.IncomingCall {
 	return &FakeIncomingCall{CallerNameF: callerName}
 }
+
+// FakeCallFrame is a stub implementation of the CallFrame interface.
+type FakeCallFrame struct {
+	ServiceF, MethodF string
+}
+
+// Service returns the service name field.
+func (f FakeCallFrame) Service() string {
+	return f.ServiceF
+}
+
+// Method returns the method field.
+func (f FakeCallFrame) Method() string {
+	return f.MethodF
+}

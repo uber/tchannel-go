@@ -15,11 +15,19 @@ const _maxRelayTombs = 1e4
 // _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
 const _relayTombTTL = time.Second
 
+// CallFrame is an interface that abstracts access to the call req frame.
+type CallFrame interface {
+	// Service is the name of the destination service.
+	Service() string
+	// Method is the name of the method being called.
+	Method() string
+}
+
 // RelayHosts allows external wrappers to inject peer selection logic for
 // relaying.
 type RelayHosts interface {
-	// Get returns the host:port of the best peer for the group.
-	Get(service string) string
+	// Get returns the host:port of the best peer for the given call.
+	Get(CallFrame) string
 	// TODO: add MarkFailed and MarkOK to for feedback loop into peer selection.
 }
 
@@ -208,11 +216,10 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	}
 
 	// Get the destination
-	svc := f.Service()
-	hostPort := r.hosts.Get(svc)
+	hostPort := r.hosts.Get(f)
 	if hostPort == "" {
 		// TODO: What is the span in the error frame actually used for, and do we need it?
-		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(svc))
+		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(f.Service()))
 		return nil
 	}
 	peer := r.peers.GetOrAdd(hostPort)
