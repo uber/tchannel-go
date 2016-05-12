@@ -116,6 +116,7 @@ func TestRoundTrip(t *testing.T) {
 
 		call, err := ts.Server().BeginCall(ctx, ts.HostPort(), testServiceName, "echo", &CallOptions{Format: JSON})
 		require.NoError(t, err)
+		assert.NotEmpty(t, call.RemotePeer().HostPort)
 
 		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(testArg2))
 		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(testArg3))
