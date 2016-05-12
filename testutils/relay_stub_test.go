@@ -23,8 +23,9 @@ package testutils
 import (
 	"testing"
 
+	"github.com/uber/tchannel-go/relay"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/uber/tchannel-go"
 )
 
 func TestSimpleRelayHosts(t *testing.T) {
@@ -37,7 +38,7 @@ func TestSimpleRelayHosts(t *testing.T) {
 	rh.Add("foo-added", "1.1.1.1:1234")
 
 	tests := []struct {
-		call      tchannel.CallFrame
+		call      relay.CallFrame
 		wantOneOf []string
 	}{
 		{
