@@ -224,16 +224,15 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	}
 	peer := r.peers.GetOrAdd(hostPort)
 
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
-	remoteConn, err := peer.GetConnection(ctx)
+	// TODO: Should connections use the call timeout? Or a separate timeout?
+	remoteConn, err := peer.getConnectionTimeout(f.TTL())
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),
 			LogField{"hostPort", hostPort},
 		).Warn("Failed to connect to relay host.")
-		// TODO: return an error frame.
+		// TODO: Same as above, do we need span here?
+		r.conn.SendSystemError(f.Header.ID, nil, NewWrappedSystemError(ErrCodeNetwork, err))
 		return nil
 	}
 
