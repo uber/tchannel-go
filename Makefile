@@ -87,7 +87,7 @@ test: clean setup install_test
 
 benchmark: clean setup
 	echo Running benchmarks:
-	go test $(PKGS) -bench=. -parallel=4 -run ^$
+	go test $(PKGS) -bench=. -parallel=4 -run NONE
 
 cover_profile: clean setup
 	@echo Testing packages:
