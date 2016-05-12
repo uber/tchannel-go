@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/tnet"
 
 	"golang.org/x/net/context"
@@ -65,7 +66,7 @@ type ChannelOptions struct {
 	Logger Logger
 
 	// The host:port selection implementation to use for relaying.
-	RelayHosts RelayHosts
+	RelayHosts relay.Hosts
 
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
@@ -121,7 +122,7 @@ type Channel struct {
 	commonStatsTags   map[string]string
 	connectionOptions ConnectionOptions
 	peers             *PeerList
-	relayHosts        RelayHosts
+	relayHosts        relay.Hosts
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -647,6 +648,6 @@ func (ch *Channel) Close() {
 }
 
 // RelayHosts returns the channel's relay hosts, if any.
-func (ch *Channel) RelayHosts() RelayHosts {
+func (ch *Channel) RelayHosts() relay.Hosts {
 	return ch.relayHosts
 }

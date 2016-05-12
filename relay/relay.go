@@ -18,58 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package benchmark
+// Package relay contains relaying interfaces for external use.
+package relay
 
-import (
-	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
-	"github.com/uber/tchannel-go/relay"
-)
-
-type fixedHosts struct {
-	hosts map[string][]string
-	pickI atomic.Int32
+// CallFrame is an interface that abstracts access to the call req frame.
+type CallFrame interface {
+	// Service is the name of the destination service.
+	Service() string
+	// Method is the name of the method being called.
+	Method() string
 }
 
-func (fh *fixedHosts) Get(call relay.CallFrame) string {
-	peers := fh.hosts[call.Service()]
-	if len(peers) == 0 {
-		return ""
-	}
-
-	pickI := int(fh.pickI.Inc()-1) % len(peers)
-	return peers[pickI]
-}
-
-type realRelay struct {
-	ch    *tchannel.Channel
-	hosts *fixedHosts
-}
-
-// NewRealRelay creates a TChannel relay.
-func NewRealRelay(services map[string][]string) (Relay, error) {
-	hosts := &fixedHosts{hosts: services}
-	ch, err := tchannel.NewChannel("relay", &tchannel.ChannelOptions{
-		RelayHosts: hosts,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := ch.ListenAndServe("127.0.0.1:0"); err != nil {
-		return nil, err
-	}
-
-	return &realRelay{
-		ch:    ch,
-		hosts: hosts,
-	}, nil
-}
-
-func (r *realRelay) HostPort() string {
-	return r.ch.PeerInfo().HostPort
-}
-
-func (r *realRelay) Close() {
-	r.ch.Close()
+// Hosts allows external wrappers to inject peer selection logic for
+// relaying.
+type Hosts interface {
+	// Get returns the host:port of the best peer for the given call.
+	Get(CallFrame) string
 }

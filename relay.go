@@ -1,3 +1,23 @@
+// Copyright (c) 2015 Uber Technologies, Inc.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 package tchannel
 
 import (
@@ -6,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/uber/tchannel-go/relay"
 )
 
 // _maxRelayTombs is the maximum number of tombs we'll accumulate in a single
@@ -14,22 +36,6 @@ const _maxRelayTombs = 1e4
 
 // _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
 const _relayTombTTL = time.Second
-
-// CallFrame is an interface that abstracts access to the call req frame.
-type CallFrame interface {
-	// Service is the name of the destination service.
-	Service() string
-	// Method is the name of the method being called.
-	Method() string
-}
-
-// RelayHosts allows external wrappers to inject peer selection logic for
-// relaying.
-type RelayHosts interface {
-	// Get returns the host:port of the best peer for the given call.
-	Get(CallFrame) string
-	// TODO: add MarkFailed and MarkOK to for feedback loop into peer selection.
-}
 
 type relayItem struct {
 	*time.Timer
@@ -140,7 +146,7 @@ const (
 // A Relayer forwards frames.
 type Relayer struct {
 	metrics StatsReporter
-	hosts   RelayHosts
+	hosts   relay.Hosts
 
 	// outbound is the remapping for requests that originated on this
 	// connection, and are outbound towards some other connection.
@@ -162,7 +168,7 @@ type Relayer struct {
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
 		metrics:  conn.statsReporter,
-		hosts:    ch.relayHosts,
+		hosts:    ch.RelayHosts(),
 		outbound: newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
 		inbound:  newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
 		peers:    ch.Peers(),
@@ -172,7 +178,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 }
 
 // Hosts returns the RelayHosts guiding peer selection.
-func (r *Relayer) Hosts() RelayHosts {
+func (r *Relayer) Hosts() relay.Hosts {
 	return r.hosts
 }
 

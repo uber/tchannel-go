@@ -27,6 +27,7 @@ import (
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/relay"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")
@@ -188,7 +189,7 @@ func (o *ChannelOpts) addPostFn(f func()) {
 }
 
 // SetRelayHosts sets the channel's relay hosts, which enables relaying.
-func (o *ChannelOpts) SetRelayHosts(rh tchannel.RelayHosts) *ChannelOpts {
+func (o *ChannelOpts) SetRelayHosts(rh relay.Hosts) *ChannelOpts {
 	o.ChannelOptions.RelayHosts = rh
 	return o
 }
