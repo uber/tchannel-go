@@ -28,8 +28,15 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
-// fakeLazyCallReq is a small helper for testing our lazy message wrappers.
-func fakeLazyCallReq() lazyCallReq {
+type testCallReq int
+
+const (
+	hasHeaders testCallReq = (1 << iota)
+	hasChecksum
+	totalCombinations
+)
+
+func (cr testCallReq) req() lazyCallReq {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
@@ -44,6 +51,28 @@ func fakeLazyCallReq() lazyCallReq {
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
 
+	if cr&hasHeaders == 0 {
+		payload.WriteSingleByte(0) // number of headers
+	} else {
+		payload.WriteSingleByte(3)    // number of headers
+		payload.WriteLen8String("k1") // header 1 key
+		payload.WriteLen8String("v1") // header 1 value
+		payload.WriteLen8String("k2") // header 2 key
+		payload.WriteLen8String("v2") // header 2 value
+		payload.WriteLen8String("k3") // header 3 key
+		payload.WriteLen8String("v3") // header 3 value
+	}
+
+	if cr&hasChecksum == 0 {
+		checksum := ChecksumTypeCrc32C
+		payload.WriteSingleByte(byte(checksum)) // checksum type
+		payload.WriteUint32(0)                  // checksum contents
+	} else {
+		checksum := ChecksumTypeNone
+		payload.WriteSingleByte(byte(checksum)) // checksum type
+		// no checksum contents for None
+	}
+	payload.WriteLen16String("moneys") // method
 	return newLazyCallReq(f)
 }
 
@@ -60,12 +89,37 @@ func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 	}, "Should panic when creating lazyCallReq from non-callReq frame.")
 }
 
+func allFrameTypes() []testCallReq {
+	combinations := make([]testCallReq, totalCombinations)
+	for i := 0; i < int(totalCombinations); i++ {
+		combinations[i] = testCallReq(combinations[i])
+	}
+	return combinations
+}
+
+func withLazyCallReqCombinations(f func(cr testCallReq)) {
+	for cr := testCallReq(0); cr < totalCombinations; cr++ {
+		f(cr)
+	}
+}
+
 func TestLazyCallReqService(t *testing.T) {
-	cr := fakeLazyCallReq()
-	assert.Equal(t, "bankmoji", cr.Service(), "Failed to read service name from frame.")
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		assert.Equal(t, "bankmoji", cr.Service(), "Service name mismatch")
+	})
+}
+
+func TestLazyCallReqMethod(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		assert.Equal(t, "moneys", cr.Method(), "Method name mismatch")
+	})
 }
 
 func TestLazyCallReqTTL(t *testing.T) {
-	cr := fakeLazyCallReq()
-	assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Failed to parse TTL from frame.")
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Failed to parse TTL from frame.")
+	})
 }

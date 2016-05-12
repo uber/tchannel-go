@@ -24,14 +24,48 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uber/tchannel-go"
 )
 
 func TestSimpleRelayHosts(t *testing.T) {
 	hosts := map[string][]string{
-		"foo":        {"1.1.1.1:1234", "1.1.1.1:1235"},
+		"foo":        {"1.1.1.1:1234", "1.1.1.1:1235", "1.1.1.1:1236"},
+		"foo-added":  {},
 		"foo-canary": {},
 	}
 	rh := NewSimpleRelayHosts(hosts)
-	assert.Equal(t, "", rh.Get("foo-canary"), "Expected no canary hosts.")
-	assert.Equal(t, "1.1.1.1:1235", rh.Get("foo"), "Unexpected peer chosen.")
+	rh.Add("foo-added", "1.1.1.1:1234")
+
+	tests := []struct {
+		call      tchannel.CallFrame
+		wantOneOf []string
+	}{
+		{
+			call:      FakeCallFrame{ServiceF: "foo-canary"},
+			wantOneOf: nil,
+		},
+		{
+			call:      FakeCallFrame{ServiceF: "foo"},
+			wantOneOf: []string{"1.1.1.1:1234", "1.1.1.1:1235", "1.1.1.1:1236"},
+		},
+		{
+			call:      FakeCallFrame{ServiceF: "foo-added"},
+			wantOneOf: []string{"1.1.1.1:1234"},
+		},
+	}
+
+	for _, tt := range tests {
+		// Since we use random, run the test a few times.
+		for i := 0; i < 5; i++ {
+			got := rh.Get(tt.call)
+			if tt.wantOneOf == nil {
+				assert.Equal(t, "", got, "Expected %v to find no hosts", tt.call)
+				continue
+			}
+
+			wantOneOf := StrMap(tt.wantOneOf...)
+			_, found := wantOneOf[got]
+			assert.True(t, found, "Got unexpected hostPort %q, want one of: %v", got, tt.wantOneOf)
+		}
+	}
 }

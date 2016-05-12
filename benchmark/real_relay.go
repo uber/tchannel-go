@@ -30,8 +30,8 @@ type fixedHosts struct {
 	pickI atomic.Int32
 }
 
-func (fh *fixedHosts) Get(svc string) string {
-	peers := fh.hosts[svc]
+func (fh *fixedHosts) Get(call tchannel.CallFrame) string {
+	peers := fh.hosts[call.Service()]
 	if len(peers) == 0 {
 		return ""
 	}

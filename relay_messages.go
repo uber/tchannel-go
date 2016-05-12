@@ -51,6 +51,31 @@ func (f lazyCallReq) Service() string {
 	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
 }
 
+// Method returns the name of the method being called. It panics if called for
+// a non-callReq frame.
+func (f lazyCallReq) Method() string {
+	serviceLen := f.Payload[_serviceLenIndex]
+
+	// nh:1 (hk~1 hv~1){nh}
+	headerStart := _serviceLenIndex + 1 /* length byte */ + serviceLen
+	numHeaders := int(f.Payload[headerStart])
+	cur := int(headerStart) + 1
+	for i := 0; i < numHeaders*2; i++ {
+		sLen := f.Payload[cur]
+		cur += 1 + int(sLen)
+	}
+
+	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
+	checkSumType := ChecksumType(f.Payload[cur])
+	cur += 1 /* checksum */ + checkSumType.ChecksumSize()
+
+	// arg1~2
+	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
+	cur += 2
+	arg1 := f.Payload[cur : cur+arg1Len]
+	return string(arg1)
+}
+
 // TTL returns the time to live for this callReq.
 func (f lazyCallReq) TTL() time.Duration {
 	ttl := binary.BigEndian.Uint32(f.Payload[_ttlIndex : _ttlIndex+_ttlLen])
