@@ -234,6 +234,11 @@ func (call *OutboundCall) Arg3Writer() (ArgWriter, error) {
 	return call.arg3Writer()
 }
 
+// RemotePeer returns the peer info.
+func (call *OutboundCall) RemotePeer() PeerInfo {
+	return call.conn.RemotePeerInfo()
+}
+
 func (call *OutboundCall) doneSending() {}
 
 // An OutboundCallResponse is the response to an outbound call
