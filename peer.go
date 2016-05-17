@@ -194,7 +194,7 @@ func (l *PeerList) GetOrAdd(hostPort string) *Peer {
 	return l.Add(hostPort)
 }
 
-// Copy returns a map of the peer list. This method should only be used for testing.
+// Copy returns a copy of the PeerList as a map from hostPort to peer.
 func (l *PeerList) Copy() map[string]*Peer {
 	l.RLock()
 	defer l.RUnlock()
