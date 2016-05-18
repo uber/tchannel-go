@@ -450,16 +450,7 @@ func (p *Peer) connectionCloseStateChange(changed *Connection) {
 
 // Connect adds a new outbound connection to the peer.
 func (p *Peer) Connect(ctx context.Context) (*Connection, error) {
-	c, err := p.channel.Connect(ctx, p.hostPort)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := p.AddOutboundConnection(c); err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return p.channel.Connect(ctx, p.hostPort)
 }
 
 // BeginCall starts a new call to this specific peer, returning an OutboundCall that can

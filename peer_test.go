@@ -518,7 +518,8 @@ func TestPeerSelection(t *testing.T) {
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
-		assert.EqualValues(t, 4, atomic.LoadUint64(count), "Expect exchange update from init resp, ping, pong")
+		assert.EqualValues(t, 5, atomic.LoadUint64(count),
+			"Expect 5 exchange updates: peer add, init mex, new conn, ping, pong")
 	})
 }
 
@@ -954,6 +955,56 @@ func TestPeerSelectionAfterClosed(t *testing.T) {
 		peer, err := pt.client.Peers().Get(nil)
 		assert.NoError(t, err, "Client failed to select a peer")
 		assert.NotEqual(pt.t, closedHP, peer.HostPort(), "Closed peer shouldn't be chosen")
+	}
+}
+
+func TestPeerScoreOnNewConnection(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	tests := []struct {
+		message string
+		connect func(s1, s2 *Channel) *Peer
+	}{
+		{
+			message: "outbound connection",
+			connect: func(s1, s2 *Channel) *Peer {
+				return s1.Peers().GetOrAdd(s2.PeerInfo().HostPort)
+			},
+		},
+		{
+			message: "inbound connection",
+			connect: func(s1, s2 *Channel) *Peer {
+				return s2.Peers().GetOrAdd(s1.PeerInfo().HostPort)
+			},
+		},
+	}
+
+	getScore := func(pl *PeerList) uint64 {
+		peers := pl.IntrospectList(nil)
+		require.Equal(t, 1, len(peers), "Wrong number of peers")
+		return peers[0].Score
+	}
+
+	for _, tt := range tests {
+		testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+			s1 := ts.Server()
+			s2 := ts.NewServer(nil)
+
+			s1.Peers().Add(s2.PeerInfo().HostPort)
+			s2.Peers().Add(s1.PeerInfo().HostPort)
+
+			initialScore := getScore(s1.Peers())
+			peer := tt.connect(s1, s2)
+			_, err := peer.GetConnection(ctx)
+			require.NoError(t, err, "%v: GetConnection failed", tt.message)
+
+			// The connection should decrease the score.
+			connectedScore := getScore(s1.Peers())
+			assert.True(t, connectedScore < initialScore,
+				"%v: Expected connected peer score %v to be less than initial score %v",
+				tt.message, connectedScore, initialScore)
+		})
 	}
 }
 

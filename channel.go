@@ -489,6 +489,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	}
 
 	events := connectionEvents{
+		OnActive:           ch.outboundConnectionActive,
 		OnCloseStateChange: ch.connectionCloseStateChange,
 		OnExchangeUpdated:  ch.exchangeUpdated,
 	}
@@ -540,18 +541,33 @@ func (ch *Channel) updatePeer(p *Peer) {
 
 // incomingConnectionActive adds a new active connection to our peer list.
 func (ch *Channel) incomingConnectionActive(c *Connection) {
-	c.log.Debugf("Add connection as an active peer for %v", c.remotePeerInfo.HostPort)
+	c.log.Debugf("Add inbound connection as an active peer for %v", c.remotePeerInfo.HostPort)
 	// TODO: Alter TChannel spec to allow optionally include the service name
 	// when initializing a connection. As-is, we have to keep these peers in
 	// rootPeers (which isn't used for outbound calls) because we don't know
 	// what services they implement.
 	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
-	p.AddInboundConnection(c)
+	if err := p.AddInboundConnection(c); err != nil {
+		c.log.WithFields(LogField{"remoteHostPort", c.remotePeerInfo.HostPort}).
+			Warn("Failed to add inbound connection to peer")
+	}
+
 	ch.updatePeer(p)
 
 	ch.mutable.Lock()
 	ch.mutable.conns[c.connID] = c
 	ch.mutable.Unlock()
+}
+
+func (ch *Channel) outboundConnectionActive(c *Connection) {
+	c.log.Debugf("Add outbound connection as an active peer for %v", c.remotePeerInfo.HostPort)
+	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	if err := p.AddOutboundConnection(c); err != nil {
+		c.log.WithFields(LogField{"remoteHostPort", c.remotePeerInfo.HostPort}).
+			Warn("Failed to add outbound connection to peer")
+	}
+
+	ch.updatePeer(p)
 }
 
 // removeClosedConn removes a connection if it's closed.
