@@ -362,9 +362,9 @@ func (p *Peer) getConnectionTimeout(timeout time.Duration) (*Connection, error) 
 	return p.Connect(ctx)
 }
 
-// AddInboundConnection adds an active inbound connection to the peer's connection list.
+// addInboundConnection adds an active inbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) AddInboundConnection(c *Connection) error {
+func (p *Peer) addInboundConnection(c *Connection) error {
 	if c.readState() != connectionActive {
 		return ErrInvalidConnectionState
 	}
@@ -397,9 +397,9 @@ func (p *Peer) canRemove() bool {
 	return count == 0
 }
 
-// AddOutboundConnection adds an active outbound connection to the peer's connection list.
+// addOutboundConnection adds an active outbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) AddOutboundConnection(c *Connection) error {
+func (p *Peer) addOutboundConnection(c *Connection) error {
 	switch c.readState() {
 	case connectionActive, connectionStartClose:
 		break
@@ -411,6 +411,13 @@ func (p *Peer) AddOutboundConnection(c *Connection) error {
 	p.outboundConnections = append(p.outboundConnections, c)
 	p.Unlock()
 	return nil
+}
+
+func (p *Peer) addConnection(c *Connection, direction connectionDirection) error {
+	if direction == inbound {
+		return p.addInboundConnection(c)
+	}
+	return p.addOutboundConnection(c)
 }
 
 // removeConnection will check remove the connection if it exists on connsPtr
