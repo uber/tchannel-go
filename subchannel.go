@@ -117,6 +117,28 @@ func (c *SubChannel) Register(h Handler, methodName string) {
 	handlers.register(h, methodName)
 }
 
+// GetHandlers returns all handlers registered on this subchannel by method name.
+//
+// This function panics if the Handler for the SubChannel was overwritten with
+// SetHandler.
+func (c *SubChannel) GetHandlers() map[string]Handler {
+	handlers, ok := c.handler.(*handlerMap)
+	if !ok {
+		panic(fmt.Sprintf(
+			"handler for SubChannel(%v) was changed to disallow method registration",
+			c.ServiceName(),
+		))
+	}
+
+	handlers.RLock()
+	handlersMap := make(map[string]Handler, len(handlers.handlers))
+	for k, v := range handlers.handlers {
+		handlersMap[k] = v
+	}
+	handlers.RUnlock()
+	return handlersMap
+}
+
 // SetHandler changes the SubChannel's underlying handler. This may be used to
 // set up a catch-all Handler for all requests received by this SubChannel.
 //
