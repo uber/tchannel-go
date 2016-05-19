@@ -21,22 +21,22 @@
 package tchannel_test
 
 import (
-	"io/ioutil"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go"
+	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
 
 type chanSet struct {
-	main     tchannel.Registrar
-	sub      tchannel.Registrar
-	isolated tchannel.Registrar
+	main     Registrar
+	sub      Registrar
+	isolated Registrar
 }
 
 func withNewSet(t *testing.T, f func(*testing.T, chanSet)) {
@@ -45,12 +45,12 @@ func withNewSet(t *testing.T, f func(*testing.T, chanSet)) {
 	f(t, chanSet{
 		main:     ch,
 		sub:      ch.GetSubChannel("hyperbahn"),
-		isolated: ch.GetSubChannel("ringpop", tchannel.Isolated),
+		isolated: ch.GetSubChannel("ringpop", Isolated),
 	})
 }
 
 // Assert that two Registrars have references to the same Peer.
-func assertHaveSameRef(t *testing.T, r1, r2 tchannel.Registrar) {
+func assertHaveSameRef(t *testing.T, r1, r2 Registrar) {
 	p1, err := r1.Peers().Get(nil)
 	assert.NoError(t, err, "First registrar has no peers.")
 
@@ -60,9 +60,9 @@ func assertHaveSameRef(t *testing.T, r1, r2 tchannel.Registrar) {
 	assert.True(t, p1 == p2, "Registrars have references to different peers.")
 }
 
-func assertNoPeer(t *testing.T, r tchannel.Registrar) {
+func assertNoPeer(t *testing.T, r Registrar) {
 	_, err := r.Peers().Get(nil)
-	assert.Equal(t, err, tchannel.ErrNoPeers)
+	assert.Equal(t, err, ErrNoPeers)
 }
 
 func TestMainAddVisibility(t *testing.T) {
@@ -113,13 +113,13 @@ func TestAddReusesPeers(t *testing.T) {
 
 func TestSetHandler(t *testing.T) {
 	// Generate a Handler that expects only the given methods to be called.
-	genHandler := func(methods ...string) tchannel.Handler {
+	genHandler := func(methods ...string) Handler {
 		allowedMethods := make(map[string]struct{}, len(methods))
 		for _, m := range methods {
 			allowedMethods[m] = struct{}{}
 		}
 
-		return tchannel.HandlerFunc(func(ctx context.Context, call *tchannel.InboundCall) {
+		return HandlerFunc(func(ctx context.Context, call *InboundCall) {
 			method := call.MethodString()
 			assert.Contains(t, allowedMethods, method, "unexpected call to %q", method)
 			err := raw.WriteResponse(call.Response(), &raw.Res{Arg3: []byte(method)})
@@ -155,7 +155,7 @@ func TestSetHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		c := client.GetSubChannel(tt.Service)
-		ctx, _ := tchannel.NewContext(time.Second)
+		ctx, _ := NewContext(time.Second)
 		_, data, _, err := raw.CallSC(ctx, c, tt.Method, nil, []byte("irrelevant"))
 
 		if tt.ShouldFail {
@@ -174,25 +174,67 @@ func TestSetHandler(t *testing.T) {
 	assert.Equal(t, []string{"foo"}, st.SubChannels["svc2"].Handler.Methods)
 }
 
-func TestCannotRegisterAfterSetHandler(t *testing.T) {
-	ch, err := tchannel.NewChannel("svc", &tchannel.ChannelOptions{
-		Logger: tchannel.NewLogger(ioutil.Discard),
-	})
-	require.NoError(t, err, "NewChannel failed")
+func TestGetHandlers(t *testing.T) {
+	ch := testutils.NewServer(t, nil)
 	defer ch.Close()
 
-	someHandler := tchannel.HandlerFunc(func(ctx context.Context, call *tchannel.InboundCall) {
+	var handler1 HandlerFunc = func(_ context.Context, _ *InboundCall) {
 		panic("unexpected call")
-	})
+	}
+	var handler2 HandlerFunc = func(_ context.Context, _ *InboundCall) {
+		panic("unexpected call")
+	}
 
-	anotherHandler := tchannel.HandlerFunc(func(ctx context.Context, call *tchannel.InboundCall) {
+	ch.Register(handler1, "method1")
+	ch.Register(handler2, "method2")
+	ch.GetSubChannel("foo").Register(handler2, "method1")
+
+	tests := []struct {
+		serviceName string
+		wantMethods []string
+	}{
+		{
+			serviceName: ch.ServiceName(),
+			// Default service name comes with extra introspection methods.
+			wantMethods: []string{"_gometa_introspect", "_gometa_runtime", "method1", "method2"},
+		},
+		{
+			serviceName: "foo",
+			wantMethods: []string{"method1"},
+		},
+	}
+
+	for _, tt := range tests {
+		handlers := ch.GetSubChannel(tt.serviceName).GetHandlers()
+		if !assert.Equal(t, len(tt.wantMethods), len(handlers),
+			"Unexpected number of methods found, expected %v, got %v", tt.wantMethods, handlers) {
+			continue
+		}
+
+		for _, method := range tt.wantMethods {
+			_, ok := handlers[method]
+			assert.True(t, ok, "Expected to find method %v in handlers: %v", method, handlers)
+		}
+	}
+}
+
+func TestCannotRegisterOrGetAfterSetHandler(t *testing.T) {
+	ch := testutils.NewServer(t, nil)
+	defer ch.Close()
+
+	var someHandler HandlerFunc = func(ctx context.Context, call *InboundCall) {
 		panic("unexpected call")
-	})
+	}
+	var anotherHandler HandlerFunc = func(ctx context.Context, call *InboundCall) {
+		panic("unexpected call")
+	}
 
 	ch.GetSubChannel("foo").SetHandler(someHandler)
 
 	// Registering against the original service should not panic but
 	// registering against the "foo" service should panic.
 	assert.NotPanics(t, func() { ch.Register(anotherHandler, "bar") })
+	assert.NotPanics(t, func() { ch.GetSubChannel("svc").GetHandlers() })
 	assert.Panics(t, func() { ch.GetSubChannel("foo").Register(anotherHandler, "bar") })
+	assert.Panics(t, func() { ch.GetSubChannel("foo").GetHandlers() })
 }
