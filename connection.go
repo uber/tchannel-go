@@ -364,8 +364,7 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	}
 
 	res := initRes{}
-	err = c.recvMessage(ctx, &res, mex)
-	if err != nil {
+	if err := c.recvMessage(ctx, &res, mex); err != nil {
 		return c.connectionError("receive init res", err)
 	}
 
@@ -392,11 +391,11 @@ func (c *Connection) handleInitReq(frame *Frame) {
 
 	var ok bool
 	if c.remotePeerInfo.HostPort, ok = req.initParams[InitParamHostPort]; !ok {
-		c.protocolError(id, fmt.Errorf("Header %v is required", InitParamHostPort))
+		c.protocolError(id, fmt.Errorf("header %v is required", InitParamHostPort))
 		return
 	}
 	if c.remotePeerInfo.ProcessName, ok = req.initParams[InitParamProcessName]; !ok {
-		c.protocolError(id, fmt.Errorf("Header %v is required", InitParamProcessName))
+		c.protocolError(id, fmt.Errorf("header %v is required", InitParamProcessName))
 		return
 	}
 	if c.remotePeerInfo.IsEphemeralHostPort() {
@@ -512,6 +511,14 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 
 	if res.Version != CurrentProtocolVersion {
 		c.protocolError(frame.Header.ID, fmt.Errorf("unsupported protocol version %d from peer", res.Version))
+		return true
+	}
+	if _, ok := res.initParams[InitParamHostPort]; !ok {
+		c.protocolError(frame.Header.ID, fmt.Errorf("header %v is required", InitParamHostPort))
+		return true
+	}
+	if _, ok := res.initParams[InitParamProcessName]; !ok {
+		c.protocolError(frame.Header.ID, fmt.Errorf("header %v is required", InitParamProcessName))
 		return true
 	}
 
@@ -681,6 +688,12 @@ func (c *Connection) protocolError(id uint32, err error) error {
 	c.SendSystemError(id, nil, sysErr)
 	// Don't close the connection until the error has been sent.
 	c.Close()
+
+	// On any connection error, notify the exchanges of this error.
+	if c.stoppedExchanges.CAS(0, 1) {
+		c.outbound.stopExchanges(sysErr)
+		c.inbound.stopExchanges(sysErr)
+	}
 	return sysErr
 }
 
