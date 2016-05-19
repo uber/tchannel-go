@@ -999,11 +999,13 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 			_, err := peer.GetConnection(ctx)
 			require.NoError(t, err, "%v: GetConnection failed", tt.message)
 
-			// The connection should decrease the score.
-			connectedScore := getScore(s1.Peers())
-			assert.True(t, connectedScore < initialScore,
-				"%v: Expected connected peer score %v to be less than initial score %v",
-				tt.message, connectedScore, initialScore)
+			// When receiving an inbound connection, the outbound connect may return
+			// before the inbound has updated the score, so we may need to retry.
+			assert.True(t, testutils.WaitFor(time.Second, func() bool {
+				connectedScore := getScore(s1.Peers())
+				return connectedScore < initialScore
+			}), "%v: Expected connected peer score %v to be less than initial score %v",
+				tt.message, getScore(s1.Peers()), initialScore)
 		})
 	}
 }
