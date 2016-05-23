@@ -89,14 +89,6 @@ func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 	}, "Should panic when creating lazyCallReq from non-callReq frame.")
 }
 
-func allFrameTypes() []testCallReq {
-	combinations := make([]testCallReq, totalCombinations)
-	for i := 0; i < int(totalCombinations); i++ {
-		combinations[i] = testCallReq(combinations[i])
-	}
-	return combinations
-}
-
 func withLazyCallReqCombinations(f func(cr testCallReq)) {
 	for cr := testCallReq(0); cr < totalCombinations; cr++ {
 		f(cr)
