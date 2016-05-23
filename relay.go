@@ -24,9 +24,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/relay"
 )
 
@@ -161,7 +161,7 @@ type Relayer struct {
 	peers   *PeerList
 	conn    *Connection
 	logger  Logger
-	pending uint32
+	pending atomic.Uint32
 }
 
 // NewRelayer constructs a Relayer.
@@ -290,7 +290,7 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 		remapID:     remapID,
 		destination: destination,
 	}
-	r.incPending()
+	r.pending.Inc()
 
 	items := r.inbound
 	if isOriginator {
@@ -309,7 +309,7 @@ func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bo
 		// TODO: As above. What's the span in the error frame for?
 		r.conn.SendSystemError(id, nil, ErrTimeout)
 	}
-	r.decPending()
+	r.pending.Dec()
 	r.conn.checkExchanges()
 }
 
@@ -318,7 +318,7 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 		return
 	}
 
-	r.decPending()
+	r.pending.Dec()
 	r.conn.checkExchanges()
 }
 
@@ -329,16 +329,8 @@ func (r *Relayer) canClose() bool {
 	return r.countPending() == 0
 }
 
-func (r *Relayer) incPending() {
-	atomic.AddUint32(&r.pending, 1)
-}
-
-func (r *Relayer) decPending() {
-	atomic.AddUint32(&r.pending, ^uint32(0))
-}
-
 func (r *Relayer) countPending() uint32 {
-	return atomic.LoadUint32(&r.pending)
+	return r.pending.Load()
 }
 
 func (r *Relayer) receiverItems(fType frameType) *relayItems {
