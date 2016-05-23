@@ -173,7 +173,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		inbound:  newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
 		peers:    ch.Peers(),
 		conn:     conn,
-		logger:   ch.Logger(),
+		logger:   conn.log,
 	}
 }
 
