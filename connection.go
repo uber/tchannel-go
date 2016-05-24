@@ -882,6 +882,13 @@ func (c *Connection) checkExchanges() {
 	}
 
 	if c.readState() == connectionInboundClosed {
+		// Safety check -- this should never happen since we already did the check
+		// when transitioning to connectionInboundClosed.
+		if !c.relay.canClose() {
+			c.relay.logger.Error("Relay can't close even though state is InboundClosed.")
+			return
+		}
+
 		if c.outbound.count() == 0 && moveState(connectionInboundClosed, connectionClosed) {
 			updated = connectionClosed
 		}
