@@ -197,7 +197,7 @@ func (ts *TestServer) addRelay(logOpts LogVerification) {
 		ChannelOptions:  tchannel.ChannelOptions{RelayHosts: ts.relayHosts},
 		LogVerification: logOpts,
 	}
-	ts.addChannel(NewServer, opts)
+	ts.addChannel(newServer, opts)
 	ts.relayIdx = len(ts.channels) - 1
 }
 
@@ -268,7 +268,7 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 
 	// Channel is not closing, fail the test.
 	sinceStart := time.Since(started)
-	ts.Errorf("Channel did not close after %v, last state: %v", sinceStart, state)
+	ts.Errorf("Channel %p did not close after %v, last state: %v", ch, sinceStart, state)
 }
 
 func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
