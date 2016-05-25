@@ -214,11 +214,23 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 	}
 }
 
-func (r *Relayer) handleCallReq(f lazyCallReq) error {
+func (r *Relayer) canHandleNewCall() bool {
+	var canHandle bool
+	r.conn.withStateRLock(func() error {
+		canHandle = r.conn.state == connectionActive
+		if canHandle {
+			r.pending.Inc()
+		}
+		return nil
+	})
+	return canHandle
+}
+
+func (r *Relayer) getDestination(f lazyCallReq) (*Connection, bool, error) {
 	if _, ok := r.outbound.Get(f.Header.ID); ok {
 		r.logger.WithFields(LogField{"id", f.Header.ID}).Warn("received duplicate callReq")
 		// TODO: this is a protocol error, kill the connection.
-		return errors.New("callReq with already active ID")
+		return nil, false, errors.New("callReq with already active ID")
 	}
 
 	// Get the destination
@@ -226,7 +238,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	if hostPort == "" {
 		// TODO: What is the span in the error frame actually used for, and do we need it?
 		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(f.Service()))
-		return nil
+		return nil, false, nil
 	}
 	peer := r.peers.GetOrAdd(hostPort)
 
@@ -239,10 +251,32 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		).Warn("Failed to connect to relay host.")
 		// TODO: Same as above, do we need span here?
 		r.conn.SendSystemError(f.Header.ID, nil, NewWrappedSystemError(ErrCodeNetwork, err))
-		return nil
+		return nil, false, nil
 	}
 
-	// TODO: Is there a race for adding the same ID twice?
+	return remoteConn, true, nil
+}
+
+func (r *Relayer) handleCallReq(f lazyCallReq) error {
+	if !r.canHandleNewCall() {
+		return ErrChannelClosed
+	}
+
+	// Get a remote connection and check whether it can handle this call.
+	remoteConn, ok, err := r.getDestination(f)
+	if err == nil && ok {
+		if !remoteConn.relay.canHandleNewCall() {
+			err = NewSystemError(ErrCodeNetwork, "selected closed connection, retry")
+		}
+	}
+	if err != nil || !ok {
+		// Failed to get a remote connection, or the connection is not in the right
+		// state to handle this call. Since we already incremented pending on
+		// the current relay, we need to decrement it.
+		r.pending.Dec()
+		return err
+	}
+
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl)
@@ -290,7 +324,6 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 		remapID:     remapID,
 		destination: destination,
 	}
-	r.pending.Inc()
 
 	items := r.inbound
 	if isOriginator {
@@ -310,6 +343,7 @@ func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bo
 		r.conn.SendSystemError(id, nil, ErrTimeout)
 	}
 	r.pending.Dec()
+
 	r.conn.checkExchanges()
 }
 

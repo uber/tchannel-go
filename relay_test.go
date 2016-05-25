@@ -6,11 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	. "github.com/uber/tchannel-go"
+
+	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type relayTest struct {
@@ -158,5 +161,54 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 		}
 
 		assert.Equal(t, ErrCodeBadRequest, se.Code(), "Expected BadRequest error")
+	})
+}
+
+// Trigger a race between receiving a new call and a connection closing
+// by closing the relay while a lot of background calls are being made.
+func TestRaceCloseWithNewCall(t *testing.T) {
+	opts := serviceNameOpts("s1").SetRelayOnly().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s1 := ts.Server()
+		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
+		testutils.RegisterEcho(s1, nil)
+
+		// signal to start closing the relay.
+		var (
+			closeRelay  sync.WaitGroup
+			stopCalling atomic.Int32
+			callers     sync.WaitGroup
+		)
+
+		for i := 0; i < 5; i++ {
+			callers.Add(1)
+			closeRelay.Add(1)
+
+			go func() {
+				defer callers.Done()
+
+				calls := 0
+				for stopCalling.Load() == 0 {
+					testutils.CallEcho(s2, ts.HostPort(), "s1", nil)
+					calls++
+					if calls == 5 {
+						closeRelay.Done()
+					}
+				}
+			}()
+		}
+
+		closeRelay.Wait()
+
+		// Close the relay, wait for it to close.
+		ts.Relay().Close()
+		closed := testutils.WaitFor(time.Second, func() bool {
+			return ts.Relay().State() == ChannelClosed
+		})
+		assert.True(t, closed, "Relay did not close within timeout")
+
+		// Now stop all calls, and wait for the calling goroutine to end.
+		stopCalling.Inc()
+		callers.Wait()
 	})
 }
