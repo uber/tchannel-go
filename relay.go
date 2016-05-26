@@ -273,7 +273,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		// Failed to get a remote connection, or the connection is not in the right
 		// state to handle this call. Since we already incremented pending on
 		// the current relay, we need to decrement it.
-		r.pending.Dec()
+		r.decrementPending()
 		return err
 	}
 
@@ -342,9 +342,8 @@ func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bo
 		// TODO: As above. What's the span in the error frame for?
 		r.conn.SendSystemError(id, nil, ErrTimeout)
 	}
-	r.pending.Dec()
 
-	r.conn.checkExchanges()
+	r.decrementPending()
 }
 
 func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
@@ -352,6 +351,10 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 		return
 	}
 
+	r.decrementPending()
+}
+
+func (r *Relayer) decrementPending() {
 	r.pending.Dec()
 	r.conn.checkExchanges()
 }
