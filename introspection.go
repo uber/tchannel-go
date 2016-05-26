@@ -61,6 +61,9 @@ type RuntimeState struct {
 	// NumConnections is the number of connections stored in the channel.
 	NumConnections int `json:"numConnections"`
 
+	// Connections is the list of connection IDs in the channel
+	Connections []uint32 ` json:"connections"`
+
 	// OtherChannels is information about any other channels running in this process.
 	OtherChannels map[string][]ChannelInfo `json:"otherChannels,omitEmpty"`
 }
@@ -180,7 +183,12 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 	}
 
 	ch.mutable.RLock()
-	conns := len(ch.mutable.conns)
+	numConns := len(ch.mutable.conns)
+	connIDs := make([]uint32, 0, numConns)
+	for id := range ch.mutable.conns {
+		connIDs = append(connIDs, id)
+	}
+
 	ch.mutable.RUnlock()
 
 	return &RuntimeState{
@@ -189,7 +197,8 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		SubChannels:    ch.subChannels.IntrospectState(opts),
 		RootPeers:      ch.rootPeers().IntrospectState(opts),
 		Peers:          ch.Peers().IntrospectList(opts),
-		NumConnections: conns,
+		NumConnections: numConns,
+		Connections:    connIDs,
 		OtherChannels:  ch.IntrospectOthers(opts),
 	}
 }
