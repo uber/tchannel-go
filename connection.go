@@ -522,12 +522,12 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		return true
 	}
 
-	c.withStateLock(func() error {
+	if err := c.withStateLock(func() error {
 		if c.state != connectionWaitingToRecvInitRes {
-			return nil
+			return errConnectionUnknownState{"handleInitRes expecting waitingToRecvInitRes", c.state}
 		}
 		if c.ignoreRemotePeer {
-			return nil
+			return errConnectionUnknownState{"handleInitRes asked to ignore remote peer", c.state}
 		}
 
 		c.remotePeerInfo.HostPort = res.initParams[InitParamHostPort]
@@ -539,13 +539,18 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 
 		c.state = connectionActive
 		return nil
-	})
+	}); err != nil {
+		// The connection was no longer in a state to handle the init res.
+		// Fail the connection.
+		c.connectionError("handleInitRes", err)
+		return true
+	}
 	c.callOnActive()
 
 	// We forward the peer frame, as the other side is blocked waiting on this frame.
 	// Rather than add another mechanism, we use the mex to block the sender till we get initRes.
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.connectionError("forard init res", errCannotHandleInitRes)
+		c.connectionError("forward init res", errCannotHandleInitRes)
 		return true
 	}
 
