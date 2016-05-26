@@ -358,8 +358,8 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 		t.Errorf("err %v", t.call(s2, s1))
 	}
 
-	require.NoError(t, t.call(s1, s2),
-		"closed channel with pending incoming calls should allow outgoing calls")
+	require.Error(t, t.call(s1, s2),
+		"closed channel with pending incoming calls disallows outgoing calls")
 
 	// Once the incoming connection is drained, outgoing calls should fail.
 	s1C <- struct{}{}
