@@ -910,26 +910,20 @@ func (c *Connection) checkExchanges() {
 func (c *Connection) Close() error {
 	c.log.Debugf("Connection Close")
 
-	var closeSendCh bool
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
 		switch c.state {
 		case connectionActive:
 			c.state = connectionStartClose
 		case connectionWaitingToRecvInitReq, connectionWaitingToRecvInitRes:
-			// If the connection isn't active yet, it can be closed after messages in sendCh.
-			c.state = connectionClosed
-			closeSendCh = true
+			// If the connection isn't active yet, it can be closed once sendCh is empty.
+			c.state = connectionInboundClosed
 		default:
 			return fmt.Errorf("connection must be Active to Close")
 		}
 		return nil
 	}); err != nil {
 		return err
-	}
-
-	if closeSendCh {
-		go c.closeSendCh(c.connID)
 	}
 
 	// Check all in-flight requests to see whether we can transition the Close state.
