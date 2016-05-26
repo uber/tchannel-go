@@ -1,0 +1,58 @@
+// Copyright (c) 2015 Uber Technologies, Inc.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package tchannel_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/uber/tchannel-go/json"
+	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/require"
+)
+
+// Purpose of this test is to ensure introspection doesn't cause any panics
+// and we have coverage of the introspection code.
+// TODO: Add introspection for the relay as well.
+func TestIntrospection(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		ctx, cancel := json.NewContext(time.Second)
+		defer cancel()
+
+		var resp map[string]interface{}
+		peer := client.Peers().GetOrAdd(ts.HostPort())
+		err := json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", map[string]interface{}{
+			"includeExchanges":  true,
+			"includeEmptyPeers": true,
+			"includeTombstones": true,
+		}, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+
+		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_runtime", map[string]interface{}{
+			"includeGoStacks": true,
+		}, &resp)
+		require.NoError(t, err, "Call _gometa_runtime failed")
+	})
+}
