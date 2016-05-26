@@ -33,6 +33,7 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -252,7 +253,7 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 	started := time.Now()
 
 	var state tchannel.ChannelState
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 60; i++ {
 		if state = ch.State(); state == tchannel.ChannelClosed {
 			return
 		}
@@ -269,6 +270,10 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 	// Channel is not closing, fail the test.
 	sinceStart := time.Since(started)
 	ts.Errorf("Channel %p did not close after %v, last state: %v", ch, sinceStart, state)
+
+	// The introspected state might help debug why the channel isn't closing.
+	introspected := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true, IncludeTombstones: true})
+	ts.Logf("Introspected state: %s", spew.Sdump(introspected))
 }
 
 func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
