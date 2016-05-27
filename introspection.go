@@ -246,11 +246,6 @@ func fromPeerList(peers containsPeerList, opts *IntrospectionOptions) map[string
 	return m
 }
 
-// IntrospectState returns the runtime state of the peer list.
-func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRuntimeState {
-	return fromPeerList(l, opts)
-}
-
 // IntrospectState returns the runtime state of the
 func (l *RootPeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRuntimeState {
 	return fromPeerList(l, opts)
