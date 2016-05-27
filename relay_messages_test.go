@@ -20,20 +20,20 @@
 package tchannel
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/typed"
 )
 
 type testCallReq int
 
 const (
-	hasHeaders testCallReq = (1 << iota)
-	hasChecksum
-	totalCombinations
+	reqHasHeaders testCallReq = (1 << iota)
+	reqHasChecksum
+	reqTotalCombinations
 )
 
 func (cr testCallReq) req() lazyCallReq {
@@ -51,19 +51,13 @@ func (cr testCallReq) req() lazyCallReq {
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
 
-	if cr&hasHeaders == 0 {
-		payload.WriteSingleByte(0) // number of headers
+	if cr&reqHasHeaders == 0 {
+		writeHeaders(payload, 0)
 	} else {
-		payload.WriteSingleByte(3)    // number of headers
-		payload.WriteLen8String("k1") // header 1 key
-		payload.WriteLen8String("v1") // header 1 value
-		payload.WriteLen8String("k2") // header 2 key
-		payload.WriteLen8String("v2") // header 2 value
-		payload.WriteLen8String("k3") // header 3 key
-		payload.WriteLen8String("v3") // header 3 value
+		writeHeaders(payload, 3)
 	}
 
-	if cr&hasChecksum == 0 {
+	if cr&reqHasChecksum == 0 {
 		checksum := ChecksumTypeCrc32C
 		payload.WriteSingleByte(byte(checksum)) // checksum type
 		payload.WriteUint32(0)                  // checksum contents
@@ -76,23 +70,126 @@ func (cr testCallReq) req() lazyCallReq {
 	return newLazyCallReq(f)
 }
 
-func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
-	msg := &initReq{initMessage{id: 1, Version: 0x1, initParams: initParams{
-		InitParamHostPort:    "0.0.0.0:0",
-		InitParamProcessName: "test",
-	}}}
-	frame := NewFrame(MaxFramePayloadSize)
-	err := frame.write(msg)
-	require.NoError(t, err, "Error writing message to frame.")
-	assert.Panics(t, func() {
-		newLazyCallReq(frame)
-	}, "Should panic when creating lazyCallReq from non-callReq frame.")
-}
-
 func withLazyCallReqCombinations(f func(cr testCallReq)) {
-	for cr := testCallReq(0); cr < totalCombinations; cr++ {
+	for cr := testCallReq(0); cr < reqTotalCombinations; cr++ {
 		f(cr)
 	}
+}
+
+type testCallRes int
+
+const (
+	resIsContinued testCallRes = (1 << iota)
+	resIsOK
+	resHasHeaders
+	resHasChecksum
+	resTotalCombinations
+)
+
+func (cr testCallRes) res() lazyCallRes {
+	f := NewFrame(100)
+	fh := FrameHeader{
+		size:        uint16(0xFF34),
+		messageType: messageTypeCallRes,
+		ID:          0xDEADBEEF,
+	}
+	f.Header = fh
+	fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+	payload := typed.NewWriteBuffer(f.Payload)
+
+	if cr&resIsContinued == 0 {
+		payload.WriteSingleByte(hasMoreFragmentsFlag) // flags
+	} else {
+		payload.WriteSingleByte(0) // flags
+	}
+
+	if cr&resIsOK == 0 {
+		payload.WriteSingleByte(0) // code ok
+	} else {
+		payload.WriteSingleByte(1) // code not ok
+	}
+
+	if cr&resHasHeaders == 0 {
+		writeHeaders(payload, 0)
+	} else {
+		writeHeaders(payload, 3)
+	}
+
+	if cr&resHasChecksum == 0 {
+		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
+		payload.WriteUint32(0)                            // checksum contents
+	} else {
+		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
+		// No contents for ChecksumTypeNone.
+	}
+	payload.WriteUint16(0) // no arg1 for call res
+	return newLazyCallRes(f)
+}
+
+func withLazyCallResCombinations(f func(cr testCallRes)) {
+	for cr := testCallRes(0); cr < resTotalCombinations; cr++ {
+		f(cr)
+	}
+}
+
+func (ec SystemErrCode) fakeErrFrame() lazyError {
+	f := NewFrame(100)
+	fh := FrameHeader{
+		size:        uint16(0xFF34),
+		messageType: messageTypeError,
+		ID:          invalidMessageID,
+	}
+	f.Header = fh
+	fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+	payload := typed.NewWriteBuffer(f.Payload)
+	payload.WriteSingleByte(byte(ec))
+	payload.WriteBytes(make([]byte, 25)) // tracing
+
+	msg := ec.String()
+	payload.WriteUint16(uint16(len(msg)))
+	payload.WriteBytes([]byte(msg))
+	return newLazyError(f)
+}
+
+func withLazyErrorCombinations(f func(ec SystemErrCode)) {
+	codes := []SystemErrCode{
+		ErrCodeInvalid,
+		ErrCodeTimeout,
+		ErrCodeCancelled,
+		ErrCodeBusy,
+		ErrCodeDeclined,
+		ErrCodeUnexpected,
+		ErrCodeBadRequest,
+		ErrCodeNetwork,
+		ErrCodeProtocol,
+	}
+	for _, ec := range codes {
+		f(ec)
+	}
+}
+
+func writeHeaders(w *typed.WriteBuffer, num uint8) {
+	w.WriteSingleByte(num) // number of headers
+	for i := uint8(1); i <= num; i++ {
+		w.WriteLen8String(fmt.Sprintf("k%d", i)) // key
+		w.WriteLen8String(fmt.Sprintf("v%d", i)) // value
+	}
+}
+
+func assertWrappingPanics(t testing.TB, f *Frame, wrap func(f *Frame)) {
+	assert.Panics(t, func() {
+		wrap(f)
+	}, "Should panic when wrapping an unexpected frame type.")
+}
+
+func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
+	assertWrappingPanics(
+		t,
+		resIsContinued.res().Frame,
+		func(f *Frame) { newLazyCallReq(f) },
+	)
 }
 
 func TestLazyCallReqService(t *testing.T) {
@@ -113,5 +210,39 @@ func TestLazyCallReqTTL(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
 		assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Failed to parse TTL from frame.")
+	})
+}
+
+func TestLazyCallResRejectsOtherFrames(t *testing.T) {
+	assertWrappingPanics(
+		t,
+		reqHasHeaders.req().Frame,
+		func(f *Frame) { newLazyCallRes(f) },
+	)
+}
+
+func TestLazyCallResOK(t *testing.T) {
+	withLazyCallResCombinations(func(crt testCallRes) {
+		cr := crt.res()
+		if crt&resIsOK == 0 {
+			assert.True(t, cr.OK(), "Expected call res to have code ok.")
+		} else {
+			assert.False(t, cr.OK(), "Expected call res to have a non-ok code.")
+		}
+	})
+}
+
+func TestLazyErrorRejectsOtherFrames(t *testing.T) {
+	assertWrappingPanics(
+		t,
+		reqHasHeaders.req().Frame,
+		func(f *Frame) { newLazyError(f) },
+	)
+}
+
+func TestLazyErrorCodes(t *testing.T) {
+	withLazyErrorCombinations(func(ec SystemErrCode) {
+		f := ec.fakeErrFrame()
+		assert.Equal(t, ec, f.Code(), "Mismatch between error code and lazy frame's Code() method.")
 	})
 }

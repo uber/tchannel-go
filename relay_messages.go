@@ -27,12 +27,52 @@ import (
 )
 
 const (
-	_flagsIndex       = 0
+	// Common to many frame types.
+	_flagsIndex = 0
+
+	// For call req.
 	_ttlIndex         = 1
 	_ttlLen           = 4
 	_serviceLenIndex  = 1 /* flags */ + _ttlLen + 25 /* tracing */
 	_serviceNameIndex = _serviceLenIndex + 1
+
+	// For call res and call res continue.
+	_resCodeOK    = 0x00
+	_resCodeIndex = 1
+
+	// For error.
+	_errCodeIndex = 0
 )
+
+type lazyError struct {
+	*Frame
+}
+
+func newLazyError(f *Frame) lazyError {
+	if msgType := f.Header.messageType; msgType != messageTypeError {
+		panic(fmt.Errorf("newLazyError called for wrong messageType: %v", msgType))
+	}
+	return lazyError{f}
+}
+
+func (e lazyError) Code() SystemErrCode {
+	return SystemErrCode(e.Payload[_errCodeIndex])
+}
+
+type lazyCallRes struct {
+	*Frame
+}
+
+func newLazyCallRes(f *Frame) lazyCallRes {
+	if msgType := f.Header.messageType; msgType != messageTypeCallRes {
+		panic(fmt.Errorf("newLazyCallRes called for wrong messageType: %v", msgType))
+	}
+	return lazyCallRes{f}
+}
+
+func (cr lazyCallRes) OK() bool {
+	return cr.Payload[_resCodeIndex] == _resCodeOK
+}
 
 type lazyCallReq struct {
 	*Frame
