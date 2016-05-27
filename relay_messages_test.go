@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/typed"
 )
 
@@ -179,17 +178,18 @@ func writeHeaders(w *typed.WriteBuffer, num uint8) {
 	}
 }
 
-func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
-	msg := &initReq{initMessage{id: 1, Version: 0x1, initParams: initParams{
-		InitParamHostPort:    "0.0.0.0:0",
-		InitParamProcessName: "test",
-	}}}
-	frame := NewFrame(MaxFramePayloadSize)
-	err := frame.write(msg)
-	require.NoError(t, err, "Error writing message to frame.")
+func assertWrappingPanics(t testing.TB, f *Frame, wrap func(f *Frame)) {
 	assert.Panics(t, func() {
-		newLazyCallReq(frame)
-	}, "Should panic when creating lazyCallReq from non-callReq frame.")
+		wrap(f)
+	}, "Should panic when wrapping an unexpected frame type.")
+}
+
+func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
+	assertWrappingPanics(
+		t,
+		resIsContinued.res().Frame,
+		func(f *Frame) { newLazyCallReq(f) },
+	)
 }
 
 func TestLazyCallReqService(t *testing.T) {
@@ -213,6 +213,14 @@ func TestLazyCallReqTTL(t *testing.T) {
 	})
 }
 
+func TestLazyCallResRejectsOtherFrames(t *testing.T) {
+	assertWrappingPanics(
+		t,
+		reqHasHeaders.req().Frame,
+		func(f *Frame) { newLazyCallRes(f) },
+	)
+}
+
 func TestLazyCallResOK(t *testing.T) {
 	withLazyCallResCombinations(func(crt testCallRes) {
 		cr := crt.res()
@@ -222,6 +230,14 @@ func TestLazyCallResOK(t *testing.T) {
 			assert.False(t, cr.OK(), "Expected call res to have a non-ok code.")
 		}
 	})
+}
+
+func TestLazyErrorRejectsOtherFrames(t *testing.T) {
+	assertWrappingPanics(
+		t,
+		reqHasHeaders.req().Frame,
+		func(f *Frame) { newLazyError(f) },
+	)
 }
 
 func TestLazyErrorCodes(t *testing.T) {
