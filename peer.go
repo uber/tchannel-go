@@ -362,19 +362,6 @@ func (p *Peer) getConnectionTimeout(timeout time.Duration) (*Connection, error) 
 	return p.Connect(ctx)
 }
 
-// addInboundConnection adds an active inbound connection to the peer's connection list.
-// If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) addInboundConnection(c *Connection) error {
-	if c.readState() != connectionActive {
-		return ErrInvalidConnectionState
-	}
-
-	p.Lock()
-	p.inboundConnections = append(p.inboundConnections, c)
-	p.Unlock()
-	return nil
-}
-
 // addSC adds a reference to a peer from a subchannel (e.g. peer list).
 func (p *Peer) addSC() {
 	p.Lock()
@@ -397,9 +384,26 @@ func (p *Peer) canRemove() bool {
 	return count == 0
 }
 
+// addInboundConnection adds an active inbound connection to the peer's connection list.
+// If a connection is not active, ErrInvalidConnectionState will be returned.
+func (p *Peer) addInboundConnection(c *Connection) error {
+	p.Lock()
+	defer p.Unlock()
+
+	if c.readState() != connectionActive {
+		return ErrInvalidConnectionState
+	}
+
+	p.inboundConnections = append(p.inboundConnections, c)
+	return nil
+}
+
 // addOutboundConnection adds an active outbound connection to the peer's connection list.
 // If a connection is not active, ErrInvalidConnectionState will be returned.
 func (p *Peer) addOutboundConnection(c *Connection) error {
+	p.Lock()
+	defer p.Unlock()
+
 	switch c.readState() {
 	case connectionActive, connectionStartClose:
 		break
@@ -407,9 +411,7 @@ func (p *Peer) addOutboundConnection(c *Connection) error {
 		return ErrInvalidConnectionState
 	}
 
-	p.Lock()
 	p.outboundConnections = append(p.outboundConnections, c)
-	p.Unlock()
 	return nil
 }
 

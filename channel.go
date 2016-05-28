@@ -541,6 +541,10 @@ func (ch *Channel) addConnection(c *Connection, direction connectionDirection) b
 	ch.mutable.Lock()
 	defer ch.mutable.Unlock()
 
+	if c.readState() != connectionActive {
+		return false
+	}
+
 	switch state := ch.mutable.state; state {
 	case ChannelStartClose:
 		// Outbound connections are allowed in ChannelStartClose, but the
@@ -572,6 +576,7 @@ func (ch *Channel) connectionActive(c *Connection, direction connectionDirection
 		c.log.WithFields(
 			LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
 			LogField{"direction", direction},
+			ErrField(err),
 		).Warn("Failed to add connection to peer")
 	}
 
