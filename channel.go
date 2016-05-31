@@ -472,9 +472,6 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	switch state := ch.State(); state {
 	case ChannelClient, ChannelListening:
 		break
-	case ChannelStartClose:
-		// We still allow outgoing connections during Close, but the connection has to immediately
-		// be Closed after opening
 	default:
 		ch.log.Debugf("Connect rejecting new connection as state is %v", state)
 		return nil, errInvalidStateForOp
@@ -501,17 +498,6 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 
 	if err := c.sendInit(ctx); err != nil {
 		return nil, err
-	}
-
-	// Any connections added after the channel is in StartClose should also be set to start close.
-	if chState := ch.State(); chState == ChannelStartClose {
-		// TODO(prashant): If Connect is called, but no outgoing calls are made, then this connection
-		// will block Close, as it will never get cleaned up.
-		c.withStateLock(func() error {
-			c.state = connectionStartClose
-			return nil
-		})
-		c.log.Debugf("Channel is in start close, set connection to start close")
 	}
 
 	return c, err
@@ -546,13 +532,8 @@ func (ch *Channel) addConnection(c *Connection, direction connectionDirection) b
 	}
 
 	switch state := ch.mutable.state; state {
-	case ChannelStartClose:
-		// Outbound connections are allowed in ChannelStartClose, but the
-		// connection state should be set to connectionStartClose.
-		if direction != outbound {
-			return false
-		}
 	case ChannelClient, ChannelListening:
+		break
 	default:
 		return false
 	}

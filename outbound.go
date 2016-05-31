@@ -36,9 +36,9 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	now := c.timeNow()
 
 	switch state := c.readState(); state {
-	case connectionActive, connectionStartClose:
+	case connectionActive:
 		break
-	case connectionInboundClosed, connectionClosed:
+	case connectionStartClose, connectionInboundClosed, connectionClosed:
 		return nil, ErrConnectionClosed
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
 		return nil, ErrConnectionNotReady
@@ -69,7 +69,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	// Close may have been called between the time we checked the state and us creating the exchange.
-	if state := c.readState(); state != connectionStartClose && state != connectionActive {
+	if state := c.readState(); state != connectionActive {
 		mex.shutdown()
 		return nil, ErrConnectionClosed
 	}

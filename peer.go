@@ -384,9 +384,11 @@ func (p *Peer) canRemove() bool {
 	return count == 0
 }
 
-// addInboundConnection adds an active inbound connection to the peer's connection list.
-// If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) addInboundConnection(c *Connection) error {
+// addConnection adds an active connection to the peer's connection list.
+// If a connection is not active, ErrInvalidConnectionState is returned.
+func (p *Peer) addConnection(c *Connection, direction connectionDirection) error {
+	conns := p.connectionsFor(direction)
+
 	p.Lock()
 	defer p.Unlock()
 
@@ -394,32 +396,15 @@ func (p *Peer) addInboundConnection(c *Connection) error {
 		return ErrInvalidConnectionState
 	}
 
-	p.inboundConnections = append(p.inboundConnections, c)
+	*conns = append(*conns, c)
 	return nil
 }
 
-// addOutboundConnection adds an active outbound connection to the peer's connection list.
-// If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) addOutboundConnection(c *Connection) error {
-	p.Lock()
-	defer p.Unlock()
-
-	switch c.readState() {
-	case connectionActive, connectionStartClose:
-		break
-	default:
-		return ErrInvalidConnectionState
-	}
-
-	p.outboundConnections = append(p.outboundConnections, c)
-	return nil
-}
-
-func (p *Peer) addConnection(c *Connection, direction connectionDirection) error {
+func (p *Peer) connectionsFor(direction connectionDirection) *[]*Connection {
 	if direction == inbound {
-		return p.addInboundConnection(c)
+		return &p.inboundConnections
 	}
-	return p.addOutboundConnection(c)
+	return &p.outboundConnections
 }
 
 // removeConnection will check remove the connection if it exists on connsPtr
