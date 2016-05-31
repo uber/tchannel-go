@@ -21,6 +21,7 @@ package tchannel
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -58,13 +59,11 @@ func (cr testCallReq) req() lazyCallReq {
 	}
 
 	if cr&reqHasChecksum == 0 {
-		checksum := ChecksumTypeCrc32C
-		payload.WriteSingleByte(byte(checksum)) // checksum type
-		payload.WriteUint32(0)                  // checksum contents
-	} else {
-		checksum := ChecksumTypeNone
-		payload.WriteSingleByte(byte(checksum)) // checksum type
+		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
 		// no checksum contents for None
+	} else {
+		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
+		payload.WriteUint32(0)                            // checksum contents
 	}
 	payload.WriteLen16String("moneys") // method
 	return newLazyCallReq(f)
@@ -99,15 +98,15 @@ func (cr testCallRes) res() lazyCallRes {
 	payload := typed.NewWriteBuffer(f.Payload)
 
 	if cr&resIsContinued == 0 {
-		payload.WriteSingleByte(hasMoreFragmentsFlag) // flags
-	} else {
 		payload.WriteSingleByte(0) // flags
+	} else {
+		payload.WriteSingleByte(hasMoreFragmentsFlag) // flags
 	}
 
 	if cr&resIsOK == 0 {
-		payload.WriteSingleByte(0) // code ok
-	} else {
 		payload.WriteSingleByte(1) // code not ok
+	} else {
+		payload.WriteSingleByte(0) // code ok
 	}
 
 	if cr&resHasHeaders == 0 {
@@ -117,11 +116,11 @@ func (cr testCallRes) res() lazyCallRes {
 	}
 
 	if cr&resHasChecksum == 0 {
-		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
-		payload.WriteUint32(0)                            // checksum contents
-	} else {
 		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
 		// No contents for ChecksumTypeNone.
+	} else {
+		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
+		payload.WriteUint32(0)                            // checksum contents
 	}
 	payload.WriteUint16(0) // no arg1 for call res
 	return newLazyCallRes(f)
@@ -172,7 +171,17 @@ func withLazyErrorCombinations(f func(ec SystemErrCode)) {
 
 func writeHeaders(w *typed.WriteBuffer, num uint8) {
 	w.WriteSingleByte(num) // number of headers
+	if num == 0 {
+		return
+	}
+	// One of the headers should be caller name.
+	callerNameHeader := uint8(rand.Intn(int(num)) + 1)
 	for i := uint8(1); i <= num; i++ {
+		if i == callerNameHeader {
+			w.WriteLen8String("cn")
+			w.WriteLen8String("fake-caller")
+			continue
+		}
 		w.WriteLen8String(fmt.Sprintf("k%d", i)) // key
 		w.WriteLen8String(fmt.Sprintf("v%d", i)) // value
 	}
@@ -196,6 +205,17 @@ func TestLazyCallReqService(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
 		assert.Equal(t, "bankmoji", cr.Service(), "Service name mismatch")
+	})
+}
+
+func TestLazyCallReqCaller(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		if crt&reqHasHeaders == 0 {
+			assert.Equal(t, "", cr.Caller(), "Unexpected caller name.")
+		} else {
+			assert.Equal(t, "fake-caller", cr.Caller(), "Caller name mismatch")
+		}
 	})
 }
 
@@ -225,9 +245,9 @@ func TestLazyCallResOK(t *testing.T) {
 	withLazyCallResCombinations(func(crt testCallRes) {
 		cr := crt.res()
 		if crt&resIsOK == 0 {
-			assert.True(t, cr.OK(), "Expected call res to have code ok.")
-		} else {
 			assert.False(t, cr.OK(), "Expected call res to have a non-ok code.")
+		} else {
+			assert.True(t, cr.OK(), "Expected call res to have code ok.")
 		}
 	})
 }
