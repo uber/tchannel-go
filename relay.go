@@ -207,6 +207,8 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 		}
 	}
 
+	// TODO: Add some sort of timeout here to avoid blocking forever on a
+	// stalled connection.
 	r.conn.sendCh <- f
 	if finishesCall(f) {
 		items := r.receiverItems(fType)
