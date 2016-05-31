@@ -24,6 +24,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"time"
+
+	"github.com/uber/tchannel-go/typed"
 )
 
 const (
@@ -83,6 +85,23 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
 	return lazyCallReq{f}
+}
+
+// Caller returns the name of the originator of this callReq.
+func (f lazyCallReq) Caller() string {
+	serviceLen := f.Payload[_serviceLenIndex]
+	// nh:1 (hk~1 hv~1){nh}
+	headerStart := _serviceLenIndex + 1 /* length byte */ + serviceLen
+	buf := typed.NewReadBuffer(f.Payload[headerStart:])
+	nh := buf.ReadSingleByte()
+	for i := 0; i < int(nh); i++ {
+		k := TransportHeaderName(buf.ReadLen8String())
+		v := buf.ReadLen8String()
+		if k == CallerName {
+			return v
+		}
+	}
+	return ""
 }
 
 // Service returns the name of the destination service for this callReq.

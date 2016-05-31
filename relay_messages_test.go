@@ -21,6 +21,7 @@ package tchannel
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -170,7 +171,17 @@ func withLazyErrorCombinations(f func(ec SystemErrCode)) {
 
 func writeHeaders(w *typed.WriteBuffer, num uint8) {
 	w.WriteSingleByte(num) // number of headers
+	if num == 0 {
+		return
+	}
+	// One of the headers should be caller name.
+	callerNameHeader := uint8(rand.Intn(int(num)) + 1)
 	for i := uint8(1); i <= num; i++ {
+		if i == callerNameHeader {
+			w.WriteLen8String("cn")
+			w.WriteLen8String("fake-caller")
+			continue
+		}
 		w.WriteLen8String(fmt.Sprintf("k%d", i)) // key
 		w.WriteLen8String(fmt.Sprintf("v%d", i)) // value
 	}
@@ -194,6 +205,17 @@ func TestLazyCallReqService(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
 		assert.Equal(t, "bankmoji", cr.Service(), "Service name mismatch")
+	})
+}
+
+func TestLazyCallReqCaller(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		if crt&reqHasHeaders == 0 {
+			assert.Equal(t, "", cr.Caller(), "Unexpected caller name.")
+		} else {
+			assert.Equal(t, "fake-caller", cr.Caller(), "Caller name mismatch")
+		}
 	})
 }
 
