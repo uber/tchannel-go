@@ -826,6 +826,10 @@ func (c *Connection) writeFrames(_ uint32) {
 				return
 			}
 		case <-c.stopCh:
+			// If there are frames in sendCh, we want to drain them.
+			if len(c.sendCh) > 0 {
+				continue
+			}
 			// Close the network once we're no longer writing frames.
 			c.closeNetwork()
 			return
