@@ -146,6 +146,7 @@ type Connection struct {
 	localPeerInfo   LocalPeerInfo
 	remotePeerInfo  PeerInfo
 	sendCh          chan *Frame
+	stopCh          chan struct{}
 	state           connectionState
 	stateMut        sync.RWMutex
 	inbound         *messageExchangeSet
@@ -261,6 +262,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		framePool:       framePool,
 		state:           initialState,
 		sendCh:          make(chan *Frame, sendBufferSize),
+		stopCh:          make(chan struct{}),
 		localPeerInfo:   peerInfo,
 		checksumType:    checksumType,
 		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
@@ -810,21 +812,29 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 // writeFrames is the main loop that pulls frames from the send channel and
 // writes them to the connection.
 func (c *Connection) writeFrames(_ uint32) {
-	for f := range c.sendCh {
-		if c.log.Enabled(LogLevelDebug) {
-			c.log.Debugf("Writing frame %s", f.Header)
-		}
+	for {
+		select {
+		case f := <-c.sendCh:
+			if c.log.Enabled(LogLevelDebug) {
+				c.log.Debugf("Writing frame %s", f.Header)
+			}
 
-		err := f.WriteOut(c.conn)
-		c.framePool.Release(f)
-		if err != nil {
-			c.connectionError("write frames", err)
+			err := f.WriteOut(c.conn)
+			c.framePool.Release(f)
+			if err != nil {
+				c.connectionError("write frames", err)
+				return
+			}
+		case <-c.stopCh:
+			// If there are frames in sendCh, we want to drain them.
+			if len(c.sendCh) > 0 {
+				continue
+			}
+			// Close the network once we're no longer writing frames.
+			c.closeNetwork()
 			return
 		}
 	}
-
-	// Close the network after we have sent the last frame
-	c.closeNetwork()
 }
 
 // pendingExchangeMethodAdd returns whether the method that is trying to
@@ -851,10 +861,7 @@ func (c *Connection) closeSendCh(connID uint32) {
 		time.Sleep(time.Millisecond)
 	}
 
-	c.inbound.waitForSendCh()
-	c.outbound.waitForSendCh()
-	c.log.Debugf("Closing send channel.")
-	close(c.sendCh)
+	close(c.stopCh)
 }
 
 // checkExchanges is called whenever an exchange is removed, and when Close is called.

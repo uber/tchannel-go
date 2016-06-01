@@ -1,6 +1,7 @@
 package tchannel_test
 
 import (
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -209,6 +210,39 @@ func TestRaceCloseWithNewCall(t *testing.T) {
 
 		// Now stop all calls, and wait for the calling goroutine to end.
 		stopCalling.Inc()
+		callers.Wait()
+	})
+}
+
+func TestTimeoutCallsThenClose(t *testing.T) {
+	// Test needs at least 2 CPUs to trigger race conditions.
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
+
+	opts := serviceNameOpts("s1").SetRelayOnly().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s1 := ts.Server()
+		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
+
+		unblockEcho := make(chan struct{})
+		testutils.RegisterEcho(s1, func() {
+			<-unblockEcho
+		})
+
+		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
+		defer cancel()
+
+		var callers sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			callers.Add(1)
+			go func() {
+				defer callers.Done()
+				raw.Call(ctx, s2, ts.HostPort(), "s1", "echo", nil, nil)
+			}()
+		}
+
+		close(unblockEcho)
+
+		// Wait for all the callers to end
 		callers.Wait()
 	})
 }
