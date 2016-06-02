@@ -149,7 +149,7 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 }
 
 {{ range .Methods }}
-	func (s *{{ $svc.ServerStruct }}) {{ .HandleFunc }}(ctx {{ contextType }}, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
+	func (s *{{ $svc.ServerStruct }}) {{ .HandleFunc }}(ctx {{ contextType }}, protocol athrift.TProtocol) (success bool, resp athrift.TStruct, retErr error) {
 		var req {{ .ArgsType }}
 		var res {{ .ResultType }}
 		const serviceMethod = "{{ $svc.ThriftName }}::{{ .ThriftName }}"
@@ -163,7 +163,7 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 		defer func () {
 			resp = &res
 			retErr = postRun(resp, err)
-			handled = retErr == nil
+			success = retErr == nil
 			if retErr != nil {
 				resp = nil
 				{{ if .HasExceptions }}
@@ -171,7 +171,7 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 					{{ range .Exceptions }}
 					case {{ .ArgType }}:
 						if v == nil {
-							retErr = fmt.Errorf("Handler for {{ .Name }} returned non-nil error type {{ .ArgType }} but nil value")
+							retErr = fmt.Errorf("handler for {{ .Name }} returned non-nil error type {{ .ArgType }} but nil value")
 						} else {
 							res.{{ .ArgStructName }} = v
 							retErr = nil

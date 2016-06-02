@@ -45,9 +45,9 @@ type TChanServer interface {
 	Methods() []string
 }
 
-// InterceptorRunnerRegistrar is a target for the registration of an
+// interceptorRunnerRegistrar is a target for the registration of an
 // interceptor runner.
-type InterceptorRunnerRegistrar interface {
+type interceptorRunnerRegistrar interface {
 	// RegisterInterceptorRunner registers the interceptor runner.
 	RegisterInterceptorRunner(InterceptorRunner)
 }

@@ -81,7 +81,7 @@ func (s *Server) Register(svr TChanServer, opts ...RegisterOption) {
 	for _, m := range svr.Methods() {
 		s.ch.Register(s, service+"::"+m)
 	}
-	if registrar, ok := svr.(InterceptorRunnerRegistrar); ok {
+	if registrar, ok := svr.(interceptorRunnerRegistrar); ok {
 		registrar.RegisterInterceptorRunner(s)
 	}
 }
