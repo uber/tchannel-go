@@ -385,11 +385,11 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
 	for _, tt := range tests {
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+
 			selectedIncoming := make(map[string]int)
 			selectedOutgoing := make(map[string]int)
 			selectedUnconnected := make(map[string]int)
