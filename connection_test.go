@@ -558,7 +558,9 @@ func TestWriteAfterConnectionError(t *testing.T) {
 	defer cancel()
 
 	// Closing network connections can lead to warnings in many places.
-	opts := testutils.NewOpts().DisableLogVerification().SetRelay()
+	// TODO: Relay is disabled due to https://github.com/uber/tchannel-go/issues/390
+	// Enabling relay causes the test to be flaky.
+	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		server := ts.Server()
