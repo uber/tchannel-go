@@ -78,7 +78,10 @@ func TestCloseNewClient(t *testing.T) {
 }
 
 func TestCloseAfterTimeout(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
+	// Disable log verfication since connections are closed after a timeout
+	// and the relay might still be reading/writing to the connection.
+	// TODO: Ideally, we only disable log verification on the relay.
+	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testHandler := onErrorTestHandler{newTestHandler(t), func(_ context.Context, err error) {}}
 		ts.Register(raw.Wrap(testHandler), "block")

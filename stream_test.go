@@ -240,17 +240,20 @@ func TestStreamSendError(t *testing.T) {
 }
 
 func TestStreamCancelled(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	// Since the cancel message is unimplemented, the relay does not know that the
+	// call was cancelled, andwill block closing till the timeout.
+	opts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
 		ctx, cancel := NewContext(testutils.Timeout(time.Second))
 		defer cancel()
 
 		helper := streamHelper{t}
-		ch := ts.NewServer(nil)
+		ch := ts.NewClient(nil)
 		cancelContext := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.Server().ServiceName())
+		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
@@ -291,7 +294,7 @@ func TestResponseClosedBeforeRequest(t *testing.T) {
 		defer cancel()
 
 		helper := streamHelper{t}
-		ch := ts.NewServer(nil)
+		ch := ts.NewClient(nil)
 		responseClosed := make(chan struct{})
 		writerDone := make(chan struct{})
 

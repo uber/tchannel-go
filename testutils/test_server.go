@@ -78,7 +78,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	}
 
 	ts.NewServer(opts)
-	if opts != nil && opts.IncludeRelay {
+	if opts == nil || !opts.DisableRelay {
 		ts.addRelay(opts.LogVerification)
 	}
 
@@ -99,13 +99,15 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 			return
 		}
 
+		// Run without the relay, unless OnlyRelay was set.
 		if !chanOpts.OnlyRelay {
 			noRelayOpts := chanOpts.Copy()
-			noRelayOpts.IncludeRelay = false
+			noRelayOpts.DisableRelay = true
 			withServer(t, noRelayOpts, f)
 		}
 
-		if chanOpts.IncludeRelay {
+		// Run with the relay, unless the user has disabled it.
+		if !chanOpts.DisableRelay {
 			withServer(t, chanOpts.Copy(), f)
 		}
 	}
