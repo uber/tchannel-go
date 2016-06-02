@@ -583,6 +583,16 @@ func (ch *Channel) removeClosedConn(c *Connection) {
 	ch.mutable.Unlock()
 }
 
+func (ch *Channel) getMinConnectionState() connectionState {
+	minState := connectionClosed
+	for _, c := range ch.mutable.conns {
+		if s := c.readState(); s < minState {
+			minState = s
+		}
+	}
+	return minState
+}
+
 // connectionCloseStateChange is called when a connection's close state changes.
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	ch.removeClosedConn(c)
@@ -597,12 +607,7 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	}
 
 	ch.mutable.RLock()
-	minState := connectionClosed
-	for _, c := range ch.mutable.conns {
-		if s := c.readState(); s < minState {
-			minState = s
-		}
-	}
+	minState := ch.getMinConnectionState()
 	ch.mutable.RUnlock()
 
 	var updateTo ChannelState
@@ -614,7 +619,11 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 
 	if updateTo > 0 {
 		ch.mutable.Lock()
-		ch.mutable.state = updateTo
+		// Recheck the state as it's possible another goroutine changed the state
+		// from what we expected, and so we might make a stale change.
+		if ch.mutable.state == chState {
+			ch.mutable.state = updateTo
+		}
 		ch.mutable.Unlock()
 		chState = updateTo
 	}
