@@ -22,8 +22,9 @@ package benchmark
 
 import (
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/relay"
+
+	"github.com/uber-go/atomic"
 )
 
 type fixedHosts struct {

@@ -9,12 +9,12 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
 )
 
 type relayTest struct {

@@ -12,7 +12,7 @@ endif
 
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
-PKGS := . ./atomic ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
+PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
 BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release

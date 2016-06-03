@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 )
@@ -524,7 +524,7 @@ func TestPeerSelection(t *testing.T) {
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
-		assert.EqualValues(t, 5, atomic.LoadUint64(count),
+		assert.EqualValues(t, 5, count.Load(),
 			"Expect 5 exchange updates: peer add, init mex, new conn, ping, pong")
 	})
 }
@@ -612,16 +612,15 @@ func TestPeerSelectionRanking(t *testing.T) {
 	}
 }
 
-func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, retCount *uint64) {
+func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, retCount *atomic.Uint64) {
 	var (
-		count uint64
-		score uint64
+		count atomic.Uint64
+		score atomic.Uint64
 	)
 
 	return ScoreCalculatorFunc(func(p *Peer) uint64 {
-		atomic.AddUint64(&count, 1)
-		atomic.AddUint64(&score, uint64(delta))
-		return atomic.LoadUint64(&score)
+		count.Add(1)
+		return score.Add(uint64(delta))
 	}), &count
 }
 

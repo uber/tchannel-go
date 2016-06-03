@@ -24,12 +24,12 @@ import (
 	"fmt"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 
+	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
 )
 

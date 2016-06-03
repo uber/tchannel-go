@@ -26,8 +26,9 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/relay"
+
+	"github.com/uber-go/atomic"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")

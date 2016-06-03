@@ -1,8 +1,8 @@
-hash: 94cf21a5f9069d934bbf173edaba5721096530c263582703175cc660f776e76e
-updated: 2016-05-04T15:58:15.151222656-07:00
+hash: 751995ad9810ebf66707d6db7b75134a59e6350eb2ad7d21fa8b497fdd5337a4
+updated: 2016-06-02T17:21:34.641634433-07:00
 imports:
 - name: github.com/apache/thrift
-  version: 6ee1a0bd263b0dc3b863285763342fb3ddc3ede4
+  version: 39a09ac5e49481d39dd1bcb6757ffe182e3df20a
   subpackages:
   - lib/go/thrift
 - name: github.com/bmizerany/perks
@@ -10,7 +10,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/cactus/go-statsd-client
-  version: 53fcd3082b7e2cfc3df66e83e492bccda879936e
+  version: 91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d
   subpackages:
   - statsd
 - name: github.com/davecgh/go-spew
@@ -18,7 +18,7 @@ imports:
   subpackages:
   - spew
 - name: github.com/jessevdk/go-flags
-  version: 6b9493b3cb60367edd942144879646604089e3f7
+  version: b9b882a3990882b05e02765f5df2cd3ad02874ee
 - name: github.com/pmezard/go-difflib
   version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
@@ -32,13 +32,15 @@ imports:
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 6cb3b85ef5a0efef77caef88363ec4d4b5c0976d
+  version: 8d64eb7173c7753d6419fd4a9caf057398611364
   subpackages:
   - assert
   - mock
   - require
+- name: github.com/uber-go/atomic
+  version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
 - name: golang.org/x/net
-  version: 35ec611a141ee705590b9eb64d673f9e6dfeb1ac
+  version: c4c3ea71919de159c9e246d7be66deb7f0a39a58
   subpackages:
   - context
 - name: gopkg.in/yaml.v2
