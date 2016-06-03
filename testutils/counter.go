@@ -23,7 +23,7 @@ package testutils
 import (
 	"sync"
 
-	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber-go/atomic"
 )
 
 // Decrement is the interface returned by Decrementor.

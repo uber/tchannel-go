@@ -26,7 +26,8 @@ import (
 	"testing"
 
 	. "github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
+
+	"github.com/uber-go/atomic"
 )
 
 func benchmarkUsing(b *testing.B, pool FramePool) {

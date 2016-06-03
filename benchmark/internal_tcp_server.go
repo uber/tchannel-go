@@ -25,7 +25,8 @@ import (
 	"net"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
+
+	"github.com/uber-go/atomic"
 )
 
 // internalTCPServer represents a TCP server responds to TChannel

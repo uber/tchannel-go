@@ -26,8 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/tchannel-go/atomic"
 	"github.com/uber/tchannel-go/relay"
+
+	"github.com/uber-go/atomic"
 )
 
 // _maxRelayTombs is the maximum number of tombs we'll accumulate in a single

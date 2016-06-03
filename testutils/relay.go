@@ -27,10 +27,10 @@ import (
 	"testing"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
 )
 
 type frameRelay struct {

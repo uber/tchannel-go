@@ -25,7 +25,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber-go/atomic"
 )
 
 type tcpRelay struct {

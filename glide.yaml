@@ -42,3 +42,4 @@ import:
   version: master
   subpackages:
   - quantile
+- package: github.com/uber-go/atomic
