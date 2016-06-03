@@ -23,6 +23,8 @@ package relay
 
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
+	// Caller is the name of the originating service.
+	Caller() string
 	// Service is the name of the destination service.
 	Service() string
 	// Method is the name of the method being called.

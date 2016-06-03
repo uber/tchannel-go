@@ -68,7 +68,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
-	ServiceF, MethodF string
+	ServiceF, MethodF, CallerF string
 }
 
 // Service returns the service name field.
@@ -79,4 +79,9 @@ func (f FakeCallFrame) Service() string {
 // Method returns the method field.
 func (f FakeCallFrame) Method() string {
 	return f.MethodF
+}
+
+// Caller returns the caller field.
+func (f FakeCallFrame) Caller() string {
+	return f.CallerF
 }
