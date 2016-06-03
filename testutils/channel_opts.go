@@ -48,9 +48,9 @@ type ChannelOpts struct {
 	// LogVerification contains options for controlling the log verification.
 	LogVerification LogVerification
 
-	// IncludeRelay instructs TestServer to interpose a relay between servers and
-	// clients. It's ignored by other test helpers.
-	IncludeRelay bool
+	// DisableRelay disables the relay interposed between clients/servers.
+	// By default, all tests are run with a relay interposed.
+	DisableRelay bool
 
 	// OnlyRelay instructs TestServer the test must only be run with a relay.
 	OnlyRelay bool
@@ -148,17 +148,15 @@ func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
 	return o
 }
 
-// SetRelay instructs TestServer to run the test twice, once without a relay
-// and once with a relay in front of this channel.
-func (o *ChannelOpts) SetRelay() *ChannelOpts {
-	o.IncludeRelay = true
+// NoRelay disables running the test with a relay interposed.
+func (o *ChannelOpts) NoRelay() *ChannelOpts {
+	o.DisableRelay = true
 	return o
 }
 
 // SetRelayOnly instructs TestServer to only run with a relay in front of this channel.
 func (o *ChannelOpts) SetRelayOnly() *ChannelOpts {
 	o.OnlyRelay = true
-	o.IncludeRelay = true
 	return o
 }
 

@@ -188,7 +188,9 @@ func TestInboundEphemeralPeerRemoved(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	// No relay, since we look for the exact host:port in peer lists.
+	opts := testutils.NewOpts().NoRelay()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		client := testutils.NewClient(t, nil)
 		assert.NoError(t, client.Ping(ctx, hostPort), "Ping to server failed")
 
@@ -283,7 +285,8 @@ func TestPeerRemovedFromRootPeers(t *testing.T) {
 	defer cancel()
 
 	for _, tt := range tests {
-		WithVerifiedServer(t, nil, func(server *Channel, hostPort string) {
+		opts := testutils.NewOpts().NoRelay()
+		WithVerifiedServer(t, opts, func(server *Channel, hostPort string) {
 			ch := testutils.NewServer(t, nil)
 			clientHP := ch.PeerInfo().HostPort
 
@@ -386,7 +389,10 @@ func TestPeerSelectionPreferIncoming(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		// We need to directly connect from the server to the client and verify
+		// the exact peers.
+		opts := testutils.NewOpts().NoRelay()
+		WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()
 

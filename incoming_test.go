@@ -36,7 +36,8 @@ func TestPeersIncomingConnection(t *testing.T) {
 		return ch, hostPort
 	}
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+	opts := testutils.NewOpts().NoRelay()
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
 		doPing := func(ch *Channel) {
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()

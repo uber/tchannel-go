@@ -106,8 +106,7 @@ func writeFlushStr(w ArgWriter, d string) error {
 }
 
 func TestRoundTrip(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		handler := newTestHandler(t)
 		ts.Register(raw.Wrap(handler), "echo")
 
@@ -136,8 +135,7 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestDefaultFormat(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		handler := newTestHandler(t)
 		ts.Register(raw.Wrap(handler), "echo")
 
@@ -207,7 +205,7 @@ func TestRemotePeer(t *testing.T) {
 	defer cancel()
 
 	for _, tt := range tests {
-		opts := testutils.NewOpts().SetServiceName("fake-service").SetRelay()
+		opts := testutils.NewOpts().SetServiceName("fake-service")
 		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 			remote := tt.remote(ts)
 			defer remote.Close()
@@ -232,7 +230,7 @@ func TestReuseConnection(t *testing.T) {
 
 	// Since we're specifically testing that connections between hosts are re-used,
 	// we can't interpose a relay in this test.
-	s1Opts := &testutils.ChannelOpts{ServiceName: "s1"}
+	s1Opts := testutils.NewOpts().SetServiceName("s1").NoRelay()
 
 	testutils.WithTestServer(t, s1Opts, func(ts *testutils.TestServer) {
 		ch2 := ts.NewServer(&testutils.ChannelOpts{ServiceName: "s2"})
@@ -283,8 +281,7 @@ func TestReuseConnection(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -296,7 +293,7 @@ func TestPing(t *testing.T) {
 
 func TestBadRequest(t *testing.T) {
 	// ch will log an error when it receives a request for an unknown handler.
-	opts := testutils.NewOpts().AddLogFilter("Couldn't find handler.", 1).SetRelay()
+	opts := testutils.NewOpts().AddLogFilter("Couldn't find handler.", 1)
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
@@ -308,8 +305,7 @@ func TestBadRequest(t *testing.T) {
 }
 
 func TestNoTimeout(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "Echo")
 
 		ctx := context.Background()
@@ -320,8 +316,7 @@ func TestNoTimeout(t *testing.T) {
 }
 
 func TestServerBusy(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ts.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
 			if _, err := raw.ReadArgs(call); err != nil {
 				return err
@@ -340,8 +335,7 @@ func TestServerBusy(t *testing.T) {
 
 func TestUnexpectedHandlerError(t *testing.T) {
 	opts := testutils.NewOpts().
-		AddLogFilter("Unexpected handler error", 1).
-		SetRelay()
+		AddLogFilter("Unexpected handler error", 1)
 
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ts.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
@@ -370,8 +364,7 @@ func (h onErrorTestHandler) OnError(ctx context.Context, err error) {
 }
 
 func TestTimeout(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		// onError may be called when the block call tries to write the call response.
 		onError := func(ctx context.Context, err error) {
 			assert.Equal(t, ErrTimeout, err, "onError err should be ErrTimeout")
@@ -397,8 +390,7 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestLargeMethod(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -409,8 +401,7 @@ func TestLargeMethod(t *testing.T) {
 }
 
 func TestLargeTimeout(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		ctx, cancel := NewContext(1000 * time.Second)
@@ -422,8 +413,7 @@ func TestLargeTimeout(t *testing.T) {
 }
 
 func TestFragmentation(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		arg2 := make([]byte, MaxFramePayloadSize*2)
@@ -450,8 +440,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 	// Inbound forward will timeout and cause a warning log.
 	opts := testutils.NewOpts().
 		AddLogFilter("Unable to forward frame", 1).
-		AddLogFilter("Connection error", 1).
-		SetRelay()
+		AddLogFilter("Connection error", 1)
 
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		startReading, handlerComplete := make(chan struct{}), make(chan struct{})
@@ -485,7 +474,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 
 func TestWriteArg3AfterTimeout(t *testing.T) {
 	// The channel reads and writes during timeouts, causing warning logs.
-	opts := testutils.NewOpts().DisableLogVerification().SetRelay()
+	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 
@@ -524,8 +513,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
 	// TODO: Make this test block at different points (e.g. before, during read/write).
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 		done := make(chan struct{})
 		handler := func(ctx context.Context, call *InboundCall) {
@@ -598,8 +586,7 @@ func TestReadTimeout(t *testing.T) {
 		AddLogFilter("Connection error", 1, "site", "read frames").
 		AddLogFilter("Connection error", 1, "site", "write frames").
 		AddLogFilter("simpleHandler OnError", 1,
-			"error", "failed to send error frame, connection state connectionClosed").
-		SetRelay()
+			"error", "failed to send error frame, connection state connectionClosed")
 
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		for i := 0; i < 10; i++ {
@@ -616,8 +603,7 @@ func TestReadTimeout(t *testing.T) {
 }
 
 func TestWriteTimeout(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ch := ts.Server()
 		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
@@ -638,8 +624,7 @@ func TestWriteTimeout(t *testing.T) {
 }
 
 func TestGracefulClose(t *testing.T) {
-	opts := testutils.NewOpts().SetRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ch2 := ts.NewServer(nil)
 		hp2 := ch2.PeerInfo().HostPort
 		defer ch2.Close()
@@ -680,7 +665,7 @@ func TestNetDialTimeout(t *testing.T) {
 }
 
 func TestConnectTimeout(t *testing.T) {
-	opts := testutils.NewOpts().DisableLogVerification().SetRelay()
+	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// Set up a relay that will delay the initial init req.
 		testComplete := make(chan struct{})

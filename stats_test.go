@@ -144,7 +144,9 @@ func TestStatsWithRetries(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	WithVerifiedServer(t, nil, func(serverCh *Channel, hostPort string) {
+	// TODO why do we need this??
+	opts := testutils.NewOpts().NoRelay()
+	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		respErr := make(chan error, 1)
 		testutils.RegisterFunc(serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
