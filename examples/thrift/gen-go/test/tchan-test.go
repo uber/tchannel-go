@@ -62,13 +62,15 @@ func (c *tchanBaseClient) BaseCall(ctx thrift.Context) error {
 
 type tchanBaseServer struct {
 	handler TChanBase
+
+	interceptorRunner thrift.InterceptorRunner
 }
 
 // NewTChanBaseServer wraps a handler for TChanBase so it can be
 // registered with a thrift.Server.
 func NewTChanBaseServer(handler TChanBase) thrift.TChanServer {
 	return &tchanBaseServer{
-		handler,
+		handler: handler,
 	}
 }
 
@@ -82,6 +84,11 @@ func (s *tchanBaseServer) Methods() []string {
 	}
 }
 
+// RegisterInterceptors registers the provided interceptors with the server.
+func (s *tchanBaseServer) RegisterInterceptorRunner(runner thrift.InterceptorRunner) {
+	s.interceptorRunner = runner
+}
+
 func (s *tchanBaseServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
 	switch methodName {
 	case "BaseCall":
@@ -92,23 +99,34 @@ func (s *tchanBaseServer) Handle(ctx thrift.Context, methodName string, protocol
 	}
 }
 
-func (s *tchanBaseServer) handleBaseCall(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanBaseServer) handleBaseCall(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req BaseBaseCallArgs
 	var res BaseBaseCallResult
+	const serviceMethod = "Base::BaseCall"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
 	}
 
-	err :=
-		s.handler.BaseCall(ctx)
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
 
 	if err != nil {
-		return false, nil, err
-	} else {
+		return
 	}
 
-	return err == nil, &res, nil
+	err =
+		s.handler.BaseCall(ctx)
+
+	return
 }
 
 type tchanFirstClient struct {
@@ -167,14 +185,16 @@ type tchanFirstServer struct {
 	thrift.TChanServer
 
 	handler TChanFirst
+
+	interceptorRunner thrift.InterceptorRunner
 }
 
 // NewTChanFirstServer wraps a handler for TChanFirst so it can be
 // registered with a thrift.Server.
 func NewTChanFirstServer(handler TChanFirst) thrift.TChanServer {
 	return &tchanFirstServer{
-		NewTChanBaseServer(handler),
-		handler,
+		TChanServer: NewTChanBaseServer(handler),
+		handler:     handler,
 	}
 }
 
@@ -190,6 +210,11 @@ func (s *tchanFirstServer) Methods() []string {
 
 		"BaseCall",
 	}
+}
+
+// RegisterInterceptors registers the provided interceptors with the server.
+func (s *tchanFirstServer) RegisterInterceptorRunner(runner thrift.InterceptorRunner) {
+	s.interceptorRunner = runner
 }
 
 func (s *tchanFirstServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
@@ -208,63 +233,102 @@ func (s *tchanFirstServer) Handle(ctx thrift.Context, methodName string, protoco
 	}
 }
 
-func (s *tchanFirstServer) handleAppError(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanFirstServer) handleAppError(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req FirstAppErrorArgs
 	var res FirstAppErrorResult
+	const serviceMethod = "First::AppError"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
 	}
 
-	err :=
-		s.handler.AppError(ctx)
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
 
 	if err != nil {
-		return false, nil, err
-	} else {
+		return
 	}
 
-	return err == nil, &res, nil
+	err =
+		s.handler.AppError(ctx)
+
+	return
 }
 
-func (s *tchanFirstServer) handleEcho(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanFirstServer) handleEcho(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req FirstEchoArgs
 	var res FirstEchoResult
+	const serviceMethod = "First::Echo"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
+	}
+
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
+
+	if err != nil {
+		return
 	}
 
 	r, err :=
 		s.handler.Echo(ctx, req.Msg)
 
-	if err != nil {
-		return false, nil, err
-	} else {
+	if err == nil {
 		res.Success = &r
 	}
 
-	return err == nil, &res, nil
+	return
 }
 
-func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req FirstHealthcheckArgs
 	var res FirstHealthcheckResult
+	const serviceMethod = "First::Healthcheck"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
+	}
+
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
+
+	if err != nil {
+		return
 	}
 
 	r, err :=
 		s.handler.Healthcheck(ctx)
 
-	if err != nil {
-		return false, nil, err
-	} else {
+	if err == nil {
 		res.Success = r
 	}
 
-	return err == nil, &res, nil
+	return
 }
 
 type tchanSecondClient struct {
@@ -296,13 +360,15 @@ func (c *tchanSecondClient) Test(ctx thrift.Context) error {
 
 type tchanSecondServer struct {
 	handler TChanSecond
+
+	interceptorRunner thrift.InterceptorRunner
 }
 
 // NewTChanSecondServer wraps a handler for TChanSecond so it can be
 // registered with a thrift.Server.
 func NewTChanSecondServer(handler TChanSecond) thrift.TChanServer {
 	return &tchanSecondServer{
-		handler,
+		handler: handler,
 	}
 }
 
@@ -316,6 +382,11 @@ func (s *tchanSecondServer) Methods() []string {
 	}
 }
 
+// RegisterInterceptors registers the provided interceptors with the server.
+func (s *tchanSecondServer) RegisterInterceptorRunner(runner thrift.InterceptorRunner) {
+	s.interceptorRunner = runner
+}
+
 func (s *tchanSecondServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
 	switch methodName {
 	case "Test":
@@ -326,21 +397,32 @@ func (s *tchanSecondServer) Handle(ctx thrift.Context, methodName string, protoc
 	}
 }
 
-func (s *tchanSecondServer) handleTest(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanSecondServer) handleTest(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req SecondTestArgs
 	var res SecondTestResult
+	const serviceMethod = "Second::Test"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
 	}
 
-	err :=
-		s.handler.Test(ctx)
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
 
 	if err != nil {
-		return false, nil, err
-	} else {
+		return
 	}
 
-	return err == nil, &res, nil
+	err =
+		s.handler.Test(ctx)
+
+	return
 }

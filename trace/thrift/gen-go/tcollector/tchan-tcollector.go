@@ -76,13 +76,15 @@ func (c *tchanTCollectorClient) SubmitBatch(ctx thrift.Context, spans []*Span) (
 
 type tchanTCollectorServer struct {
 	handler TChanTCollector
+
+	interceptorRunner thrift.InterceptorRunner
 }
 
 // NewTChanTCollectorServer wraps a handler for TChanTCollector so it can be
 // registered with a thrift.Server.
 func NewTChanTCollectorServer(handler TChanTCollector) thrift.TChanServer {
 	return &tchanTCollectorServer{
-		handler,
+		handler: handler,
 	}
 }
 
@@ -96,6 +98,11 @@ func (s *tchanTCollectorServer) Methods() []string {
 		"submit",
 		"submitBatch",
 	}
+}
+
+// RegisterInterceptors registers the provided interceptors with the server.
+func (s *tchanTCollectorServer) RegisterInterceptorRunner(runner thrift.InterceptorRunner) {
+	s.interceptorRunner = runner
 }
 
 func (s *tchanTCollectorServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
@@ -112,62 +119,104 @@ func (s *tchanTCollectorServer) Handle(ctx thrift.Context, methodName string, pr
 	}
 }
 
-func (s *tchanTCollectorServer) handleGetSamplingStrategy(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanTCollectorServer) handleGetSamplingStrategy(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req TCollectorGetSamplingStrategyArgs
 	var res TCollectorGetSamplingStrategyResult
+	const serviceMethod = "TCollector::getSamplingStrategy"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
+	}
+
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
+
+	if err != nil {
+		return
 	}
 
 	r, err :=
 		s.handler.GetSamplingStrategy(ctx, req.ServiceName)
 
-	if err != nil {
-		return false, nil, err
-	} else {
+	if err == nil {
 		res.Success = r
 	}
 
-	return err == nil, &res, nil
+	return
 }
 
-func (s *tchanTCollectorServer) handleSubmit(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanTCollectorServer) handleSubmit(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req TCollectorSubmitArgs
 	var res TCollectorSubmitResult
+	const serviceMethod = "TCollector::submit"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
+	}
+
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
+
+	if err != nil {
+		return
 	}
 
 	r, err :=
 		s.handler.Submit(ctx, req.Span)
 
-	if err != nil {
-		return false, nil, err
-	} else {
+	if err == nil {
 		res.Success = r
 	}
 
-	return err == nil, &res, nil
+	return
 }
 
-func (s *tchanTCollectorServer) handleSubmitBatch(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+func (s *tchanTCollectorServer) handleSubmitBatch(ctx thrift.Context, protocol athrift.TProtocol) (handled bool, resp athrift.TStruct, retErr error) {
 	var req TCollectorSubmitBatchArgs
 	var res TCollectorSubmitBatchResult
+	const serviceMethod = "TCollector::submitBatch"
 
-	if err := req.Read(protocol); err != nil {
-		return false, nil, err
+	if readErr := req.Read(protocol); readErr != nil {
+		return false, nil, readErr
+	}
+
+	postRun, err := s.interceptorRunner.RunPre(ctx, serviceMethod, &req)
+
+	defer func() {
+		resp = &res
+		retErr = postRun(resp, err)
+		handled = retErr == nil
+		if retErr != nil {
+			resp = nil
+		}
+	}()
+
+	if err != nil {
+		return
 	}
 
 	r, err :=
 		s.handler.SubmitBatch(ctx, req.Spans)
 
-	if err != nil {
-		return false, nil, err
-	} else {
+	if err == nil {
 		res.Success = r
 	}
 
-	return err == nil, &res, nil
+	return
 }

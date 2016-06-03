@@ -11,6 +11,7 @@ exception SimpleErr {
 service SimpleService {
   Data Call(1: Data arg)
   void Simple() throws (1: SimpleErr simpleErr)
+  string Throws(1: string arg) throws (1: SimpleErr simpleErr)
 }
 
 service SecondService {
