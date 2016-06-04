@@ -30,6 +30,7 @@ import (
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/davecgh/go-spew/spew"
@@ -53,6 +54,9 @@ type TestServer struct {
 	// relayHosts is the relayer's SimpleRelayHosts (if any).
 	relayHosts *SimpleRelayHosts
 
+	// relayStats is the channel's relaying stats (if any).
+	relayStats *relay.MockStats
+
 	// channels is the list of channels created for this TestServer. The first
 	// element is always the initial server.
 	channels []*tchannel.Channel
@@ -71,6 +75,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	ts := &TestServer{
 		TB:            t,
 		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
+		relayStats:    relay.NewMockStats(t),
 		introspectOpts: &tchannel.IntrospectionOptions{
 			IncludeExchanges:  true,
 			IncludeTombstones: true,
@@ -174,6 +179,11 @@ func (ts *TestServer) CloseAndVerify() {
 	}
 }
 
+// RelayStats returns the relay.Stats for this test server, if any.
+func (ts *TestServer) RelayStats() *relay.MockStats {
+	return ts.relayStats
+}
+
 // NewClient returns a client that with log verification.
 // TODO: Verify message exchanges and leaks for client channels as well.
 func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
@@ -196,8 +206,11 @@ func (ts *TestServer) addRelay(logOpts LogVerification) {
 		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
 	})
 	opts := &ChannelOpts{
-		ServiceName:     "relay",
-		ChannelOptions:  tchannel.ChannelOptions{RelayHosts: ts.relayHosts},
+		ServiceName: "relay",
+		ChannelOptions: tchannel.ChannelOptions{
+			RelayHosts: ts.relayHosts,
+			RelayStats: ts.relayStats,
+		},
 		LogVerification: logOpts,
 	}
 	ts.addChannel(newServer, opts)
