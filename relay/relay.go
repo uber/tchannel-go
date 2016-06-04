@@ -37,3 +37,18 @@ type Hosts interface {
 	// Get returns the host:port of the best peer for the given call.
 	Get(CallFrame) string
 }
+
+// CallStats is a reporter for per-request stats.
+type CallStats interface {
+	// The call succeeded (possibly after retrying).
+	Succeeded()
+	// The RPC failed.
+	Failed(reason string)
+	// End stats collection for this RPC. Must be called exactly once.
+	End()
+}
+
+// Stats is a CallStats factory.
+type Stats interface {
+	Begin(CallFrame) CallStats
+}
