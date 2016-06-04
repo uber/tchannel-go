@@ -25,18 +25,18 @@ func serviceNameOpts(s string) *testutils.ChannelOpts {
 	return testutils.NewOpts().SetServiceName(s)
 }
 
-func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel)) {
+func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel, ts *testutils.TestServer)) {
 	opts := serviceNameOpts("test").SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		client := ts.NewClient(serviceNameOpts("client"))
 		client.Peers().Add(ts.HostPort())
-		f(ts.Relay(), ts.Server(), client)
+		f(ts.Relay(), ts.Server(), client, ts)
 	})
 }
 
 func TestRelay(t *testing.T) {
-	withRelayedEcho(t, func(_, _, client *Channel) {
+	withRelayedEcho(t, func(_, _, client *Channel, ts *testutils.TestServer) {
 		tests := []struct {
 			header string
 			body   string
@@ -54,11 +54,18 @@ func TestRelay(t *testing.T) {
 			assert.Equal(t, tt.header, string(arg2), "Header was mangled during relay.")
 			assert.Equal(t, tt.body, string(arg3), "Body was mangled during relay.")
 		}
+		stats := ts.RelayStats()
+		stats.AssertEdges(1)
+		callStats := stats.Get("client", "test", "echo")
+		require.Equal(t, 2, len(callStats), "Expected call stats for each RPC.")
+		for _, cs := range callStats {
+			cs.AssertCalled(1)
+		}
 	})
 }
 
 func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
-	withRelayedEcho(t, func(_, server, client *Channel) {
+	withRelayedEcho(t, func(_, server, client *Channel, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -92,6 +99,13 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 		})
 
 		testutils.AssertEcho(t, s2, ts.HostPort(), "s1")
+		stats := ts.RelayStats()
+		stats.AssertEdges(1)
+		callStats := stats.Get("s2", "s1", "echo")
+		assert.Equal(t, 1, len(callStats), "Expected call stats for each RPC.")
+		for _, cs := range callStats {
+			cs.AssertCalled(1)
+		}
 	})
 }
 
@@ -142,6 +156,14 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 
 		assert.Equal(t, ErrCodeDeclined, se.Code(), "Expected Declined error")
 		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
+
+		stats := ts.RelayStats()
+		stats.AssertEdges(1)
+		callStats := stats.Get(client.PeerInfo().ServiceName, "random-service", "echo")
+		if assert.Equal(t, 1, len(callStats), "Expected call stats for each RPC.") {
+			cs := callStats[0]
+			cs.AssertCalled(0, "relay-declined")
+		}
 	})
 }
 
@@ -162,6 +184,14 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 		}
 
 		assert.Equal(t, ErrCodeBadRequest, se.Code(), "Expected BadRequest error")
+
+		stats := ts.RelayStats()
+		stats.AssertEdges(1)
+		callStats := stats.Get(client.PeerInfo().ServiceName, "svc", "echo")
+		if assert.Equal(t, 1, len(callStats), "Expected call stats for each RPC.") {
+			cs := callStats[0]
+			cs.AssertCalled(0, "bad-request")
+		}
 	})
 }
 
