@@ -53,34 +53,31 @@ type MockCallStats struct {
 	succeeded  int
 	failedMsgs []string
 	ended      int
+	wg         *sync.WaitGroup
 }
 
 // Succeeded marks the RPC as succeeded.
 func (m *MockCallStats) Succeeded() CallStats {
-	m.Lock()
 	m.succeeded++
-	m.Unlock()
 	return m
 }
 
 // Failed marks the RPC as failed for the provided reason.
 func (m *MockCallStats) Failed(reason string) CallStats {
-	m.Lock()
 	m.failedMsgs = append(m.failedMsgs, reason)
-	m.Unlock()
 	return m
 }
 
 // End halts timer and metric collection for the RPC.
 func (m *MockCallStats) End() {
-	m.Lock()
 	m.ended++
-	m.Unlock()
+	m.wg.Done()
 }
 
 // MockStats is a testing spy for the Stats interface.
 type MockStats struct {
 	mu    sync.Mutex
+	wg    sync.WaitGroup
 	stats map[string][]*MockCallStats
 }
 
@@ -98,7 +95,8 @@ func (m *MockStats) Begin(f CallFrame) CallStats {
 
 // Add explicitly adds a new call along an edge of the call graph.
 func (m *MockStats) Add(caller, callee, procedure string) CallStats {
-	cs := &MockCallStats{}
+	m.wg.Add(1)
+	cs := &MockCallStats{wg: &m.wg}
 	key := m.tripleToKey(caller, callee, procedure)
 	m.mu.Lock()
 	m.stats[key] = append(m.stats[key], cs)
@@ -108,6 +106,9 @@ func (m *MockStats) Add(caller, callee, procedure string) CallStats {
 
 // AssertEqual asserts that two MockStats describe the same call graph.
 func (m *MockStats) AssertEqual(t testing.TB, expected *MockStats) {
+	// Wait for any outstandanding CallStats to end.
+	m.wg.Wait()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -132,10 +133,6 @@ func (m *MockStats) assertEdgeEqual(t testing.TB, expected *MockStats, edge stri
 }
 
 func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actual *MockCallStats) {
-	// FIXME: Shouldn't need these locks.
-	actual.Lock()
-	defer actual.Unlock()
-
 	// Revisit these assertions if we ever need to assert zero or many calls to
 	// End.
 	require.Equal(t, 1, expected.ended, "Expected call must assert exactly one call to End.")
