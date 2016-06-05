@@ -199,18 +199,23 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 	// If we receive a response frame, we expect to find that ID in our outbound.
 	// If we receive a request frame, we expect to find that ID in our inbound.
 	items := r.receiverItems(fType)
-	isOriginator := fType == responseFrame
 
 	item, ok := items.Get(f.Header.ID)
 	if !ok {
 		r.logger.WithFields(
 			LogField{"ID", f.Header.ID},
 		).Warn("Received a frame without a RelayItem.")
-	} else if isOriginator {
-		if msg := relayErrMsg(f); msg != "" {
-			item.stats.Failed(msg)
-		} else if indicatesSuccess(f) {
+		return
+	}
+
+	// call res frames don't include the OK bit, so we can't wait until the last
+	// frame of a relayed RPC to determine if the call succeeded.
+	isOriginator := fType == responseFrame
+	if isOriginator {
+		if succeeded, failed, failMsg := determinesCallSuccess(f); succeeded {
 			item.stats.Succeeded()
+		} else if failed {
+			item.stats.Failed(failMsg)
 		}
 	}
 
@@ -416,29 +421,25 @@ func errUnknownGroup(group string) error {
 	return NewSystemError(ErrCodeDeclined, "no peers for %q", group)
 }
 
-// relayErrMsg checks whether a relayer should mark this RPC as failed, and if
-// so, what metrics key to use when reporting the failure.
-func relayErrMsg(f *Frame) string {
-	switch f.messageType() {
-	case messageTypeError:
-		return newLazyError(f).Code().MetricsKey()
-	case messageTypeCallRes:
-		if ok := newLazyCallRes(f).OK(); !ok {
-			return "application-error"
-		}
-		return ""
-	default:
-		return ""
-	}
-}
+func determinesCallSuccess(f *Frame) (succeeded bool, failed bool, failMsg string) {
+	ftype := f.messageType()
 
-// indicatesSuccess checks whether receipt of a frame, on the originating
-// connection, indicates that the RPC succeeded.
-func indicatesSuccess(f *Frame) bool {
-	switch f.messageType() {
-	case messageTypeCallRes:
-		return newLazyCallRes(f).OK()
-	default:
-		return false
+	if ftype == messageTypeError {
+		// The call failed unexpectedly.
+		msg := newLazyError(f).Code().MetricsKey()
+		return false, true, msg
 	}
+
+	if ftype != messageTypeCallRes {
+		// The call hasn't succeeded or failed yet.
+		return false, false, ""
+	}
+
+	// The frame is a callRes, which could be either a success or an
+	// application error.
+	if ok := newLazyCallRes(f).OK(); !ok {
+		return false, true, "application-error"
+	}
+
+	return true, false, ""
 }
