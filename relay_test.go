@@ -10,6 +10,7 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
@@ -54,13 +55,12 @@ func TestRelay(t *testing.T) {
 			assert.Equal(t, tt.header, string(arg2), "Header was mangled during relay.")
 			assert.Equal(t, tt.body, string(arg3), "Body was mangled during relay.")
 		}
-		stats := ts.RelayStats()
-		stats.AssertEdges(1)
-		callStats := stats.Get("client", "test", "echo")
-		require.Equal(t, 2, len(callStats), "Expected call stats for each RPC.")
-		for _, cs := range callStats {
-			cs.AssertCalled(1)
+
+		calls := relay.NewMockStats()
+		for _ = range tests {
+			calls.Add("client", "test", "echo").Succeeded().End()
 		}
+		ts.AssertRelayStats(t, calls)
 	})
 }
 
@@ -99,13 +99,10 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 		})
 
 		testutils.AssertEcho(t, s2, ts.HostPort(), "s1")
-		stats := ts.RelayStats()
-		stats.AssertEdges(1)
-		callStats := stats.Get("s2", "s1", "echo")
-		assert.Equal(t, 1, len(callStats), "Expected call stats for each RPC.")
-		for _, cs := range callStats {
-			cs.AssertCalled(1)
-		}
+
+		calls := relay.NewMockStats()
+		calls.Add("s2", "s1", "echo").Succeeded().End()
+		ts.AssertRelayStats(t, calls)
 	})
 }
 
@@ -157,13 +154,9 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 		assert.Equal(t, ErrCodeDeclined, se.Code(), "Expected Declined error")
 		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
 
-		stats := ts.RelayStats()
-		stats.AssertEdges(1)
-		callStats := stats.Get(client.PeerInfo().ServiceName, "random-service", "echo")
-		if assert.Equal(t, 1, len(callStats), "Expected call stats for each RPC.") {
-			cs := callStats[0]
-			cs.AssertCalled(0, "relay-declined")
-		}
+		calls := relay.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, "random-service", "echo").Failed("relay-declined").End()
+		ts.AssertRelayStats(t, calls)
 	})
 }
 
@@ -185,13 +178,9 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 
 		assert.Equal(t, ErrCodeBadRequest, se.Code(), "Expected BadRequest error")
 
-		stats := ts.RelayStats()
-		stats.AssertEdges(1)
-		callStats := stats.Get(client.PeerInfo().ServiceName, "svc", "echo")
-		if assert.Equal(t, 1, len(callStats), "Expected call stats for each RPC.") {
-			cs := callStats[0]
-			cs.AssertCalled(0, "bad-request")
-		}
+		calls := relay.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, "svc", "echo").Failed("bad-request").End()
+		ts.AssertRelayStats(t, calls)
 	})
 }
 

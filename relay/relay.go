@@ -39,12 +39,17 @@ type Hosts interface {
 }
 
 // CallStats is a reporter for per-request stats.
+//
+// Because call res frames don't include the OK bit, we can't wait until the
+// last frame of a relayed RPC to decide whether or not the RPC succeeded.
+// Instead, we mark the call successful or failed as we see the relevant frame,
+// but we wait to end any timers until the last frame of the response.
 type CallStats interface {
 	// The call succeeded (possibly after retrying).
-	Succeeded()
+	Succeeded() CallStats
 	// The RPC failed.
-	Failed(reason string)
-	// End stats collection for this RPC. Must be called exactly once.
+	Failed(reason string) CallStats
+	// End stats collection for this RPC. Will be called exactly once.
 	End()
 }
 

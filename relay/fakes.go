@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type noopStats struct{}
@@ -41,32 +42,33 @@ func (n noopStats) Begin(_ CallFrame) CallStats {
 
 type noopCallStats struct{}
 
-func (n noopCallStats) Succeeded()      {}
-func (n noopCallStats) Failed(_ string) {}
-func (n noopCallStats) End()            {}
+func (n noopCallStats) Succeeded() CallStats      { return noopCallStats{} }
+func (n noopCallStats) Failed(_ string) CallStats { return noopCallStats{} }
+func (n noopCallStats) End()                      {}
 
 // MockCallStats is a testing spy for the CallStats interface.
 type MockCallStats struct {
 	sync.Mutex
 
-	t          testing.TB
 	succeeded  int
 	failedMsgs []string
 	ended      int
 }
 
 // Succeeded marks the RPC as succeeded.
-func (m *MockCallStats) Succeeded() {
+func (m *MockCallStats) Succeeded() CallStats {
 	m.Lock()
 	m.succeeded++
 	m.Unlock()
+	return m
 }
 
 // Failed marks the RPC as failed for the provided reason.
-func (m *MockCallStats) Failed(reason string) {
+func (m *MockCallStats) Failed(reason string) CallStats {
 	m.Lock()
 	m.failedMsgs = append(m.failedMsgs, reason)
 	m.Unlock()
+	return m
 }
 
 // End halts timer and metric collection for the RPC.
@@ -76,74 +78,76 @@ func (m *MockCallStats) End() {
 	m.Unlock()
 }
 
-// AssertSucceeded asserts the number of successes recorded.
-func (m *MockCallStats) AssertSucceeded(n int) {
-	m.Lock()
-	assert.Equal(m.t, n, m.succeeded, "Unexpected number of successes.")
-	m.Unlock()
-}
-
-// AssertFailed asserts that the RPC failed for the specified reason(s).
-func (m *MockCallStats) AssertFailed(reasons ...string) {
-	m.Lock()
-	assert.Equal(m.t, reasons, m.failedMsgs, "Unexpected reasons for RPC failure.")
-	m.Unlock()
-}
-
-// AssertEnded asserts that metrics collection was stopped exactly once.
-func (m *MockCallStats) AssertEnded() {
-	m.Lock()
-	if assert.Equal(m.t, 1, m.ended, "Expected metric collection for RPC to have stopped.") {
-		assert.False(m.t, m.succeeded == 0 && len(m.failedMsgs) == 0, "Expected stopped RPC to be marked either succeeded or failed.")
-	}
-	m.Unlock()
-}
-
-// AssertCalled is a convenience wrapper for asserting success and failure.
-func (m *MockCallStats) AssertCalled(successes int, failReasons ...string) {
-	m.AssertSucceeded(successes)
-	m.AssertFailed(failReasons...)
-	m.AssertEnded()
-}
-
 // MockStats is a testing spy for the Stats interface.
 type MockStats struct {
-	t     testing.TB
 	mu    sync.Mutex
 	stats map[string][]*MockCallStats
 }
 
 // NewMockStats constructs a MockStats.
-func NewMockStats(t testing.TB) *MockStats {
+func NewMockStats() *MockStats {
 	return &MockStats{
-		t:     t,
 		stats: make(map[string][]*MockCallStats),
 	}
 }
 
 // Begin starts collecting metrics for an RPC.
 func (m *MockStats) Begin(f CallFrame) CallStats {
-	cs := &MockCallStats{t: m.t}
-	key := m.tripleToKey(f.Caller(), f.Service(), f.Method())
+	return m.Add(f.Caller(), f.Service(), f.Method())
+}
+
+// Add explicitly adds a new call along an edge of the call graph.
+func (m *MockStats) Add(caller, callee, procedure string) CallStats {
+	cs := &MockCallStats{}
+	key := m.tripleToKey(caller, callee, procedure)
 	m.mu.Lock()
 	m.stats[key] = append(m.stats[key], cs)
 	m.mu.Unlock()
 	return cs
 }
 
-// Get returns the collected call stats for all RPCs along this edge.
-func (m *MockStats) Get(caller, callee, procedure string) []*MockCallStats {
+// AssertEqual asserts that two MockStats describe the same call graph.
+func (m *MockStats) AssertEqual(t testing.TB, expected *MockStats) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.stats[m.tripleToKey(caller, callee, procedure)]
+
+	expected.mu.Lock()
+	defer expected.mu.Unlock()
+
+	if assert.Equal(t, len(expected.stats), len(m.stats), "Found calls along unexpected edges.") {
+		for edge := range expected.stats {
+			m.assertEdgeEqual(t, expected, edge)
+		}
+	}
 }
 
-// AssertEdges asserts the number of caller-callee::procedure edges we expect to
-// have calls along.
-func (m *MockStats) AssertEdges(n int) {
-	m.mu.Lock()
-	assert.Equal(m.t, n, len(m.stats), "Unexpected number of edges in call graph.")
-	m.mu.Unlock()
+func (m *MockStats) assertEdgeEqual(t testing.TB, expected *MockStats, edge string) {
+	expectedCalls := expected.stats[edge]
+	actualCalls := m.stats[edge]
+	if assert.Equal(t, len(expectedCalls), len(actualCalls), "Unexpected number of calls along %s edge.", edge) {
+		for i := range expectedCalls {
+			m.assertCallEqual(t, expectedCalls[i], actualCalls[i])
+		}
+	}
+}
+
+func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actual *MockCallStats) {
+	// FIXME: Shouldn't need these locks.
+	actual.Lock()
+	defer actual.Unlock()
+
+	// Revisit these assertions if we ever need to assert zero or many calls to
+	// End.
+	require.Equal(t, 1, expected.ended, "Expected call must assert exactly one call to End.")
+	require.False(
+		t,
+		expected.succeeded <= 0 && len(expected.failedMsgs) == 0,
+		"Expectation must indicate whether RPC should succeed or fail.",
+	)
+
+	assert.Equal(t, expected.succeeded, actual.succeeded, "Unexpected number of successes.")
+	assert.Equal(t, expected.failedMsgs, actual.failedMsgs, "Unexpected reasons for RPC failure.")
+	assert.Equal(t, expected.ended, actual.ended, "Unexpected number of calls to End.")
 }
 
 func (m *MockStats) tripleToKey(caller, callee, procedure string) string {

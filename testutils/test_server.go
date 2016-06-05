@@ -75,7 +75,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	ts := &TestServer{
 		TB:            t,
 		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
-		relayStats:    relay.NewMockStats(t),
+		relayStats:    relay.NewMockStats(),
 		introspectOpts: &tchannel.IntrospectionOptions{
 			IncludeExchanges:  true,
 			IncludeTombstones: true,
@@ -179,9 +179,13 @@ func (ts *TestServer) CloseAndVerify() {
 	}
 }
 
-// RelayStats returns the relay.Stats for this test server, if any.
-func (ts *TestServer) RelayStats() *relay.MockStats {
-	return ts.relayStats
+// AssertRelayStats checks that the relayed call graph matches expectations. If
+// there's no relay, AssertRelayStats is a no-op.
+func (ts *TestServer) AssertRelayStats(t testing.TB, expected *relay.MockStats) {
+	if !ts.HasRelay() {
+		return
+	}
+	ts.relayStats.AssertEqual(t, expected)
 }
 
 // NewClient returns a client that with log verification.
