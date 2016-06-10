@@ -210,11 +210,12 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 
 	// call res frames don't include the OK bit, so we can't wait until the last
 	// frame of a relayed RPC to determine if the call succeeded.
-	isOriginator := fType == responseFrame
-	if isOriginator {
-		if succeeded, failed, failMsg := determinesCallSuccess(f); succeeded {
+	if fType == responseFrame {
+		// If we've gotten a response frame, we're the originating relayer and
+		// should handle stats.
+		if succeeded, failMsg := determinesCallSuccess(f); succeeded {
 			item.stats.Succeeded()
-		} else if failed {
+		} else if len(failMsg) > 0 {
 			item.stats.Failed(failMsg)
 		}
 	}
@@ -421,25 +422,17 @@ func errUnknownGroup(group string) error {
 	return NewSystemError(ErrCodeDeclined, "no peers for %q", group)
 }
 
-func determinesCallSuccess(f *Frame) (succeeded bool, failed bool, failMsg string) {
-	ftype := f.messageType()
-
-	if ftype == messageTypeError {
-		// The call failed unexpectedly.
+func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
+	switch f.messageType() {
+	case messageTypeError:
 		msg := newLazyError(f).Code().MetricsKey()
-		return false, true, msg
+		return false, msg
+	case messageTypeCallRes:
+		if newLazyCallRes(f).OK() {
+			return true, ""
+		}
+		return false, "application-error"
+	default:
+		return false, ""
 	}
-
-	if ftype != messageTypeCallRes {
-		// The call hasn't succeeded or failed yet.
-		return false, false, ""
-	}
-
-	// The frame is a callRes, which could be either a success or an
-	// application error.
-	if ok := newLazyCallRes(f).OK(); !ok {
-		return false, true, "application-error"
-	}
-
-	return true, false, ""
 }

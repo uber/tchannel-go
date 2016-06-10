@@ -48,8 +48,6 @@ func (n noopCallStats) End()                      {}
 
 // MockCallStats is a testing spy for the CallStats interface.
 type MockCallStats struct {
-	sync.Mutex
-
 	succeeded  int
 	failedMsgs []string
 	ended      int
