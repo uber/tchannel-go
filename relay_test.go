@@ -10,6 +10,7 @@ import (
 	. "github.com/uber/tchannel-go"
 
 	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
@@ -25,18 +26,18 @@ func serviceNameOpts(s string) *testutils.ChannelOpts {
 	return testutils.NewOpts().SetServiceName(s)
 }
 
-func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel)) {
+func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel, ts *testutils.TestServer)) {
 	opts := serviceNameOpts("test").SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		client := ts.NewClient(serviceNameOpts("client"))
 		client.Peers().Add(ts.HostPort())
-		f(ts.Relay(), ts.Server(), client)
+		f(ts.Relay(), ts.Server(), client, ts)
 	})
 }
 
 func TestRelay(t *testing.T) {
-	withRelayedEcho(t, func(_, _, client *Channel) {
+	withRelayedEcho(t, func(_, _, client *Channel, ts *testutils.TestServer) {
 		tests := []struct {
 			header string
 			body   string
@@ -54,11 +55,17 @@ func TestRelay(t *testing.T) {
 			assert.Equal(t, tt.header, string(arg2), "Header was mangled during relay.")
 			assert.Equal(t, tt.body, string(arg3), "Body was mangled during relay.")
 		}
+
+		calls := relay.NewMockStats()
+		for _ = range tests {
+			calls.Add("client", "test", "echo").Succeeded().End()
+		}
+		ts.AssertRelayStats(t, calls)
 	})
 }
 
 func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
-	withRelayedEcho(t, func(_, server, client *Channel) {
+	withRelayedEcho(t, func(_, server, client *Channel, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -92,6 +99,10 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 		})
 
 		testutils.AssertEcho(t, s2, ts.HostPort(), "s1")
+
+		calls := relay.NewMockStats()
+		calls.Add("s2", "s1", "echo").Succeeded().End()
+		ts.AssertRelayStats(t, calls)
 	})
 }
 
@@ -142,6 +153,10 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 
 		assert.Equal(t, ErrCodeDeclined, se.Code(), "Expected Declined error")
 		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
+
+		calls := relay.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, "random-service", "echo").Failed("relay-declined").End()
+		ts.AssertRelayStats(t, calls)
 	})
 }
 
@@ -162,6 +177,10 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 		}
 
 		assert.Equal(t, ErrCodeBadRequest, se.Code(), "Expected BadRequest error")
+
+		calls := relay.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, "svc", "echo").Failed("bad-request").End()
+		ts.AssertRelayStats(t, calls)
 	})
 }
 

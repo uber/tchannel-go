@@ -68,6 +68,9 @@ type ChannelOptions struct {
 	// The host:port selection implementation to use for relaying.
 	RelayHosts relay.Hosts
 
+	// The stats implementation to use for relaying.
+	RelayStats relay.Stats
+
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
@@ -138,6 +141,7 @@ type Channel struct {
 // and can be copied directly from the channel to the connection.
 type channelConnectionCommon struct {
 	log             Logger
+	relayStats      relay.Stats
 	statsReporter   StatsReporter
 	traceReporter   TraceReporter
 	subChannels     *subChannelMap
@@ -182,11 +186,17 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		traceSampleRate = *opts.TraceSampleRate
 	}
 
+	relayStats := relay.NewNoopStats()
+	if opts.RelayStats != nil {
+		relayStats = opts.RelayStats
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log: logger.WithFields(
 				LogField{"service", serviceName},
 				LogField{"process", processName}),
+			relayStats:      relayStats,
 			statsReporter:   statsReporter,
 			subChannels:     &subChannelMap{},
 			timeNow:         timeNow,

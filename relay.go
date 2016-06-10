@@ -41,6 +41,7 @@ const _relayTombTTL = time.Second
 type relayItem struct {
 	*time.Timer
 
+	stats       relay.CallStats
 	remapID     uint32
 	destination *Relayer
 	tomb        bool
@@ -86,15 +87,16 @@ func (r *relayItems) Add(id uint32, item relayItem) {
 	r.Unlock()
 }
 
-// Delete removes a relayItem completely (without leaving a tombstone). It returns
-// a bool indicating whether we completed a relayed call.
-func (r *relayItems) Delete(id uint32) bool {
+// Delete removes a relayItem completely (without leaving a tombstone). It
+// returns the deleted item, along with a bool indicating whether we completed a
+// relayed call.
+func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 	r.Lock()
 	item, ok := r.items[id]
 	if !ok {
 		r.Unlock()
 		r.logger.WithFields(LogField{"id", id}).Warn("Attempted to delete non-existent relay item.")
-		return false
+		return item, false
 	}
 	delete(r.items, id)
 	if item.tomb {
@@ -103,28 +105,29 @@ func (r *relayItems) Delete(id uint32) bool {
 	r.Unlock()
 
 	item.Stop()
-	return !item.tomb
+	return item, !item.tomb
 }
 
 // Entomb sets the tomb bit on a relayItem and schedules a garbage collection. It
-// returns a bool indicating whether we completed a relayed call.
-func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) bool {
+// returns the entombed item, along with a bool indicating whether we completed
+// a relayed call.
+func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) (relayItem, bool) {
 	r.Lock()
 	if r.tombs > _maxRelayTombs {
 		r.Unlock()
 		r.logger.WithFields(LogField{"id", id}).Warn("Too many tombstones, deleting relay item immediately.")
-		return false
+		return r.Delete(id)
 	}
 	item, ok := r.items[id]
 	if !ok {
 		r.Unlock()
 		r.logger.WithFields(LogField{"id", id}).Warn("Can't find relay item to entomb.")
-		return false
+		return item, false
 	}
 	if item.tomb {
 		r.Unlock()
 		r.logger.WithFields(LogField{"id", id}).Warn("Re-entombing a tombstone.")
-		return false
+		return item, false
 	}
 	r.tombs++
 	item.tomb = true
@@ -134,7 +137,7 @@ func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) bool {
 	// TODO: We should be clearing these out in batches, rather than creating
 	// individual timers for each item.
 	time.AfterFunc(deleteAfter, func() { r.Delete(id) })
-	return true
+	return item, true
 }
 
 type frameType int
@@ -146,8 +149,8 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	metrics StatsReporter
-	hosts   relay.Hosts
+	stats relay.Stats
+	hosts relay.Hosts
 
 	// outbound is the remapping for requests that originated on this
 	// connection, and are outbound towards some other connection.
@@ -168,7 +171,7 @@ type Relayer struct {
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
-		metrics:  conn.statsReporter,
+		stats:    ch.relayStats,
 		hosts:    ch.RelayHosts(),
 		outbound: newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
 		inbound:  newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
@@ -193,18 +196,27 @@ func (r *Relayer) Relay(f *Frame) error {
 
 // Receive receives frames intended for this connection.
 func (r *Relayer) Receive(f *Frame, fType frameType) {
-	{
-		// TODO: Since this block is only checking for safety, we should not
-		// enable this in production builds.
+	// If we receive a response frame, we expect to find that ID in our outbound.
+	// If we receive a request frame, we expect to find that ID in our inbound.
+	items := r.receiverItems(fType)
 
-		// If we receive a response frame, we expect to find that ID in our outbound.
-		// If we receive a request frame, we expect to find that ID in our inbound.
-		items := r.receiverItems(fType)
+	item, ok := items.Get(f.Header.ID)
+	if !ok {
+		r.logger.WithFields(
+			LogField{"ID", f.Header.ID},
+		).Warn("Received a frame without a RelayItem.")
+		return
+	}
 
-		if _, ok := items.Get(f.Header.ID); !ok {
-			r.logger.WithFields(
-				LogField{"ID", f.Header.ID},
-			).Warn("Received a frame without a RelayItem.")
+	// call res frames don't include the OK bit, so we can't wait until the last
+	// frame of a relayed RPC to determine if the call succeeded.
+	if fType == responseFrame {
+		// If we've gotten a response frame, we're the originating relayer and
+		// should handle stats.
+		if succeeded, failMsg := determinesCallSuccess(f); succeeded {
+			item.stats.Succeeded()
+		} else if len(failMsg) > 0 {
+			item.stats.Failed(failMsg)
 		}
 	}
 
@@ -229,9 +241,10 @@ func (r *Relayer) canHandleNewCall() bool {
 	return canHandle
 }
 
-func (r *Relayer) getDestination(f lazyCallReq) (*Connection, bool, error) {
+func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection, bool, error) {
 	if _, ok := r.outbound.Get(f.Header.ID); ok {
 		r.logger.WithFields(LogField{"id", f.Header.ID}).Warn("received duplicate callReq")
+		cs.Failed("relay-" + ErrCodeProtocol.MetricsKey())
 		// TODO: this is a protocol error, kill the connection.
 		return nil, false, errors.New("callReq with already active ID")
 	}
@@ -241,6 +254,7 @@ func (r *Relayer) getDestination(f lazyCallReq) (*Connection, bool, error) {
 	if hostPort == "" {
 		// TODO: What is the span in the error frame actually used for, and do we need it?
 		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(f.Service()))
+		cs.Failed("relay-" + ErrCodeDeclined.MetricsKey())
 		return nil, false, nil
 	}
 	peer := r.peers.GetOrAdd(hostPort)
@@ -252,6 +266,7 @@ func (r *Relayer) getDestination(f lazyCallReq) (*Connection, bool, error) {
 			ErrField(err),
 			LogField{"hostPort", hostPort},
 		).Warn("Failed to connect to relay host.")
+		cs.Failed("relay-connection-failed")
 		// TODO: Same as above, do we need span here?
 		r.conn.SendSystemError(f.Header.ID, nil, NewWrappedSystemError(ErrCodeNetwork, err))
 		return nil, false, nil
@@ -261,15 +276,19 @@ func (r *Relayer) getDestination(f lazyCallReq) (*Connection, bool, error) {
 }
 
 func (r *Relayer) handleCallReq(f lazyCallReq) error {
+	callStats := r.stats.Begin(f)
 	if !r.canHandleNewCall() {
+		callStats.Failed("relay-channel-closed")
+		callStats.End()
 		return ErrChannelClosed
 	}
 
 	// Get a remote connection and check whether it can handle this call.
-	remoteConn, ok, err := r.getDestination(f)
+	remoteConn, ok, err := r.getDestination(f, callStats)
 	if err == nil && ok {
 		if !remoteConn.relay.canHandleNewCall() {
 			err = NewSystemError(ErrCodeNetwork, "selected closed connection, retry")
+			callStats.Failed("relay-connection-closed")
 		}
 	}
 	if err != nil || !ok {
@@ -277,14 +296,15 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		// state to handle this call. Since we already incremented pending on
 		// the current relay, we need to decrement it.
 		r.decrementPending()
+		callStats.End()
 		return err
 	}
 
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
-	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl)
-	r.metrics.IncCounter("relay", nil, 1)
-	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl)
+	// The remote side of the relay doesn't need to track stats.
+	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, nil)
+	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, callStats)
 
 	f.Header.ID = destinationID
 	relayToDest.destination.Receive(f.Frame, requestFrame)
@@ -307,8 +327,8 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return errors.New("non-callReq for inactive ID")
 	}
 	if item.tomb {
-		// Call timed out, ignore this frame.
-		// TODO: Add metrics for this case.
+		// Call timed out, ignore this frame. (We've already handled stats.)
+		// TODO: metrics for late-arriving frames.
 		return nil
 	}
 	originalID := f.Header.ID
@@ -322,8 +342,9 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
-func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration) relayItem {
+func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, cs relay.CallStats) relayItem {
 	item := relayItem{
+		stats:       cs,
 		remapID:     remapID,
 		destination: destination,
 	}
@@ -332,28 +353,34 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	if isOriginator {
 		items = r.outbound
 	}
-	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(items, id, isOriginator) })
+	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
 	items.Add(id, item)
 	return item
 }
 
-func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bool) {
-	if ok := items.Entomb(id, _relayTombTTL); !ok {
+func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint32) {
+	item, ok := items.Entomb(id, _relayTombTTL)
+	if !ok {
 		return
 	}
 	if isOriginator {
 		// TODO: As above. What's the span in the error frame for?
 		r.conn.SendSystemError(id, nil, ErrTimeout)
+		item.stats.Failed("timeout")
+		item.stats.End()
 	}
 
 	r.decrementPending()
 }
 
 func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
-	if ok := items.Delete(id); !ok {
+	item, ok := items.Delete(id)
+	if !ok {
 		return
 	}
-
+	if item.stats != nil {
+		item.stats.End()
+	}
 	r.decrementPending()
 }
 
@@ -393,4 +420,19 @@ func frameTypeFor(f *Frame) frameType {
 
 func errUnknownGroup(group string) error {
 	return NewSystemError(ErrCodeDeclined, "no peers for %q", group)
+}
+
+func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
+	switch f.messageType() {
+	case messageTypeError:
+		msg := newLazyError(f).Code().MetricsKey()
+		return false, msg
+	case messageTypeCallRes:
+		if newLazyCallRes(f).OK() {
+			return true, ""
+		}
+		return false, "application-error"
+	default:
+		return false, ""
+	}
 }
