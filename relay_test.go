@@ -60,7 +60,7 @@ func TestRelay(t *testing.T) {
 		for _ = range tests {
 			calls.Add("client", "test", "echo").Succeeded().End()
 		}
-		ts.AssertRelayStats(t, calls)
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -102,7 +102,7 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 
 		calls := relay.NewMockStats()
 		calls.Add("s2", "s1", "echo").Succeeded().End()
-		ts.AssertRelayStats(t, calls)
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -156,7 +156,7 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 
 		calls := relay.NewMockStats()
 		calls.Add(client.PeerInfo().ServiceName, "random-service", "echo").Failed("relay-declined").End()
-		ts.AssertRelayStats(t, calls)
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -180,7 +180,7 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 
 		calls := relay.NewMockStats()
 		calls.Add(client.PeerInfo().ServiceName, "svc", "echo").Failed("bad-request").End()
-		ts.AssertRelayStats(t, calls)
+		ts.AssertRelayStats(calls)
 	})
 }
 
