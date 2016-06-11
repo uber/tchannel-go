@@ -48,6 +48,9 @@ func (n noopCallStats) End()                      {}
 
 // MockCallStats is a testing spy for the CallStats interface.
 type MockCallStats struct {
+	// Store ints and slices instead of bools and strings so that we can assert
+	// the actual sequence of calls (in case we expect to call both Succeeded
+	// and Failed). The real implementation will have the first writer win.
 	succeeded  int
 	failedMsgs []string
 	ended      int
@@ -143,6 +146,10 @@ func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actua
 	assert.Equal(t, expected.succeeded, actual.succeeded, "Unexpected number of successes.")
 	assert.Equal(t, expected.failedMsgs, actual.failedMsgs, "Unexpected reasons for RPC failure.")
 	assert.Equal(t, expected.ended, actual.ended, "Unexpected number of calls to End.")
+	if t.Failed() {
+		// The default testify output is often insufficient.
+		t.Logf("\nExpected relayed stats were:\n\t%+v\nActual relayed stats were:\n\t%+v\n", expected, actual)
+	}
 }
 
 func (m *MockStats) tripleToKey(caller, callee, procedure string) string {
