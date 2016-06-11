@@ -299,9 +299,14 @@ func TestBadRequest(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().ServiceName(), "Noone", []byte("Headers"), []byte("Body"))
+		serviceName := ts.Server().ServiceName()
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), serviceName, "Noone", []byte("Headers"), []byte("Body"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeBadRequest, GetSystemErrorCode(err))
+
+		calls := relay.NewMockStats()
+		calls.Add(serviceName, serviceName, "Noone").Failed("bad-request").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -313,6 +318,8 @@ func TestNoTimeout(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), "svc", "Echo", []byte("Headers"), []byte("Body"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrTimeoutRequired, err)
+
+		ts.AssertRelayStats(relay.NewMockStats())
 	})
 }
 
@@ -331,6 +338,10 @@ func TestServerBusy(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "busy", []byte("Arg2"), []byte("Arg3"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeBusy, GetSystemErrorCode(err), "err: %v", err)
+
+		calls := relay.NewMockStats()
+		calls.Add(testServiceName, ts.Server().ServiceName(), "busy").Failed("busy").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -352,6 +363,10 @@ func TestUnexpectedHandlerError(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "nope", []byte("Arg2"), []byte("Arg3"))
 		require.NotNil(t, err)
 		assert.Equal(t, ErrCodeUnexpected, GetSystemErrorCode(err), "err: %v", err)
+
+		calls := relay.NewMockStats()
+		calls.Add(testServiceName, ts.Server().ServiceName(), "nope").Failed("unexpected-error").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -377,7 +392,8 @@ func TestTimeout(t *testing.T) {
 		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "block", []byte("Arg2"), []byte("Arg3"))
+		serviceName := ts.Server().ServiceName()
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), serviceName, "block", []byte("Arg2"), []byte("Arg3"))
 		assert.Equal(t, ErrTimeout, err)
 
 		// Verify the server-side receives an error from the context.
@@ -387,6 +403,10 @@ func TestTimeout(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Server did not receive call, may need higher timeout")
 		}
+
+		calls := relay.NewMockStats()
+		calls.Add(serviceName, serviceName, "block").Failed("timeout").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -410,6 +430,10 @@ func TestLargeTimeout(t *testing.T) {
 
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), testServiceName, "echo", testArg2, testArg3)
 		assert.NoError(t, err, "Call failed")
+
+		calls := relay.NewMockStats()
+		calls.Add(testServiceName, testServiceName, "echo").Succeeded().End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -434,6 +458,10 @@ func TestFragmentation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, arg2, respArg2)
 		assert.Equal(t, arg3, respArg3)
+
+		calls := relay.NewMockStats()
+		calls.Add(testServiceName, testServiceName, "echo").Succeeded().End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -461,7 +489,8 @@ func TestFragmentationSlowReader(t *testing.T) {
 		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
 
-		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "echo", arg2, arg3)
+		serviceName := ts.Server().PeerInfo().ServiceName
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), serviceName, "echo", arg2, arg3)
 		assert.Error(t, err, "Call should timeout due to slow reader")
 
 		close(startReading)
@@ -470,6 +499,10 @@ func TestFragmentationSlowReader(t *testing.T) {
 		case <-time.After(testutils.Timeout(70 * time.Millisecond)):
 			t.Errorf("Handler not called, context timeout may be too low")
 		}
+
+		calls := relay.NewMockStats()
+		calls.Add(serviceName, serviceName, "echo").Failed("timeout").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -500,7 +533,9 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 
 		ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
 		defer cancel()
-		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "call", nil, nil)
+
+		serviceName := ts.Server().PeerInfo().ServiceName
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), serviceName, "call", nil, nil)
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 
 		// Wait for the write to complete, make sure there's no errors.
@@ -509,6 +544,10 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
+
+		calls := relay.NewMockStats()
+		calls.Add(serviceName, serviceName, "call").Failed("timeout").Succeeded().End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -528,9 +567,10 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		}
 		ts.Register(HandlerFunc(handler), "call")
 
+		serviceName := ts.Server().PeerInfo().ServiceName
 		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
 		defer cancel()
-		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "call", nil, testutils.RandBytes(100000))
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), serviceName, "call", nil, testutils.RandBytes(100000))
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 		close(timedOut)
 
@@ -539,6 +579,10 @@ func TestWriteErrorAfterTimeout(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Handler not called, timeout may be too low")
 		}
+
+		calls := relay.NewMockStats()
+		calls.Add(serviceName, serviceName, "call").Failed("timeout").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -590,6 +634,9 @@ func TestReadTimeout(t *testing.T) {
 			"error", "failed to send error frame, connection state connectionClosed")
 
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		sn := ts.ServiceName()
+		calls := relay.NewMockStats()
+
 		for i := 0; i < 10; i++ {
 			ctx, cancel := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -597,9 +644,13 @@ func TestReadTimeout(t *testing.T) {
 				return nil, ErrTimeout
 			}
 			ts.RegisterFunc("call", handler)
-			_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.Server().PeerInfo().ServiceName, "call", nil, nil)
+
+			_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "call", nil, nil)
 			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
+			calls.Add(sn, sn, "call").Failed("timeout").End()
 		}
+
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -621,6 +672,8 @@ func TestWriteTimeout(t *testing.T) {
 
 		_, err = io.Copy(writer, testreader.Looper([]byte{1}))
 		assert.Equal(t, ErrTimeout, err, "Write should fail with timeout")
+
+		ts.AssertRelayStats(relay.NewMockStats())
 	})
 }
 
@@ -635,6 +688,9 @@ func TestGracefulClose(t *testing.T) {
 
 		assert.NoError(t, ts.Server().Ping(ctx, hp2), "Ping from ch1 -> ch2 failed")
 		assert.NoError(t, ch2.Ping(ctx, ts.HostPort()), "Ping from ch2 -> ch1 failed")
+
+		// No stats for pings.
+		ts.AssertRelayStats(relay.NewMockStats())
 	})
 }
 
