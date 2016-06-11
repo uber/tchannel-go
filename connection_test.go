@@ -31,12 +31,13 @@ import (
 	"time"
 
 	. "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/testreader"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/raw"
-	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/testreader"
 	"golang.org/x/net/context"
 )
 
@@ -548,7 +549,7 @@ func TestWriteAfterConnectionError(t *testing.T) {
 	// Closing network connections can lead to warnings in many places.
 	// TODO: Relay is disabled due to https://github.com/uber/tchannel-go/issues/390
 	// Enabling relay causes the test to be flaky.
-	opts := testutils.NewOpts().DisableLogVerification()
+	opts := testutils.NewOpts().DisableLogVerification().NoRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		server := ts.Server()
