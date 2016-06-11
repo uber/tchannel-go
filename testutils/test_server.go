@@ -181,11 +181,11 @@ func (ts *TestServer) CloseAndVerify() {
 
 // AssertRelayStats checks that the relayed call graph matches expectations. If
 // there's no relay, AssertRelayStats is a no-op.
-func (ts *TestServer) AssertRelayStats(t testing.TB, expected *relay.MockStats) {
+func (ts *TestServer) AssertRelayStats(expected *relay.MockStats) {
 	if !ts.HasRelay() {
 		return
 	}
-	ts.relayStats.AssertEqual(t, expected)
+	ts.relayStats.AssertEqual(ts, expected)
 }
 
 // NewClient returns a client that with log verification.
