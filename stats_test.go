@@ -99,7 +99,7 @@ func TestStatsCalls(t *testing.T) {
 			ctx, cancel := NewContext(time.Second * 5)
 			defer cancel()
 
-			_, _, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, tt.method, nil, nil)
+			_, _, resp, err := raw.Call(ctx, ch, hostPort, testutils.DefaultServerName, tt.method, nil, nil)
 			require.NoError(t, err, "Call(%v) should fail", tt.method)
 			assert.Equal(t, tt.wantErr, resp.ApplicationError(), "Call(%v) check application error")
 
