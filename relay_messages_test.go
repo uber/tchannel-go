@@ -35,6 +35,7 @@ const (
 	reqHasHeaders testCallReq = (1 << iota)
 	reqHasChecksum
 	reqTotalCombinations
+	reqHasAll testCallReq = reqTotalCombinations - 1
 )
 
 func (cr testCallReq) req() lazyCallReq {

@@ -21,12 +21,13 @@
 package tchannel
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"time"
-
-	"github.com/uber/tchannel-go/typed"
 )
+
+var _callerNameKeyBytes = []byte(CallerName)
 
 const (
 	// Common to many frame types.
@@ -76,32 +77,58 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
+// TODO: Use []byte instead of string for caller/method to avoid allocations.
 type lazyCallReq struct {
 	*Frame
+
+	caller string
+	method string
 }
+
+// TODO: Consider pooling lazyCallReq and using pointers to the struct.
 
 func newLazyCallReq(f *Frame) lazyCallReq {
 	if msgType := f.Header.messageType; msgType != messageTypeCallReq {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
-	return lazyCallReq{f}
+
+	cr := lazyCallReq{Frame: f}
+
+	serviceLen := f.Payload[_serviceLenIndex]
+	// nh:1 (hk~1 hv~1){nh}
+	headerStart := _serviceLenIndex + 1 /* length byte */ + serviceLen
+	numHeaders := int(f.Payload[headerStart])
+	cur := int(headerStart) + 1
+	for i := 0; i < numHeaders; i++ {
+		keyLen := int(f.Payload[cur])
+		cur++
+		key := f.Payload[cur : cur+keyLen]
+		cur += keyLen
+
+		valLen := int(f.Payload[cur])
+		cur++
+		val := f.Payload[cur : cur+valLen]
+		cur += valLen
+
+		if bytes.Equal(key, _callerNameKeyBytes) {
+			cr.caller = string(val)
+		}
+	}
+
+	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
+	checkSumType := ChecksumType(f.Payload[cur])
+	cur += 1 /* checksum */ + checkSumType.ChecksumSize()
+
+	// arg1~2
+	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
+	cur += 2
+	cr.method = string(f.Payload[cur : cur+arg1Len])
+	return cr
 }
 
 // Caller returns the name of the originator of this callReq.
 func (f lazyCallReq) Caller() string {
-	serviceLen := f.Payload[_serviceLenIndex]
-	// nh:1 (hk~1 hv~1){nh}
-	headerStart := _serviceLenIndex + 1 /* length byte */ + serviceLen
-	buf := typed.NewReadBuffer(f.Payload[headerStart:])
-	nh := buf.ReadSingleByte()
-	for i := 0; i < int(nh); i++ {
-		k := TransportHeaderName(buf.ReadLen8String())
-		v := buf.ReadLen8String()
-		if k == CallerName {
-			return v
-		}
-	}
-	return ""
+	return f.caller
 }
 
 // Service returns the name of the destination service for this callReq.
@@ -113,26 +140,7 @@ func (f lazyCallReq) Service() string {
 // Method returns the name of the method being called. It panics if called for
 // a non-callReq frame.
 func (f lazyCallReq) Method() string {
-	serviceLen := f.Payload[_serviceLenIndex]
-
-	// nh:1 (hk~1 hv~1){nh}
-	headerStart := _serviceLenIndex + 1 /* length byte */ + serviceLen
-	numHeaders := int(f.Payload[headerStart])
-	cur := int(headerStart) + 1
-	for i := 0; i < numHeaders*2; i++ {
-		sLen := f.Payload[cur]
-		cur += 1 + int(sLen)
-	}
-
-	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
-	checkSumType := ChecksumType(f.Payload[cur])
-	cur += 1 /* checksum */ + checkSumType.ChecksumSize()
-
-	// arg1~2
-	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
-	cur += 2
-	arg1 := f.Payload[cur : cur+arg1Len]
-	return string(arg1)
+	return f.method
 }
 
 // TTL returns the time to live for this callReq.
