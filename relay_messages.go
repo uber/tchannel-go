@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var callerNameKeyBytes = []byte(CallerName)
+var _callerNameKeyBytes = []byte(CallerName)
 
 const (
 	// Common to many frame types.
@@ -77,12 +77,12 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
-// TODO: Use []byte instead of string to avoid allocations.
+// TODO: Use []byte instead of string for caller/method to avoid allocations.
 type lazyCallReq struct {
 	*Frame
 
-	caller []byte
-	method []byte
+	caller string
+	method string
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -110,8 +110,8 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		val := f.Payload[cur : cur+valLen]
 		cur += valLen
 
-		if bytes.Equal(key, callerNameKeyBytes) {
-			cr.caller = val
+		if bytes.Equal(key, _callerNameKeyBytes) {
+			cr.caller = string(val)
 		}
 	}
 
@@ -122,13 +122,13 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	// arg1~2
 	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
 	cur += 2
-	cr.method = f.Payload[cur : cur+arg1Len]
+	cr.method = string(f.Payload[cur : cur+arg1Len])
 	return cr
 }
 
 // Caller returns the name of the originator of this callReq.
 func (f lazyCallReq) Caller() string {
-	return string(f.caller)
+	return f.caller
 }
 
 // Service returns the name of the destination service for this callReq.
@@ -140,7 +140,7 @@ func (f lazyCallReq) Service() string {
 // Method returns the name of the method being called. It panics if called for
 // a non-callReq frame.
 func (f lazyCallReq) Method() string {
-	return string(f.method)
+	return f.method
 }
 
 // TTL returns the time to live for this callReq.
