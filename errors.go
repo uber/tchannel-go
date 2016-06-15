@@ -177,6 +177,10 @@ func GetContextError(err error) error {
 // GetSystemErrorCode returns the code to report for the given error.  If the error is a
 // SystemError, we can get the code directly.  Otherwise treat it as an unexpected error
 func GetSystemErrorCode(err error) SystemErrCode {
+	if err == nil {
+		return ErrCodeInvalid
+	}
+
 	if se, ok := err.(SystemError); ok {
 		return se.Code()
 	}
