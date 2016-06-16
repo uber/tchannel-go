@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# 1.0.6
+
+* Fix trace span encoding fields in the wrong order
+
 # 1.0.5
 
 * Use `context.Context` storage for headers so `thrift.Context` and
