@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"io"
 	"regexp"
 	"testing"
 
@@ -49,4 +50,19 @@ func TestErrorMetricKeys(t *testing.T) {
 
 	// Unexpected codes may have poorly-formed keys.
 	assert.Equal(t, "SystemErrCode(13)", SystemErrCode(13).MetricsKey(), "Expected invalid error codes to use a fallback metrics key format.")
+}
+
+func TestInvalidError(t *testing.T) {
+	code := GetSystemErrorCode(nil)
+	assert.Equal(t, ErrCodeInvalid, code, "nil error should produce ErrCodeInvalid")
+}
+
+func TestUnexpectedError(t *testing.T) {
+	code := GetSystemErrorCode(io.EOF)
+	assert.Equal(t, ErrCodeUnexpected, code, "non-tchannel SystemError should produce ErrCodeUnexpected")
+}
+
+func TestSystemError(t *testing.T) {
+	code := GetSystemErrorCode(ErrTimeout)
+	assert.Equal(t, ErrCodeTimeout, code, "tchannel timeout error produces ErrCodeTimeout")
 }
