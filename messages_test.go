@@ -26,9 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uber/tchannel-go/typed"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/typed"
 )
 
 func TestInitReq(t *testing.T) {

@@ -25,8 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go/typed"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testCallReq int

@@ -27,9 +27,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
 )
 

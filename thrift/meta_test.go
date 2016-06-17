@@ -26,11 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift/gen-go/meta"
+
+	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDefaultHealth(t *testing.T) {

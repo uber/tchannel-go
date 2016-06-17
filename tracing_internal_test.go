@@ -23,9 +23,10 @@ package tchannel
 import (
 	"testing"
 
+	"github.com/uber/tchannel-go/typed"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/typed"
 )
 
 func TestTracingSpanEncoding(t *testing.T) {
