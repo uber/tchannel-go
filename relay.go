@@ -45,6 +45,7 @@ type relayItem struct {
 	remapID     uint32
 	destination *Relayer
 	tomb        bool
+	span        Span
 }
 
 type relayItems struct {
@@ -253,7 +254,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	selectedPeer := r.hosts.Get(f)
 	if selectedPeer.HostPort == "" {
 		// TODO: What is the span in the error frame actually used for, and do we need it?
-		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(f.Service()))
+		r.conn.SendSystemError(f.Header.ID, f.Span(), errUnknownGroup(f.Service()))
 		cs.Failed("relay-" + ErrCodeDeclined.MetricsKey())
 		return nil, false, nil
 	}
@@ -269,8 +270,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 			LogField{"selectedPeer", selectedPeer},
 		).Warn("Failed to connect to relay host.")
 		cs.Failed("relay-connection-failed")
-		// TODO: Same as above, do we need span here?
-		r.conn.SendSystemError(f.Header.ID, nil, NewWrappedSystemError(ErrCodeNetwork, err))
+		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeNetwork, err))
 		return nil, false, nil
 	}
 
@@ -304,9 +304,10 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
+	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.
-	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, nil)
-	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, callStats)
+	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
+	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, callStats)
 
 	f.Header.ID = destinationID
 	relayToDest.destination.Receive(f.Frame, requestFrame)
@@ -344,11 +345,12 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
-func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, cs relay.CallStats) relayItem {
+func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, cs relay.CallStats) relayItem {
 	item := relayItem{
 		stats:       cs,
 		remapID:     remapID,
 		destination: destination,
+		span:        span,
 	}
 
 	items := r.inbound
@@ -366,8 +368,7 @@ func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint
 		return
 	}
 	if isOriginator {
-		// TODO: As above. What's the span in the error frame for?
-		r.conn.SendSystemError(id, nil, ErrTimeout)
+		r.conn.SendSystemError(id, item.span, ErrTimeout)
 		item.stats.Failed("timeout")
 		item.stats.End()
 	}
