@@ -455,6 +455,10 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName, methodName string, ca
 	}
 	callOptions.RequestState.AddSelectedPeer(p.HostPort())
 
+	if err := validateCall(ctx, serviceName, methodName, callOptions); err != nil {
+		return nil, err
+	}
+
 	conn, err := p.GetConnection(ctx)
 	if err != nil {
 		return nil, err

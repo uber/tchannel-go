@@ -47,8 +47,9 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	deadline, ok := ctx.Deadline()
-	// No deadline was set, we should not support no deadlines.
 	if !ok {
+		// This case is handled by validateCall, so we should
+		// never get here.
 		return nil, ErrTimeoutRequired
 	}
 	timeToLive := deadline.Sub(now)
@@ -214,10 +215,6 @@ func (call *OutboundCall) createStatsTags(connectionTags map[string]string, call
 
 // writeMethod writes the method (arg1) to the call
 func (call *OutboundCall) writeMethod(method []byte) error {
-	if len(method) > maxMethodSize {
-		return call.failed(ErrMethodTooLarge)
-	}
-
 	call.statsReporter.IncCounter("outbound.calls.send", call.commonStatsTags, 1)
 	return NewArgWriter(call.arg1Writer()).Write(method)
 }
@@ -368,4 +365,20 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 	}
 
 	response.mex.shutdown()
+}
+
+func validateCall(ctx context.Context, serviceName, methodName string, callOpts *CallOptions) error {
+	if serviceName == "" {
+		return ErrNoServiceName
+	}
+
+	if len(methodName) > maxMethodSize {
+		return ErrMethodTooLarge
+	}
+
+	if _, ok := ctx.Deadline(); !ok {
+		return ErrTimeoutRequired
+	}
+
+	return nil
 }

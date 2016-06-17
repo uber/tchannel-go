@@ -314,8 +314,19 @@ func TestNoTimeout(t *testing.T) {
 
 		ctx := context.Background()
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), "svc", "Echo", []byte("Headers"), []byte("Body"))
-		require.NotNil(t, err)
 		assert.Equal(t, ErrTimeoutRequired, err)
+
+		ts.AssertRelayStats(relay.NewMockStats())
+	})
+}
+
+func TestNoServiceNaming(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), "", "Echo", []byte("Headers"), []byte("Body"))
+		assert.Equal(t, ErrNoServiceName, err)
 
 		ts.AssertRelayStats(relay.NewMockStats())
 	})
