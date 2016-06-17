@@ -603,18 +603,13 @@ func (c *Connection) NextMessageID() uint32 {
 }
 
 // SendSystemError sends an error frame for the given system error.
-func (c *Connection) SendSystemError(id uint32, span *Span, err error) error {
+func (c *Connection) SendSystemError(id uint32, span Span, err error) error {
 	frame := c.framePool.Get()
-
-	errorSpan := Span{}
-	if span != nil {
-		errorSpan = *span
-	}
 
 	if err := frame.write(&errorMessage{
 		id:      id,
 		errCode: GetSystemErrorCode(err),
-		tracing: errorSpan,
+		tracing: span,
 		message: GetSystemErrorMessage(err),
 	}); err != nil {
 
@@ -692,7 +687,7 @@ func (c *Connection) connectionError(site string, err error) error {
 func (c *Connection) protocolError(id uint32, err error) error {
 	c.log.WithFields(ErrField(err)).Warn("Protocol error.")
 	sysErr := NewWrappedSystemError(ErrCodeProtocol, err)
-	c.SendSystemError(id, nil, sysErr)
+	c.SendSystemError(id, Span{}, sysErr)
 	// Don't close the connection until the error has been sent.
 	c.Close()
 

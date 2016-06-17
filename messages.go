@@ -322,3 +322,10 @@ type pingRes struct {
 
 func (c *pingRes) ID() uint32               { return c.id }
 func (c *pingRes) messageType() messageType { return messageTypePingRes }
+
+func callReqSpan(f *Frame) Span {
+	rdr := typed.NewReadBuffer(f.Payload[_spanIndex : _spanIndex+_spanLength])
+	var s Span
+	s.read(rdr)
+	return s
+}
