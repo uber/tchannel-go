@@ -24,9 +24,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uber/tchannel-go"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go"
 )
 
 // combinations will call f with every combination of selecting elements

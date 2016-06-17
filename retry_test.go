@@ -27,9 +27,10 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
+	"github.com/uber/tchannel-go/testutils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/testutils"
 	"golang.org/x/net/context"
 )
 

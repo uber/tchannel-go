@@ -32,6 +32,7 @@ import (
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
+
 	"golang.org/x/net/context"
 )
 

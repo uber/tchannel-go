@@ -26,14 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
-
 	. "github.com/uber/tchannel-go"
+
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/raw"
-	"github.com/uber/tchannel-go/testutils"
+	"golang.org/x/net/context"
 )
 
 func tagsForOutboundCall(serverCh *Channel, clientCh *Channel, method string) map[string]string {

@@ -23,8 +23,9 @@ package testutils
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+
+	"github.com/stretchr/testify/require"
 )
 
 func updateOptsLogger(opts *ChannelOpts) {

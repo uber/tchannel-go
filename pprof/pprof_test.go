@@ -26,11 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	thttp "github.com/uber/tchannel-go/http"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPProfEndpoint(t *testing.T) {

@@ -26,8 +26,9 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/require"
 )
 
 func benchmarkGetConnection(b *testing.B, numIncoming, numOutgoing int) {

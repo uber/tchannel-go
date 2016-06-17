@@ -25,8 +25,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/apache/thrift/lib/go/thrift"
 	tchannel "github.com/uber/tchannel-go"
+
+	"github.com/apache/thrift/lib/go/thrift"
 	"golang.org/x/net/context"
 )
 

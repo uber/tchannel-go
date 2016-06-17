@@ -26,8 +26,9 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPeersIncomingConnection(t *testing.T) {

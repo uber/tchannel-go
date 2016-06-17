@@ -24,11 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
-
-	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 )
 
 // CallEcho calls the "echo" endpoint from the given src to target.

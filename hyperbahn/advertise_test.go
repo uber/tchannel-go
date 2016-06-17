@@ -26,12 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInitialAdvertiseFailedRetryBackoff(t *testing.T) {

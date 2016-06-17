@@ -25,10 +25,11 @@ import (
 
 	. "github.com/uber/tchannel-go/hyperbahn"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/mockhyperbahn"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func withSetup(t *testing.T, f func(mh *mockhyperbahn.Mock, client *Client)) {

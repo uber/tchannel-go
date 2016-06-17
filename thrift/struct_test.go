@@ -26,13 +26,14 @@ import (
 	"sync"
 	"testing"
 
+	. "github.com/uber/tchannel-go/thrift"
+
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/testutils/testwriter"
-	. "github.com/uber/tchannel-go/thrift"
+	"github.com/uber/tchannel-go/thrift/gen-go/test"
 
 	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
-	"github.com/uber/tchannel-go/thrift/gen-go/test"
 )
 
 var structTest = struct {
