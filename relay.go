@@ -250,21 +250,23 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	}
 
 	// Get the destination
-	hostPort := r.hosts.Get(f)
-	if hostPort == "" {
+	selectedPeer := r.hosts.Get(f)
+	if selectedPeer.HostPort == "" {
 		// TODO: What is the span in the error frame actually used for, and do we need it?
 		r.conn.SendSystemError(f.Header.ID, nil, errUnknownGroup(f.Service()))
 		cs.Failed("relay-" + ErrCodeDeclined.MetricsKey())
 		return nil, false, nil
 	}
-	peer := r.peers.GetOrAdd(hostPort)
+
+	cs.SetPeer(selectedPeer)
+	peer := r.peers.GetOrAdd(selectedPeer.HostPort)
 
 	// TODO: Should connections use the call timeout? Or a separate timeout?
 	remoteConn, err := peer.getConnectionTimeout(f.TTL())
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),
-			LogField{"hostPort", hostPort},
+			LogField{"selectedPeer", selectedPeer},
 		).Warn("Failed to connect to relay host.")
 		cs.Failed("relay-connection-failed")
 		// TODO: Same as above, do we need span here?

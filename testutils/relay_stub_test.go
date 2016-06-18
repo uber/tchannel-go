@@ -60,13 +60,20 @@ func TestSimpleRelayHosts(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			got := rh.Get(tt.call)
 			if tt.wantOneOf == nil {
-				assert.Equal(t, "", got, "Expected %v to find no hosts", tt.call)
+				assert.Equal(t, "", got.HostPort, "Expected %v to find no hosts", tt.call)
 				continue
 			}
 
 			wantOneOf := StrMap(tt.wantOneOf...)
-			_, found := wantOneOf[got]
+			_, found := wantOneOf[got.HostPort]
 			assert.True(t, found, "Got unexpected hostPort %q, want one of: %v", got, tt.wantOneOf)
 		}
 	}
+}
+
+func TestSimpleRelayHostsPeer(t *testing.T) {
+	hosts := NewSimpleRelayHosts(nil)
+	hosts.AddAssignment("svc", "1.1.1.1:1", "a1")
+	peer := hosts.Get(FakeCallFrame{ServiceF: "svc"})
+	assert.Equal(t, relay.Peer{HostPort: "1.1.1.1:1", Assignment: "a1"}, peer, "Unexpected peer")
 }

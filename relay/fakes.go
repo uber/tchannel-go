@@ -42,8 +42,9 @@ func (n noopStats) Begin(_ CallFrame) CallStats {
 
 type noopCallStats struct{}
 
-func (n noopCallStats) Succeeded() CallStats      { return noopCallStats{} }
-func (n noopCallStats) Failed(_ string) CallStats { return noopCallStats{} }
+func (n noopCallStats) Succeeded() CallStats      { return n }
+func (n noopCallStats) Failed(_ string) CallStats { return n }
+func (n noopCallStats) SetPeer(_ Peer) CallStats  { return n }
 func (n noopCallStats) End()                      {}
 
 // MockCallStats is a testing spy for the CallStats interface.
@@ -54,7 +55,12 @@ type MockCallStats struct {
 	succeeded  int
 	failedMsgs []string
 	ended      int
+	peer       *Peer
 	wg         *sync.WaitGroup
+
+	// By default, we don't verify peers, as we get unique host:ports and
+	// verifying constantly lead to a lot of noise in tests.
+	verifyPeer bool
 }
 
 // Succeeded marks the RPC as succeeded.
@@ -66,6 +72,20 @@ func (m *MockCallStats) Succeeded() CallStats {
 // Failed marks the RPC as failed for the provided reason.
 func (m *MockCallStats) Failed(reason string) CallStats {
 	m.failedMsgs = append(m.failedMsgs, reason)
+	return m
+}
+
+// SetPeer sets the peer for the current call.
+func (m *MockCallStats) SetPeer(peer Peer) CallStats {
+	m.verifyPeer = true
+	m.peer = &peer
+	return m
+}
+
+// ExpectNoPeer ensures that no call to SetPeer is made.
+func (m *MockCallStats) ExpectNoPeer() CallStats {
+	m.verifyPeer = true
+	m.peer = nil
 	return m
 }
 
@@ -95,7 +115,7 @@ func (m *MockStats) Begin(f CallFrame) CallStats {
 }
 
 // Add explicitly adds a new call along an edge of the call graph.
-func (m *MockStats) Add(caller, callee, procedure string) CallStats {
+func (m *MockStats) Add(caller, callee, procedure string) *MockCallStats {
 	m.wg.Add(1)
 	cs := &MockCallStats{wg: &m.wg}
 	key := m.tripleToKey(caller, callee, procedure)
@@ -146,6 +166,11 @@ func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actua
 	assert.Equal(t, expected.succeeded, actual.succeeded, "Unexpected number of successes.")
 	assert.Equal(t, expected.failedMsgs, actual.failedMsgs, "Unexpected reasons for RPC failure.")
 	assert.Equal(t, expected.ended, actual.ended, "Unexpected number of calls to End.")
+
+	if expected.verifyPeer {
+		assert.Equal(t, expected.peer, actual.peer, "Unexpected peer used for the call")
+	}
+
 	if t.Failed() {
 		// The default testify output is often insufficient.
 		t.Logf("\nExpected relayed stats were:\n\t%+v\nActual relayed stats were:\n\t%+v\n", expected, actual)

@@ -34,8 +34,8 @@ type CallFrame interface {
 // Hosts allows external wrappers to inject peer selection logic for
 // relaying.
 type Hosts interface {
-	// Get returns the host:port of the best peer for the given call.
-	Get(CallFrame) string
+	// Get returns the peer to forward the given call to.
+	Get(CallFrame) Peer
 }
 
 // CallStats is a reporter for per-request stats.
@@ -45,6 +45,10 @@ type Hosts interface {
 // Instead, we mark the call successful or failed as we see the relevant frame,
 // but we wait to end any timers until the last frame of the response.
 type CallStats interface {
+	// SetPeer is called once a peer has been selected for this call.
+	// Note: This may not be called if a call fails before peer selection.
+	SetPeer(Peer) CallStats
+
 	// The call succeeded (possibly after retrying).
 	Succeeded() CallStats
 	// The RPC failed.
@@ -56,4 +60,14 @@ type CallStats interface {
 // Stats is a CallStats factory.
 type Stats interface {
 	Begin(CallFrame) CallStats
+}
+
+// Peer represents the destination selected for a call.
+type Peer struct {
+	// HostPort of the peer that was selected.
+	HostPort string
+
+	// Assignment allows the peer selection to specify a group that this
+	// Peer belongs to, which may be useful when reporting stats.
+	Assignment string
 }
