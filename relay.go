@@ -418,7 +418,7 @@ func frameTypeFor(f *Frame) frameType {
 	}
 }
 
-func errUnknownGroup(group string) error {
+func errUnknownGroup(group []byte) error {
 	return NewSystemError(ErrCodeDeclined, "no peers for %q", group)
 }
 

@@ -30,7 +30,7 @@ func BenchmarkCallReqFrame(b *testing.B) {
 	cr := reqHasAll.req()
 	f := cr.Frame
 
-	var service, caller, method string
+	var service, caller, method []byte
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

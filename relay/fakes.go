@@ -91,7 +91,7 @@ func NewMockStats() *MockStats {
 
 // Begin starts collecting metrics for an RPC.
 func (m *MockStats) Begin(f CallFrame) CallStats {
-	return m.Add(f.Caller(), f.Service(), f.Method())
+	return m.Add(string(f.Caller()), string(f.Service()), string(f.Method()))
 }
 
 // Add explicitly adds a new call along an edge of the call graph.

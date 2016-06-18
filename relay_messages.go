@@ -81,8 +81,8 @@ func (cr lazyCallRes) OK() bool {
 type lazyCallReq struct {
 	*Frame
 
-	caller string
-	method string
+	caller []byte
+	method []byte
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -111,7 +111,7 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		cur += valLen
 
 		if bytes.Equal(key, _callerNameKeyBytes) {
-			cr.caller = string(val)
+			cr.caller = val
 		}
 	}
 
@@ -122,24 +122,24 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	// arg1~2
 	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
 	cur += 2
-	cr.method = string(f.Payload[cur : cur+arg1Len])
+	cr.method = f.Payload[cur : cur+arg1Len]
 	return cr
 }
 
 // Caller returns the name of the originator of this callReq.
-func (f lazyCallReq) Caller() string {
+func (f lazyCallReq) Caller() []byte {
 	return f.caller
 }
 
 // Service returns the name of the destination service for this callReq.
-func (f lazyCallReq) Service() string {
+func (f lazyCallReq) Service() []byte {
 	l := f.Payload[_serviceLenIndex]
-	return string(f.Payload[_serviceNameIndex : _serviceNameIndex+l])
+	return f.Payload[_serviceNameIndex : _serviceNameIndex+l]
 }
 
 // Method returns the name of the method being called. It panics if called for
 // a non-callReq frame.
-func (f lazyCallReq) Method() string {
+func (f lazyCallReq) Method() []byte {
 	return f.method
 }
 
