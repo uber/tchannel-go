@@ -206,7 +206,7 @@ func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 func TestLazyCallReqService(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
-		assert.Equal(t, "bankmoji", cr.Service(), "Service name mismatch")
+		assert.Equal(t, "bankmoji", string(cr.Service()), "Service name mismatch")
 	})
 }
 
@@ -214,9 +214,9 @@ func TestLazyCallReqCaller(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
 		if crt&reqHasHeaders == 0 {
-			assert.Equal(t, "", cr.Caller(), "Unexpected caller name.")
+			assert.Equal(t, []byte(nil), cr.Caller(), "Unexpected caller name.")
 		} else {
-			assert.Equal(t, "fake-caller", cr.Caller(), "Caller name mismatch")
+			assert.Equal(t, "fake-caller", string(cr.Caller()), "Caller name mismatch")
 		}
 	})
 }
@@ -224,7 +224,7 @@ func TestLazyCallReqCaller(t *testing.T) {
 func TestLazyCallReqMethod(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
-		assert.Equal(t, "moneys", cr.Method(), "Method name mismatch")
+		assert.Equal(t, "moneys", string(cr.Method()), "Method name mismatch")
 	})
 }
 

@@ -49,7 +49,7 @@ func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) string {
 	rh.RLock()
 	defer rh.RUnlock()
 
-	available, ok := rh.peers[frame.Service()]
+	available, ok := rh.peers[string(frame.Service())]
 	if !ok || len(available) == 0 {
 		return ""
 	}

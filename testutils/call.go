@@ -72,16 +72,16 @@ type FakeCallFrame struct {
 }
 
 // Service returns the service name field.
-func (f FakeCallFrame) Service() string {
-	return f.ServiceF
+func (f FakeCallFrame) Service() []byte {
+	return []byte(f.ServiceF)
 }
 
 // Method returns the method field.
-func (f FakeCallFrame) Method() string {
-	return f.MethodF
+func (f FakeCallFrame) Method() []byte {
+	return []byte(f.MethodF)
 }
 
 // Caller returns the caller field.
-func (f FakeCallFrame) Caller() string {
-	return f.CallerF
+func (f FakeCallFrame) Caller() []byte {
+	return []byte(f.CallerF)
 }

@@ -33,7 +33,7 @@ type fixedHosts struct {
 }
 
 func (fh *fixedHosts) Get(call relay.CallFrame) string {
-	peers := fh.hosts[call.Service()]
+	peers := fh.hosts[string(call.Service())]
 	if len(peers) == 0 {
 		return ""
 	}
