@@ -57,8 +57,9 @@ func TestRelay(t *testing.T) {
 		}
 
 		calls := relay.NewMockStats()
+		peer := relay.Peer{HostPort: ts.Server().PeerInfo().HostPort}
 		for _ = range tests {
-			calls.Add("client", "test", "echo").Succeeded().End()
+			calls.Add("client", "test", "echo").SetPeer(peer).Succeeded().End()
 		}
 		ts.AssertRelayStats(calls)
 	})
@@ -155,7 +156,8 @@ func TestRelayErrorUnknownPeer(t *testing.T) {
 		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
 
 		calls := relay.NewMockStats()
-		calls.Add(client.PeerInfo().ServiceName, "random-service", "echo").Failed("relay-declined").End()
+		calls.Add(client.PeerInfo().ServiceName, "random-service", "echo").
+			ExpectNoPeer().Failed("relay-declined").End()
 		ts.AssertRelayStats(calls)
 	})
 }

@@ -32,11 +32,20 @@ import (
 type SimpleRelayHosts struct {
 	sync.RWMutex
 	r     *rand.Rand
-	peers map[string][]string
+	peers map[string][]relay.Peer
 }
 
 // NewSimpleRelayHosts wraps a map in the RelayHosts interface.
-func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
+func NewSimpleRelayHosts(peerHostPorts map[string][]string) *SimpleRelayHosts {
+	peers := make(map[string][]relay.Peer)
+	for key, hosts := range peerHostPorts {
+		peerList := make([]relay.Peer, len(hosts))
+		for i, host := range hosts {
+			peerList[i] = relay.Peer{HostPort: host}
+		}
+		peers[key] = peerList
+	}
+
 	// Use a known seed for repeatable tests.
 	return &SimpleRelayHosts{
 		r:     trand.New(1),
@@ -45,21 +54,29 @@ func NewSimpleRelayHosts(peers map[string][]string) *SimpleRelayHosts {
 }
 
 // Get takes a routing key and returns the best host:port for that key.
-func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) string {
+func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) relay.Peer {
 	rh.RLock()
 	defer rh.RUnlock()
 
 	available, ok := rh.peers[string(frame.Service())]
 	if !ok || len(available) == 0 {
-		return ""
+		return relay.Peer{}
 	}
 	i := rh.r.Intn(len(available))
 	return available[i]
 }
 
-// Add adds a host:port to a routing key.
+// Add adds a host:port for a routing key.
 func (rh *SimpleRelayHosts) Add(service, hostPort string) {
+	rh.AddAssignment(service, hostPort, "")
+}
+
+// AddAssignment adds a host:port with an assignment for a routing key.
+func (rh *SimpleRelayHosts) AddAssignment(service, hostPort, assignment string) {
 	rh.Lock()
-	rh.peers[service] = append(rh.peers[service], hostPort)
+	rh.peers[service] = append(rh.peers[service], relay.Peer{
+		HostPort:   hostPort,
+		Assignment: assignment,
+	})
 	rh.Unlock()
 }
