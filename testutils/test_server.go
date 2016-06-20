@@ -142,6 +142,11 @@ func (ts *TestServer) Relay() *tchannel.Channel {
 	return nil
 }
 
+// RelayHosts returns the stub RelayHosts for mapping service names to peers.
+func (ts *TestServer) RelayHosts() *SimpleRelayHosts {
+	return ts.relayHosts
+}
+
 // HostPort returns the host:port for clients to connect to. Note that this may
 // not be the same as the host:port of the server channel.
 func (ts *TestServer) HostPort() string {

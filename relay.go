@@ -251,11 +251,16 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	}
 
 	// Get the destination
-	selectedPeer := r.hosts.Get(f)
-	if selectedPeer.HostPort == "" {
-		// TODO: What is the span in the error frame actually used for, and do we need it?
-		r.conn.SendSystemError(f.Header.ID, f.Span(), errUnknownGroup(f.Service()))
-		cs.Failed("relay-" + ErrCodeDeclined.MetricsKey())
+	selectedPeer, err := r.hosts.Get(f)
+	if err == nil && selectedPeer.HostPort == "" {
+		err = errInvalidPeerForGroup(f.Service())
+	}
+	if err != nil {
+		if _, ok := err.(SystemError); !ok {
+			err = NewSystemError(ErrCodeDeclined, err.Error())
+		}
+		cs.Failed("relay-" + GetSystemErrorCode(err).MetricsKey())
+		r.conn.SendSystemError(f.Header.ID, f.Span(), err)
 		return nil, false, nil
 	}
 
@@ -421,8 +426,8 @@ func frameTypeFor(f *Frame) frameType {
 	}
 }
 
-func errUnknownGroup(group []byte) error {
-	return NewSystemError(ErrCodeDeclined, "no peers for %q", group)
+func errInvalidPeerForGroup(group []byte) error {
+	return NewSystemError(ErrCodeDeclined, "invalid peer for %q", group)
 }
 
 func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {

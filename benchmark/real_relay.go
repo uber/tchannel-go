@@ -32,14 +32,14 @@ type fixedHosts struct {
 	pickI atomic.Int32
 }
 
-func (fh *fixedHosts) Get(call relay.CallFrame) relay.Peer {
+func (fh *fixedHosts) Get(call relay.CallFrame) (relay.Peer, error) {
 	peers := fh.hosts[string(call.Service())]
 	if len(peers) == 0 {
-		return relay.Peer{}
+		return relay.Peer{}, nil
 	}
 
 	pickI := int(fh.pickI.Inc()-1) % len(peers)
-	return relay.Peer{HostPort: peers[pickI]}
+	return relay.Peer{HostPort: peers[pickI]}, nil
 }
 
 type realRelay struct {
