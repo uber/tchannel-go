@@ -20,7 +20,10 @@
 
 package testutils
 
-import "github.com/uber/tchannel-go"
+import (
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/relay"
+)
 
 // This file contains test setup logic, and is named with a _test.go suffix to
 // ensure it's only compiled with tests.
@@ -70,6 +73,8 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 type FakeCallFrame struct {
 	ServiceF, MethodF, CallerF string
 }
+
+var _ relay.CallFrame = FakeCallFrame{}
 
 // Service returns the service name field.
 func (f FakeCallFrame) Service() []byte {
