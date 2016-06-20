@@ -92,7 +92,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 		// Make a call, wait for it to timeout.
 		clientCh := ts.NewClient(nil)
 		_, _, _, err := raw.Call(ctx, clientCh, ts.HostPort(), ts.ServiceName(), "block", nil, nil)
-		require.Error(t, err, "Expected call to timeout")
+		require.Equal(t, ErrTimeout, err, "Expected call to timeout")
 
 		// The client channel should also close immediately.
 		clientCh.Close()
