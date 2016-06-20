@@ -39,10 +39,11 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	case connectionActive:
 		break
 	case connectionStartClose, connectionInboundClosed, connectionClosed:
-		c.SendSystemError(frame.Header.ID, nil, ErrChannelClosed)
+		c.SendSystemError(frame.Header.ID, callReqSpan(frame), ErrChannelClosed)
 		return true
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
-		c.SendSystemError(frame.Header.ID, nil, NewSystemError(ErrCodeDeclined, "connection not ready"))
+		err := NewSystemError(ErrCodeDeclined, "connection not ready")
+		c.SendSystemError(frame.Header.ID, callReqSpan(frame), err)
 		return true
 	default:
 		panic(fmt.Errorf("unknown connection state for call req: %v", state))
@@ -327,7 +328,14 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	response.systemError = true
 	response.doneSending()
 	response.call.releasePreviousFragment()
-	return response.conn.SendSystemError(response.mex.msgID, CurrentSpan(response.mex.ctx), err)
+
+	span := CurrentSpan(response.mex.ctx)
+	if span == nil {
+		response.log.Error("Missing span when sending system error")
+		span = &Span{}
+	}
+
+	return response.conn.SendSystemError(response.mex.msgID, *span, err)
 }
 
 // SetApplicationError marks the response as being an application error.  This method can

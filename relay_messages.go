@@ -36,7 +36,9 @@ const (
 	// For call req.
 	_ttlIndex         = 1
 	_ttlLen           = 4
-	_serviceLenIndex  = 1 /* flags */ + _ttlLen + 25 /* tracing */
+	_spanIndex        = _ttlIndex + _ttlLen
+	_spanLength       = 25
+	_serviceLenIndex  = _spanIndex + _spanLength
 	_serviceNameIndex = _serviceLenIndex + 1
 
 	// For call res and call res continue.
@@ -147,6 +149,11 @@ func (f lazyCallReq) Method() []byte {
 func (f lazyCallReq) TTL() time.Duration {
 	ttl := binary.BigEndian.Uint32(f.Payload[_ttlIndex : _ttlIndex+_ttlLen])
 	return time.Duration(ttl) * time.Millisecond
+}
+
+// Span returns the Span
+func (f lazyCallReq) Span() Span {
+	return callReqSpan(f.Frame)
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
