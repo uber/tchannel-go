@@ -35,7 +35,9 @@ type CallFrame interface {
 // relaying.
 type Hosts interface {
 	// Get returns the peer to forward the given call to.
-	Get(CallFrame) Peer
+	// If a SystemError is returned, the error is forwarded. Otherwise
+	// a Declined error is returned to the caller.
+	Get(CallFrame) (Peer, error)
 }
 
 // CallStats is a reporter for per-request stats.

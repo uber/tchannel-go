@@ -31,8 +31,9 @@ import (
 // SimpleRelayHosts is a simple stub that satisfies the RelayHosts interface.
 type SimpleRelayHosts struct {
 	sync.RWMutex
-	r     *rand.Rand
-	peers map[string][]relay.Peer
+	r      *rand.Rand
+	peers  map[string][]relay.Peer
+	errors map[string]error
 }
 
 // NewSimpleRelayHosts wraps a map in the RelayHosts interface.
@@ -48,22 +49,27 @@ func NewSimpleRelayHosts(peerHostPorts map[string][]string) *SimpleRelayHosts {
 
 	// Use a known seed for repeatable tests.
 	return &SimpleRelayHosts{
-		r:     trand.New(1),
-		peers: peers,
+		r:      trand.New(1),
+		peers:  peers,
+		errors: make(map[string]error),
 	}
 }
 
 // Get takes a routing key and returns the best host:port for that key.
-func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) relay.Peer {
+func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) (relay.Peer, error) {
 	rh.RLock()
 	defer rh.RUnlock()
 
+	if err, ok := rh.errors[string(frame.Service())]; ok {
+		return relay.Peer{}, err
+	}
+
 	available, ok := rh.peers[string(frame.Service())]
 	if !ok || len(available) == 0 {
-		return relay.Peer{}
+		return relay.Peer{}, nil
 	}
 	i := rh.r.Intn(len(available))
-	return available[i]
+	return available[i], nil
 }
 
 // Add adds a host:port for a routing key.
@@ -74,9 +80,18 @@ func (rh *SimpleRelayHosts) Add(service, hostPort string) {
 // AddAssignment adds a host:port with an assignment for a routing key.
 func (rh *SimpleRelayHosts) AddAssignment(service, hostPort, assignment string) {
 	rh.Lock()
+	defer rh.Unlock()
+
 	rh.peers[service] = append(rh.peers[service], relay.Peer{
 		HostPort:   hostPort,
 		Assignment: assignment,
 	})
-	rh.Unlock()
+}
+
+// AddError specifies an error to be returned for a given service.
+func (rh *SimpleRelayHosts) AddError(service string, err error) {
+	rh.Lock()
+	defer rh.Unlock()
+
+	rh.errors[service] = err
 }

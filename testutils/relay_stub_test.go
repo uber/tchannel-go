@@ -21,11 +21,13 @@
 package testutils
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/uber/tchannel-go/relay"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSimpleRelayHosts(t *testing.T) {
@@ -58,7 +60,8 @@ func TestSimpleRelayHosts(t *testing.T) {
 	for _, tt := range tests {
 		// Since we use random, run the test a few times.
 		for i := 0; i < 5; i++ {
-			got := rh.Get(tt.call)
+			got, err := rh.Get(tt.call)
+			require.NoError(t, err, "Get failed")
 			if tt.wantOneOf == nil {
 				assert.Equal(t, "", got.HostPort, "Expected %v to find no hosts", tt.call)
 				continue
@@ -74,6 +77,16 @@ func TestSimpleRelayHosts(t *testing.T) {
 func TestSimpleRelayHostsPeer(t *testing.T) {
 	hosts := NewSimpleRelayHosts(nil)
 	hosts.AddAssignment("svc", "1.1.1.1:1", "a1")
-	peer := hosts.Get(FakeCallFrame{ServiceF: "svc"})
+	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"})
+	require.NoError(t, err, "Get failed")
 	assert.Equal(t, relay.Peer{HostPort: "1.1.1.1:1", Assignment: "a1"}, peer, "Unexpected peer")
+}
+
+func TestSimpleRelayHostsPeerError(t *testing.T) {
+	wantErr := errors.New("test error")
+	hosts := NewSimpleRelayHosts(nil)
+	hosts.AddError("svc", wantErr)
+	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"})
+	assert.Equal(t, relay.Peer{}, peer, "Unexpected peer")
+	assert.Equal(t, wantErr, err, "Unexpected error")
 }

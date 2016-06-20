@@ -1,6 +1,7 @@
 package tchannel_test
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"sync"
@@ -137,29 +138,57 @@ func TestRelayIDClash(t *testing.T) {
 	})
 }
 
-func TestRelayErrorUnknownPeer(t *testing.T) {
-	opts := testutils.NewOpts().SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
-		client := ts.NewClient(nil)
+func TestRelayErrorsOnGetPeer(t *testing.T) {
+	busyErr := NewSystemError(ErrCodeBusy, "busy")
+	tests := []struct {
+		desc     string
+		addPeer  func(*testutils.SimpleRelayHosts)
+		statsKey string
+		wantErr  error
+	}{
+		{
+			desc:     "No peer mappings, return empty Peer",
+			addPeer:  func(_ *testutils.SimpleRelayHosts) {},
+			statsKey: "relay-declined",
+			wantErr:  NewSystemError(ErrCodeDeclined, `invalid peer for "svc"`),
+		},
+		{
+			desc: "System error getting peer",
+			addPeer: func(rh *testutils.SimpleRelayHosts) {
+				rh.AddError("svc", busyErr)
+			},
+			statsKey: "relay-busy",
+			wantErr:  busyErr,
+		},
+		{
+			desc: "Unknown error getting peer",
+			addPeer: func(rh *testutils.SimpleRelayHosts) {
+				rh.AddError("svc", errors.New("unknown"))
+			},
+			statsKey: "relay-declined",
+			wantErr:  NewSystemError(ErrCodeDeclined, "unknown"),
+		},
+	}
 
-		err := testutils.CallEcho(client, ts.HostPort(), "random-service", nil)
-		if !assert.Error(t, err, "Call to unknown service should fail") {
-			return
-		}
+	for _, tt := range tests {
+		opts := testutils.NewOpts().SetRelayOnly()
+		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+			tt.addPeer(ts.RelayHosts())
 
-		se, ok := err.(SystemError)
-		if !assert.True(t, ok, "err should be a SystemError, got %T", err) {
-			return
-		}
+			client := ts.NewClient(nil)
+			err := testutils.CallEcho(client, ts.HostPort(), "svc", nil)
+			if !assert.Error(t, err, "Call to unknown service should fail") {
+				return
+			}
 
-		assert.Equal(t, ErrCodeDeclined, se.Code(), "Expected Declined error")
-		assert.Contains(t, err.Error(), `no peers for "random-service"`, "Unexpected error")
+			assert.Equal(t, tt.wantErr, err, "%v: unexpected error", tt.desc)
 
-		calls := relay.NewMockStats()
-		calls.Add(client.PeerInfo().ServiceName, "random-service", "echo").
-			ExpectNoPeer().Failed("relay-declined").End()
-		ts.AssertRelayStats(calls)
-	})
+			calls := relay.NewMockStats()
+			calls.Add(client.PeerInfo().ServiceName, "svc", "echo").
+				ExpectNoPeer().Failed(tt.statsKey).End()
+			ts.AssertRelayStats(calls)
+		})
+	}
 }
 
 func TestErrorFrameEndsRelay(t *testing.T) {
