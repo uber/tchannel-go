@@ -23,6 +23,7 @@ package benchmark
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/uber/tchannel-go"
@@ -66,7 +67,9 @@ func newClient(hosts []string, opts *options) inProcClient {
 }
 
 func newInternalClient(hosts []string, opts *options) inProcClient {
-	ch, err := tchannel.NewChannel(opts.svcName, nil)
+	ch, err := tchannel.NewChannel(opts.svcName, &tchannel.ChannelOptions{
+		Logger: tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
+	})
 	if err != nil {
 		panic("failed to create channel: " + err.Error())
 	}

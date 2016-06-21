@@ -21,6 +21,8 @@
 package benchmark
 
 import (
+	"os"
+
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 
@@ -52,6 +54,7 @@ func NewRealRelay(services map[string][]string) (Relay, error) {
 	hosts := &fixedHosts{hosts: services}
 	ch, err := tchannel.NewChannel("relay", &tchannel.ChannelOptions{
 		RelayHosts: hosts,
+		Logger:     tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
 	})
 	if err != nil {
 		return nil, err
