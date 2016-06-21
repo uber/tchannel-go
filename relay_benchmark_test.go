@@ -188,7 +188,7 @@ func BenchmarkRelayNoLatencies(b *testing.B) {
 		benchmark.WithTimeout(10*time.Second),
 	)
 	defer client.Close()
-	require.NoError(b, err, client.Warmup(), "client.Warmup failed")
+	require.NoError(b, client.Warmup(), "client.Warmup failed")
 
 	b.ResetTimer()
 	started := time.Now()
