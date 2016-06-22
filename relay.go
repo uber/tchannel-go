@@ -348,9 +348,13 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	}
 	originalID := f.Header.ID
 	f.Header.ID = item.remapID
+
+	// Once we call Receive on the frame, we lose ownership of the frame.
+	finished := finishesCall(f)
+
 	item.destination.Receive(f, frameType)
 
-	if finishesCall(f) {
+	if finished {
 		r.finishRelayItem(items, originalID)
 	}
 	return nil
