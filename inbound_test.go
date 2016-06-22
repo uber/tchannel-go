@@ -101,3 +101,44 @@ func TestInboundConnection(t *testing.T) {
 		require.NoError(t, err, "Call failed")
 	})
 }
+
+func TestInboundConnection_CallOptions(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(serverCh *Channel, serverHostPort string) {
+		testutils.RegisterFunc(serverCh, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			assert.Equal(t, "client", CurrentCall(ctx).CallerName(), "Expected caller name to be passed through")
+			return &raw.Res{}, nil
+		})
+
+		backendName := serverCh.PeerInfo().ServiceName
+
+		proxyCh, err := testutils.NewServerChannel(&testutils.ChannelOpts{ServiceName: "proxy"})
+		require.NoError(t, err, "Proxy channel creation failed")
+		defer proxyCh.Close()
+
+		subCh := proxyCh.GetSubChannel(backendName)
+		subCh.SetHandler(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			outbound, err := proxyCh.BeginCall(ctx, serverHostPort, backendName, inbound.MethodString(), inbound.CallOptions())
+			require.NoError(t, err, "Create outbound call failed")
+
+			require.NoError(t, NewArgWriter(outbound.Arg2Writer()).Write([]byte("hi")), "Write arg2 failed")
+			require.NoError(t, NewArgWriter(outbound.Arg3Writer()).Write([]byte("body")), "Write arg3 failed")
+			var arg2, arg3 []byte
+			require.NoError(t, NewArgReader(outbound.Response().Arg2Reader()).Read(&arg2), "Read arg2 failed")
+			require.NoError(t, NewArgReader(outbound.Response().Arg3Reader()).Read(&arg3), "Read arg3 failed")
+			require.NoError(t, NewArgWriter(inbound.Response().Arg2Writer()).Write(arg2), "Write arg2 failed")
+			require.NoError(t, NewArgWriter(inbound.Response().Arg3Writer()).Write(arg3), "Write arg3 failed")
+		}))
+
+		clientCh, err := NewChannel("client", nil)
+		require.NoError(t, err, "Create client channel failed")
+		defer clientCh.Close()
+
+		clientCh.Peers().Add(proxyCh.PeerInfo().HostPort)
+
+		_, _, _, err = raw.Call(ctx, clientCh, proxyCh.PeerInfo().HostPort, backendName, "test", nil, nil)
+		require.NoError(t, err, "Call through proxy failed")
+	})
+}

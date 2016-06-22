@@ -64,6 +64,14 @@ func (f *FakeIncomingCall) RemotePeer() tchannel.PeerInfo {
 	return f.RemotePeerF
 }
 
+// CallOptions returns the incoming call options suitable for proxying a request.
+func (f *FakeIncomingCall) CallOptions() *tchannel.CallOptions {
+	return &tchannel.CallOptions{
+		ShardKey:        f.ShardKey(),
+		RoutingDelegate: f.RoutingDelegate(),
+	}
+}
+
 // NewIncomingCall creates an incoming call for tests.
 func NewIncomingCall(callerName string) tchannel.IncomingCall {
 	return &FakeIncomingCall{CallerNameF: callerName}

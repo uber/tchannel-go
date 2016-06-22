@@ -59,6 +59,11 @@ type IncomingCall interface {
 	// If the caller is an ephemeral peer, then the HostPort cannot be used to make new
 	// connections to the caller.
 	RemotePeer() PeerInfo
+
+	// CallOptions returns the call options set for the incoming call. It can be useful
+	// if you are forwarding a request and wish to retain the CallerName(), which is not
+	// possible to set manually.
+	CallOptions() *CallOptions
 }
 
 func getTChannelParams(ctx context.Context) *tchannelCtxParams {
