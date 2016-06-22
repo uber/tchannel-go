@@ -43,3 +43,4 @@ import:
   subpackages:
   - quantile
 - package: github.com/uber-go/atomic
+- package: github.com/prashantv/protectmem

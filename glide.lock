@@ -1,8 +1,8 @@
-hash: 751995ad9810ebf66707d6db7b75134a59e6350eb2ad7d21fa8b497fdd5337a4
-updated: 2016-06-02T17:21:34.641634433-07:00
+hash: 9950186274c3f039a7a65ea45573abacfca42050b0f40215c956ddfe7cd7f823
+updated: 2016-06-22T14:30:54.982533777-07:00
 imports:
 - name: github.com/apache/thrift
-  version: 39a09ac5e49481d39dd1bcb6757ffe182e3df20a
+  version: 0e9fed1e12ed066865e46c6903782b2ef95f4650
   subpackages:
   - lib/go/thrift
 - name: github.com/bmizerany/perks
@@ -23,6 +23,8 @@ imports:
   version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
+- name: github.com/prashantv/protectmem
+  version: dda468c7a8a992f1642b31604d732590921a30e5
 - name: github.com/samuel/go-thrift
   version: e9042807f4f5bf47563df6992d3ea0857313e2be
   subpackages:
@@ -32,7 +34,7 @@ imports:
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: 8d64eb7173c7753d6419fd4a9caf057398611364
+  version: d77da356e56a7428ad25149ca77381849a6a5232
   subpackages:
   - assert
   - mock
@@ -40,7 +42,7 @@ imports:
 - name: github.com/uber-go/atomic
   version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
 - name: golang.org/x/net
-  version: c4c3ea71919de159c9e246d7be66deb7f0a39a58
+  version: bc3663df0ac92f928d419e31e0d2af22e683a5a2
   subpackages:
   - context
 - name: gopkg.in/yaml.v2
