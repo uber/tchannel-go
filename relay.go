@@ -197,14 +197,16 @@ func (r *Relayer) Relay(f *Frame) error {
 
 // Receive receives frames intended for this connection.
 func (r *Relayer) Receive(f *Frame, fType frameType) {
+	id := f.Header.ID
+
 	// If we receive a response frame, we expect to find that ID in our outbound.
 	// If we receive a request frame, we expect to find that ID in our inbound.
 	items := r.receiverItems(fType)
 
-	item, ok := items.Get(f.Header.ID)
+	item, ok := items.Get(id)
 	if !ok {
 		r.logger.WithFields(
-			LogField{"ID", f.Header.ID},
+			LogField{"id", id},
 		).Warn("Received a frame without a RelayItem.")
 		return
 	}
@@ -221,12 +223,17 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 		}
 	}
 
+	// When we write the frame to sendCh, we lose ownership of the frame, and it
+	// may be released to the frame pool at any point.
+	finished := finishesCall(f)
+
 	// TODO: Add some sort of timeout here to avoid blocking forever on a
 	// stalled connection.
 	r.conn.sendCh <- f
-	if finishesCall(f) {
+
+	if finished {
 		items := r.receiverItems(fType)
-		r.finishRelayItem(items, f.Header.ID)
+		r.finishRelayItem(items, id)
 	}
 }
 
