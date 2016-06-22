@@ -114,6 +114,7 @@ func getRawCallFrames(timeout time.Duration, svcName string, reqSize int) frames
 		if err != nil {
 			panic(err)
 		}
+		defer relay.Close()
 
 		args := &raw.Args{
 			Arg2: getRequestBytes(reqSize),
