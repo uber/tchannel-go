@@ -84,7 +84,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 
 	ts.NewServer(opts)
 	if opts == nil || !opts.DisableRelay {
-		ts.addRelay(opts.LogVerification)
+		ts.addRelay(opts)
 	}
 
 	return ts
@@ -210,18 +210,16 @@ func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 
 // addRelay adds a relay in front of the test server, altering public methods as
 // necessary to route traffic through the relay.
-func (ts *TestServer) addRelay(logOpts LogVerification) {
+func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
 	ts.relayHosts = NewSimpleRelayHosts(map[string][]string{
 		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
 	})
-	opts := &ChannelOpts{
-		ServiceName: "relay",
-		ChannelOptions: tchannel.ChannelOptions{
-			RelayHosts: ts.relayHosts,
-			RelayStats: ts.relayStats,
-		},
-		LogVerification: logOpts,
-	}
+
+	opts := parentOpts.Copy()
+	opts.ServiceName = "relay"
+	opts.ChannelOptions.RelayHosts = ts.relayHosts
+	opts.RelayStats = ts.relayStats
+
 	ts.addChannel(newServer, opts)
 	ts.relayIdx = len(ts.channels) - 1
 }
