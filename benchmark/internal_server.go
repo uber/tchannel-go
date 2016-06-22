@@ -22,6 +22,7 @@ package benchmark
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
@@ -48,7 +49,9 @@ func NewServer(optFns ...Option) Server {
 		return newExternalServer(opts)
 	}
 
-	ch, err := tchannel.NewChannel(opts.svcName, nil)
+	ch, err := tchannel.NewChannel(opts.svcName, &tchannel.ChannelOptions{
+		Logger: tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
+	})
 	if err != nil {
 		panic("failed to create channel: " + err.Error())
 	}
