@@ -261,6 +261,16 @@ func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }
 
+// CallOptions returns a CallOptions struct suitable for forwarding a request.
+func (call *InboundCall) CallOptions() *CallOptions {
+	return &CallOptions{
+		callerName:      call.CallerName(),
+		Format:          call.Format(),
+		ShardKey:        call.ShardKey(),
+		RoutingDelegate: call.RoutingDelegate(),
+	}
+}
+
 // Reads the entire method name (arg1) from the request stream.
 func (call *InboundCall) readMethod() error {
 	var arg1 []byte
