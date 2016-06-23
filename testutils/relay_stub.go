@@ -74,17 +74,18 @@ func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) (relay.Peer, error) {
 
 // Add adds a host:port for a routing key.
 func (rh *SimpleRelayHosts) Add(service, hostPort string) {
-	rh.AddAssignment(service, hostPort, "")
+	rh.AddPeer(service, hostPort, "", "")
 }
 
-// AddAssignment adds a host:port with an assignment for a routing key.
-func (rh *SimpleRelayHosts) AddAssignment(service, hostPort, assignment string) {
+// AddPeer adds a host:port with all the associated Peer information.
+func (rh *SimpleRelayHosts) AddPeer(service, hostPort, pool, zone string) {
 	rh.Lock()
 	defer rh.Unlock()
 
 	rh.peers[service] = append(rh.peers[service], relay.Peer{
-		HostPort:   hostPort,
-		Assignment: assignment,
+		HostPort: hostPort,
+		Pool:     pool,
+		Zone:     zone,
 	})
 }
 

@@ -69,7 +69,11 @@ type Peer struct {
 	// HostPort of the peer that was selected.
 	HostPort string
 
-	// Assignment allows the peer selection to specify a group that this
-	// Peer belongs to, which may be useful when reporting stats.
-	Assignment string
+	// Pool allows the peer selection to specify a pool that this Peer belongs
+	// to, which may be useful when reporting stats.
+	Pool string
+
+	// Zone allows the peer selection to specify the zone that this Peer belongs
+	// to, which is also useful for stats.
+	Zone string
 }
