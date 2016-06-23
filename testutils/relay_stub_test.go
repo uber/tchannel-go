@@ -76,10 +76,10 @@ func TestSimpleRelayHosts(t *testing.T) {
 
 func TestSimpleRelayHostsPeer(t *testing.T) {
 	hosts := NewSimpleRelayHosts(nil)
-	hosts.AddAssignment("svc", "1.1.1.1:1", "a1")
+	hosts.AddPeer("svc", "1.1.1.1:1", "a1", "sjc1")
 	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"})
 	require.NoError(t, err, "Get failed")
-	assert.Equal(t, relay.Peer{HostPort: "1.1.1.1:1", Assignment: "a1"}, peer, "Unexpected peer")
+	assert.Equal(t, relay.Peer{HostPort: "1.1.1.1:1", Pool: "a1", Zone: "sjc1"}, peer, "Unexpected peer")
 }
 
 func TestSimpleRelayHostsPeerError(t *testing.T) {
