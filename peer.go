@@ -349,14 +349,18 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 	return p.Connect(ctx)
 }
 
-// getConnectionTimeout gets a connection, and uses the given timeout if a new
+// getConnectionRelay gets a connection, and uses the given timeout if a new
 // connection is required.
-func (p *Peer) getConnectionTimeout(timeout time.Duration) (*Connection, error) {
+func (p *Peer) getConnectionRelay(timeout time.Duration) (*Connection, error) {
 	if conn, ok := p.getActiveConn(); ok {
 		return conn, nil
 	}
 
-	ctx, cancel := NewContext(timeout)
+	// When the relay creates outbound connections, we don't want those services
+	// to ever connect back to us and send us traffic. We hide the host:port
+	// so that service instances on remote machines don't try to connect back
+	// and don't try to send Hyperbahn traffic on this connection.
+	ctx, cancel := NewContextBuilder(timeout).HideListeningOnOutbound().Build()
 	defer cancel()
 
 	return p.Connect(ctx)

@@ -346,7 +346,11 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	initMsgID := c.NextMessageID()
 	req := initReq{initMessage{id: initMsgID}}
 	req.Version = CurrentProtocolVersion
+
 	req.initParams = c.getInitParams()
+	if params := getTChannelParams(ctx); params != nil && params.hideListeningOnOutbound {
+		req.initParams[InitParamHostPort] = ephemeralHostPort
+	}
 
 	if !c.pendingExchangeMethodAdd() {
 		// Connection is closed, no need to do anything.
