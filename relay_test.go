@@ -38,6 +38,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/atomic"
+	"golang.org/x/net/context"
 )
 
 type relayTest struct {
@@ -343,5 +344,25 @@ func TestRelayConcurrentCalls(t *testing.T) {
 
 		_, err := client.RawCall(1000)
 		assert.NoError(t, err, "RawCalls failed")
+	})
+}
+
+// Ensure that any connections created in the relay path send the ephemeral
+// host:port.
+func TestRelayOutgoingConnectionsEphemeral(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s2 := ts.NewServer(serviceNameOpts("s2"))
+		testutils.RegisterFunc(s2, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			assert.True(t, CurrentCall(ctx).RemotePeer().IsEphemeral,
+				"Connections created for the relay should send ephemeral host:port header")
+
+			return &raw.Res{
+				Arg2: args.Arg2,
+				Arg3: args.Arg3,
+			}, nil
+		})
+
+		require.NoError(t, testutils.CallEcho(ts.Server(), ts.HostPort(), "s2", nil), "CallEcho failed")
 	})
 }

@@ -162,16 +162,6 @@ func TestRemotePeer(t *testing.T) {
 			name:   "ephemeral client",
 			remote: func(ts *testutils.TestServer) *Channel { return ts.NewClient(nil) },
 			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
-				if ts.HasRelay() {
-					// The server should see a call from the relay. Connections from relays
-					// to the receiving service shouldn't be ephemeral.
-					relayInfo := ts.Relay().PeerInfo()
-					return PeerInfo{
-						HostPort:    relayInfo.HostPort,
-						IsEphemeral: false,
-						ProcessName: relayInfo.ProcessName,
-					}
-				}
 				return PeerInfo{
 					HostPort:    state.RootPeers[ts.HostPort()].OutboundConnections[0].LocalHostPort,
 					IsEphemeral: true,
@@ -183,15 +173,6 @@ func TestRemotePeer(t *testing.T) {
 			name:   "listening server",
 			remote: func(ts *testutils.TestServer) *Channel { return ts.NewServer(nil) },
 			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
-				if ts.HasRelay() {
-					// Same as above.
-					relayInfo := ts.Relay().PeerInfo()
-					return PeerInfo{
-						HostPort:    relayInfo.HostPort,
-						IsEphemeral: false,
-						ProcessName: relayInfo.ProcessName,
-					}
-				}
 				return PeerInfo{
 					HostPort:    state.LocalPeer.HostPort,
 					IsEphemeral: false,
@@ -205,7 +186,7 @@ func TestRemotePeer(t *testing.T) {
 	defer cancel()
 
 	for _, tt := range tests {
-		opts := testutils.NewOpts().SetServiceName("fake-service")
+		opts := testutils.NewOpts().SetServiceName("fake-service").NoRelay()
 		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 			remote := tt.remote(ts)
 			defer remote.Close()

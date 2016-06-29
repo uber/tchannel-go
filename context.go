@@ -36,11 +36,12 @@ const (
 )
 
 type tchannelCtxParams struct {
-	span           *Span
-	call           IncomingCall
-	options        *CallOptions
-	retryOptions   *RetryOptions
-	connectTimeout time.Duration
+	span                    *Span
+	call                    IncomingCall
+	options                 *CallOptions
+	retryOptions            *RetryOptions
+	connectTimeout          time.Duration
+	hideListeningOnOutbound bool
 }
 
 // IncomingCall exposes properties for incoming calls through the context.
