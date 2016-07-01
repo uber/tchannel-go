@@ -259,6 +259,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 
 	// Get the destination
 	selectedPeer, err := r.hosts.Get(f)
+	cs.SetPeer(selectedPeer)
 	if err == nil && selectedPeer.HostPort == "" {
 		err = errInvalidPeerForGroup(f.Service())
 	}
@@ -271,7 +272,6 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 		return nil, false, nil
 	}
 
-	cs.SetPeer(selectedPeer)
 	peer := r.peers.GetOrAdd(selectedPeer.HostPort)
 
 	// TODO: Should connections use the call timeout? Or a separate timeout?

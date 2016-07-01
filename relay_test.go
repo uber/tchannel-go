@@ -163,10 +163,11 @@ func TestRelayIDClash(t *testing.T) {
 func TestRelayErrorsOnGetPeer(t *testing.T) {
 	busyErr := NewSystemError(ErrCodeBusy, "busy")
 	tests := []struct {
-		desc     string
-		addPeer  func(*testutils.SimpleRelayHosts)
-		statsKey string
-		wantErr  error
+		desc      string
+		addPeer   func(*testutils.SimpleRelayHosts)
+		statsKey  string
+		statsPeer relay.Peer
+		wantErr   error
 	}{
 		{
 			desc:     "No peer mappings, return empty Peer",
@@ -190,6 +191,15 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 			statsKey: "relay-declined",
 			wantErr:  NewSystemError(ErrCodeDeclined, "unknown"),
 		},
+		{
+			desc: "No host:port on peer",
+			addPeer: func(rh *testutils.SimpleRelayHosts) {
+				rh.AddPeer("svc", "", "pool", "zone")
+			},
+			statsKey:  "relay-declined",
+			statsPeer: relay.Peer{Zone: "zone", Pool: "pool"},
+			wantErr:   NewSystemError(ErrCodeDeclined, `invalid peer for "svc"`),
+		},
 	}
 
 	for _, tt := range tests {
@@ -207,7 +217,8 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 
 			calls := relay.NewMockStats()
 			calls.Add(client.PeerInfo().ServiceName, "svc", "echo").
-				ExpectNoPeer().Failed(tt.statsKey).End()
+				SetPeer(tt.statsPeer).
+				Failed(tt.statsKey).End()
 			ts.AssertRelayStats(calls)
 		})
 	}

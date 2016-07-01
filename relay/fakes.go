@@ -82,13 +82,6 @@ func (m *MockCallStats) SetPeer(peer Peer) CallStats {
 	return m
 }
 
-// ExpectNoPeer ensures that no call to SetPeer is made.
-func (m *MockCallStats) ExpectNoPeer() CallStats {
-	m.verifyPeer = true
-	m.peer = nil
-	return m
-}
-
 // End halts timer and metric collection for the RPC.
 func (m *MockCallStats) End() {
 	m.ended++
