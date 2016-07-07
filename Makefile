@@ -24,7 +24,11 @@ PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
 THRIFT_REL := ./scripts/travis/thrift-release/$(PLATFORM)-$(ARCH)
 
+OLD_GOPATH := $(GOPATH)
+VENDOR_PATH := $(PWD)/.tmp/vendor
+
 export PATH := $(realpath $(THRIFT_REL)):$(PATH)
+export GOPATH := $(VENDOR_PATH):$(GOPATH)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -44,21 +48,30 @@ setup:
 get_thrift:
 	scripts/travis/get-thrift.sh
 
+# We want to remove `vendor` dir because thrift-gen tests don't work with it.
+# However, glide install even with --cache-gopath option leaves GOPATH at HEAD,
+# not at the desired versions from glide.lock, which are only applied to `vendor`
+# dir. So we move `vendor` to a temp dir and prepend it to GOPATH.
+# Note that glide itself is still executed against the original GOPATH.
 install:
-	glide --debug install --cache --cache-gopath
-	rm -rf vendor
+	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
+	rm -rf $(VENDOR_PATH)
+	mkdir -p $(VENDOR_PATH)
+	mv vendor $(VENDOR_PATH)/src
+
+install_lint:
 ifdef SHOULD_LINT
 	@echo "Installing golint, since we expect to lint on" $(GO_VERSION)
-	go get -u -f github.com/golang/lint/golint
+	GOPATH=$(OLD_GOPATH) go get -u -f github.com/golang/lint/golint
 else
 	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
 endif
 
 install_glide:
-	go get -u github.com/Masterminds/glide
+	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
 
-install_ci: install_glide get_thrift install
-	go get -u github.com/mattn/goveralls
+install_ci: install_glide install_lint get_thrift install
+	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 
 install_test:
 	go test -i $(TEST_ARG) $(shell glide nv)
@@ -153,5 +166,5 @@ release_thrift_gen: clean setup
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 
-.PHONY: all help clean fmt format get_thrift install install_ci release_thrift_gen packages_test test test_ci lint
+.PHONY: all help clean fmt format get_thrift install install_ci install_lint install_glide release_thrift_gen packages_test test test_ci lint
 .SILENT: all help clean fmt format test lint
