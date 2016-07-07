@@ -26,6 +26,8 @@ package tchannel
 import (
 	"net"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 // MexChannelBufferSize is the size of the message exchange channel buffer.
@@ -57,6 +59,11 @@ func (ch *Channel) SetRandomSeed(seed int64) {
 	for _, sc := range ch.subChannels.subchannels {
 		sc.peers.peerHeap.rng.Seed(seed + int64(len(sc.peers.peersByHostPort)))
 	}
+}
+
+// Ping sends a ping on the specific connection.
+func (c *Connection) Ping(ctx context.Context) error {
+	return c.ping(ctx)
 }
 
 // OutboundConnection returns the underlying connection for an outbound call.

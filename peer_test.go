@@ -172,8 +172,11 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 
 		c1, err := p.Connect(ctx)
 		require.NoError(t, err, "Failed to connect")
+		require.NoError(t, err, c1.Ping(ctx))
+
 		c2, err := p.Connect(ctx)
 		require.NoError(t, err, "Failed to connect")
+		require.NoError(t, err, c2.Ping(ctx))
 
 		require.NoError(t, c1.Close(), "Failed to close first connection")
 		_, outConns := p.NumConnections()
