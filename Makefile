@@ -55,10 +55,9 @@ get_thrift:
 # Note that glide itself is still executed against the original GOPATH.
 install:
 	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
-	[ -d $(VENDOR_PATH) ] && rm -rf $(VENDOR_PATH) || true
+	rm -rf $(VENDOR_PATH)
 	mkdir -p $(VENDOR_PATH)/src
-	mv vendor/* $(VENDOR_PATH)/src/
-	rm -rf vendor
+	mv vendor $(VENDOR_PATH)/src
 
 install_lint:
 ifdef SHOULD_LINT
