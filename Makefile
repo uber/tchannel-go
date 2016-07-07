@@ -56,7 +56,7 @@ get_thrift:
 install:
 	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
 	rm -rf $(VENDOR_PATH)
-	mkdir -p $(VENDOR_PATH)/src
+	mkdir -p $(VENDOR_PATH)
 	mv vendor $(VENDOR_PATH)/src
 
 install_lint:
