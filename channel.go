@@ -65,10 +65,12 @@ type ChannelOptions struct {
 	// The logger to use for this channel
 	Logger Logger
 
-	// The host:port selection implementation to use for relaying.
+	// The host:port selection implementation to use for relaying. This is an
+	// unstable API - breaking changes are likely.
 	RelayHosts relay.Hosts
 
-	// The stats implementation to use for relaying.
+	// The stats implementation to use for relaying. This is an unstable API -
+	// breaking changes are likely.
 	RelayStats relay.Stats
 
 	// The reporter to use for reporting stats for this channel.

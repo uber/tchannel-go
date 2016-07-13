@@ -42,10 +42,10 @@ func (n noopStats) Begin(_ CallFrame) CallStats {
 
 type noopCallStats struct{}
 
-func (n noopCallStats) Succeeded() CallStats      { return n }
-func (n noopCallStats) Failed(_ string) CallStats { return n }
-func (n noopCallStats) SetPeer(_ Peer) CallStats  { return n }
-func (n noopCallStats) End()                      {}
+func (n noopCallStats) Succeeded()      {}
+func (n noopCallStats) Failed(_ string) {}
+func (n noopCallStats) SetPeer(_ Peer)  {}
+func (n noopCallStats) End()            {}
 
 // MockCallStats is a testing spy for the CallStats interface.
 type MockCallStats struct {
@@ -64,28 +64,48 @@ type MockCallStats struct {
 }
 
 // Succeeded marks the RPC as succeeded.
-func (m *MockCallStats) Succeeded() CallStats {
+func (m *MockCallStats) Succeeded() {
 	m.succeeded++
-	return m
 }
 
 // Failed marks the RPC as failed for the provided reason.
-func (m *MockCallStats) Failed(reason string) CallStats {
+func (m *MockCallStats) Failed(reason string) {
 	m.failedMsgs = append(m.failedMsgs, reason)
-	return m
 }
 
 // SetPeer sets the peer for the current call.
-func (m *MockCallStats) SetPeer(peer Peer) CallStats {
+func (m *MockCallStats) SetPeer(peer Peer) {
 	m.verifyPeer = true
 	m.peer = &peer
-	return m
 }
 
 // End halts timer and metric collection for the RPC.
 func (m *MockCallStats) End() {
 	m.ended++
 	m.wg.Done()
+}
+
+// FluentMockCallStats wraps the MockCallStats in a fluent API that's convenient for tests.
+type FluentMockCallStats struct {
+	*MockCallStats
+}
+
+// Succeeded marks the RPC as succeeded.
+func (f *FluentMockCallStats) Succeeded() *FluentMockCallStats {
+	f.MockCallStats.Succeeded()
+	return f
+}
+
+// Failed marks the RPC as failed.
+func (f *FluentMockCallStats) Failed(reason string) *FluentMockCallStats {
+	f.MockCallStats.Failed(reason)
+	return f
+}
+
+// SetPeer sets the peer for the current call.
+func (f *FluentMockCallStats) SetPeer(peer Peer) *FluentMockCallStats {
+	f.MockCallStats.SetPeer(peer)
+	return f
 }
 
 // MockStats is a testing spy for the Stats interface.
@@ -104,18 +124,18 @@ func NewMockStats() *MockStats {
 
 // Begin starts collecting metrics for an RPC.
 func (m *MockStats) Begin(f CallFrame) CallStats {
-	return m.Add(string(f.Caller()), string(f.Service()), string(f.Method()))
+	return m.Add(string(f.Caller()), string(f.Service()), string(f.Method())).MockCallStats
 }
 
 // Add explicitly adds a new call along an edge of the call graph.
-func (m *MockStats) Add(caller, callee, procedure string) *MockCallStats {
+func (m *MockStats) Add(caller, callee, procedure string) *FluentMockCallStats {
 	m.wg.Add(1)
 	cs := &MockCallStats{wg: &m.wg}
 	key := m.tripleToKey(caller, callee, procedure)
 	m.mu.Lock()
 	m.stats[key] = append(m.stats[key], cs)
 	m.mu.Unlock()
-	return cs
+	return &FluentMockCallStats{cs}
 }
 
 // AssertEqual asserts that two MockStats describe the same call graph.
