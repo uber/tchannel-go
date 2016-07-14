@@ -19,6 +19,9 @@
 // THE SOFTWARE.
 
 // Package relay contains relaying interfaces for external use.
+//
+// These interfaces are currently unstable, and aren't covered by the API
+// backwards-compatibility guarantee.
 package relay
 
 // CallFrame is an interface that abstracts access to the call req frame.
@@ -49,12 +52,12 @@ type Hosts interface {
 type CallStats interface {
 	// SetPeer is called once a peer has been selected for this call.
 	// Note: This may not be called if a call fails before peer selection.
-	SetPeer(Peer) CallStats
+	SetPeer(Peer)
 
 	// The call succeeded (possibly after retrying).
-	Succeeded() CallStats
+	Succeeded()
 	// The RPC failed.
-	Failed(reason string) CallStats
+	Failed(reason string)
 	// End stats collection for this RPC. Will be called exactly once.
 	End()
 }
