@@ -306,7 +306,12 @@ func TestResponseClosedBeforeRequest(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
 			}
-			assert.NoError(t, writeFlushBytes(arg3Writer, []byte{streamRequestClose}), "Write failed")
+
+			// Ignore the error of writeFlushBytes here since once we flush, the
+			// remote side could receive and close the response before we've created
+			// a new fragment (see fragmentingWriter.Flush). This could result
+			// in the Flush returning a "mex is already shutdown" error.
+			writeFlushBytes(arg3Writer, []byte{streamRequestClose})
 
 			// Wait until our reader gets the EOF.
 			<-responseClosed
