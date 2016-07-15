@@ -968,9 +968,6 @@ func TestPeerSelectionAfterClosed(t *testing.T) {
 }
 
 func TestPeerScoreOnNewConnection(t *testing.T) {
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
 	tests := []struct {
 		message string
 		connect func(s1, s2 *Channel) *Peer
@@ -997,6 +994,9 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 
 	for _, tt := range tests {
 		testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+
 			s1 := ts.Server()
 			s2 := ts.NewServer(nil)
 
@@ -1005,7 +1005,7 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 
 			initialScore := getScore(s1.Peers())
 			peer := tt.connect(s1, s2)
-			_, err := peer.GetConnection(ctx)
+			conn, err := peer.GetConnection(ctx)
 			require.NoError(t, err, "%v: GetConnection failed", tt.message)
 
 			// When receiving an inbound connection, the outbound connect may return
@@ -1015,6 +1015,9 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 				return connectedScore < initialScore
 			}), "%v: Expected connected peer score %v to be less than initial score %v",
 				tt.message, getScore(s1.Peers()), initialScore)
+
+			// Ping to ensure the connection has been added to peers on both sides.
+			require.NoError(t, conn.Ping(ctx), "%v: Ping failed", tt.message)
 		})
 	}
 }
