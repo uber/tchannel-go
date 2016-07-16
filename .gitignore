@@ -1,5 +1,6 @@
 build
 Godeps/_workspace
+vendor/
 thrift-gen-release/
 
 # Lint output
@@ -14,3 +15,4 @@ lint.log
 .DS_Store
 .idea
 tchannel-go.iml
+.vscode

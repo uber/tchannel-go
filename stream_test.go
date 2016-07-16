@@ -31,9 +31,10 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
+	"github.com/uber/tchannel-go/testutils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/testutils"
 	"golang.org/x/net/context"
 )
 
@@ -240,17 +241,20 @@ func TestStreamSendError(t *testing.T) {
 }
 
 func TestStreamCancelled(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	// Since the cancel message is unimplemented, the relay does not know that the
+	// call was cancelled, andwill block closing till the timeout.
+	opts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
 		ctx, cancel := NewContext(testutils.Timeout(time.Second))
 		defer cancel()
 
 		helper := streamHelper{t}
-		ch := ts.NewServer(nil)
+		ch := ts.NewClient(nil)
 		cancelContext := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.Server().ServiceName())
+		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
@@ -291,7 +295,7 @@ func TestResponseClosedBeforeRequest(t *testing.T) {
 		defer cancel()
 
 		helper := streamHelper{t}
-		ch := ts.NewServer(nil)
+		ch := ts.NewClient(nil)
 		responseClosed := make(chan struct{})
 		writerDone := make(chan struct{})
 
@@ -302,7 +306,12 @@ func TestResponseClosedBeforeRequest(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
 			}
-			assert.NoError(t, writeFlushBytes(arg3Writer, []byte{streamRequestClose}), "Write failed")
+
+			// Ignore the error of writeFlushBytes here since once we flush, the
+			// remote side could receive and close the response before we've created
+			// a new fragment (see fragmentingWriter.Flush). This could result
+			// in the Flush returning a "mex is already shutdown" error.
+			writeFlushBytes(arg3Writer, []byte{streamRequestClose})
 
 			// Wait until our reader gets the EOF.
 			<-responseClosed

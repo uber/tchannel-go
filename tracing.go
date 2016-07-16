@@ -23,8 +23,8 @@ package tchannel
 import (
 	"fmt"
 	"math/rand"
-	"time"
 
+	"github.com/uber/tchannel-go/trand"
 	"github.com/uber/tchannel-go/typed"
 )
 
@@ -36,7 +36,7 @@ const (
 )
 
 // traceRng is a thread-safe random number generator for generating trace IDs.
-var traceRng = NewRand(time.Now().UnixNano())
+var traceRng = trand.NewSeeded()
 
 // Span represents Zipkin-style span.
 type Span struct {

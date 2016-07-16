@@ -21,12 +21,14 @@
 package testutils
 
 import (
+	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
+
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 )
 
 // CallEcho calls the "echo" endpoint from the given src to target.
@@ -40,6 +42,26 @@ func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args 
 
 	_, _, _, err := raw.Call(ctx, src, targetHostPort, targetService, "echo", args.Arg2, args.Arg3)
 	return err
+}
+
+// AssertEcho calls the "echo" endpoint with random data, and asserts
+// that the returned data matches the arguments "echo" was called with.
+func AssertEcho(tb testing.TB, src *tchannel.Channel, targetHostPort, targetService string) {
+	ctx, cancel := tchannel.NewContext(Timeout(300 * time.Millisecond))
+	defer cancel()
+
+	args := &raw.Args{
+		Arg2: RandBytes(1000),
+		Arg3: RandBytes(1000),
+	}
+
+	arg2, arg3, _, err := raw.Call(ctx, src, targetHostPort, targetService, "echo", args.Arg2, args.Arg3)
+	if !assert.NoError(tb, err, "Call from %v (%v) to %v (%v) failed", src.ServiceName(), src.PeerInfo().HostPort, targetService, targetHostPort) {
+		return
+	}
+
+	assert.Equal(tb, args.Arg2, arg2, "Arg2 mismatch")
+	assert.Equal(tb, args.Arg3, arg3, "Arg3 mismatch")
 }
 
 // RegisterEcho registers an echo endpoint on the given channel. The optional provided

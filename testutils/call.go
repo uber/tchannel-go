@@ -20,7 +20,10 @@
 
 package testutils
 
-import "github.com/uber/tchannel-go"
+import (
+	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/relay"
+)
 
 // This file contains test setup logic, and is named with a _test.go suffix to
 // ensure it's only compiled with tests.
@@ -61,7 +64,37 @@ func (f *FakeIncomingCall) RemotePeer() tchannel.PeerInfo {
 	return f.RemotePeerF
 }
 
+// CallOptions returns the incoming call options suitable for proxying a request.
+func (f *FakeIncomingCall) CallOptions() *tchannel.CallOptions {
+	return &tchannel.CallOptions{
+		ShardKey:        f.ShardKey(),
+		RoutingDelegate: f.RoutingDelegate(),
+	}
+}
+
 // NewIncomingCall creates an incoming call for tests.
 func NewIncomingCall(callerName string) tchannel.IncomingCall {
 	return &FakeIncomingCall{CallerNameF: callerName}
+}
+
+// FakeCallFrame is a stub implementation of the CallFrame interface.
+type FakeCallFrame struct {
+	ServiceF, MethodF, CallerF string
+}
+
+var _ relay.CallFrame = FakeCallFrame{}
+
+// Service returns the service name field.
+func (f FakeCallFrame) Service() []byte {
+	return []byte(f.ServiceF)
+}
+
+// Method returns the method field.
+func (f FakeCallFrame) Method() []byte {
+	return []byte(f.MethodF)
+}
+
+// Caller returns the caller field.
+func (f FakeCallFrame) Caller() []byte {
+	return []byte(f.CallerF)
 }

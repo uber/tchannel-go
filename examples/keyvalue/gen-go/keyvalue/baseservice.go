@@ -267,7 +267,7 @@ func (p *BaseServiceHealthCheckArgs) String() string {
 // Attributes:
 //  - Success
 type BaseServiceHealthCheckResult struct {
-	Success *string `thrift:"success,0" json:"success,omitempty"`
+	Success *string `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewBaseServiceHealthCheckResult() *BaseServiceHealthCheckResult {
@@ -301,7 +301,7 @@ func (p *BaseServiceHealthCheckResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -319,7 +319,7 @@ func (p *BaseServiceHealthCheckResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *BaseServiceHealthCheckResult) readField0(iprot thrift.TProtocol) error {
+func (p *BaseServiceHealthCheckResult) ReadField0(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 0: ", err)
 	} else {

@@ -50,6 +50,10 @@ type CallOptions struct {
 	// RoutingDelegate identifies a service capable of routing a request to its
 	// intended recipient.
 	RoutingDelegate string
+
+	// callerName can only be used when forwarding a request. It can only be set internally,
+	// e.g. by calling (*InboundCall).CallOptions() when forwarding a request
+	callerName string
 }
 
 var defaultCallOptions = &CallOptions{}
@@ -69,6 +73,9 @@ func (c *CallOptions) overrideHeaders(headers transportHeaders) {
 	}
 	if c.RoutingDelegate != "" {
 		headers[RoutingDelegate] = c.RoutingDelegate
+	}
+	if c.callerName != "" {
+		headers[CallerName] = c.callerName
 	}
 }
 

@@ -26,17 +26,45 @@ import (
 	"os"
 	"testing"
 
+	. "github.com/uber/tchannel-go"
+
 	"github.com/uber/tchannel-go/testutils/goroutines"
 )
+
+func checkAllChannels() error {
+	ch, err := NewChannel("test-end", nil)
+	if err != nil {
+		return err
+	}
+
+	var foundChannels bool
+	allChannels := ch.IntrospectOthers(&IntrospectionOptions{})
+	for _, cs := range allChannels {
+		if len(cs) != 0 {
+			foundChannels = true
+		}
+	}
+
+	if !foundChannels {
+		return nil
+	}
+
+	return fmt.Errorf("unclosed channels:\n%+v", allChannels)
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 	exitCode := m.Run()
 
-	// Only run the goroutine leak detector if the tests are successful.
 	if exitCode == 0 {
+		// Only do extra checks if the tests were successful.
 		if err := goroutines.IdentifyLeaks(nil); err != nil {
 			fmt.Fprintf(os.Stderr, "Found goroutine leaks on successful test run: %v", err)
+			exitCode = 1
+		}
+
+		if err := checkAllChannels(); err != nil {
+			fmt.Fprintf(os.Stderr, "Found unclosed channels on successful test run: %v", err)
 			exitCode = 1
 		}
 	}

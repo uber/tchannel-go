@@ -25,13 +25,14 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	. "github.com/uber/tchannel-go"
+
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	. "github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/raw"
-	"github.com/uber/tchannel-go/testutils"
+	"golang.org/x/net/context"
 )
 
 func TestActiveCallReq(t *testing.T) {
@@ -98,5 +99,42 @@ func TestInboundConnection(t *testing.T) {
 
 		_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "test", nil, nil)
 		require.NoError(t, err, "Call failed")
+	})
+}
+
+func TestInboundConnection_CallOptions(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	testutils.WithTestServer(t, nil, func(server *testutils.TestServer) {
+		server.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			assert.Equal(t, "client", CurrentCall(ctx).CallerName(), "Expected caller name to be passed through")
+			return &raw.Res{}, nil
+		})
+
+		backendName := server.ServiceName()
+
+		proxyCh := server.NewServer(&testutils.ChannelOpts{ServiceName: "proxy"})
+		defer proxyCh.Close()
+
+		subCh := proxyCh.GetSubChannel(backendName)
+		subCh.SetHandler(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			outbound, err := proxyCh.BeginCall(ctx, server.HostPort(), backendName, inbound.MethodString(), inbound.CallOptions())
+			require.NoError(t, err, "Create outbound call failed")
+			arg2, arg3, _, err := raw.WriteArgs(outbound, []byte("hello"), []byte("world"))
+			require.NoError(t, err, "Write outbound call failed")
+			require.NoError(t, raw.WriteResponse(inbound.Response(), &raw.Res{
+				Arg2: arg2,
+				Arg3: arg3,
+			}), "Write response failed")
+		}))
+
+		clientCh := server.NewClient(&testutils.ChannelOpts{
+			ServiceName: "client",
+		})
+		defer clientCh.Close()
+
+		_, _, _, err := raw.Call(ctx, clientCh, proxyCh.PeerInfo().HostPort, backendName, "test", nil, nil)
+		require.NoError(t, err, "Call through proxy failed")
 	})
 }

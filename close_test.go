@@ -21,20 +21,19 @@
 package tchannel_test
 
 import (
-	"log"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -70,7 +69,7 @@ func TestCloseOnlyListening(t *testing.T) {
 }
 
 func TestCloseNewClient(t *testing.T) {
-	ch := testutils.NewServer(t, nil)
+	ch := testutils.NewClient(t, nil)
 
 	// If there are no connections, then the channel should close immediately.
 	ch.Close()
@@ -79,7 +78,11 @@ func TestCloseNewClient(t *testing.T) {
 }
 
 func TestCloseAfterTimeout(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	// Disable log verfication since connections are closed after a timeout
+	// and the relay might still be reading/writing to the connection.
+	// TODO: Ideally, we only disable log verification on the relay.
+	opts := testutils.NewOpts().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testHandler := onErrorTestHandler{newTestHandler(t), func(_ context.Context, err error) {}}
 		ts.Register(raw.Wrap(testHandler), "block")
 
@@ -89,7 +92,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 		// Make a call, wait for it to timeout.
 		clientCh := ts.NewClient(nil)
 		_, _, _, err := raw.Call(ctx, clientCh, ts.HostPort(), ts.ServiceName(), "block", nil, nil)
-		require.Error(t, err, "Expected call to timeout")
+		require.Equal(t, ErrTimeout, err, "Expected call to timeout")
 
 		// The client channel should also close immediately.
 		clientCh.Close()
@@ -102,8 +105,6 @@ func TestCloseAfterTimeout(t *testing.T) {
 }
 
 func TestRaceExchangesWithClose(t *testing.T) {
-	log.SetFlags(log.Lmicroseconds)
-
 	var wg sync.WaitGroup
 
 	ctx, cancel := NewContext(testutils.Timeout(70 * time.Millisecond))
@@ -124,7 +125,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 			<-completeCall
 		})
 
-		client := testutils.NewClient(t, nil)
+		client := ts.NewClient(opts)
 		defer client.Close()
 
 		callDone := make(chan struct{})
@@ -142,7 +143,8 @@ func TestRaceExchangesWithClose(t *testing.T) {
 			go func() {
 				defer wg.Done()
 
-				c := testutils.NewClient(t, nil)
+				// We don't use ts.NewClient here to avoid data races.
+				c := testutils.NewClient(t, opts)
 				defer c.Close()
 
 				c.Ping(ctx, ts.HostPort())
@@ -359,8 +361,8 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 		t.Errorf("err %v", t.call(s2, s1))
 	}
 
-	require.NoError(t, t.call(s1, s2),
-		"closed channel with pending incoming calls should allow outgoing calls")
+	require.Error(t, t.call(s1, s2),
+		"closed channel with pending incoming calls disallows outgoing calls")
 
 	// Once the incoming connection is drained, outgoing calls should fail.
 	s1C <- struct{}{}
@@ -495,7 +497,8 @@ func TestCloseSendError(t *testing.T) {
 		counter atomic.Uint32
 	)
 
-	serverCh := testutils.NewServer(t, nil)
+	opts := testutils.NewOpts().DisableLogVerification()
+	serverCh := testutils.NewServer(t, opts)
 	testutils.RegisterEcho(serverCh, func() {
 		if counter.Inc() > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
@@ -506,7 +509,7 @@ func TestCloseSendError(t *testing.T) {
 		}
 	})
 
-	clientCh := testutils.NewClient(t, nil)
+	clientCh := testutils.NewClient(t, opts)
 
 	// Create a connection that will be shared.
 	require.NoError(t, testutils.Ping(clientCh, serverCh), "Ping from client to server failed")

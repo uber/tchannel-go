@@ -23,11 +23,12 @@ package mockhyperbahn_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/testutils/mockhyperbahn"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var config = struct {

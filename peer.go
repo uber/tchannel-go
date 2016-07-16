@@ -26,14 +26,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/trand"
 
+	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
 )
 
 var (
 	// ErrInvalidConnectionState indicates that the connection is not in a valid state.
-	ErrInvalidConnectionState = errors.New("connection is in an invalid state")
+	// This may be due to a race between selecting the connection and it closing, so
+	// it is a network failure that can be retried.
+	ErrInvalidConnectionState = NewSystemError(ErrCodeNetwork, "connection is in an invalid state")
 
 	// ErrNoPeers indicates that there are no peers.
 	ErrNoPeers = errors.New("no peers available")
@@ -41,7 +44,7 @@ var (
 	// ErrPeerNotFound indicates that the specified peer was not found.
 	ErrPeerNotFound = errors.New("peer not found")
 
-	peerRng = NewRand(time.Now().UnixNano())
+	peerRng = trand.NewSeeded()
 )
 
 // Connectable is the interface used by peers to create connections.
@@ -191,7 +194,7 @@ func (l *PeerList) GetOrAdd(hostPort string) *Peer {
 	return l.Add(hostPort)
 }
 
-// Copy returns a map of the peer list. This method should only be used for testing.
+// Copy returns a copy of the PeerList as a map from hostPort to peer.
 func (l *PeerList) Copy() map[string]*Peer {
 	l.RLock()
 	defer l.RUnlock()
@@ -343,24 +346,24 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 	}
 
 	// No active connections, make a new outgoing connection.
-	c, err := p.Connect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
+	return p.Connect(ctx)
 }
 
-// AddInboundConnection adds an active inbound connection to the peer's connection list.
-// If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) AddInboundConnection(c *Connection) error {
-	if c.readState() != connectionActive {
-		return ErrInvalidConnectionState
+// getConnectionRelay gets a connection, and uses the given timeout if a new
+// connection is required.
+func (p *Peer) getConnectionRelay(timeout time.Duration) (*Connection, error) {
+	if conn, ok := p.getActiveConn(); ok {
+		return conn, nil
 	}
 
-	p.Lock()
-	p.inboundConnections = append(p.inboundConnections, c)
-	p.Unlock()
-	return nil
+	// When the relay creates outbound connections, we don't want those services
+	// to ever connect back to us and send us traffic. We hide the host:port
+	// so that service instances on remote machines don't try to connect back
+	// and don't try to send Hyperbahn traffic on this connection.
+	ctx, cancel := NewContextBuilder(timeout).HideListeningOnOutbound().Build()
+	defer cancel()
+
+	return p.Connect(ctx)
 }
 
 // addSC adds a reference to a peer from a subchannel (e.g. peer list).
@@ -385,20 +388,27 @@ func (p *Peer) canRemove() bool {
 	return count == 0
 }
 
-// AddOutboundConnection adds an active outbound connection to the peer's connection list.
-// If a connection is not active, ErrInvalidConnectionState will be returned.
-func (p *Peer) AddOutboundConnection(c *Connection) error {
-	switch c.readState() {
-	case connectionActive, connectionStartClose:
-		break
-	default:
+// addConnection adds an active connection to the peer's connection list.
+// If a connection is not active, ErrInvalidConnectionState is returned.
+func (p *Peer) addConnection(c *Connection, direction connectionDirection) error {
+	conns := p.connectionsFor(direction)
+
+	p.Lock()
+	defer p.Unlock()
+
+	if c.readState() != connectionActive {
 		return ErrInvalidConnectionState
 	}
 
-	p.Lock()
-	p.outboundConnections = append(p.outboundConnections, c)
-	p.Unlock()
+	*conns = append(*conns, c)
 	return nil
+}
+
+func (p *Peer) connectionsFor(direction connectionDirection) *[]*Connection {
+	if direction == inbound {
+		return &p.inboundConnections
+	}
+	return &p.outboundConnections
 }
 
 // removeConnection will check remove the connection if it exists on connsPtr
@@ -438,16 +448,7 @@ func (p *Peer) connectionCloseStateChange(changed *Connection) {
 
 // Connect adds a new outbound connection to the peer.
 func (p *Peer) Connect(ctx context.Context) (*Connection, error) {
-	c, err := p.channel.Connect(ctx, p.hostPort)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := p.AddOutboundConnection(c); err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return p.channel.Connect(ctx, p.hostPort)
 }
 
 // BeginCall starts a new call to this specific peer, returning an OutboundCall that can
@@ -458,14 +459,15 @@ func (p *Peer) BeginCall(ctx context.Context, serviceName, methodName string, ca
 	}
 	callOptions.RequestState.AddSelectedPeer(p.HostPort())
 
+	if err := validateCall(ctx, serviceName, methodName, callOptions); err != nil {
+		return nil, err
+	}
+
 	conn, err := p.GetConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if callOptions == nil {
-		callOptions = defaultCallOptions
-	}
 	call, err := conn.beginCall(ctx, serviceName, methodName, callOptions)
 	if err != nil {
 		return nil, err

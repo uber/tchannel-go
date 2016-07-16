@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/tnet"
 
 	"golang.org/x/net/context"
@@ -63,6 +64,14 @@ type ChannelOptions struct {
 
 	// The logger to use for this channel
 	Logger Logger
+
+	// The host:port selection implementation to use for relaying. This is an
+	// unstable API - breaking changes are likely.
+	RelayHosts relay.Hosts
+
+	// The stats implementation to use for relaying. This is an unstable API -
+	// breaking changes are likely.
+	RelayStats relay.Stats
 
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
@@ -118,6 +127,7 @@ type Channel struct {
 	commonStatsTags   map[string]string
 	connectionOptions ConnectionOptions
 	peers             *PeerList
+	relayHosts        relay.Hosts
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -133,6 +143,7 @@ type Channel struct {
 // and can be copied directly from the channel to the connection.
 type channelConnectionCommon struct {
 	log             Logger
+	relayStats      relay.Stats
 	statsReporter   StatsReporter
 	traceReporter   TraceReporter
 	subChannels     *subChannelMap
@@ -177,11 +188,17 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		traceSampleRate = *opts.TraceSampleRate
 	}
 
+	relayStats := relay.NewNoopStats()
+	if opts.RelayStats != nil {
+		relayStats = opts.RelayStats
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log: logger.WithFields(
 				LogField{"service", serviceName},
 				LogField{"process", processName}),
+			relayStats:      relayStats,
 			statsReporter:   statsReporter,
 			subChannels:     &subChannelMap{},
 			timeNow:         timeNow,
@@ -189,6 +206,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,
+		relayHosts:        opts.RelayHosts,
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
@@ -398,7 +416,7 @@ func (ch *Channel) serve() {
 
 		// Register the connection in the peer once the channel is set up.
 		events := connectionEvents{
-			OnActive:           ch.incomingConnectionActive,
+			OnActive:           ch.inboundConnectionActive,
 			OnCloseStateChange: ch.connectionCloseStateChange,
 			OnExchangeUpdated:  ch.exchangeUpdated,
 		}
@@ -461,20 +479,26 @@ func getTimeout(ctx context.Context) time.Duration {
 	return deadline.Sub(time.Now())
 }
 
-// Connect connects the channel.
+// Connect creates a new outbound connection to hostPort.
 func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, error) {
 	switch state := ch.State(); state {
 	case ChannelClient, ChannelListening:
 		break
-	case ChannelStartClose:
-		// We still allow outgoing connections during Close, but the connection has to immediately
-		// be Closed after opening
 	default:
 		ch.log.Debugf("Connect rejecting new connection as state is %v", state)
 		return nil, errInvalidStateForOp
 	}
 
+	// The context timeout applies to the whole call, but users may want a lower
+	// connect timeout (e.g. for streams).
+	if params := getTChannelParams(ctx); params != nil && params.connectTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, params.connectTimeout)
+		defer cancel()
+	}
+
 	events := connectionEvents{
+		OnActive:           ch.outboundConnectionActive,
 		OnCloseStateChange: ch.connectionCloseStateChange,
 		OnExchangeUpdated:  ch.exchangeUpdated,
 	}
@@ -486,22 +510,6 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 
 	if err := c.sendInit(ctx); err != nil {
 		return nil, err
-	}
-
-	ch.mutable.Lock()
-	ch.mutable.conns[c.connID] = c
-	chState := ch.mutable.state
-	ch.mutable.Unlock()
-
-	// Any connections added after the channel is in StartClose should also be set to start close.
-	if chState == ChannelStartClose {
-		// TODO(prashant): If Connect is called, but no outgoing calls are made, then this connection
-		// will block Close, as it will never get cleaned up.
-		c.withStateLock(func() error {
-			c.state = connectionStartClose
-			return nil
-		})
-		c.log.Debugf("Channel is in start close, set connection to start close")
 	}
 
 	return c, err
@@ -524,20 +532,56 @@ func (ch *Channel) updatePeer(p *Peer) {
 	p.callOnUpdateComplete()
 }
 
-// incomingConnectionActive adds a new active connection to our peer list.
-func (ch *Channel) incomingConnectionActive(c *Connection) {
-	c.log.Debugf("Add connection as an active peer for %v", c.remotePeerInfo.HostPort)
-	// TODO: Alter TChannel spec to allow optionally include the service name
-	// when initializing a connection. As-is, we have to keep these peers in
-	// rootPeers (which isn't used for outbound calls) because we don't know
-	// what services they implement.
-	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
-	p.AddInboundConnection(c)
-	ch.updatePeer(p)
-
+// addConnection adds the connection to the channel's list of connection
+// if the channel is in a valid state to accept this connection. It returns
+// whether the connection was added.
+func (ch *Channel) addConnection(c *Connection, direction connectionDirection) bool {
 	ch.mutable.Lock()
+	defer ch.mutable.Unlock()
+
+	if c.readState() != connectionActive {
+		return false
+	}
+
+	switch state := ch.mutable.state; state {
+	case ChannelClient, ChannelListening:
+		break
+	default:
+		return false
+	}
+
 	ch.mutable.conns[c.connID] = c
-	ch.mutable.Unlock()
+	return true
+}
+
+func (ch *Channel) connectionActive(c *Connection, direction connectionDirection) {
+	c.log.Debugf("New active %v connection for peer %v", direction, c.remotePeerInfo.HostPort)
+
+	if added := ch.addConnection(c, direction); !added {
+		// The channel isn't in a valid state to accept this connection, close the connection.
+		c.log.Debugf("Closing connection due to closing channel state")
+		c.Close()
+		return
+	}
+
+	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	if err := p.addConnection(c, direction); err != nil {
+		c.log.WithFields(
+			LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
+			LogField{"direction", direction},
+			ErrField(err),
+		).Warn("Failed to add connection to peer")
+	}
+
+	ch.updatePeer(p)
+}
+
+func (ch *Channel) inboundConnectionActive(c *Connection) {
+	ch.connectionActive(c, inbound)
+}
+
+func (ch *Channel) outboundConnectionActive(c *Connection) {
+	ch.connectionActive(c, outbound)
 }
 
 // removeClosedConn removes a connection if it's closed.
@@ -549,6 +593,16 @@ func (ch *Channel) removeClosedConn(c *Connection) {
 	ch.mutable.Lock()
 	delete(ch.mutable.conns, c.connID)
 	ch.mutable.Unlock()
+}
+
+func (ch *Channel) getMinConnectionState() connectionState {
+	minState := connectionClosed
+	for _, c := range ch.mutable.conns {
+		if s := c.readState(); s < minState {
+			minState = s
+		}
+	}
+	return minState
 }
 
 // connectionCloseStateChange is called when a connection's close state changes.
@@ -565,12 +619,7 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	}
 
 	ch.mutable.RLock()
-	minState := connectionClosed
-	for _, c := range ch.mutable.conns {
-		if s := c.readState(); s < minState {
-			minState = s
-		}
-	}
+	minState := ch.getMinConnectionState()
 	ch.mutable.RUnlock()
 
 	var updateTo ChannelState
@@ -582,7 +631,11 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 
 	if updateTo > 0 {
 		ch.mutable.Lock()
-		ch.mutable.state = updateTo
+		// Recheck the state as it's possible another goroutine changed the state
+		// from what we expected, and so we might make a stale change.
+		if ch.mutable.state == chState {
+			ch.mutable.state = updateTo
+		}
 		ch.mutable.Unlock()
 		chState = updateTo
 	}
@@ -631,4 +684,9 @@ func (ch *Channel) Close() {
 		c.Close()
 	}
 	removeClosedChannel(ch)
+}
+
+// RelayHosts returns the channel's relay hosts, if any.
+func (ch *Channel) RelayHosts() relay.Hosts {
+	return ch.relayHosts
 }

@@ -36,9 +36,9 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	now := c.timeNow()
 
 	switch state := c.readState(); state {
-	case connectionActive, connectionStartClose:
+	case connectionActive:
 		break
-	case connectionInboundClosed, connectionClosed:
+	case connectionStartClose, connectionInboundClosed, connectionClosed:
 		return nil, ErrConnectionClosed
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
 		return nil, ErrConnectionNotReady
@@ -47,8 +47,9 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	deadline, ok := ctx.Deadline()
-	// No deadline was set, we should not support no deadlines.
 	if !ok {
+		// This case is handled by validateCall, so we should
+		// never get here.
 		return nil, ErrTimeoutRequired
 	}
 	timeToLive := deadline.Sub(now)
@@ -69,7 +70,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	// Close may have been called between the time we checked the state and us creating the exchange.
-	if state := c.readState(); state != connectionStartClose && state != connectionActive {
+	if state := c.readState(); state != connectionActive {
 		mex.shutdown()
 		return nil, ErrConnectionClosed
 	}
@@ -214,10 +215,6 @@ func (call *OutboundCall) createStatsTags(connectionTags map[string]string, call
 
 // writeMethod writes the method (arg1) to the call
 func (call *OutboundCall) writeMethod(method []byte) error {
-	if len(method) > maxMethodSize {
-		return call.failed(ErrMethodTooLarge)
-	}
-
 	call.statsReporter.IncCounter("outbound.calls.send", call.commonStatsTags, 1)
 	return NewArgWriter(call.arg1Writer()).Write(method)
 }
@@ -232,6 +229,11 @@ func (call *OutboundCall) Arg2Writer() (ArgWriter, error) {
 // The returned writer must be closed once the write is complete.
 func (call *OutboundCall) Arg3Writer() (ArgWriter, error) {
 	return call.arg3Writer()
+}
+
+// RemotePeer returns the peer information for this call.
+func (call *OutboundCall) RemotePeer() PeerInfo {
+	return call.conn.RemotePeerInfo()
 }
 
 func (call *OutboundCall) doneSending() {}
@@ -363,4 +365,20 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 	}
 
 	response.mex.shutdown()
+}
+
+func validateCall(ctx context.Context, serviceName, methodName string, callOpts *CallOptions) error {
+	if serviceName == "" {
+		return ErrNoServiceName
+	}
+
+	if len(methodName) > maxMethodSize {
+		return ErrMethodTooLarge
+	}
+
+	if _, ok := ctx.Deadline(); !ok {
+		return ErrTimeoutRequired
+	}
+
+	return nil
 }

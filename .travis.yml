@@ -1,13 +1,17 @@
 language: go
 cache:
   directories:
-    - Godeps/_workspace/src
+    - $HOME/.glide/cache
 go:
   - 1.4
   - 1.5
   - 1.6
+  - 1.7rc1
   - tip
 install: make install_ci
+env:
+ # Set higher timeouts for Travis
+ - TEST_TIMEOUT_SCALE=20
 script:
  - make test_ci
  - make cover_ci

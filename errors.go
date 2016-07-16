@@ -97,6 +97,34 @@ var (
 	ErrMethodTooLarge = NewSystemError(ErrCodeProtocol, "method too large")
 )
 
+// MetricsKey is a string representation of the error code that's suitable for
+// inclusion in metrics tags.
+func (c SystemErrCode) MetricsKey() string {
+	switch c {
+	case ErrCodeInvalid:
+		// Shouldn't ever need this.
+		return "invalid"
+	case ErrCodeTimeout:
+		return "timeout"
+	case ErrCodeCancelled:
+		return "cancelled"
+	case ErrCodeBusy:
+		return "busy"
+	case ErrCodeDeclined:
+		return "declined"
+	case ErrCodeUnexpected:
+		return "unexpected-error"
+	case ErrCodeBadRequest:
+		return "bad-request"
+	case ErrCodeNetwork:
+		return "network-error"
+	case ErrCodeProtocol:
+		return "protocol-error"
+	default:
+		return c.String()
+	}
+}
+
 // A SystemError is a system-level error, containing an error code and message
 // TODO(mmihic): Probably we want to hide this interface, and let application code
 // just deal with standard raw errors.
@@ -149,6 +177,10 @@ func GetContextError(err error) error {
 // GetSystemErrorCode returns the code to report for the given error.  If the error is a
 // SystemError, we can get the code directly.  Otherwise treat it as an unexpected error
 func GetSystemErrorCode(err error) SystemErrCode {
+	if err == nil {
+		return ErrCodeInvalid
+	}
+
 	if se, ok := err.(SystemError); ok {
 		return se.Code()
 	}

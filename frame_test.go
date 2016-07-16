@@ -27,18 +27,23 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/typed"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestFrameHeaderJSON(t *testing.T) {
-	fh := FrameHeader{
+func fakeHeader() FrameHeader {
+	return FrameHeader{
 		size:        uint16(0xFF34),
 		messageType: messageTypeCallReq,
 		ID:          0xDEADBEEF,
 	}
+}
+
+func TestFrameHeaderJSON(t *testing.T) {
+	fh := fakeHeader()
 	logged, err := json.Marshal(fh)
 	assert.NoError(t, err, "FrameHeader can't be marshalled to JSON")
 	assert.Equal(
@@ -50,12 +55,7 @@ func TestFrameHeaderJSON(t *testing.T) {
 }
 
 func TestFraming(t *testing.T) {
-	fh := FrameHeader{
-		size:        uint16(0xFF34),
-		messageType: messageTypeCallReq,
-		ID:          0xDEADBEEF,
-	}
-
+	fh := fakeHeader()
 	wbuf := typed.NewWriteBufferWithSize(1024)
 	require.Nil(t, fh.write(wbuf))
 
@@ -134,4 +134,11 @@ func TestReservedBytes(t *testing.T) {
 			0x0, 0x0, 0x0, 0x0, // reserved should always be 0
 		},
 		buf.Bytes(), "Unexpected bytes")
+}
+
+func TestMessageType(t *testing.T) {
+	frame := NewFrame(MaxFramePayloadSize)
+	err := frame.write(&callReq{Service: "foo"})
+	require.NoError(t, err, "Error writing message to frame.")
+	assert.Equal(t, messageTypeCallReq, frame.messageType(), "Failed to read message type from frame.")
 }

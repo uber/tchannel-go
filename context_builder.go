@@ -44,6 +44,13 @@ type ContextBuilder struct {
 	// RetryOptions are the retry options for this call.
 	RetryOptions *RetryOptions
 
+	// ConnectTimeout is the timeout for creating a TChannel connection.
+	ConnectTimeout time.Duration
+
+	// hideListeningOnOutbound disables sending the listening server's host:port
+	// when creating new outgoing connections.
+	hideListeningOnOutbound bool
+
 	// ParentContext to build the new context from. If empty, context.Background() is used.
 	// The new (child) context inherits a number of properties from the parent context:
 	//   - the tracing Span, unless replaced via SetExternalSpan()
@@ -116,6 +123,21 @@ func (cb *ContextBuilder) SetRoutingDelegate(rd string) *ContextBuilder {
 		cb.CallOptions = new(CallOptions)
 	}
 	cb.CallOptions.RoutingDelegate = rd
+	return cb
+}
+
+// SetConnectTimeout sets the ConnectionTimeout for this context.
+// The context timeout applies to the whole call, while the connect
+// timeout only applies to creating a new connection.
+func (cb *ContextBuilder) SetConnectTimeout(d time.Duration) *ContextBuilder {
+	cb.ConnectTimeout = d
+	return cb
+}
+
+// HideListeningOnOutbound hides the host:port when creating new outbound
+// connections.
+func (cb *ContextBuilder) HideListeningOnOutbound() *ContextBuilder {
+	cb.hideListeningOnOutbound = true
 	return cb
 }
 
@@ -216,10 +238,12 @@ func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 	}
 
 	params := &tchannelCtxParams{
-		options:      cb.CallOptions,
-		span:         span,
-		call:         cb.incomingCall,
-		retryOptions: cb.RetryOptions,
+		options:                 cb.CallOptions,
+		span:                    span,
+		call:                    cb.incomingCall,
+		retryOptions:            cb.RetryOptions,
+		connectTimeout:          cb.ConnectTimeout,
+		hideListeningOnOutbound: cb.hideListeningOnOutbound,
 	}
 
 	parent := cb.ParentContext

@@ -36,10 +36,12 @@ const (
 )
 
 type tchannelCtxParams struct {
-	span         *Span
-	call         IncomingCall
-	options      *CallOptions
-	retryOptions *RetryOptions
+	span                    *Span
+	call                    IncomingCall
+	options                 *CallOptions
+	retryOptions            *RetryOptions
+	connectTimeout          time.Duration
+	hideListeningOnOutbound bool
 }
 
 // IncomingCall exposes properties for incoming calls through the context.
@@ -58,6 +60,11 @@ type IncomingCall interface {
 	// If the caller is an ephemeral peer, then the HostPort cannot be used to make new
 	// connections to the caller.
 	RemotePeer() PeerInfo
+
+	// CallOptions returns the call options set for the incoming call. It can be useful
+	// if you are forwarding a request and wish to retain the CallerName(), which is not
+	// possible to set manually.
+	CallOptions() *CallOptions
 }
 
 func getTChannelParams(ctx context.Context) *tchannelCtxParams {

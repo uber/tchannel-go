@@ -25,6 +25,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"unsafe"
+
+	"github.com/prashantv/protectmem"
 )
 
 type RecordingFramePool struct {
@@ -32,6 +35,17 @@ type RecordingFramePool struct {
 
 	allocations map[*Frame]string
 	badRelease  []string
+}
+
+type protectMemAllocs struct {
+	frameAlloc  *protectmem.Allocation
+	bufferAlloc *protectmem.Allocation
+}
+
+type ProtectMemFramePool struct {
+	sync.Mutex
+
+	allocations map[*Frame]protectMemAllocs
 }
 
 func NewRecordingFramePool() *RecordingFramePool {
@@ -92,4 +106,44 @@ func (p *RecordingFramePool) CheckEmpty() (int, string) {
 		badCalls = append(badCalls, fmt.Sprintf("frame %p: %v not released, get from: %v", f, f.Header, s))
 	}
 	return len(p.allocations), strings.Join(badCalls, "\n")
+}
+
+// NewProtectMemFramePool creates a frame pool that ensures that released frames
+// are not reused by removing all access to a frame once it's been released.
+func NewProtectMemFramePool() FramePool {
+	return &ProtectMemFramePool{
+		allocations: make(map[*Frame]protectMemAllocs),
+	}
+}
+func (p *ProtectMemFramePool) Get() *Frame {
+	frameAlloc := protectmem.Allocate(unsafe.Sizeof(Frame{}))
+	f := (*Frame)(frameAlloc.Ptr())
+
+	bufferAlloc := protectmem.AllocateSlice(&f.buffer, MaxFramePayloadSize)
+	f.buffer = f.buffer[:MaxFramePayloadSize]
+	f.Payload = f.buffer[FrameHeaderSize:]
+	f.headerBuffer = f.buffer[:FrameHeaderSize]
+
+	p.Lock()
+	p.allocations[f] = protectMemAllocs{
+		frameAlloc:  frameAlloc,
+		bufferAlloc: bufferAlloc,
+	}
+	p.Unlock()
+
+	return f
+}
+
+func (p *ProtectMemFramePool) Release(f *Frame) {
+	p.Lock()
+	allocs, ok := p.allocations[f]
+	delete(p.allocations, f)
+	p.Unlock()
+
+	if !ok {
+		panic(fmt.Errorf("released frame that was not allocated by pool: %v", f.Header))
+	}
+
+	allocs.bufferAlloc.Protect(protectmem.None)
+	allocs.frameAlloc.Protect(protectmem.None)
 }

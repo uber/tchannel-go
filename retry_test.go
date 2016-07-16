@@ -27,9 +27,10 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
+	"github.com/uber/tchannel-go/testutils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/testutils"
 	"golang.org/x/net/context"
 )
 
@@ -106,6 +107,7 @@ func TestCanRetry(t *testing.T) {
 
 func TestNoRetry(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 
 	e := getTestErrors()
 	retryOpts := &RetryOptions{RetryOn: RetryNever}
@@ -122,6 +124,7 @@ func TestNoRetry(t *testing.T) {
 
 func TestRetryTillMaxAttempts(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 
 	setErr := ErrServerBusy
 	runTest := func(maxAttempts, numErrors, expectCounter int, expectErr error) {
@@ -167,6 +170,8 @@ func TestRetrySubContextNoTimeoutPerAttempt(t *testing.T) {
 	defer cancel()
 
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+
 	counter := 0
 	ch.RunWithRetry(ctx, func(sctx context.Context, _ *RequestState) error {
 		counter++
@@ -183,6 +188,8 @@ func TestRetrySubContextTimeoutPerAttempt(t *testing.T) {
 	defer cancel()
 
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+
 	var lastDeadline time.Time
 
 	counter := 0
@@ -205,6 +212,7 @@ func TestRetrySubContextTimeoutPerAttempt(t *testing.T) {
 func TestRetryNetConnect(t *testing.T) {
 	e := getTestErrors()
 	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()

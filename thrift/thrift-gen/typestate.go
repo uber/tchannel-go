@@ -61,7 +61,7 @@ func (s *State) isBasicType(thriftType string) bool {
 
 // rootType recurses through typedefs and returns the underlying type.
 func (s *State) rootType(thriftType *parser.Type) *parser.Type {
-	if state, newType, _, include := s.checkInclude(thriftType); include {
+	if state, newType, include := s.checkInclude(thriftType); include != nil {
 		return state.rootType(newType)
 	}
 
@@ -73,10 +73,10 @@ func (s *State) rootType(thriftType *parser.Type) *parser.Type {
 
 // checkInclude will check if the type is an included type, and if so, return the
 // state and type from the state for that file.
-func (s *State) checkInclude(thriftType *parser.Type) (*State, *parser.Type, string, bool) {
+func (s *State) checkInclude(thriftType *parser.Type) (*State, *parser.Type, *Include) {
 	parts := strings.SplitN(thriftType.Name, ".", 2)
 	if len(parts) < 2 {
-		return nil, nil, "", false
+		return nil, nil, nil
 	}
 
 	newType := *thriftType
@@ -84,7 +84,7 @@ func (s *State) checkInclude(thriftType *parser.Type) (*State, *parser.Type, str
 
 	include := s.includes[parts[0]]
 	state := s.all[include.file]
-	return state.global, &newType, parts[0], true
+	return state.global, &newType, include
 }
 
 // isResultPointer returns whether the result for this method is a pointer.
@@ -112,8 +112,8 @@ func (s *State) goTypePrefix(prefix string, thriftType *parser.Type) string {
 	}
 
 	// If the type is imported, then ignore the package.
-	if state, newType, prefix, include := s.checkInclude(thriftType); include {
-		return state.goTypePrefix(prefix+".", newType)
+	if state, newType, include := s.checkInclude(thriftType); include != nil {
+		return state.goTypePrefix(include.Package()+".", newType)
 	}
 
 	// If the type is a direct Go type, use that.

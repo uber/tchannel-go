@@ -26,14 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
-
 	. "github.com/uber/tchannel-go"
+
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/raw"
-	"github.com/uber/tchannel-go/testutils"
+	"golang.org/x/net/context"
 )
 
 func tagsForOutboundCall(serverCh *Channel, clientCh *Channel, method string) map[string]string {
@@ -99,7 +99,7 @@ func TestStatsCalls(t *testing.T) {
 			ctx, cancel := NewContext(time.Second * 5)
 			defer cancel()
 
-			_, _, resp, err := raw.Call(ctx, ch, hostPort, testServiceName, tt.method, nil, nil)
+			_, _, resp, err := raw.Call(ctx, ch, hostPort, testutils.DefaultServerName, tt.method, nil, nil)
 			require.NoError(t, err, "Call(%v) should fail", tt.method)
 			assert.Equal(t, tt.wantErr, resp.ApplicationError(), "Call(%v) check application error")
 
@@ -144,7 +144,9 @@ func TestStatsWithRetries(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	WithVerifiedServer(t, nil, func(serverCh *Channel, hostPort string) {
+	// TODO why do we need this??
+	opts := testutils.NewOpts().NoRelay()
+	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		respErr := make(chan error, 1)
 		testutils.RegisterFunc(serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr

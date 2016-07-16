@@ -26,7 +26,9 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/relay"
+
+	"github.com/uber-go/atomic"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")
@@ -47,8 +49,16 @@ type ChannelOpts struct {
 	// LogVerification contains options for controlling the log verification.
 	LogVerification LogVerification
 
-	// optFn is run with the channel options before creating the channel.
-	optFn func(*ChannelOpts)
+	// DisableRelay disables the relay interposed between clients/servers.
+	// By default, all tests are run with a relay interposed.
+	DisableRelay bool
+
+	// OnlyRelay instructs TestServer the test must only be run with a relay.
+	OnlyRelay bool
+
+	// RunCount is the number of times the test should be run. Zero or
+	// negative values are treated as a single run.
+	RunCount int
 
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
@@ -74,6 +84,15 @@ type LogFilter struct {
 
 	// FieldFilters specifies expected substring matches for fields.
 	FieldFilters map[string]string
+}
+
+// Copy copies the channel options (so that they can be safely modified).
+func (o *ChannelOpts) Copy() *ChannelOpts {
+	if o == nil {
+		return NewOpts()
+	}
+	copiedOpts := *o
+	return &copiedOpts
 }
 
 // SetServiceName sets ServiceName.
@@ -130,6 +149,24 @@ func (o *ChannelOpts) DisableLogVerification() *ChannelOpts {
 	return o
 }
 
+// NoRelay disables running the test with a relay interposed.
+func (o *ChannelOpts) NoRelay() *ChannelOpts {
+	o.DisableRelay = true
+	return o
+}
+
+// SetRelayOnly instructs TestServer to only run with a relay in front of this channel.
+func (o *ChannelOpts) SetRelayOnly() *ChannelOpts {
+	o.OnlyRelay = true
+	return o
+}
+
+// SetRunCount sets the number of times run the test.
+func (o *ChannelOpts) SetRunCount(n int) *ChannelOpts {
+	o.RunCount = n
+	return o
+}
+
 // AddLogFilter sets an allowed filter for warning/error logs and sets
 // the maximum number of times that log can occur.
 func (o *ChannelOpts) AddLogFilter(filter string, maxCount uint, fields ...string) *ChannelOpts {
@@ -150,21 +187,17 @@ func (o *ChannelOpts) addPostFn(f func()) {
 	o.postFns = append(o.postFns, f)
 }
 
+// SetRelayHosts sets the channel's relay hosts, which enables relaying.
+func (o *ChannelOpts) SetRelayHosts(rh relay.Hosts) *ChannelOpts {
+	o.ChannelOptions.RelayHosts = rh
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue
 	}
 	return v
-}
-
-func getChannelOptions(opts *ChannelOpts) *tchannel.ChannelOptions {
-	if opts.Logger == nil && *connectionLog {
-		opts.Logger = tchannel.SimpleLogger
-	}
-	if opts.optFn != nil {
-		opts.optFn(opts)
-	}
-	return &opts.ChannelOptions
 }
 
 // NewOpts returns a new ChannelOpts that can be used in a chained fashion.

@@ -25,9 +25,10 @@ import (
 	"io"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/testutils/testwriter"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func writeByte(writer io.Writer, b byte) error {

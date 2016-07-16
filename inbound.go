@@ -39,10 +39,11 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	case connectionActive:
 		break
 	case connectionStartClose, connectionInboundClosed, connectionClosed:
-		c.SendSystemError(frame.Header.ID, nil, ErrChannelClosed)
+		c.SendSystemError(frame.Header.ID, callReqSpan(frame), ErrChannelClosed)
 		return true
 	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
-		c.SendSystemError(frame.Header.ID, nil, NewSystemError(ErrCodeDeclined, "connection not ready"))
+		err := NewSystemError(ErrCodeDeclined, "connection not ready")
+		c.SendSystemError(frame.Header.ID, callReqSpan(frame), err)
 		return true
 	default:
 		panic(fmt.Errorf("unknown connection state for call req: %v", state))
@@ -260,6 +261,16 @@ func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }
 
+// CallOptions returns a CallOptions struct suitable for forwarding a request.
+func (call *InboundCall) CallOptions() *CallOptions {
+	return &CallOptions{
+		callerName:      call.CallerName(),
+		Format:          call.Format(),
+		ShardKey:        call.ShardKey(),
+		RoutingDelegate: call.RoutingDelegate(),
+	}
+}
+
 // Reads the entire method name (arg1) from the request stream.
 func (call *InboundCall) readMethod() error {
 	var arg1 []byte
@@ -327,7 +338,14 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	response.systemError = true
 	response.doneSending()
 	response.call.releasePreviousFragment()
-	return response.conn.SendSystemError(response.mex.msgID, CurrentSpan(response.mex.ctx), err)
+
+	span := CurrentSpan(response.mex.ctx)
+	if span == nil {
+		response.log.Error("Missing span when sending system error")
+		span = &Span{}
+	}
+
+	return response.conn.SendSystemError(response.mex.msgID, *span, err)
 }
 
 // SetApplicationError marks the response as being an application error.  This method can

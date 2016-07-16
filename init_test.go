@@ -115,6 +115,89 @@ func TestUnexpectedInitReq(t *testing.T) {
 	}
 }
 
+func TestUnexpectedInitRes(t *testing.T) {
+	validParams := initParams{
+		InitParamHostPort:    "0.0.0.0:0",
+		InitParamProcessName: "tchannel-go.test",
+	}
+	tests := []struct {
+		msg    message
+		errMsg string
+	}{
+		{
+			msg: &initRes{initMessage{
+				id:         1,
+				Version:    CurrentProtocolVersion - 1,
+				initParams: validParams,
+			}},
+			errMsg: "unsupported protocol version",
+		},
+		{
+			msg: &initRes{initMessage{
+				id:         1,
+				Version:    CurrentProtocolVersion + 1,
+				initParams: validParams,
+			}},
+			errMsg: "unsupported protocol version",
+		},
+		{
+			msg: &initRes{initMessage{
+				id:      1,
+				Version: CurrentProtocolVersion,
+			}},
+			errMsg: "header host_port is required",
+		},
+		{
+			msg: &initRes{initMessage{
+				id:      1,
+				Version: CurrentProtocolVersion,
+				initParams: initParams{
+					InitParamHostPort: "0.0.0.0:0",
+				},
+			}},
+			errMsg: "header process_name is required",
+		},
+	}
+
+	for _, tt := range tests {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err, "net.Listen failed")
+		defer ln.Close()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			ch, err := NewChannel("test", nil)
+			require.NoError(t, err)
+			defer ch.Close()
+
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+			_, err = ch.Peers().GetOrAdd(ln.Addr().String()).GetConnection(ctx)
+			if !assert.Error(t, err, "Expected GetConnection to fail") {
+				return
+			}
+
+			assert.Equal(t, ErrCodeProtocol, GetSystemErrorCode(err), "Unexpected error code")
+			assert.Contains(t, err.Error(), tt.errMsg)
+		}()
+
+		conn, err := ln.Accept()
+		require.NoError(t, err, "Failed to accept connection")
+
+		// Read the frame and verify that it's an initReq.
+		f, err := readFrame(conn)
+		require.NoError(t, err, "read frame failed")
+		if !assert.Equal(t, messageTypeInitReq, f.messageType(), "Expected first message to be initReq") {
+			continue
+		}
+
+		// Write out the specified initRes wait for the channel to get an error.
+		assert.NoError(t, writeMessage(conn, tt.msg), "write initRes failed")
+		<-done
+	}
+}
+
 func TestHandleInitReqNewVersion(t *testing.T) {
 	ch, err := NewChannel("test", nil)
 	require.NoError(t, err)
@@ -187,6 +270,7 @@ func TestHandleInitRes(t *testing.T) {
 
 	ch, err := NewChannel("test-svc", nil)
 	require.NoError(t, err, "NewChannel failed")
+	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -223,6 +307,7 @@ func TestInitReqGetsError(t *testing.T) {
 	logOut := &bytes.Buffer{}
 	ch, err := NewChannel("test-svc", &ChannelOptions{Logger: NewLevelLogger(NewLogger(logOut), LogLevelWarn)})
 	require.NoError(t, err, "NewClient failed")
+	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()

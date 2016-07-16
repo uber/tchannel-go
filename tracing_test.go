@@ -28,11 +28,12 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
 
@@ -160,17 +161,20 @@ func TestTraceReportingEnabled(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		state.signal = make(chan struct{})
-
 		serverNow, serverNowFn := testutils.NowStub(initialTime.Add(time.Second))
 		clientNow, clientNowFn := testutils.NowStub(initialTime)
 		serverNowFn(time.Second)
 		clientNowFn(time.Second)
 
-		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(serverNow)
+		// Note: we disable the relay as the relay shares the same options
+		// and since the relay would call timeNow, it causes a mismatch in
+		// the expected timestamps.
+		tt.serverOpts = testutils.DefaultOpts(tt.serverOpts).SetTimeNow(serverNow).NoRelay()
 		tt.clientOpts = testutils.DefaultOpts(tt.clientOpts).SetTimeNow(clientNow)
 
 		WithVerifiedServer(t, tt.serverOpts, func(ch *Channel, hostPort string) {
+			state.signal = make(chan struct{})
+
 			testutils.RegisterEcho(ch, func() {
 				clientNowFn(5 * time.Second)
 			})
@@ -251,12 +255,12 @@ func TestTraceSamplingRate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		var reportedTraces int
-		testTraceReporter := TraceReporterFunc(func(_ TraceData) {
-			reportedTraces++
-		})
-
 		WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+			var reportedTraces int
+			testTraceReporter := TraceReporterFunc(func(_ TraceData) {
+				reportedTraces++
+			})
+
 			var tracedCalls int
 			testutils.RegisterFunc(ch, "t", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				if CurrentSpan(ctx).TracingEnabled() {

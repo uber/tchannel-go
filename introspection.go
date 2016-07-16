@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"runtime"
 	"sort"
+	"strconv"
 
 	"golang.org/x/net/context"
 )
@@ -35,6 +36,9 @@ type IntrospectionOptions struct {
 
 	// IncludeEmptyPeers will include peers, even if they have no connections.
 	IncludeEmptyPeers bool `json:"includeEmptyPeers"`
+
+	// IncludeTombstones will include tombstones when introspecting relays.
+	IncludeTombstones bool `json:"includeTombstones"`
 }
 
 // RuntimeState is a snapshot of the runtime state for a channel.
@@ -56,6 +60,9 @@ type RuntimeState struct {
 
 	// NumConnections is the number of connections stored in the channel.
 	NumConnections int `json:"numConnections"`
+
+	// Connections is the list of connection IDs in the channel
+	Connections []uint32 ` json:"connections"`
 
 	// OtherChannels is information about any other channels running in this process.
 	OtherChannels map[string][]ChannelInfo `json:"otherChannels,omitEmpty"`
@@ -121,19 +128,42 @@ type ConnectionRuntimeState struct {
 	IsEphemeral      bool                    `json:"isEphemeral"`
 	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
 	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
+	Relayer          RelayerRuntimeState     `json:"relayer"`
+}
+
+// RelayerRuntimeState is the runtime state for a single relayer.
+type RelayerRuntimeState struct {
+	Count         int               `json:"count"`
+	InboundItems  RelayItemSetState `json:"inboundItems"`
+	OutboundItems RelayItemSetState `json:"outboundItems"`
 }
 
 // ExchangeSetRuntimeState is the runtime state for a message exchange set.
 type ExchangeSetRuntimeState struct {
-	Name      string                 `json:"name"`
-	Count     int                    `json:"count"`
-	Exchanges []ExchangeRuntimeState `json:"exchanges,omitempty"`
+	Name      string                          `json:"name"`
+	Count     int                             `json:"count"`
+	Exchanges map[string]ExchangeRuntimeState `json:"exchanges,omitempty"`
+}
+
+// RelayItemSetState is the runtime state for a list of relay items.
+type RelayItemSetState struct {
+	Name  string                    `json:"name"`
+	Count int                       `json:"count"`
+	Items map[string]RelayItemState `json:"items,omitempty"`
 }
 
 // ExchangeRuntimeState is the runtime state for a single message exchange.
 type ExchangeRuntimeState struct {
 	ID          uint32      `json:"id"`
 	MessageType messageType `json:"messageType"`
+}
+
+// RelayItemState is the runtime state for a single relay item.
+type RelayItemState struct {
+	ID                      uint32 `json:"id"`
+	RemapID                 uint32 `json:"remapID"`
+	DestinationConnectionID uint32 `json:"destinationConnectionID"`
+	Tomb                    bool   `json:"tomb"`
 }
 
 // PeerRuntimeState is the runtime state for a single peer.
@@ -153,7 +183,12 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 	}
 
 	ch.mutable.RLock()
-	conns := len(ch.mutable.conns)
+	numConns := len(ch.mutable.conns)
+	connIDs := make([]uint32, 0, numConns)
+	for id := range ch.mutable.conns {
+		connIDs = append(connIDs, id)
+	}
+
 	ch.mutable.RUnlock()
 
 	return &RuntimeState{
@@ -162,7 +197,8 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		SubChannels:    ch.subChannels.IntrospectState(opts),
 		RootPeers:      ch.rootPeers().IntrospectState(opts),
 		Peers:          ch.Peers().IntrospectList(opts),
-		NumConnections: conns,
+		NumConnections: numConns,
+		Connections:    connIDs,
 		OtherChannels:  ch.IntrospectOthers(opts),
 	}
 }
@@ -208,11 +244,6 @@ func fromPeerList(peers containsPeerList, opts *IntrospectionOptions) map[string
 		}
 	}
 	return m
-}
-
-// IntrospectState returns the runtime state of the peer list.
-func (l *PeerList) IntrospectState(opts *IntrospectionOptions) map[string]PeerRuntimeState {
-	return fromPeerList(l, opts)
 }
 
 // IntrospectState returns the runtime state of the
@@ -278,7 +309,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 	c.stateMut.RLock()
 	defer c.stateMut.RUnlock()
 
-	return ConnectionRuntimeState{
+	state := ConnectionRuntimeState{
 		ID:               c.connID,
 		ConnectionState:  c.state.String(),
 		LocalHostPort:    c.conn.LocalAddr().String(),
@@ -287,6 +318,48 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
 	}
+	if c.relay != nil {
+		state.Relayer = c.relay.IntrospectState(opts)
+	}
+	return state
+}
+
+// IntrospectState returns the runtime state for this relayer.
+func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeState {
+	count := r.inbound.Count() + r.outbound.Count()
+	return RelayerRuntimeState{
+		Count:         count,
+		InboundItems:  r.inbound.IntrospectState(opts, "inbound"),
+		OutboundItems: r.outbound.IntrospectState(opts, "outbound"),
+	}
+}
+
+// IntrospectState returns the runtime state for this relayItems.
+func (ri *relayItems) IntrospectState(opts *IntrospectionOptions, name string) RelayItemSetState {
+	ri.RLock()
+	defer ri.RUnlock()
+
+	setState := RelayItemSetState{
+		Name:  name,
+		Count: ri.Count(),
+	}
+	if opts.IncludeExchanges {
+		setState.Items = make(map[string]RelayItemState, len(ri.items))
+		for k, v := range ri.items {
+			if !opts.IncludeTombstones && v.tomb {
+				continue
+			}
+			state := RelayItemState{
+				ID:                      k,
+				RemapID:                 v.remapID,
+				DestinationConnectionID: v.destination.conn.connID,
+				Tomb: v.tomb,
+			}
+			setState.Items[strconv.Itoa(int(k))] = state
+		}
+	}
+
+	return setState
 }
 
 // IntrospectState returns the runtime state for this messsage exchange set.
@@ -298,13 +371,13 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 	}
 
 	if opts.IncludeExchanges {
-		setState.Exchanges = make([]ExchangeRuntimeState, 0, len(mexset.exchanges))
+		setState.Exchanges = make(map[string]ExchangeRuntimeState, len(mexset.exchanges))
 		for k, v := range mexset.exchanges {
 			state := ExchangeRuntimeState{
 				ID:          k,
 				MessageType: v.msgType,
 			}
-			setState.Exchanges = append(setState.Exchanges, state)
+			setState.Exchanges[strconv.Itoa(int(k))] = state
 		}
 	}
 

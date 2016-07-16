@@ -32,14 +32,15 @@ import (
 	// Test is in a separate package to avoid circular dependencies.
 	. "github.com/uber/tchannel-go/thrift"
 
-	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	tchannel "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 	"github.com/uber/tchannel-go/thrift/mocks"
+
+	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // Generate the service mocks using go generate.

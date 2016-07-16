@@ -23,8 +23,9 @@ package raw
 import (
 	"errors"
 
-	"github.com/uber/tchannel-go"
 	"golang.org/x/net/context"
+
+	"github.com/uber/tchannel-go"
 )
 
 // ErrAppError is returned if the application sets an error response.

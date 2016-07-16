@@ -23,7 +23,12 @@ package tchannel
 // This file contains functions for tests to access internal tchannel state.
 // Since it has a _test.go suffix, it is only compiled with tests in this package.
 
-import "net"
+import (
+	"net"
+	"time"
+
+	"golang.org/x/net/context"
+)
 
 // MexChannelBufferSize is the size of the message exchange channel buffer.
 const MexChannelBufferSize = mexChannelBufferSize
@@ -41,6 +46,11 @@ func (p *Peer) SetOnUpdate(f func(*Peer)) {
 	p.Unlock()
 }
 
+// GetConnectionRelay exports the getConnectionRelay for tests.
+func (p *Peer) GetConnectionRelay(timeout time.Duration) (*Connection, error) {
+	return p.getConnectionRelay(timeout)
+}
+
 // SetRandomSeed seeds all the random number generators in the channel so that
 // tests will be deterministic for a given seed.
 func (ch *Channel) SetRandomSeed(seed int64) {
@@ -49,6 +59,11 @@ func (ch *Channel) SetRandomSeed(seed int64) {
 	for _, sc := range ch.subChannels.subchannels {
 		sc.peers.peerHeap.rng.Seed(seed + int64(len(sc.peers.peersByHostPort)))
 	}
+}
+
+// Ping sends a ping on the specific connection.
+func (c *Connection) Ping(ctx context.Context) error {
+	return c.ping(ctx)
 }
 
 // OutboundConnection returns the underlying connection for an outbound call.

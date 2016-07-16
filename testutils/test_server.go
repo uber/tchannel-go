@@ -21,6 +21,7 @@
 package testutils
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"strings"
@@ -28,11 +29,15 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/atomic"
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
+	"golang.org/x/net/context"
 )
 
 // Has a previous test already leaked a goroutine?
@@ -40,10 +45,17 @@ var _leakedGoroutine = atomic.NewInt32(0)
 
 // A TestServer encapsulates a TChannel server, a client factory, and functions
 // to ensure that we're not leaking resources.
-//
-// TODO: Include an optional relay.
 type TestServer struct {
 	testing.TB
+
+	// relayIdx is the index of the relay channel, if any, in the channels slice.
+	relayIdx int
+
+	// relayHosts is the relayer's SimpleRelayHosts (if any).
+	relayHosts *SimpleRelayHosts
+
+	// relayStats is the channel's relaying stats (if any).
+	relayStats *relaytest.MockStats
 
 	// channels is the list of channels created for this TestServer. The first
 	// element is always the initial server.
@@ -53,41 +65,57 @@ type TestServer struct {
 	// as part of the TestServer (including the server).
 	channelStates map[*tchannel.Channel]*tchannel.RuntimeState
 
-	verifyOpts *goroutines.VerifyOpts
-	postFns    []func()
+	introspectOpts *tchannel.IntrospectionOptions
+	verifyOpts     *goroutines.VerifyOpts
+	postFns        []func()
 }
 
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
-	opts = getOptsForTest(t, opts)
-	ch, err := NewServerChannel(opts)
-	require.NoError(t, err, "WithTestServer failed to create Server")
-
-	states := map[*tchannel.Channel]*tchannel.RuntimeState{
-		ch: comparableState(ch),
-	}
-
-	return &TestServer{
+	ts := &TestServer{
 		TB:            t,
-		channels:      []*tchannel.Channel{ch},
-		channelStates: states,
-		postFns:       opts.postFns,
+		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
+		relayStats:    relaytest.NewMockStats(),
+		introspectOpts: &tchannel.IntrospectionOptions{
+			IncludeExchanges:  true,
+			IncludeTombstones: true,
+		},
 	}
+
+	ts.NewServer(opts)
+	if opts == nil || !opts.DisableRelay {
+		ts.addRelay(opts)
+	}
+
+	return ts
 }
 
 // WithTestServer creates a new TestServer, runs the passed function, and then
 // verifies that no resources were leaked.
-//
-// TODO: run function twice; once with a relay, once without.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
-	ts := NewTestServer(t, chanOpts)
-	// Note: We use defer, as we want the postFns to run even if the test
-	// goroutine exits (e.g. user calls t.Fatalf).
-	defer ts.post()
+	chanOpts = chanOpts.Copy()
+	runCount := chanOpts.RunCount
+	if runCount < 1 {
+		runCount = 1
+	}
 
-	f(ts)
-	ts.Server().Logger().Debugf("TEST: Test function complete")
-	ts.CloseAndVerify()
+	for i := 0; i < runCount; i++ {
+		if t.Failed() {
+			return
+		}
+
+		// Run without the relay, unless OnlyRelay was set.
+		if !chanOpts.OnlyRelay {
+			noRelayOpts := chanOpts.Copy()
+			noRelayOpts.DisableRelay = true
+			withServer(t, noRelayOpts, f)
+		}
+
+		// Run with the relay, unless the user has disabled it.
+		if !chanOpts.DisableRelay {
+			withServer(t, chanOpts.Copy(), f)
+		}
+	}
 }
 
 // SetVerifyOpts specifies the options we'll use during teardown to verify that
@@ -106,11 +134,25 @@ func (ts *TestServer) Server() *tchannel.Channel {
 	return ts.channels[0]
 }
 
+// Relay returns the relay channel, if one is present.
+func (ts *TestServer) Relay() *tchannel.Channel {
+	if ts.HasRelay() {
+		return ts.channels[ts.relayIdx]
+	}
+	return nil
+}
+
+// RelayHosts returns the stub RelayHosts for mapping service names to peers.
+func (ts *TestServer) RelayHosts() *SimpleRelayHosts {
+	return ts.relayHosts
+}
+
 // HostPort returns the host:port for clients to connect to. Note that this may
 // not be the same as the host:port of the server channel.
 func (ts *TestServer) HostPort() string {
-	// Use this wrapper to enable registering handlers on the server, but
-	// connecting to a relay.
+	if ts.HasRelay() {
+		return ts.Relay().PeerInfo().HostPort
+	}
 	return ts.Server().PeerInfo().HostPort
 }
 
@@ -124,6 +166,13 @@ func (ts *TestServer) Register(h tchannel.Handler, methodName string) {
 	ts.Server().Register(h, methodName)
 }
 
+// RegisterFunc registers a function as a handler for the given method name.
+//
+// TODO: Delete testutils.RegisterFunc in favor of this test server.
+func (ts *TestServer) RegisterFunc(name string, f func(context.Context, *raw.Args) (*raw.Res, error)) {
+	ts.Register(raw.Wrap(rawFuncHandler{ts.Server(), f}), name)
+}
+
 // CloseAndVerify closes all channels verifying each channel as it is closed.
 // It then verifies that no goroutines were leaked.
 func (ts *TestServer) CloseAndVerify() {
@@ -135,23 +184,57 @@ func (ts *TestServer) CloseAndVerify() {
 	}
 }
 
+// AssertRelayStats checks that the relayed call graph matches expectations. If
+// there's no relay, AssertRelayStats is a no-op.
+func (ts *TestServer) AssertRelayStats(expected *relaytest.MockStats) {
+	if !ts.HasRelay() {
+		return
+	}
+	ts.relayStats.AssertEqual(ts, expected)
+}
+
 // NewClient returns a client that with log verification.
 // TODO: Verify message exchanges and leaks for client channels as well.
 func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
-	return ts.addChannel(NewClient, opts)
+	return ts.addChannel(newClient, opts.Copy())
 }
 
 // NewServer returns a server with log and channel state verification.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
-	return ts.addChannel(NewServer, opts)
+	ch := ts.addChannel(newServer, opts.Copy())
+	if ts.HasRelay() {
+		ts.relayHosts.Add(ch.ServiceName(), ch.PeerInfo().HostPort)
+	}
+	return ch
+}
+
+// addRelay adds a relay in front of the test server, altering public methods as
+// necessary to route traffic through the relay.
+func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
+	ts.relayHosts = NewSimpleRelayHosts(map[string][]string{
+		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
+	})
+
+	opts := parentOpts.Copy()
+	opts.ServiceName = "relay"
+	opts.ChannelOptions.RelayHosts = ts.relayHosts
+	opts.RelayStats = ts.relayStats
+
+	ts.addChannel(newServer, opts)
+	ts.relayIdx = len(ts.channels) - 1
+}
+
+// HasRelay indicates whether this TestServer has a relay interposed between the
+// server and clients.
+func (ts *TestServer) HasRelay() bool {
+	return ts.relayIdx > 0
 }
 
 func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelOpts) *tchannel.Channel, opts *ChannelOpts) *tchannel.Channel {
-	opts = getOptsForTest(ts, opts)
 	ch := createChannel(ts, opts)
 	ts.postFns = append(ts.postFns, opts.postFns...)
 	ts.channels = append(ts.channels, ch)
-	ts.channelStates[ch] = comparableState(ch)
+	ts.channelStates[ch] = comparableState(ch, ts.introspectOpts)
 	return ch
 }
 
@@ -170,11 +253,16 @@ func (ts *TestServer) verify(ch *tchannel.Channel) {
 		ts.verifyNoGoroutinesLeaked()
 	}
 
+	ts.verifyRelaysEmpty(ch)
 	ts.verifyExchangesCleared(ch)
-	ts.verifyNoStateLeak(ch)
 }
 
 func (ts *TestServer) post() {
+	if !ts.Failed() {
+		for _, ch := range ts.channels {
+			ts.verifyNoStateLeak(ch)
+		}
+	}
 	for _, fn := range ts.postFns {
 		fn()
 	}
@@ -187,7 +275,7 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 	started := time.Now()
 
 	var state tchannel.ChannelState
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 60; i++ {
 		if state = ch.State(); state == tchannel.ChannelClosed {
 			return
 		}
@@ -203,12 +291,16 @@ func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
 
 	// Channel is not closing, fail the test.
 	sinceStart := time.Since(started)
-	ts.Errorf("Channel did not close after %v, last state: %v", sinceStart, state)
+	ts.Errorf("Channel %p did not close after %v, last state: %v", ch, sinceStart, state)
+
+	// The introspected state might help debug why the channel isn't closing.
+	introspected := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true, IncludeTombstones: true})
+	ts.Logf("Introspected state: %s", spew.Sdump(introspected))
 }
 
 func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
 	initial := ts.channelStates[ch]
-	final := comparableState(ch)
+	final := comparableState(ch, ts.introspectOpts)
 	assert.Equal(ts.TB, initial, final, "Runtime state has leaks")
 }
 
@@ -217,12 +309,39 @@ func (ts *TestServer) verifyExchangesCleared(ch *tchannel.Channel) {
 		return
 	}
 	// Ensure that all the message exchanges are empty.
-	serverState := ch.IntrospectState(&tchannel.IntrospectionOptions{
-		IncludeExchanges: true,
-	})
+	serverState := ch.IntrospectState(ts.introspectOpts)
 	if exchangesLeft := describeLeakedExchanges(serverState); exchangesLeft != "" {
 		ts.Errorf("Found uncleared message exchanges on server:\n%v", exchangesLeft)
 	}
+}
+
+func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
+	if ts.Failed() {
+		return
+	}
+	var foundErrors bool
+	state := ch.IntrospectState(ts.introspectOpts)
+	for _, peerState := range state.RootPeers {
+		var connStates []tchannel.ConnectionRuntimeState
+		connStates = append(connStates, peerState.InboundConnections...)
+		connStates = append(connStates, peerState.OutboundConnections...)
+		for _, connState := range connStates {
+			n := connState.Relayer.Count
+			if assert.Equal(ts, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort) {
+				continue
+			}
+			foundErrors = true
+		}
+	}
+
+	if !foundErrors {
+		return
+	}
+
+	marshalled, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(ts, err, "Failed to marshal relayer state")
+	// Print out all the exchanges we found.
+	ts.Logf("Relayer state:\n%s", marshalled)
 }
 
 func (ts *TestServer) verifyNoGoroutinesLeaked() {
@@ -247,10 +366,8 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 	ts.Error(err.Error())
 }
 
-func comparableState(ch *tchannel.Channel) *tchannel.RuntimeState {
-	s := ch.IntrospectState(&tchannel.IntrospectionOptions{
-		IncludeExchanges: true,
-	})
+func comparableState(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) *tchannel.RuntimeState {
+	s := ch.IntrospectState(opts)
 	s.OtherChannels = nil
 	s.SubChannels = nil
 	s.Peers = nil
@@ -297,4 +414,15 @@ func describeLeakedExchangesSingleConn(cs *tchannel.ConnectionRuntimeState) stri
 	}
 
 	return fmt.Sprintf("Connection %d has leftover exchanges:\n\t%v", cs.ID, strings.Join(exchanges, "\n\t"))
+}
+
+func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
+	ts := NewTestServer(t, chanOpts)
+	// Note: We use defer, as we want the postFns to run even if the test
+	// goroutine exits (e.g. user calls t.Fatalf).
+	defer ts.post()
+
+	f(ts)
+	ts.Server().Logger().Debugf("TEST: Test function complete")
+	ts.CloseAndVerify()
 }
