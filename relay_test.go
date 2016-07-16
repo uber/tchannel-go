@@ -33,6 +33,7 @@ import (
 	"github.com/uber/tchannel-go/benchmark"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
@@ -79,7 +80,7 @@ func TestRelay(t *testing.T) {
 			assert.Equal(t, tt.body, string(arg3), "Body was mangled during relay.")
 		}
 
-		calls := relay.NewMockStats()
+		calls := relaytest.NewMockStats()
 		peer := relay.Peer{HostPort: ts.Server().PeerInfo().HostPort}
 		for _ = range tests {
 			calls.Add("client", "test", "echo").SetPeer(peer).Succeeded().End()
@@ -124,7 +125,7 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 
 		testutils.AssertEcho(t, s2, ts.HostPort(), "s1")
 
-		calls := relay.NewMockStats()
+		calls := relaytest.NewMockStats()
 		calls.Add("s2", "s1", "echo").Succeeded().End()
 		ts.AssertRelayStats(calls)
 	})
@@ -215,7 +216,7 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 
 			assert.Equal(t, tt.wantErr, err, "%v: unexpected error", tt.desc)
 
-			calls := relay.NewMockStats()
+			calls := relaytest.NewMockStats()
 			calls.Add(client.PeerInfo().ServiceName, "svc", "echo").
 				SetPeer(tt.statsPeer).
 				Failed(tt.statsKey).End()
@@ -242,7 +243,7 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 
 		assert.Equal(t, ErrCodeBadRequest, se.Code(), "Expected BadRequest error")
 
-		calls := relay.NewMockStats()
+		calls := relaytest.NewMockStats()
 		calls.Add(client.PeerInfo().ServiceName, "svc", "echo").Failed("bad-request").End()
 		ts.AssertRelayStats(calls)
 	})
