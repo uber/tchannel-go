@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# 1.0.8
+
+* Remove dependency on "testing" from "tchannel-go" introduced in v1.0.7.
+
 # 1.0.7
 
 * Add CallOptions() to IncomingCall which can be used as the call option
