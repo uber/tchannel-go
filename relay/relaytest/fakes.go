@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package relay
+package relaytest
 
 import (
 	"fmt"
@@ -27,25 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/relay"
 )
-
-type noopStats struct{}
-
-// NewNoopStats returns a no-op implementation of Stats.
-func NewNoopStats() Stats {
-	return noopStats{}
-}
-
-func (n noopStats) Begin(_ CallFrame) CallStats {
-	return noopCallStats{}
-}
-
-type noopCallStats struct{}
-
-func (n noopCallStats) Succeeded()      {}
-func (n noopCallStats) Failed(_ string) {}
-func (n noopCallStats) SetPeer(_ Peer)  {}
-func (n noopCallStats) End()            {}
 
 // MockCallStats is a testing spy for the CallStats interface.
 type MockCallStats struct {
@@ -55,7 +38,7 @@ type MockCallStats struct {
 	succeeded  int
 	failedMsgs []string
 	ended      int
-	peer       *Peer
+	peer       *relay.Peer
 	wg         *sync.WaitGroup
 
 	// By default, we don't verify peers, as we get unique host:ports and
@@ -74,7 +57,7 @@ func (m *MockCallStats) Failed(reason string) {
 }
 
 // SetPeer sets the peer for the current call.
-func (m *MockCallStats) SetPeer(peer Peer) {
+func (m *MockCallStats) SetPeer(peer relay.Peer) {
 	m.verifyPeer = true
 	m.peer = &peer
 }
@@ -103,7 +86,7 @@ func (f *FluentMockCallStats) Failed(reason string) *FluentMockCallStats {
 }
 
 // SetPeer sets the peer for the current call.
-func (f *FluentMockCallStats) SetPeer(peer Peer) *FluentMockCallStats {
+func (f *FluentMockCallStats) SetPeer(peer relay.Peer) *FluentMockCallStats {
 	f.MockCallStats.SetPeer(peer)
 	return f
 }
@@ -123,7 +106,7 @@ func NewMockStats() *MockStats {
 }
 
 // Begin starts collecting metrics for an RPC.
-func (m *MockStats) Begin(f CallFrame) CallStats {
+func (m *MockStats) Begin(f relay.CallFrame) relay.CallStats {
 	return m.Add(string(f.Caller()), string(f.Service()), string(f.Method())).MockCallStats
 }
 
