@@ -12,7 +12,8 @@ endif
 
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
-PKGS := . ./json ./hyperbahn ./thrift ./typed ./trace $(EXAMPLES)
+ALL_PKGS := $(shell glide nv)
+PROD_PKGS := . ./http ./hyperbahn ./json ./pprof ./raw ./relay ./stats ./thrift $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
 BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release
@@ -74,7 +75,7 @@ install_ci: install_glide install_lint get_thrift install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 
 install_test:
-	go test -i $(TEST_ARG) $(shell glide nv)
+	go test -i $(TEST_ARG) $(ALL_PKGS)
 
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
@@ -87,20 +88,23 @@ clean:
 
 fmt format:
 	echo Formatting Packages...
-	go fmt $(PKGS)
+	go fmt $(ALL_PKGS)
 	echo
 
 test_ci: test
 
-test: clean setup install_test
+test: clean setup install_test check_no_test_deps
 	@echo Testing packages:
-	go test -parallel=4 $(TEST_ARG) $(shell glide nv)
+	go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
 	@echo Running frame pool tests
 	go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
+check_no_test_deps:
+	! go list -json $(PROD_PKGS) | jq -r .Deps[] | grep test
+
 benchmark: clean setup
 	echo Running benchmarks:
-	go test $(PKGS) -bench=. -cpu=1 -benchmem -run NONE
+	go test $(ALL_PKGS) -bench=. -cpu=1 -benchmem -run NONE
 
 cover_profile: clean setup
 	@echo Testing packages:
@@ -156,7 +160,7 @@ thrift_gen:
 	go build -o $(BUILD)/thrift-gen ./thrift/thrift-gen
 	$(BUILD)/thrift-gen --generateThrift --inputFile thrift/test.thrift --outputDir thrift/gen-go/
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift --outputDir examples/keyvalue/gen-go
-	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/test.thrift --outputDir examples/thrift/gen-go
+	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/example.thrift --outputDir examples/thrift/gen-go
 	$(BUILD)/thrift-gen --generateThrift --inputFile hyperbahn/hyperbahn.thrift --outputDir hyperbahn/gen-go
 	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift --outputDir trace/thrift/gen-go/
 
@@ -166,5 +170,5 @@ release_thrift_gen: clean setup
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 
-.PHONY: all help clean fmt format get_thrift install install_ci install_lint install_glide release_thrift_gen packages_test test test_ci lint
+.PHONY: all help clean fmt format get_thrift install install_ci install_lint install_glide release_thrift_gen packages_test check_no_test_deps test test_ci lint
 .SILENT: all help clean fmt format test lint
