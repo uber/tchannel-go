@@ -350,10 +350,10 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 		retryTags["retry-count"] = fmt.Sprint(retryCount)
 		response.statsReporter.IncCounter("outbound.calls.retries", retryTags, 1)
 	}
-
 	if unexpected != nil {
-		// TODO(prashant): Report the error code type as per metrics doc and enable.
-		// response.statsReporter.IncCounter("outbound.calls.system-errors", response.commonStatsTags, 1)
+		sysErrorTags := cloneTags(response.commonStatsTags)
+		sysErrorTags["type"] = GetSystemErrorMetricKey(unexpected)
+		response.statsReporter.IncCounter("outbound.calls.system-errors", sysErrorTags, 1)
 	} else if response.ApplicationError() {
 		// TODO(prashant): Figure out how to add "type" to tags, which TChannel does not know about.
 		response.statsReporter.IncCounter("outbound.calls.per-attempt.app-errors", response.commonStatsTags, 1)

@@ -221,6 +221,11 @@ func TestStatsWithRetries(t *testing.T) {
 					clientStats.Expected.IncCounter("outbound.calls.retries", tags, 1)
 				}
 			}
+			if tt.numFailures > 0 {
+				tags := tagsForOutboundCall(serverCh, ch, "req")
+				tags["type"] = GetSystemErrorMetricKey(ErrServerBusy)
+				clientStats.Expected.IncCounter("outbound.calls.system-errors", tags, 1)
+			}
 			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, tt.overallLatency)
 			clientStats.Validate(t)
 		}

@@ -197,3 +197,17 @@ func GetSystemErrorMessage(err error) string {
 
 	return err.Error()
 }
+
+// GetSystemErrorKey returns the metric key for the given error.  If the error is a
+// SystemError, we can get the metric key. Otherwise, treat it as an unexpected error
+func GetSystemErrorMetricKey(err error) string {
+	if err == nil {
+		return ErrCodeInvalid.MetricsKey()
+	}
+
+	if se, ok := err.(SystemError); ok {
+		return se.Code().MetricsKey()
+	}
+
+	return ErrCodeUnexpected.MetricsKey()
+}

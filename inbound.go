@@ -320,6 +320,7 @@ type InboundCallResponse struct {
 	// calledAt is the time the inbound call was routed to the application.
 	calledAt         time.Time
 	applicationError bool
+	errorType        string
 	systemError      bool
 	headers          transportHeaders
 	span             Span
@@ -336,6 +337,7 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	// Fail all future attempts to read fragments
 	response.state = reqResWriterComplete
 	response.systemError = true
+	response.errorType = GetSystemErrorMetricKey(err)
 	response.doneSending()
 	response.call.releasePreviousFragment()
 
@@ -388,8 +390,9 @@ func (response *InboundCallResponse) doneSending() {
 	response.statsReporter.RecordTimer("inbound.calls.latency", response.commonStatsTags, latency)
 
 	if response.systemError {
-		// TODO(prashant): Report the error code type as per metrics doc and enable.
-		// response.statsReporter.IncCounter("inbound.calls.system-errors", response.commonStatsTags, 1)
+		sysErrorTags := cloneTags(response.commonStatsTags)
+		sysErrorTags["type"] = response.errorType
+		response.statsReporter.IncCounter("inbound.calls.system-errors", sysErrorTags, 1)
 	} else if response.applicationError {
 		response.statsReporter.IncCounter("inbound.calls.app-errors", response.commonStatsTags, 1)
 	} else {
