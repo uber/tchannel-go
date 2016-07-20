@@ -91,8 +91,8 @@ func TestRelay(t *testing.T) {
 
 func TestRelayHandlesClosedPeers(t *testing.T) {
 	opts := serviceNameOpts("test").SetRelayOnly().
-		// The relay will fail to connect when the server is closed.
-		AddLogFilter("Failed to connect to relay host", 1)
+		// Disable logs as we are closing connections that can error in a lot of places.
+		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(300 * time.Millisecond)
 		defer cancel()
