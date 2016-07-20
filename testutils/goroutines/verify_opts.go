@@ -24,15 +24,21 @@ import "bytes"
 
 // VerifyOpts contains
 type VerifyOpts struct {
-	// Exclude is a string that will exclude a stack from being considered a leak.
-	Exclude string
+	// Excludes is a list of strings that will exclude a stack from being considered a leak.
+	Excludes []string
 }
 
 // ShouldSkip returns whether the given stack should be skipped when doing verification.
 func (opts *VerifyOpts) ShouldSkip(s Stack) bool {
-	if opts == nil || len(opts.Exclude) == 0 {
+	if opts == nil || len(opts.Excludes) == 0 {
 		return false
 	}
 
-	return bytes.Contains(s.Full(), []byte(opts.Exclude))
+	for _, exclude := range opts.Excludes {
+		if bytes.Contains(s.Full(), []byte(exclude)) {
+			return true
+		}
+	}
+
+	return false
 }
