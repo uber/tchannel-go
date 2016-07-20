@@ -29,6 +29,7 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
+	"github.com/uber/tchannel-go/benchmark"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 
@@ -1020,6 +1021,26 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 			require.NoError(t, conn.Ping(ctx), "%v: Ping failed", tt.message)
 		})
 	}
+}
+
+func TestConnectToPeerHostPortMismatch(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		// Set up a relay which will have a different host:port than the
+		// real TChannel HostPort.
+		relay, err := benchmark.NewTCPRawRelay([]string{ts.HostPort()})
+		require.NoError(t, err, "Failed to set up TCP relay")
+		defer relay.Close()
+
+		s2 := ts.NewServer(nil)
+		for i := 0; i < 10; i++ {
+			require.NoError(t, s2.Ping(ctx, relay.HostPort()), "Ping failed")
+		}
+
+		assert.Equal(t, 1, s2.IntrospectNumConnections(), "Unexpected number of connections")
+	})
 }
 
 func BenchmarkAddPeers(b *testing.B) {

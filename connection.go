@@ -157,6 +157,11 @@ type Connection struct {
 	commonStatsTags map[string]string
 	relay           *Relayer
 
+	// outboundHP is the host:port we used to create this outbound connection.
+	// It may not match remotePeerInfo.HostPort, in which case the connection is
+	// added to peers for both host:ports. For inbound connections, this is empty.
+	outboundHP string
+
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
 	closeNetworkCalled atomic.Int32
@@ -213,16 +218,16 @@ func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string,
 		return nil, err
 	}
 
-	return ch.newConnection(conn, connectionWaitingToSendInitReq, events), nil
+	return ch.newConnection(conn, hostPort, connectionWaitingToSendInitReq, events), nil
 }
 
 // Creates a new Connection based on an incoming connection from a peer
 func (ch *Channel) newInboundConnection(conn net.Conn, events connectionEvents) (*Connection, error) {
-	return ch.newConnection(conn, connectionWaitingToRecvInitReq, events), nil
+	return ch.newConnection(conn, "" /* outboundHP */, connectionWaitingToRecvInitReq, events), nil
 }
 
 // Creates a new connection in a given initial state
-func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, events connectionEvents) *Connection {
+func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState connectionState, events connectionEvents) *Connection {
 	opts := &ch.connectionOptions
 
 	checksumType := opts.ChecksumType
@@ -264,6 +269,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialState connectionState, ev
 		sendCh:          make(chan *Frame, sendBufferSize),
 		stopCh:          make(chan struct{}),
 		localPeerInfo:   peerInfo,
+		outboundHP:      outboundHP,
 		checksumType:    checksumType,
 		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
 		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
