@@ -477,6 +477,7 @@ func (ch *Channel) registerInternal() {
 		{"_gometa_runtime", handleInternalRuntime},
 	}
 
+	tchanSC := ch.GetSubChannel("tchannel")
 	for _, ep := range endpoints {
 		// We need ep in our closure.
 		ep := ep
@@ -494,5 +495,6 @@ func (ch *Channel) registerInternal() {
 			NewArgWriter(call.Response().Arg3Writer()).WriteJSON(ep.handler(arg3))
 		}
 		ch.Register(HandlerFunc(handler), ep.name)
+		tchanSC.Register(HandlerFunc(handler), ep.name)
 	}
 }

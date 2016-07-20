@@ -55,6 +55,16 @@ func TestIntrospection(t *testing.T) {
 			"includeGoStacks": true,
 		}, &resp)
 		require.NoError(t, err, "Call _gometa_runtime failed")
+
+		if !ts.HasRelay() {
+			// Try making the call on the "tchannel" service which is where meta handlers
+			// are registered. This will only work when we call it directly as the relay
+			// will not forward the tchannel service.
+			err = json.CallPeer(ctx, peer, "tchannel", "_gometa_runtime", map[string]interface{}{
+				"includeGoStacks": true,
+			}, &resp)
+			require.NoError(t, err, "Call _gometa_runtime failed")
+		}
 	})
 }
 
