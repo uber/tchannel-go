@@ -512,7 +512,19 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 		return nil, err
 	}
 
-	return c, err
+	// It's possible that the connection we just created responds with a host:port
+	// that is not what we tried to connect to. E.g., we may have connected to
+	// 127.0.0.1:1234, but the returned host:port may be 10.0.0.1:1234.
+	// In this case, the connection won't be added to 127.0.0.1:1234 peer
+	// and so future calls to that peer may end up creating new connections. To
+	// avoid this issue, and to avoid clients being aware of any TCP relays, we
+	// add the connection to the intended peer.
+	if hostPort != c.remotePeerInfo.HostPort {
+		c.log.Debugf("Outbound connection host:port mismatch, adding to peer %v", c.remotePeerInfo.HostPort)
+		ch.addConnectionToPeer(hostPort, c, outbound)
+	}
+
+	return c, nil
 }
 
 // exchangeUpdated updates the peer heap.
@@ -564,7 +576,11 @@ func (ch *Channel) connectionActive(c *Connection, direction connectionDirection
 		return
 	}
 
-	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+	ch.addConnectionToPeer(c.remotePeerInfo.HostPort, c, direction)
+}
+
+func (ch *Channel) addConnectionToPeer(hostPort string, c *Connection, direction connectionDirection) {
+	p := ch.rootPeers().GetOrAdd(hostPort)
 	if err := p.addConnection(c, direction); err != nil {
 		c.log.WithFields(
 			LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
@@ -611,6 +627,13 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
 		peer.connectionCloseStateChange(c)
 		ch.updatePeer(peer)
+	}
+	if c.outboundHP != "" && c.outboundHP != c.remotePeerInfo.HostPort {
+		// Outbound connections may be in multiple peers.
+		if peer, ok := ch.rootPeers().Get(c.outboundHP); ok {
+			peer.connectionCloseStateChange(c)
+			ch.updatePeer(peer)
+		}
 	}
 
 	chState := ch.State()
