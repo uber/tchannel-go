@@ -419,6 +419,15 @@ func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []SubPeerScore {
 	return peers
 }
 
+// IntrospectNumConnections returns the number of connections returns the number
+// of connections. Note: like other introspection APIs, this is not a stable API.
+func (ch *Channel) IntrospectNumConnections() int {
+	ch.mutable.RLock()
+	numConns := len(ch.mutable.conns)
+	ch.mutable.RUnlock()
+	return numConns
+}
+
 func handleInternalRuntime(arg3 []byte) interface{} {
 	var opts GoRuntimeStateOptions
 	json.Unmarshal(arg3, &opts)
