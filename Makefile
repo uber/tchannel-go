@@ -100,7 +100,7 @@ test: clean setup install_test check_no_test_deps
 	go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
 check_no_test_deps:
-	! go list -json $(PROD_PKGS) | jq -r .Deps[] | grep test
+	! go list -json $(PROD_PKGS) | jq -r .Deps[] | grep -e test -e mock
 
 benchmark: clean setup
 	echo Running benchmarks:
