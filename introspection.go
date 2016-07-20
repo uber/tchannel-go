@@ -41,6 +41,13 @@ type IntrospectionOptions struct {
 	IncludeTombstones bool `json:"includeTombstones"`
 }
 
+// RuntimeVersion includes version information about the runtime and
+// the tchannel library.
+type RuntimeVersion struct {
+	GoVersion      string `json:"goVersion"`
+	LibraryVersion string `json:"tchannelVersion"`
+}
+
 // RuntimeState is a snapshot of the runtime state for a channel.
 type RuntimeState struct {
 	// CreatedStack is the stack for how this channel was created.
@@ -66,6 +73,9 @@ type RuntimeState struct {
 
 	// OtherChannels is information about any other channels running in this process.
 	OtherChannels map[string][]ChannelInfo `json:"otherChannels,omitEmpty"`
+
+	// RuntimeVersion is the version information about the runtime and the library.
+	RuntimeVersion RuntimeVersion `json:"runtimeVersion"`
 }
 
 // GoRuntimeStateOptions are the options used when getting Go runtime state.
@@ -201,6 +211,7 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		NumConnections: numConns,
 		Connections:    connIDs,
 		OtherChannels:  ch.IntrospectOthers(opts),
+		RuntimeVersion: introspectRuntimeVersion(),
 	}
 }
 
@@ -445,6 +456,13 @@ func handleInternalRuntime(arg3 []byte) interface{} {
 	}
 
 	return state
+}
+
+func introspectRuntimeVersion() RuntimeVersion {
+	return RuntimeVersion{
+		GoVersion:      runtime.Version(),
+		LibraryVersion: VersionInfo,
+	}
 }
 
 // registerInternal registers the following internal handlers which return runtime state:
