@@ -193,6 +193,13 @@ func (o *ChannelOpts) SetRelayHosts(rh relay.Hosts) *ChannelOpts {
 	return o
 }
 
+// SetRelayLocal sets the channel's relay local handlers for service names
+// that should be handled by the relay channel itself.
+func (o *ChannelOpts) SetRelayLocal(relayLocal ...string) *ChannelOpts {
+	o.ChannelOptions.RelayLocalHandlers = relayLocal
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue

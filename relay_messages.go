@@ -156,6 +156,11 @@ func (f lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)
 }
 
+// HasMoreFragments returns whether the callReq has more fragments.
+func (f lazyCallReq) HasMoreFragments() bool {
+	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
+}
+
 // finishesCall checks whether this frame is the last one we should expect for
 // this RPC req-res.
 func finishesCall(f *Frame) bool {
