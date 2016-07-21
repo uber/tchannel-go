@@ -73,6 +73,10 @@ type ChannelOptions struct {
 	// breaking changes are likely.
 	RelayStats relay.Stats
 
+	// The list of service names that should be handled locally by this channel.
+	// This is an unstable API - breaking changes are likely.
+	RelayLocalHandlers []string
+
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
@@ -144,6 +148,7 @@ type Channel struct {
 type channelConnectionCommon struct {
 	log             Logger
 	relayStats      relay.Stats
+	relayLocal      map[string]struct{}
 	statsReporter   StatsReporter
 	traceReporter   TraceReporter
 	subChannels     *subChannelMap
@@ -199,6 +204,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 				LogField{"service", serviceName},
 				LogField{"process", processName}),
 			relayStats:      relayStats,
+			relayLocal:      toStringSet(opts.RelayLocalHandlers),
 			statsReporter:   statsReporter,
 			subChannels:     &subChannelMap{},
 			timeNow:         timeNow,
@@ -712,4 +718,12 @@ func (ch *Channel) Close() {
 // RelayHosts returns the channel's relay hosts, if any.
 func (ch *Channel) RelayHosts() relay.Hosts {
 	return ch.relayHosts
+}
+
+func toStringSet(ss []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(ss))
+	for _, s := range ss {
+		set[s] = struct{}{}
+	}
+	return set
 }

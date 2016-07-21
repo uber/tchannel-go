@@ -38,6 +38,8 @@ const _maxRelayTombs = 1e4
 // _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
 const _relayTombTTL = time.Second
 
+var errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
+
 type relayItem struct {
 	*time.Timer
 
@@ -45,6 +47,7 @@ type relayItem struct {
 	remapID     uint32
 	destination *Relayer
 	tomb        bool
+	local       bool
 	span        Span
 }
 
@@ -153,6 +156,10 @@ type Relayer struct {
 	stats relay.Stats
 	hosts relay.Hosts
 
+	// localHandlers is the set of service names that are handled by the local
+	// channel.
+	localHandler map[string]struct{}
+
 	// outbound is the remapping for requests that originated on this
 	// connection, and are outbound towards some other connection.
 	// It stores remappings for all request frames read on this connection.
@@ -172,13 +179,14 @@ type Relayer struct {
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
-		stats:    ch.relayStats,
-		hosts:    ch.RelayHosts(),
-		outbound: newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
-		inbound:  newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
-		peers:    ch.Peers(),
-		conn:     conn,
-		logger:   conn.log,
+		stats:        ch.relayStats,
+		hosts:        ch.RelayHosts(),
+		localHandler: ch.relayLocal,
+		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
+		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
+		peers:        ch.Peers(),
+		conn:         conn,
+		logger:       conn.log,
 	}
 }
 
@@ -290,6 +298,10 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 }
 
 func (r *Relayer) handleCallReq(f lazyCallReq) error {
+	if handled := r.handleLocalCallReq(f); handled {
+		return nil
+	}
+
 	callStats := r.stats.Begin(f)
 	if !r.canHandleNewCall() {
 		callStats.Failed("relay-channel-closed")
@@ -424,6 +436,33 @@ func (r *Relayer) receiverItems(fType frameType) *relayItems {
 		return r.inbound
 	}
 	return r.outbound
+}
+
+func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
+	// Check whether this is a service we want to handle locally.
+	if _, ok := r.localHandler[string(cr.Service())]; !ok {
+		return false
+	}
+
+	f := cr.Frame
+
+	// We can only handle non-fragmented calls in the relay channel.
+	// This is a simplification to avoid back references from a mex to a
+	// relayItem so that the relayItem is cleared when the call completes.
+	if cr.HasMoreFragments() {
+		r.logger.WithFields(
+			LogField{"id", cr.Header.ID},
+			LogField{"service", string(cr.Service())},
+			LogField{"method", string(cr.Method())},
+		).Error("Received fragmented callReq intended for local relay channel, can only handle unfragmented calls.")
+		r.conn.SendSystemError(f.Header.ID, cr.Span(), errRelayMethodFragmented)
+		return true
+	}
+
+	if release := r.conn.handleFrameNoRelay(f); release {
+		r.conn.framePool.Release(f)
+	}
+	return true
 }
 
 func frameTypeFor(f *Frame) frameType {
