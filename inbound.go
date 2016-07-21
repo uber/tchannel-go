@@ -50,6 +50,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	}
 
 	callReq := new(callReq)
+	callReq.id = frame.Header.ID
 	initialFragment, err := parseInboundFragment(c.framePool, frame, callReq)
 	if err != nil {
 		// TODO(mmihic): Probably want to treat this as a protocol error
@@ -172,12 +173,12 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, frame *Frame) {
-	if c.log.Enabled(LogLevelDebug) {
-		c.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
+	if call.log.Enabled(LogLevelDebug) {
+		call.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
 
 	if err := call.readMethod(); err != nil {
-		c.log.WithFields(
+		call.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
 			ErrField(err),
 		).Error("Couldn't read method.")
@@ -198,7 +199,7 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 			}
 		case <-call.mex.errCh.c:
 			if c.log.Enabled(LogLevelDebug) {
-				c.log.Debugf("Wait for timeout/cancellation interrupted by error: %v", call.mex.errCh.err)
+				call.log.Debugf("Wait for timeout/cancellation interrupted by error: %v", call.mex.errCh.err)
 			}
 		}
 	}()
