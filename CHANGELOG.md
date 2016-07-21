@@ -1,6 +1,14 @@
 Changelog
 =========
 
+# 1.0.9
+
+* Expose meta endpoints on the "tchannel" service name. (#459)
+* Add Go version and tchannel-go library version to introspection. (#457)
+* Better handling of peers where dialed host:port doesn't match the remote
+  connection's reported host:port. (#452)
+* Expose the number of connections on a channel. (#451)
+
 # 1.0.8
 
 * Remove dependency on "testing" from "tchannel-go" introduced in v1.0.7.

@@ -89,17 +89,23 @@ func TestRelay(t *testing.T) {
 	})
 }
 
-func DisabledTestRelayHandlesCrashedPeers(t *testing.T) {
-	withRelayedEcho(t, func(_, server, client *Channel, ts *testutils.TestServer) {
-		ctx, cancel := NewContext(time.Second)
+func TestRelayHandlesClosedPeers(t *testing.T) {
+	opts := serviceNameOpts("test").SetRelayOnly().
+		// Disable logs as we are closing connections that can error in a lot of places.
+		DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ctx, cancel := NewContext(300 * time.Millisecond)
 		defer cancel()
+
+		testutils.RegisterEcho(ts.Server(), nil)
+		client := ts.NewClient(serviceNameOpts("client"))
+		client.Peers().Add(ts.HostPort())
 
 		sc := client.GetSubChannel("test")
 		_, _, _, err := raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
 		require.NoError(t, err, "Relayed call failed.")
 
-		// Simulate a server crash.
-		server.Close()
+		ts.Server().Close()
 		require.NotPanics(t, func() {
 			raw.CallSC(ctx, sc, "echo", []byte("fake-header"), []byte("fake-body"))
 		})

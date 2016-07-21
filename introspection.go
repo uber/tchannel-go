@@ -41,6 +41,13 @@ type IntrospectionOptions struct {
 	IncludeTombstones bool `json:"includeTombstones"`
 }
 
+// RuntimeVersion includes version information about the runtime and
+// the tchannel library.
+type RuntimeVersion struct {
+	GoVersion      string `json:"goVersion"`
+	LibraryVersion string `json:"tchannelVersion"`
+}
+
 // RuntimeState is a snapshot of the runtime state for a channel.
 type RuntimeState struct {
 	// CreatedStack is the stack for how this channel was created.
@@ -66,6 +73,9 @@ type RuntimeState struct {
 
 	// OtherChannels is information about any other channels running in this process.
 	OtherChannels map[string][]ChannelInfo `json:"otherChannels,omitEmpty"`
+
+	// RuntimeVersion is the version information about the runtime and the library.
+	RuntimeVersion RuntimeVersion `json:"runtimeVersion"`
 }
 
 // GoRuntimeStateOptions are the options used when getting Go runtime state.
@@ -125,6 +135,7 @@ type ConnectionRuntimeState struct {
 	ConnectionState  string                  `json:"connectionState"`
 	LocalHostPort    string                  `json:"localHostPort"`
 	RemoteHostPort   string                  `json:"remoteHostPort"`
+	OutboundHostPort string                  `json:"outboundHostPort"`
 	IsEphemeral      bool                    `json:"isEphemeral"`
 	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
 	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
@@ -200,6 +211,7 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		NumConnections: numConns,
 		Connections:    connIDs,
 		OtherChannels:  ch.IntrospectOthers(opts),
+		RuntimeVersion: introspectRuntimeVersion(),
 	}
 }
 
@@ -314,6 +326,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		ConnectionState:  c.state.String(),
 		LocalHostPort:    c.conn.LocalAddr().String(),
 		RemoteHostPort:   c.conn.RemoteAddr().String(),
+		OutboundHostPort: c.outboundHP,
 		IsEphemeral:      c.remotePeerInfo.IsEphemeral,
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
@@ -419,6 +432,15 @@ func (l *PeerList) IntrospectList(opts *IntrospectionOptions) []SubPeerScore {
 	return peers
 }
 
+// IntrospectNumConnections returns the number of connections returns the number
+// of connections. Note: like other introspection APIs, this is not a stable API.
+func (ch *Channel) IntrospectNumConnections() int {
+	ch.mutable.RLock()
+	numConns := len(ch.mutable.conns)
+	ch.mutable.RUnlock()
+	return numConns
+}
+
 func handleInternalRuntime(arg3 []byte) interface{} {
 	var opts GoRuntimeStateOptions
 	json.Unmarshal(arg3, &opts)
@@ -436,6 +458,13 @@ func handleInternalRuntime(arg3 []byte) interface{} {
 	return state
 }
 
+func introspectRuntimeVersion() RuntimeVersion {
+	return RuntimeVersion{
+		GoVersion:      runtime.Version(),
+		LibraryVersion: VersionInfo,
+	}
+}
+
 // registerInternal registers the following internal handlers which return runtime state:
 //  _gometa_introspect: TChannel internal state.
 //  _gometa_runtime: Golang runtime stats.
@@ -448,6 +477,7 @@ func (ch *Channel) registerInternal() {
 		{"_gometa_runtime", handleInternalRuntime},
 	}
 
+	tchanSC := ch.GetSubChannel("tchannel")
 	for _, ep := range endpoints {
 		// We need ep in our closure.
 		ep := ep
@@ -465,5 +495,6 @@ func (ch *Channel) registerInternal() {
 			NewArgWriter(call.Response().Arg3Writer()).WriteJSON(ep.handler(arg3))
 		}
 		ch.Register(HandlerFunc(handler), ep.name)
+		tchanSC.Register(HandlerFunc(handler), ep.name)
 	}
 }

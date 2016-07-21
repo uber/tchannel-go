@@ -32,7 +32,7 @@ import (
 	"time"
 
 	tchannel "github.com/uber/tchannel-go"
-	gen "github.com/uber/tchannel-go/examples/thrift/gen-go/test"
+	gen "github.com/uber/tchannel-go/examples/thrift/gen-go/example"
 	"github.com/uber/tchannel-go/thrift"
 )
 
