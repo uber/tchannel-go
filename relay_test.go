@@ -387,7 +387,7 @@ func TestRelayOutgoingConnectionsEphemeral(t *testing.T) {
 
 func TestRelayHandleLocalCall(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly().
-		SetRelayLocal([]string{"relay", "tchannel", "test"}).
+		SetRelayLocal("relay", "tchannel", "test").
 		// We make a call to "test" for an unknown method.
 		AddLogFilter("Couldn't find handler.", 1)
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
@@ -412,7 +412,7 @@ func TestRelayHandleLocalCall(t *testing.T) {
 
 func TestRelayHandleLargeLocalCall(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly().
-		SetRelayLocal([]string{"relay"}).
+		SetRelayLocal("relay").
 		AddLogFilter("Received fragmented callReq", 1).
 		// Expect 4 callReqContinues for 256 kb payload that we cannot relay.
 		AddLogFilter("Failed to relay frame.", 4)
