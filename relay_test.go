@@ -428,5 +428,11 @@ func TestRelayHandleLargeLocalCall(t *testing.T) {
 		if assert.Equal(t, ErrCodeBadRequest, GetSystemErrorCode(err), "Expected BadRequest for large call to relay") {
 			assert.Contains(t, err.Error(), "cannot receive fragmented calls")
 		}
+
+		// We may get an error before the call is finished flushing.
+		// Do a ping to ensure everything has been flushed.
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+		require.NoError(t, client.Ping(ctx, ts.HostPort()), "Ping failed")
 	})
 }
