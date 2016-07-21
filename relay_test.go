@@ -395,7 +395,7 @@ func TestRelayHandleLocalCall(t *testing.T) {
 		testutils.RegisterEcho(s2, nil)
 
 		client := ts.NewClient(nil)
-		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), "s2", nil), "CallEcho to relayed service failed")
+		testutils.AssertEcho(t, client, ts.HostPort(), "s2")
 
 		testutils.RegisterEcho(ts.Relay(), nil)
 		testutils.AssertEcho(t, client, ts.HostPort(), "relay")
