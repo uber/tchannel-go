@@ -168,7 +168,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	err = writer.Close()
 
 	if handler.postResponseCB != nil {
-		handler.postResponseCB(method, resp)
+		handler.postResponseCB(ctx, method, resp)
 	}
 
 	return err
