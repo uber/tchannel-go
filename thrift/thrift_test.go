@@ -237,14 +237,14 @@ func TestClientHostPort(t *testing.T) {
 }
 
 func TestRegisterPostResponseCB(t *testing.T) {
-	key := "key"
-	value := "value"
-	opts := setupOptions{contextFn: func() (Context, func()) {
-		ctx, cancel := NewContext(time.Second)
-		ctx = WithHeaders(context.WithValue(ctx, key, value), ctx.Headers())
-		return ctx, cancel
-	}}
-	withSetupOptions(t, opts, func(ctx Context, args testArgs) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		ctxKey := "key"
+		ctxValue := "value"
+
+		args.server.SetContextFn(func(ctx context.Context, method string, headers map[string]string) Context {
+			return WithHeaders(context.WithValue(ctx, ctxKey, ctxValue), headers)
+		})
+
 		arg := &gen.Data{
 			B1: true,
 			S2: "str",
@@ -259,7 +259,7 @@ func TestRegisterPostResponseCB(t *testing.T) {
 		called := make(chan struct{})
 		cb := func(reqCtx context.Context, method string, response thrift.TStruct) {
 			assert.Equal(t, "Call", method)
-			assert.Equal(t, ctx.Value(key), value)
+			assert.Equal(t, ctxValue, reqCtx.Value(ctxKey))
 			res, ok := response.(*gen.SimpleServiceCallResult)
 			if assert.True(t, ok, "response type should be Result struct") {
 				assert.Equal(t, ret, res.GetSuccess(), "result should be returned value")
@@ -319,24 +319,13 @@ func TestThriftContextFn(t *testing.T) {
 	})
 }
 
-type setupOptions struct {
-	contextFn func() (Context, func())
-}
-
 func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
-	contextFn := func() (Context, func()) {
-		return NewContext(time.Second)
-	}
-	withSetupOptions(t, setupOptions{contextFn: contextFn}, f)
-}
-
-func withSetupOptions(t *testing.T, opts setupOptions, f func(ctx Context, args testArgs)) {
 	args := testArgs{
 		s1: new(mocks.TChanSimpleService),
 		s2: new(mocks.TChanSecondService),
 	}
 
-	ctx, cancel := opts.contextFn()
+	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
 	// Start server
