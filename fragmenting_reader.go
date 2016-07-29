@@ -157,7 +157,7 @@ func (r *fragmentingReader) Read(b []byte) (int, error) {
 		r.curChunk = r.curChunk[n:]
 		b = b[n:]
 
-		if len(b) == 0 || totalRead > 0 {
+		if len(b) == 0 {
 			// There was enough data in the current chunk to
 			// satisfy the read.  Advance our place in the current
 			// chunk and be done
@@ -176,6 +176,12 @@ func (r *fragmentingReader) Read(b []byte) (int, error) {
 		// fragments, then we've reached the end of the argument
 		if !r.hasMoreFragments {
 			return totalRead, io.EOF
+		}
+
+		// If we need to get a new chunk to satisfy this read but we
+		// have already read some bytes, do a partial read.
+		if totalRead > 0 {
+			return totalRead, nil
 		}
 
 		if r.err = r.recvAndParseNextFragment(false); r.err != nil {
