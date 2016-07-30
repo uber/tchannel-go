@@ -66,6 +66,7 @@ func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrif
 	if err != nil {
 		return err
 	}
+	headers = tchannel.InjectOutboundSpan(call.Response(), headers)
 	if err := WriteHeaders(writer, headers); err != nil {
 		return err
 	}

@@ -82,9 +82,6 @@ func (c headerCtx) SetResponseHeaders(headers map[string]string) {
 // If the parent `ctx` is already an instance of ContextWithHeaders, its existing headers
 // will be ignored. In order to merge new headers with parent headers, use ContextBuilder.
 func WrapWithHeaders(ctx context.Context, headers map[string]string) ContextWithHeaders {
-	if hctx, ok := ctx.(headerCtx); ok {
-		ctx = hctx
-	}
 	h := &headersContainer{
 		reqHeaders: headers,
 	}

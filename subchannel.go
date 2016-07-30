@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
@@ -164,6 +165,11 @@ func (c *SubChannel) StatsTags() map[string]string {
 	tags := c.topChannel.StatsTags()
 	tags["subchannel"] = c.serviceName
 	return tags
+}
+
+// Tracer returns OpenTracing Tracer from the top channel.
+func (c *SubChannel) Tracer() opentracing.Tracer {
+	return c.topChannel.Tracer()
 }
 
 // Register a new subchannel for the given serviceName

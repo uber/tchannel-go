@@ -43,22 +43,6 @@ func TestWrapContextForTest(t *testing.T) {
 	assert.Equal(t, call, CurrentCall(actual), "Incorrect call object returned.")
 }
 
-func TestNewContextBuilderHasSpan(t *testing.T) {
-	ctx, cancel := NewContextBuilder(time.Second).Build()
-	defer cancel()
-
-	assert.NotNil(t, CurrentSpan(ctx), "NewContext should contain span")
-	assert.True(t, CurrentSpan(ctx).TracingEnabled(), "Tracing should be enabled")
-}
-
-func TestNewContextBuilderDisableTracing(t *testing.T) {
-	ctx, cancel := NewContextBuilder(time.Second).
-		DisableTracing().Build()
-	defer cancel()
-
-	assert.False(t, CurrentSpan(ctx).TracingEnabled(), "Tracing should be disabled")
-}
-
 func TestNewContextTimeoutZero(t *testing.T) {
 	ctx, cancel := NewContextBuilder(0).Build()
 	defer cancel()
@@ -124,11 +108,13 @@ func TestCurrentCallWithNilResult(t *testing.T) {
 
 func getParentContext(t *testing.T) ContextWithHeaders {
 	ctx := context.WithValue(context.Background(), "some key", "some value")
+	assert.Equal(t, "some value", ctx.Value("some key"))
 
 	ctx1, _ := NewContextBuilder(time.Second).
 		SetParentContext(ctx).
 		AddHeader("header key", "header value").
 		Build()
+	assert.Equal(t, "some value", ctx1.Value("some key"))
 	return ctx1
 }
 
@@ -208,25 +194,12 @@ func TestContextWithHeadersAsContext(t *testing.T) {
 
 func TestContextBuilderParentContextSpan(t *testing.T) {
 	ctx := getParentContext(t)
-	span := NewSpan(5, 4, 3)
+	assert.Equal(t, "some value", ctx.Value("some key"))
 
 	ctx2, _ := NewContextBuilder(time.Second).
 		SetParentContext(ctx).
-		SetSpanForTest(&span).
 		Build()
-	assert.Equal(t, &span, CurrentSpan(ctx2), "explicitly provided span used")
-
-	ctx3, _ := NewContextBuilder(time.Second).
-		SetParentContext(ctx2).
-		Build()
-	assert.Equal(t, &span, CurrentSpan(ctx3), "span inherited from parent")
-
-	ctx4, _ := NewContextBuilder(time.Second).
-		SetParentContext(ctx2).
-		SetExternalSpan(3, 2, 1, true).
-		Build()
-	span4 := NewSpan(3, 2, 1)
-	assert.Equal(t, &span4, CurrentSpan(ctx4), "external span used")
+	assert.Equal(t, "some value", ctx2.Value("some key"), "key/value propagated from parent ctx")
 
 	goroutines.VerifyNoLeaks(t, nil)
 }

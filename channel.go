@@ -32,6 +32,7 @@ import (
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/tnet"
 
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
@@ -46,13 +47,7 @@ var (
 
 const (
 	ephemeralHostPort = "0.0.0.0:0"
-
-	// DefaultTraceSampleRate is the default sampling rate for traces.
-	DefaultTraceSampleRate = 1.0
 )
-
-// TraceReporterFactory is the interface of the method to generate TraceReporter instance.
-type TraceReporterFactory func(*Channel) TraceReporter
 
 // ChannelOptions are used to control parameters on a create a TChannel
 type ChannelOptions struct {
@@ -84,15 +79,9 @@ type ChannelOptions struct {
 	// Note: This is not a stable part of the API and may change.
 	TimeNow func() time.Time
 
-	// Trace reporter to use for this channel.
-	TraceReporter TraceReporter
-
-	// Trace reporter factory to generate trace reporter instance.
-	TraceReporterFactory TraceReporterFactory
-
-	// TraceSampleRate is the rate of requests to sample, and should be in the range [0, 1].
-	// If this value is not set, then DefaultTraceSampleRate is used.
-	TraceSampleRate *float64
+	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
+	// If not set, opentracing.GlobalTracer() is used.
+	Tracer opentracing.Tracer
 }
 
 // ChannelState is the state of a channel.
@@ -146,14 +135,23 @@ type Channel struct {
 // channelConnectionCommon is the list of common objects that both use
 // and can be copied directly from the channel to the connection.
 type channelConnectionCommon struct {
-	log             Logger
-	relayStats      relay.Stats
-	relayLocal      map[string]struct{}
-	statsReporter   StatsReporter
-	traceReporter   TraceReporter
-	subChannels     *subChannelMap
-	timeNow         func() time.Time
-	traceSampleRate float64
+	log           Logger
+	relayStats    relay.Stats
+	relayLocal    map[string]struct{}
+	statsReporter StatsReporter
+	tracer        opentracing.Tracer
+	subChannels   *subChannelMap
+	timeNow       func() time.Time
+}
+
+// Tracer returns the OpenTracing Tracer for this channel. If no tracer was provided
+// in the configuration, returns opentracing.GlobalTracer(). Note that this approach
+// allows opentracing.GlobalTracer() to be initialized _after_ the channel is created.
+func (ccc channelConnectionCommon) Tracer() opentracing.Tracer {
+	if ccc.tracer != nil {
+		return ccc.tracer
+	}
+	return opentracing.GlobalTracer()
 }
 
 // NewChannel creates a new Channel.  The new channel can be used to send outbound requests
@@ -188,11 +186,6 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeNow = time.Now
 	}
 
-	traceSampleRate := DefaultTraceSampleRate
-	if opts.TraceSampleRate != nil {
-		traceSampleRate = *opts.TraceSampleRate
-	}
-
 	relayStats := relay.NewNoopStats()
 	if opts.RelayStats != nil {
 		relayStats = opts.RelayStats
@@ -203,12 +196,12 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 			log: logger.WithFields(
 				LogField{"service", serviceName},
 				LogField{"process", processName}),
-			relayStats:      relayStats,
-			relayLocal:      toStringSet(opts.RelayLocalHandlers),
-			statsReporter:   statsReporter,
-			subChannels:     &subChannelMap{},
-			timeNow:         timeNow,
-			traceSampleRate: traceSampleRate,
+			relayStats:    relayStats,
+			relayLocal:    toStringSet(opts.RelayLocalHandlers),
+			statsReporter: statsReporter,
+			subChannels:   &subChannelMap{},
+			timeNow:       timeNow,
+			tracer:        opts.Tracer,
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,
@@ -226,16 +219,6 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.mutable.state = ChannelClient
 	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
-
-	// TraceReporter may use the channel, so we must initialize it once the channel is ready.
-	traceReporter := opts.TraceReporter
-	if opts.TraceReporterFactory != nil {
-		traceReporter = opts.TraceReporterFactory(ch)
-	}
-	if traceReporter == nil {
-		traceReporter = NullReporter
-	}
-	ch.traceReporter = traceReporter
 
 	ch.registerInternal()
 
@@ -317,6 +300,9 @@ type Registrar interface {
 
 	// Peers returns the peer list for this Registrar.
 	Peers() *PeerList
+
+	// Tracer returns OpenTracing Tracer this channel was configured with
+	Tracer() opentracing.Tracer
 }
 
 // Register registers a handler for a method.
@@ -454,11 +440,6 @@ func (ch *Channel) Logger() Logger {
 // StatsReporter returns the stats reporter for this channel.
 func (ch *Channel) StatsReporter() StatsReporter {
 	return ch.statsReporter
-}
-
-// TraceReporter returns the trace reporter for this channel.
-func (ch *Channel) TraceReporter() TraceReporter {
-	return ch.traceReporter
 }
 
 // StatsTags returns the common tags that should be used when reporting stats.
