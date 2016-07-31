@@ -9,6 +9,9 @@ lint.log
 # Cover profiles
 *.out
 
+# Crossdock logs
+run-crossdock.log
+
 # Editor and OS detritus
 *~
 *.swp
