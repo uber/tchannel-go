@@ -17,28 +17,41 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-
 package tchannel
 
 import (
 	"testing"
+	"time"
 
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/mocktracer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
 )
 
-func TestTraceReporterFactory(t *testing.T) {
-	var gotChannel *Channel
-	testTraceReporterFactory := func(ch *Channel) TraceReporter {
-		gotChannel = ch
-		return SimpleTraceReporter
-	}
-	tc, err := NewChannel("client", &ChannelOptions{
-		TraceReporter:        NullReporter,
-		TraceReporterFactory: testTraceReporterFactory,
-	})
-	require.NoError(t, err)
-	defer tc.Close()
-	assert.Equal(t, tc, gotChannel, "TraceReporterFactory got wrong channel")
-	assert.Equal(t, tc.traceReporter, SimpleTraceReporter, "Wrong TraceReporter")
+func TestNewContextBuilderDisableTracing(t *testing.T) {
+	ctx, cancel := NewContextBuilder(time.Second).
+		DisableTracing().Build()
+	defer cancel()
+
+	assert.True(t, isTracingDisabled(ctx), "Tracing should be disabled")
+}
+
+func TestCurrentSpan(t *testing.T) {
+	ctx := context.Background()
+	span := CurrentSpan(ctx)
+	require.NotNil(t, span, "CurrentSpan() should always return something")
+
+	tracer := mocktracer.New()
+	sp := tracer.StartSpan("test")
+	ctx = opentracing.ContextWithSpan(ctx, sp)
+	span = CurrentSpan(ctx)
+	require.NotNil(t, span, "CurrentSpan() should always return something")
+	assert.EqualValues(t, 0, span.TraceID(), "mock tracer is not Zipkin-compatible")
+
+	tracer.RegisterInjector(zipkinSpanFormat, new(zipkinInjector))
+	span = CurrentSpan(ctx)
+	require.NotNil(t, span, "CurrentSpan() should always return something")
+	assert.NotEqual(t, uint64(0), span.TraceID(), "mock tracer is now Zipkin-compatible")
 }

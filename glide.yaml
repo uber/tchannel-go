@@ -44,3 +44,6 @@ import:
   - quantile
 - package: github.com/uber-go/atomic
 - package: github.com/prashantv/protectmem
+- package: github.com/opentracing/opentracing-go
+- package: github.com/uber/jaeger-client-go
+- package: github.com/crossdock/crossdock-go
