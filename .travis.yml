@@ -16,8 +16,8 @@ env:
     - DOCKER_VERSION=1.10.1-0~trusty
     - DOCKER_COMPOSE_VERSION=1.6.0
     - COMMIT=${TRAVIS_COMMIT::8}
-  # Set higher timeouts for Travis
-  - TEST_TIMEOUT_SCALE=20
+    # Set higher timeouts for Travis
+    - TEST_TIMEOUT_SCALE=20
 script:
   - make test_ci
   - make cover_ci
