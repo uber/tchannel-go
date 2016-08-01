@@ -3,10 +3,9 @@ cache:
   directories:
     - $HOME/.glide/cache
 go:
-  - 1.4
   - 1.5
   - 1.6
-  - 1.7rc1
+  - 1.7rc3
   - tip
 install: make install_ci
 env:
