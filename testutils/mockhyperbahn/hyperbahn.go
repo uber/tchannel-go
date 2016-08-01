@@ -40,11 +40,17 @@ type Mock struct {
 	respCh          chan int
 	advertised      []string
 	discoverResults map[string][]string
+	table           *advertisedTable
 }
 
 // New returns a mock Hyperbahn server that can be used for testing.
 func New() (*Mock, error) {
-	ch, err := tchannel.NewChannel("hyperbahn", nil)
+	table := newAdvertisedTable()
+
+	ch, err := tchannel.NewChannel("hyperbahn", &tchannel.ChannelOptions{
+		RelayHosts:         table,
+		RelayLocalHandlers: []string{"hyperbahn"},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +59,7 @@ func New() (*Mock, error) {
 		ch:              ch,
 		respCh:          make(chan int),
 		discoverResults: make(map[string][]string),
+		table:           table,
 	}
 	if err := json.Register(ch, json.Handlers{"ad": mh.adHandler}, nil); err != nil {
 		return nil, err
@@ -105,6 +112,7 @@ func (h *Mock) adHandler(ctx json.Context, req *hyperbahn.AdRequest) (*hyperbahn
 	h.Lock()
 	for _, s := range req.Services {
 		h.advertised = append(h.advertised, s.Name)
+		h.table.addPeer(s.Name, tchannel.CurrentCall(ctx).RemotePeer().HostPort)
 	}
 	h.Unlock()
 

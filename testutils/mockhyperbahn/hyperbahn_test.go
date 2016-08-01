@@ -22,9 +22,12 @@ package mockhyperbahn_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
+	"github.com/uber/tchannel-go/raw"
+	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/mockhyperbahn"
 
 	"github.com/stretchr/testify/assert"
@@ -83,4 +86,35 @@ func TestMockDiscovery(t *testing.T) {
 	gotPeers, err := client.Discover("discover-svc")
 	require.NoError(t, err, "Discover failed")
 	assert.Equal(t, peers, gotPeers, "Discover returned invalid peers")
+}
+
+func TestMockForwards(t *testing.T) {
+	mockHB, err := mockhyperbahn.New()
+	require.NoError(t, err, "Failed to set up mock hyperbahm")
+
+	called := false
+	server := testutils.NewServer(t, &testutils.ChannelOpts{
+		ServiceName: "svr",
+	})
+	testutils.RegisterEcho(server, func() {
+		called = true
+	})
+
+	serverHyp, err := hyperbahn.NewClient(server, mockHB.Configuration(), nil)
+	require.NoError(t, err, "Failed to set up Hyperbahn client")
+	require.NoError(t, serverHyp.Advertise(), "Advertise failed")
+
+	client := testutils.NewServer(t, &testutils.ChannelOpts{
+		ServiceName: "client",
+	})
+	clientHyp, err := hyperbahn.NewClient(client, mockHB.Configuration(), nil)
+	require.NoError(t, err, "Failed to set up Hyperbahn client")
+	require.NoError(t, clientHyp.Advertise(), "Advertise failed")
+
+	ctx, cancel := tchannel.NewContext(time.Second)
+	defer cancel()
+
+	_, _, _, err = raw.CallSC(ctx, client.GetSubChannel("svr"), "echo", nil, nil)
+	require.NoError(t, err, "Call failed")
+	require.True(t, called, "Advertised server was not called")
 }
