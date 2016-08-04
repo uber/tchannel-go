@@ -368,7 +368,6 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 
 func comparableState(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) *tchannel.RuntimeState {
 	s := ch.IntrospectState(opts)
-	s.OtherChannels = nil
 	s.SubChannels = nil
 	s.Peers = nil
 	return s
