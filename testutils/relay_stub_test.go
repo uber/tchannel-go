@@ -60,7 +60,7 @@ func TestSimpleRelayHosts(t *testing.T) {
 	for _, tt := range tests {
 		// Since we use random, run the test a few times.
 		for i := 0; i < 5; i++ {
-			got, err := rh.Get(tt.call)
+			got, err := rh.Get(tt.call, nil)
 			require.NoError(t, err, "Get failed")
 			if tt.wantOneOf == nil {
 				assert.Equal(t, "", got.HostPort, "Expected %v to find no hosts", tt.call)
@@ -77,7 +77,7 @@ func TestSimpleRelayHosts(t *testing.T) {
 func TestSimpleRelayHostsPeer(t *testing.T) {
 	hosts := NewSimpleRelayHosts(nil)
 	hosts.AddPeer("svc", "1.1.1.1:1", "a1", "sjc1")
-	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"})
+	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"}, nil)
 	require.NoError(t, err, "Get failed")
 	assert.Equal(t, relay.Peer{HostPort: "1.1.1.1:1", Pool: "a1", Zone: "sjc1"}, peer, "Unexpected peer")
 }
@@ -86,7 +86,7 @@ func TestSimpleRelayHostsPeerError(t *testing.T) {
 	wantErr := errors.New("test error")
 	hosts := NewSimpleRelayHosts(nil)
 	hosts.AddError("svc", wantErr)
-	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"})
+	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"}, nil)
 	assert.Equal(t, relay.Peer{}, peer, "Unexpected peer")
 	assert.Equal(t, wantErr, err, "Unexpected error")
 }

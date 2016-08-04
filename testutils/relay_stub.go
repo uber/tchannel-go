@@ -56,7 +56,7 @@ func NewSimpleRelayHosts(peerHostPorts map[string][]string) *SimpleRelayHosts {
 }
 
 // Get takes a routing key and returns the best host:port for that key.
-func (rh *SimpleRelayHosts) Get(frame relay.CallFrame) (relay.Peer, error) {
+func (rh *SimpleRelayHosts) Get(frame relay.CallFrame, _ relay.Conn) (relay.Peer, error) {
 	rh.RLock()
 	defer rh.RUnlock()
 
