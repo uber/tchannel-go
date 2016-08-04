@@ -748,3 +748,19 @@ func TestConnectTimeout(t *testing.T) {
 		close(testComplete)
 	})
 }
+
+func TestConnectionProcessPrefixes(t *testing.T) {
+	opts := testutils.NewOpts().NoRelay().SetProcessName("nodejs-hyperbahn")
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		clientOpts := testutils.NewOpts().NoRelay().SetProcessPrefixes("nod", "nodejs-hyperbahn", "", "hyperbahn")
+		client := ts.NewClient(clientOpts)
+
+		ctx, cancel := NewContextBuilder(testutils.Timeout(100 * time.Millisecond)).Build()
+		defer cancel()
+		conn, err := client.Connect(ctx, ts.HostPort())
+		require.NoError(t, err, "Unexpected error connecting to test server.")
+
+		matches := conn.RemoteProcessPrefixMatches()
+		assert.Equal(t, []bool{true, true, true, false}, matches, "Unexpected prefix matches.")
+	})
+}
