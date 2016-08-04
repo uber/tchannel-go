@@ -23,21 +23,27 @@ package testutils
 import (
 	"math/rand"
 	"sync"
+	"testing"
 
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/trand"
 )
 
+const _noConnMsg = "SimpleRelayHosts implementation was passed a nil relay.Conn."
+
 // SimpleRelayHosts is a simple stub that satisfies the RelayHosts interface.
 type SimpleRelayHosts struct {
 	sync.RWMutex
-	r      *rand.Rand
-	peers  map[string][]relay.Peer
-	errors map[string]error
+
+	t          testing.TB
+	r          *rand.Rand
+	verifyConn bool
+	peers      map[string][]relay.Peer
+	errors     map[string]error
 }
 
 // NewSimpleRelayHosts wraps a map in the RelayHosts interface.
-func NewSimpleRelayHosts(peerHostPorts map[string][]string) *SimpleRelayHosts {
+func NewSimpleRelayHosts(t testing.TB, peerHostPorts map[string][]string) *SimpleRelayHosts {
 	peers := make(map[string][]relay.Peer)
 	for key, hosts := range peerHostPorts {
 		peerList := make([]relay.Peer, len(hosts))
@@ -49,16 +55,22 @@ func NewSimpleRelayHosts(peerHostPorts map[string][]string) *SimpleRelayHosts {
 
 	// Use a known seed for repeatable tests.
 	return &SimpleRelayHosts{
-		r:      trand.New(1),
-		peers:  peers,
-		errors: make(map[string]error),
+		t:          t,
+		verifyConn: true,
+		r:          trand.New(1),
+		peers:      peers,
+		errors:     make(map[string]error),
 	}
 }
 
 // Get takes a routing key and returns the best host:port for that key.
-func (rh *SimpleRelayHosts) Get(frame relay.CallFrame, _ relay.Conn) (relay.Peer, error) {
+func (rh *SimpleRelayHosts) Get(frame relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
 	rh.RLock()
 	defer rh.RUnlock()
+
+	if rh.verifyConn && conn == nil {
+		rh.t.Error(_noConnMsg)
+	}
 
 	if err, ok := rh.errors[string(frame.Service())]; ok {
 		return relay.Peer{}, err
@@ -95,4 +107,9 @@ func (rh *SimpleRelayHosts) AddError(service string, err error) {
 	defer rh.Unlock()
 
 	rh.errors[service] = err
+}
+
+// DisableConnVerification disables nil checks on the relay.Conn passed to Get.
+func (rh *SimpleRelayHosts) DisableConnVerification() {
+	rh.verifyConn = false
 }

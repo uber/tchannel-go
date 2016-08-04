@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/uber/tchannel-go/relay"
@@ -36,7 +37,8 @@ func TestSimpleRelayHosts(t *testing.T) {
 		"foo-added":  {},
 		"foo-canary": {},
 	}
-	rh := NewSimpleRelayHosts(hosts)
+	rh := NewSimpleRelayHosts(t, hosts)
+	rh.DisableConnVerification()
 	rh.Add("foo-added", "1.1.1.1:1234")
 
 	tests := []struct {
@@ -75,7 +77,8 @@ func TestSimpleRelayHosts(t *testing.T) {
 }
 
 func TestSimpleRelayHostsPeer(t *testing.T) {
-	hosts := NewSimpleRelayHosts(nil)
+	hosts := NewSimpleRelayHosts(t, nil)
+	hosts.DisableConnVerification()
 	hosts.AddPeer("svc", "1.1.1.1:1", "a1", "sjc1")
 	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"}, nil)
 	require.NoError(t, err, "Get failed")
@@ -84,9 +87,32 @@ func TestSimpleRelayHostsPeer(t *testing.T) {
 
 func TestSimpleRelayHostsPeerError(t *testing.T) {
 	wantErr := errors.New("test error")
-	hosts := NewSimpleRelayHosts(nil)
+	hosts := NewSimpleRelayHosts(t, nil)
+	hosts.DisableConnVerification()
 	hosts.AddError("svc", wantErr)
 	peer, err := hosts.Get(FakeCallFrame{ServiceF: "svc"}, nil)
 	assert.Equal(t, relay.Peer{}, peer, "Unexpected peer")
 	assert.Equal(t, wantErr, err, "Unexpected error")
+}
+
+type fakeTB struct {
+	testing.TB
+	errMsg string
+}
+
+func (tb *fakeTB) Error(args ...interface{}) {
+	tb.errMsg = fmt.Sprint(args...)
+}
+
+func TestSimpleRelayHostsConnVerification(t *testing.T) {
+	spy := &fakeTB{TB: nil}
+
+	hosts := NewSimpleRelayHosts(spy, nil)
+	hosts.Get(FakeCallFrame{ServiceF: "svc"}, nil)
+	assert.Equal(
+		t,
+		_noConnMsg,
+		spy.errMsg,
+		"Expected test failure when passing a nil relay.Conn.",
+	)
 }

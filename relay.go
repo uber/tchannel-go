@@ -170,11 +170,10 @@ type Relayer struct {
 	// It stores remappings for all response frames read on this connection.
 	inbound *relayItems
 
-	peers     *PeerList
-	conn      *Connection
-	relayConn relay.Conn // cast and allocate once
-	logger    Logger
-	pending   atomic.Uint32
+	peers   *PeerList
+	conn    *Connection
+	logger  Logger
+	pending atomic.Uint32
 }
 
 // NewRelayer constructs a Relayer.
@@ -187,7 +186,6 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
 		peers:        ch.Peers(),
 		conn:         conn,
-		relayConn:    relay.Conn(conn),
 		logger:       conn.log,
 	}
 }
@@ -268,7 +266,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	}
 
 	// Get the destination
-	selectedPeer, err := r.hosts.Get(f, r.relayConn)
+	selectedPeer, err := r.hosts.Get(f, r.conn)
 	cs.SetPeer(selectedPeer)
 	if err == nil && selectedPeer.HostPort == "" {
 		err = errInvalidPeerForGroup(f.Service())

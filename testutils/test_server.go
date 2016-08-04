@@ -211,7 +211,7 @@ func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 // addRelay adds a relay in front of the test server, altering public methods as
 // necessary to route traffic through the relay.
 func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
-	ts.relayHosts = NewSimpleRelayHosts(map[string][]string{
+	ts.relayHosts = NewSimpleRelayHosts(ts, map[string][]string{
 		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
 	})
 
