@@ -105,24 +105,24 @@ func TestRawTracingPropagation(t *testing.T) {
 		// Since Raw encoding does not support headers, there is no baggage propagation
 		TestCases: map[TracerType][]PropagationTestCase{
 			Noop: {
-				{2, true, "", 0},
-				{2, false, "", 0},
+				{ForwardCount: 2, TracingDisabled: true, ExpectedBaggage: "", ExpectedSpanCount: 0},
+				{ForwardCount: 2, TracingDisabled: false, ExpectedBaggage: "", ExpectedSpanCount: 0},
 			},
 			Mock: {
 				// Since Raw encoding does not propagate generic traces, the tracingDisable
 				// only affects the first outbound span (it's not sampled), but the other
 				// two outbound spans are still sampled and recorded.
-				{2, true, "", 2},
+				{ForwardCount: 2, TracingDisabled: true, ExpectedBaggage: "", ExpectedSpanCount: 2},
 				// Since Raw encoding does not propagate generic traces, we record 3 spans
 				// for outbound calls, but none for inbound calls.
-				{2, false, "", 3},
+				{ForwardCount: 2, TracingDisabled: false, ExpectedBaggage: "", ExpectedSpanCount: 3},
 			},
 			Jaeger: {
 				// Since Jaeger is Zipkin-compatible, it is able to keep track of tracingDisabled
-				{2, true, "", 0},
+				{ForwardCount: 2, TracingDisabled: true, ExpectedBaggage: "", ExpectedSpanCount: 0},
 				// Since Jaeger is Zipkin-compatible, it is able to decode the trace
 				// even from the Raw encoding.
-				{2, false, "", 6},
+				{ForwardCount: 2, TracingDisabled: false, ExpectedBaggage: "", ExpectedSpanCount: 6},
 			},
 		},
 	}

@@ -115,16 +115,25 @@ func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
 }
 
 func TestChannelTracerMethod(t *testing.T) {
-	tracer := mocktracer.New()
+	mockTracer := mocktracer.New()
 	ch, err := NewChannel("svc", &ChannelOptions{
-		Tracer: tracer,
+		Tracer: mockTracer,
 	})
 	require.NoError(t, err)
 	defer ch.Close()
-	assert.Equal(t, tracer, ch.Tracer(), "expecting tracer passed at initialization")
+	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer passed at initialization")
 
 	ch, err = NewChannel("svc", &ChannelOptions{})
 	require.NoError(t, err)
 	defer ch.Close()
 	assert.EqualValues(t, opentracing.GlobalTracer(), ch.Tracer(), "expecting default tracer")
+
+	// because ch.Tracer() function is doing dynamic lookup, we can change global tracer
+	origTracer := opentracing.GlobalTracer()
+	defer func() {
+		// restore it on exit
+		opentracing.InitGlobalTracer(origTracer)
+	}()
+	opentracing.InitGlobalTracer(mockTracer)
+	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer set as global tracer")
 }

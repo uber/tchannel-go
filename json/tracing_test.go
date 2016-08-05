@@ -51,16 +51,16 @@ func TestJSONTracingPropagation(t *testing.T) {
 		},
 		TestCases: map[TracerType][]PropagationTestCase{
 			Noop: {
-				{2, true, "", 0},
-				{2, false, "", 0},
+				{ForwardCount: 2, TracingDisabled: true, ExpectedBaggage: "", ExpectedSpanCount: 0},
+				{ForwardCount: 2, TracingDisabled: false, ExpectedBaggage: "", ExpectedSpanCount: 0},
 			},
 			Mock: {
-				{2, true, BaggageValue, 0},
-				{2, false, BaggageValue, 6},
+				{ForwardCount: 2, TracingDisabled: true, ExpectedBaggage: BaggageValue, ExpectedSpanCount: 0},
+				{ForwardCount: 2, TracingDisabled: false, ExpectedBaggage: BaggageValue, ExpectedSpanCount: 6},
 			},
 			Jaeger: {
-				{2, true, BaggageValue, 0},
-				{2, false, BaggageValue, 6},
+				{ForwardCount: 2, TracingDisabled: true, ExpectedBaggage: BaggageValue, ExpectedSpanCount: 0},
+				{ForwardCount: 2, TracingDisabled: false, ExpectedBaggage: BaggageValue, ExpectedSpanCount: 6},
 			},
 		},
 	}

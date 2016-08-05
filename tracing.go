@@ -180,7 +180,7 @@ func InjectOutboundSpan(response *OutboundCallResponse, headers map[string]strin
 	if err := span.Tracer().Inject(span.Context(), opentracing.TextMap, carrier); err != nil {
 		// Something had to go seriously wrong for Inject to fail, usually a setup problem.
 		// A good Tracer implementation may also emit a metric.
-		response.log.Error("Failed to inject tracing span: " + err.Error())
+		response.log.WithFields(ErrField(err)).Error("Failed to inject tracing span.")
 	}
 	return headers
 }
@@ -194,7 +194,7 @@ func (c *Connection) extractInboundSpan(callReq *callReq) opentracing.Span {
 	spanCtx, err := c.Tracer().Extract(zipkinSpanFormat, &callReq.Tracing)
 	if err != nil {
 		if err != opentracing.ErrUnsupportedFormat && err != opentracing.ErrSpanContextNotFound {
-			c.log.Error("Failed to extract Zipkin-style span: " + err.Error())
+			c.log.WithFields(ErrField(err)).Error("Failed to extract Zipkin-style span.")
 		}
 		return nil
 	}
