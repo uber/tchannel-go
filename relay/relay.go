@@ -40,6 +40,8 @@ type CallFrame interface {
 	Service() []byte
 	// Method is the name of the method being called.
 	Method() []byte
+	// RoutingDelegate is the name of the routing delegate, if any.
+	RoutingDelegate() []byte
 }
 
 // Hosts allows external wrappers to inject peer selection logic for
