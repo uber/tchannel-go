@@ -64,7 +64,7 @@ type TracingResponse struct {
 func (r *TracingResponse) ObserveSpan(ctx context.Context) *TracingResponse {
 	if span := opentracing.SpanFromContext(ctx); span != nil {
 		if mockSpan, ok := span.(*mocktracer.MockSpan); ok {
-			sc := mockSpan.Context().(*mocktracer.MockSpanContext)
+			sc := mockSpan.Context().(mocktracer.MockSpanContext)
 			r.TraceID = uint64(sc.TraceID)
 			r.SpanID = uint64(sc.SpanID)
 			r.ParentID = uint64(mockSpan.ParentID)
@@ -75,7 +75,7 @@ func (r *TracingResponse) ObserveSpan(ctx context.Context) *TracingResponse {
 			r.ParentID = span.ParentID()
 			r.TracingEnabled = span.Flags()&1 == 1
 		}
-		r.Luggage = span.Context().BaggageItem(BaggageKey)
+		r.Luggage = span.BaggageItem(BaggageKey)
 	}
 	return r
 }
@@ -248,7 +248,7 @@ func (s *PropagationTestSuite) runTestCase(
 	tracer.resetSpans()
 
 	span := ch.Tracer().StartSpan("client")
-	span.Context().SetBaggageItem(BaggageKey, BaggageValue)
+	span.SetBaggageItem(BaggageKey, BaggageValue)
 	ctx := opentracing.ContextWithSpan(context.Background(), span)
 
 	ctxBuilder := tchannel.NewContextBuilder(5 * time.Second).SetParentContext(ctx)
@@ -305,7 +305,7 @@ func (s *PropagationTestSuite) runTestCase(
 func MockTracerSampledSpans(tracer *mocktracer.MockTracer) []*mocktracer.MockSpan {
 	var spans []*mocktracer.MockSpan
 	for _, span := range tracer.FinishedSpans() {
-		if span.Context().(*mocktracer.MockSpanContext).Sampled {
+		if span.Context().(mocktracer.MockSpanContext).Sampled {
 			spans = append(spans, span)
 		}
 	}

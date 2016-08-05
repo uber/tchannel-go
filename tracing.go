@@ -226,7 +226,7 @@ func ExtractInboundSpan(ctx context.Context, call *InboundCall, headers map[stri
 			carrier := tracingHeadersCarrier(headers)
 			if sc, err := tracer.Extract(opentracing.TextMap, carrier); err == nil {
 				sc.ForeachBaggageItem(func(k, v string) bool {
-					span.Context().SetBaggageItem(k, v)
+					span.SetBaggageItem(k, v)
 					return true
 				})
 			}

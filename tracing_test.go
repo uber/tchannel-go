@@ -64,7 +64,7 @@ func TestTracingSpanAttributes(t *testing.T) {
 		json.Register(ch, json.Handlers{"call": jsonHandler.callJSON}, jsonHandler.onError)
 
 		span := ch.Tracer().StartSpan("client")
-		span.Context().SetBaggageItem(testtracing.BaggageKey, testtracing.BaggageValue)
+		span.SetBaggageItem(testtracing.BaggageKey, testtracing.BaggageValue)
 		ctx := opentracing.ContextWithSpan(context.Background(), span)
 		root := new(testtracing.TracingResponse).ObserveSpan(ctx)
 
@@ -111,13 +111,13 @@ func TestTracingSpanAttributes(t *testing.T) {
 		require.NotNil(t, child)
 
 		traceID := func(s opentracing.Span) int {
-			return s.Context().(*mocktracer.MockSpanContext).TraceID
+			return s.Context().(mocktracer.MockSpanContext).TraceID
 		}
 		spanID := func(s *mocktracer.MockSpan) int {
-			return s.Context().(*mocktracer.MockSpanContext).SpanID
+			return s.Context().(mocktracer.MockSpanContext).SpanID
 		}
 		sampled := func(s *mocktracer.MockSpan) bool {
-			return s.Context().(*mocktracer.MockSpanContext).Sampled
+			return s.Context().(mocktracer.MockSpanContext).Sampled
 		}
 
 		require.Equal(t, traceID(span), traceID(parent), "parent must be found")

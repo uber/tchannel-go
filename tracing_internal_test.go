@@ -121,7 +121,7 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 
 	// start a temporary span so that we can populate headers with baggage
 	tempSpan := tracer.StartSpan("test")
-	tempSpan.Context().SetBaggageItem("x", "y")
+	tempSpan.SetBaggageItem("x", "y")
 	headers := make(map[string]string)
 	carrier := tracingHeadersCarrier(headers)
 	err := tracer.Inject(tempSpan.Context(), opentracing.TextMap, carrier)
@@ -139,12 +139,12 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 	s2, ok := span.(*mocktracer.MockSpan)
 	require.True(t, ok)
 	assert.Equal(t, s1, s2, "should be the same span started previously")
-	assert.Equal(t, "y", s2.Context().BaggageItem("x"), "baggage should've been added")
+	assert.Equal(t, "y", s2.BaggageItem("x"), "baggage should've been added")
 }
 
 type zipkinInjector struct{}
 
-func (z *zipkinInjector) Inject(sc *mocktracer.MockSpanContext, carrier interface{}) error {
+func (z *zipkinInjector) Inject(sc mocktracer.MockSpanContext, carrier interface{}) error {
 	span, ok := carrier.(*injectableSpan)
 	if !ok {
 		return opentracing.ErrInvalidCarrier
@@ -161,12 +161,12 @@ func (z *zipkinInjector) Inject(sc *mocktracer.MockSpanContext, carrier interfac
 
 type zipkinExtractor struct{}
 
-func (z *zipkinExtractor) Extract(carrier interface{}) (*mocktracer.MockSpanContext, error) {
+func (z *zipkinExtractor) Extract(carrier interface{}) (mocktracer.MockSpanContext, error) {
 	span, ok := carrier.(*Span)
 	if !ok {
-		return nil, opentracing.ErrInvalidCarrier
+		return mocktracer.MockSpanContext{}, opentracing.ErrInvalidCarrier
 	}
-	return &mocktracer.MockSpanContext{
+	return mocktracer.MockSpanContext{
 		TraceID: int(span.traceID),
 		SpanID:  int(span.spanID),
 		Sampled: span.flags&1 == 1,
