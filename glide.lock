@@ -1,5 +1,5 @@
-hash: 9950186274c3f039a7a65ea45573abacfca42050b0f40215c956ddfe7cd7f823
-updated: 2016-06-22T14:30:54.982533777-07:00
+hash: 111bdf9797d23d4b9f8833a9780e382dd53153af70ad286f99815cea4c2fdf4b
+updated: 2016-08-05T18:02:17.171302481-04:00
 imports:
 - name: github.com/apache/thrift
   version: 0e9fed1e12ed066865e46c6903782b2ef95f4650
@@ -18,13 +18,18 @@ imports:
   subpackages:
   - spew
 - name: github.com/jessevdk/go-flags
-  version: b9b882a3990882b05e02765f5df2cd3ad02874ee
+  version: f2785f5820ec967043de79c8be97edfc464ca745
+- name: github.com/opentracing/opentracing-go
+  version: 855519783f479520497c6b3445611b05fc42f009
+  subpackages:
+  - ext
+  - mocktracer
 - name: github.com/pmezard/go-difflib
   version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
 - name: github.com/prashantv/protectmem
-  version: dda468c7a8a992f1642b31604d732590921a30e5
+  version: d0cabd7ce64237b84414449086fa42810ae01a92
 - name: github.com/samuel/go-thrift
   version: e9042807f4f5bf47563df6992d3ea0857313e2be
   subpackages:
@@ -41,8 +46,16 @@ imports:
   - require
 - name: github.com/uber-go/atomic
   version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
+- name: github.com/uber/jaeger-client-go
+  version: 9342cec8070f1d9bbf56f8df1d7a885ed8cb015d
+  subpackages:
+  - thrift-gen/sampling
+  - thrift-gen/zipkincore
+  - transport
+  - utils
+  - thrift-gen/agent
 - name: golang.org/x/net
-  version: bc3663df0ac92f928d419e31e0d2af22e683a5a2
+  version: b400c2eff1badec7022a8c8f5bea058b6315eed7
   subpackages:
   - context
 - name: gopkg.in/yaml.v2

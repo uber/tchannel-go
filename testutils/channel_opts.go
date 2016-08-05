@@ -113,18 +113,6 @@ func (o *ChannelOpts) SetStatsReporter(statsReporter tchannel.StatsReporter) *Ch
 	return o
 }
 
-// SetTraceReporter sets TraceReporter in ChannelOptions.
-func (o *ChannelOpts) SetTraceReporter(traceReporter tchannel.TraceReporter) *ChannelOpts {
-	o.TraceReporter = traceReporter
-	return o
-}
-
-// SetTraceReporterFactory sets TraceReporterFactory in ChannelOptions.
-func (o *ChannelOpts) SetTraceReporterFactory(factory tchannel.TraceReporterFactory) *ChannelOpts {
-	o.TraceReporterFactory = factory
-	return o
-}
-
 // SetFramePool sets FramePool in DefaultConnectionOptions.
 func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	o.DefaultConnectionOptions.FramePool = framePool
@@ -140,12 +128,6 @@ func (o *ChannelOpts) SetProcessPrefixes(prefixes ...string) *ChannelOpts {
 // SetTimeNow sets TimeNow in ChannelOptions.
 func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	o.TimeNow = timeNow
-	return o
-}
-
-// SetTraceSampleRate sets the TraceSampleRate in ChannelOptions.
-func (o *ChannelOpts) SetTraceSampleRate(sampleRate float64) *ChannelOpts {
-	o.ChannelOptions.TraceSampleRate = &sampleRate
 	return o
 }
 

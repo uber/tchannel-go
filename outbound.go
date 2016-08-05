@@ -25,6 +25,9 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go/typed"
+
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"golang.org/x/net/context"
 )
 
@@ -106,44 +109,14 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	call.contents = newFragmentingWriter(call.log, call, c.checksumType.New())
-	span := CurrentSpan(ctx)
-	if span != nil {
-		call.callReq.Tracing = *span.NewChildSpan()
-	} else {
-		// TODO(mmihic): Potentially reject calls that are made outside a root context?
-		call.callReq.Tracing.EnableTracing(false)
-	}
-	call.callReq.Tracing.sampleRootSpan(c.traceSampleRate)
 
 	response := new(OutboundCallResponse)
 	response.startedAt = now
-	response.Annotations = Annotations{
-		reporter: c.traceReporter,
-		timeNow:  c.timeNow,
-		data: TraceData{
-			Span: call.callReq.Tracing,
-			Source: TraceEndpoint{
-				HostPort:    c.localPeerInfo.HostPort,
-				ServiceName: c.localPeerInfo.ServiceName,
-			},
-			Target: TraceEndpoint{
-				HostPort:    c.remotePeerInfo.HostPort,
-				ServiceName: serviceName,
-			},
-			Method: methodName,
-		},
-		binaryAnnotationsBacking: [2]BinaryAnnotation{
-			{Key: "cn", Value: call.callReq.Headers[CallerName]},
-			{Key: "as", Value: call.callReq.Headers[ArgScheme]},
-		},
-	}
-	response.data.Annotations = response.annotationsBacking[:0]
-	response.data.BinaryAnnotations = response.binaryAnnotationsBacking[:]
-	response.AddAnnotationAt(AnnotationKeyClientSend, now)
-
+	response.timeNow = c.timeNow
 	response.requestState = callOptions.RequestState
 	response.mex = mex
 	response.log = c.log.WithFields(LogField{"Out-Response", requestID})
+	response.span = c.startOutboundSpan(ctx, serviceName, methodName, call, now)
 	response.messageForFragment = func(initial bool) message {
 		if initial {
 			return &response.callRes
@@ -241,13 +214,14 @@ func (call *OutboundCall) doneSending() {}
 // An OutboundCallResponse is the response to an outbound call
 type OutboundCallResponse struct {
 	reqResReader
-	Annotations
 
 	callRes callRes
 
 	requestState *RequestState
 	// startedAt is the time at which the outbound call was started.
 	startedAt       time.Time
+	timeNow         func() time.Time
+	span            opentracing.Span
 	statsReporter   StatsReporter
 	commonStatsTags map[string]string
 }
@@ -332,12 +306,21 @@ func cloneTags(tags map[string]string) map[string]string {
 // doneReading shuts down the message exchange for this call.
 // For outgoing calls, the last message is reading the call response.
 func (response *OutboundCallResponse) doneReading(unexpected error) {
-	now := response.GetTime()
-	response.AddAnnotationAt(AnnotationKeyClientReceive, now)
-	response.Report()
+	now := response.timeNow()
 
 	isSuccess := unexpected == nil && !response.ApplicationError()
 	lastAttempt := isSuccess || !response.requestState.HasRetries(unexpected)
+
+	// TODO how should this work with retries?
+	if span := response.span; span != nil {
+		if unexpected != nil {
+			span.LogEventWithPayload("error", unexpected)
+		}
+		if !isSuccess && lastAttempt {
+			ext.Error.Set(span, true)
+		}
+		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
+	}
 
 	latency := now.Sub(response.startedAt)
 	response.statsReporter.RecordTimer("outbound.calls.per-attempt.latency", response.commonStatsTags, latency)

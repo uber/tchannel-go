@@ -26,6 +26,7 @@ import (
 
 	"github.com/uber/tchannel-go"
 
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
@@ -77,6 +78,7 @@ type handler struct {
 	handler  reflect.Value
 	argType  reflect.Type
 	isArgMap bool
+	tracer   func() opentracing.Tracer
 }
 
 func toHandler(f interface{}) (*handler, error) {
@@ -85,7 +87,7 @@ func toHandler(f interface{}) (*handler, error) {
 		return nil, err
 	}
 	argType := hV.Type().In(1)
-	return &handler{hV, argType, argType.Kind() == reflect.Map}, nil
+	return &handler{handler: hV, argType: argType, isArgMap: argType.Kind() == reflect.Map}, nil
 }
 
 // Register registers the specified methods specified as a map from method name to the
@@ -111,6 +113,7 @@ func Register(registrar tchannel.Registrar, funcs Handlers, onError func(context
 		if err != nil {
 			return fmt.Errorf("%v cannot be used as a handler: %v", m, err)
 		}
+		h.tracer = registrar.Tracer
 		handlers[m] = h
 		registrar.Register(handler, m)
 	}
@@ -124,6 +127,7 @@ func (h *handler) Handle(tctx context.Context, call *tchannel.InboundCall) error
 	if err := tchannel.NewArgReader(call.Arg2Reader()).ReadJSON(&headers); err != nil {
 		return fmt.Errorf("arg2 read failed: %v", err)
 	}
+	tctx = tchannel.ExtractInboundSpan(tctx, call, headers, h.tracer())
 	ctx := WithHeaders(tctx, headers)
 
 	var arg3 reflect.Value

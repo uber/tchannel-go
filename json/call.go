@@ -60,6 +60,9 @@ func NewClient(ch *tchannel.Channel, targetService string, opts *ClientOptions) 
 }
 
 func makeCall(call *tchannel.OutboundCall, headers, arg3In, respHeaders, arg3Out, errorOut interface{}) (bool, string, error) {
+	if mapHeaders, ok := headers.(map[string]string); ok {
+		headers = tchannel.InjectOutboundSpan(call.Response(), mapHeaders)
+	}
 	if err := tchannel.NewArgWriter(call.Arg2Writer()).WriteJSON(headers); err != nil {
 		return false, "arg2 write failed", err
 	}

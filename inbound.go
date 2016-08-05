@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"golang.org/x/net/context"
 )
 
@@ -63,7 +65,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 
 	call := new(InboundCall)
 	call.conn = c
-	ctx, cancel := newIncomingContext(call, callReq.TimeToLive, &callReq.Tracing)
+	ctx, cancel := newIncomingContext(call, callReq.TimeToLive)
 
 	if !c.pendingExchangeMethodAdd() {
 		// Connection is closed, no need to do anything.
@@ -90,29 +92,14 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response := new(InboundCallResponse)
 	response.call = call
 	response.calledAt = now
-	response.Annotations = Annotations{
-		reporter: c.traceReporter,
-		timeNow:  c.timeNow,
-		data: TraceData{
-			Span: callReq.Tracing,
-			Source: TraceEndpoint{
-				HostPort:    c.localPeerInfo.HostPort,
-				ServiceName: callReq.Service,
-			},
-		},
-		binaryAnnotationsBacking: [2]BinaryAnnotation{
-			{Key: "cn", Value: callReq.Headers[CallerName]},
-			{Key: "as", Value: callReq.Headers[ArgScheme]},
-		},
+	response.timeNow = c.timeNow
+	response.span = c.extractInboundSpan(callReq)
+	if response.span != nil {
+		mex.ctx = opentracing.ContextWithSpan(mex.ctx, response.span)
 	}
-	response.data.Target = response.data.Source
-	response.data.Annotations = response.annotationsBacking[:0]
-	response.data.BinaryAnnotations = response.binaryAnnotationsBacking[:]
-	response.AddAnnotationAt(AnnotationKeyServerReceive, now)
 	response.mex = mex
 	response.conn = c
 	response.cancel = cancel
-	response.span = callReq.Tracing
 	response.log = c.log.WithFields(LogField{"In-Response", callReq.ID()})
 	response.contents = newFragmentingWriter(response.log, response, initialFragment.checksumType.New())
 	response.headers = transportHeaders{}
@@ -134,7 +121,6 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.initialFragment = initialFragment
 	call.serviceName = string(callReq.Service)
 	call.headers = callReq.Headers
-	call.span = callReq.Tracing
 	call.response = response
 	call.log = c.log.WithFields(LogField{"In-Call", callReq.ID()})
 	call.messageForFragment = func(initial bool) message { return new(callReqContinue) }
@@ -186,9 +172,11 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		return
 	}
 
-	call.commonStatsTags["endpoint"] = string(call.method)
+	call.commonStatsTags["endpoint"] = call.methodString
 	call.statsReporter.IncCounter("inbound.calls.recvd", call.commonStatsTags, 1)
-	call.response.SetMethod(string(call.method))
+	if span := call.response.span; span != nil {
+		span.SetOperationName(call.methodString)
+	}
 
 	// TODO(prashant): This is an expensive way to check for cancellation. Use a heap for timeouts.
 	go func() {
@@ -217,7 +205,6 @@ type InboundCall struct {
 	method          []byte
 	methodString    string
 	headers         transportHeaders
-	span            Span
 	statsReporter   StatsReporter
 	commonStatsTags map[string]string
 }
@@ -314,16 +301,16 @@ func (call *InboundCall) doneReading(unexpected error) {}
 // An InboundCallResponse is used to send the response back to the calling peer
 type InboundCallResponse struct {
 	reqResWriter
-	Annotations
 
 	call   *InboundCall
 	cancel context.CancelFunc
 	// calledAt is the time the inbound call was routed to the application.
 	calledAt         time.Time
+	timeNow          func() time.Time
 	applicationError bool
 	systemError      bool
 	headers          transportHeaders
-	span             Span
+	span             opentracing.Span
 	statsReporter    StatsReporter
 	commonStatsTags  map[string]string
 }
@@ -341,10 +328,6 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	response.call.releasePreviousFragment()
 
 	span := CurrentSpan(response.mex.ctx)
-	if span == nil {
-		response.log.Error("Missing span when sending system error")
-		span = &Span{}
-	}
 
 	return response.conn.SendSystemError(response.mex.msgID, *span, err)
 }
@@ -381,9 +364,14 @@ func (response *InboundCallResponse) Arg3Writer() (ArgWriter, error) {
 // For incoming calls, the last message is sending the call response.
 func (response *InboundCallResponse) doneSending() {
 	// TODO(prashant): Move this to when the message is actually being sent.
-	now := response.GetTime()
-	response.AddAnnotationAt(AnnotationKeyServerSend, now)
-	response.Report()
+	now := response.timeNow()
+
+	if span := response.span; span != nil {
+		if response.applicationError || response.systemError {
+			ext.Error.Set(span, true)
+		}
+		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
+	}
 
 	latency := now.Sub(response.calledAt)
 	response.statsReporter.RecordTimer("inbound.calls.latency", response.commonStatsTags, latency)
