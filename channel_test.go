@@ -130,10 +130,8 @@ func TestChannelTracerMethod(t *testing.T) {
 
 	// because ch.Tracer() function is doing dynamic lookup, we can change global tracer
 	origTracer := opentracing.GlobalTracer()
-	defer func() {
-		// restore it on exit
-		opentracing.InitGlobalTracer(origTracer)
-	}()
+	defer opentracing.InitGlobalTracer(origTracer)
+
 	opentracing.InitGlobalTracer(mockTracer)
 	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer set as global tracer")
 }
