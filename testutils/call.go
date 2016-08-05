@@ -25,9 +25,6 @@ import (
 	"github.com/uber/tchannel-go/relay"
 )
 
-// This file contains test setup logic, and is named with a _test.go suffix to
-// ensure it's only compiled with tests.
-
 // FakeIncomingCall implements IncomingCall interface.
 // Note: the F suffix for the fields is to clash with the method name.
 type FakeIncomingCall struct {
@@ -79,7 +76,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
-	ServiceF, MethodF, CallerF string
+	ServiceF, MethodF, CallerF, RoutingDelegateF string
 }
 
 var _ relay.CallFrame = FakeCallFrame{}
@@ -97,4 +94,9 @@ func (f FakeCallFrame) Method() []byte {
 // Caller returns the caller field.
 func (f FakeCallFrame) Caller() []byte {
 	return []byte(f.CallerF)
+}
+
+// RoutingDelegate returns the routing delegate field.
+func (f FakeCallFrame) RoutingDelegate() []byte {
+	return []byte(f.RoutingDelegateF)
 }
