@@ -38,7 +38,10 @@ const _maxRelayTombs = 1e4
 // _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
 const _relayTombTTL = time.Second
 
-var errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
+var (
+	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
+	errUnknownID             = errors.New("non-callReq for inactive ID")
+)
 
 type relayItem struct {
 	*time.Timer
@@ -198,7 +201,16 @@ func (r *Relayer) Hosts() relay.Hosts {
 // Relay is called for each frame that is read on the connection.
 func (r *Relayer) Relay(f *Frame) error {
 	if f.messageType() != messageTypeCallReq {
-		return r.handleNonCallReq(f)
+		err := r.handleNonCallReq(f)
+		if err == errUnknownID {
+			// This ID may be owned by an outgoing call, so check the outbound
+			// message exchange, and if it succeeds, then the frame has been
+			// handled successfully.
+			if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
+				return nil
+			}
+		}
+		return err
 	}
 	return r.handleCallReq(newLazyCallReq(f))
 }
@@ -351,7 +363,7 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 
 	item, ok := items.Get(f.Header.ID)
 	if !ok {
-		return errors.New("non-callReq for inactive ID")
+		return errUnknownID
 	}
 	if item.tomb {
 		// Call timed out, ignore this frame. (We've already handled stats.)

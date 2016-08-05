@@ -436,3 +436,21 @@ func TestRelayHandleLargeLocalCall(t *testing.T) {
 		require.NoError(t, client.Ping(ctx, ts.HostPort()), "Ping failed")
 	})
 }
+
+func TestRelayMakeOutgoingCall(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		svr1 := ts.Relay()
+		svr2 := ts.NewServer(testutils.NewOpts().SetServiceName("svc2"))
+		testutils.RegisterEcho(svr2, nil)
+
+		sizes := []int{128, 1024, 128 * 1024}
+		for _, size := range sizes {
+			err := testutils.CallEcho(svr1, ts.HostPort(), "svc2", &raw.Args{
+				Arg2: testutils.RandBytes(size),
+				Arg3: testutils.RandBytes(size),
+			})
+			assert.NoError(t, err, "Echo with size %v failed", size)
+		}
+	})
+}
