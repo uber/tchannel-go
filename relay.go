@@ -266,7 +266,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	}
 
 	// Get the destination
-	selectedPeer, err := r.hosts.Get(f)
+	selectedPeer, err := r.hosts.Get(f, r.conn)
 	cs.SetPeer(selectedPeer)
 	if err == nil && selectedPeer.HostPort == "" {
 		err = errInvalidPeerForGroup(f.Service())

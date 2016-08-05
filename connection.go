@@ -110,17 +110,21 @@ func (e errConnectionUnknownState) Error() string {
 
 // ConnectionOptions are options that control the behavior of a Connection
 type ConnectionOptions struct {
-	// The frame pool, allowing better management of frame buffers.  Defaults to using raw heap
+	// The frame pool, allowing better management of frame buffers. Defaults to using raw heap.
 	FramePool FramePool
 
-	// The size of receive channel buffers.  Defaults to 512
+	// The size of receive channel buffers. Defaults to 512.
 	RecvBufferSize int
 
-	// The size of send channel buffers.  Defaults to 512
+	// The size of send channel buffers. Defaults to 512.
 	SendBufferSize int
 
-	// The type of checksum to use when sending messages
+	// The type of checksum to use when sending messages.
 	ChecksumType ChecksumType
+
+	// A static set of prefixes to check against the remote process name when
+	// setting up a connection. Check matches with RemoteProcessPrefixMatches().
+	CheckedProcessPrefixes []string
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -139,23 +143,25 @@ type connectionEvents struct {
 type Connection struct {
 	channelConnectionCommon
 
-	connID          uint32
-	checksumType    ChecksumType
-	framePool       FramePool
-	conn            net.Conn
-	localPeerInfo   LocalPeerInfo
-	remotePeerInfo  PeerInfo
-	sendCh          chan *Frame
-	stopCh          chan struct{}
-	state           connectionState
-	stateMut        sync.RWMutex
-	inbound         *messageExchangeSet
-	outbound        *messageExchangeSet
-	handler         Handler
-	nextMessageID   atomic.Uint32
-	events          connectionEvents
-	commonStatsTags map[string]string
-	relay           *Relayer
+	connID                     uint32
+	checksumType               ChecksumType
+	framePool                  FramePool
+	conn                       net.Conn
+	localPeerInfo              LocalPeerInfo
+	remotePeerInfo             PeerInfo
+	checkedProcessPrefixes     []string
+	remoteProcessPrefixMatches []bool // populated in init req/res handling
+	sendCh                     chan *Frame
+	stopCh                     chan struct{}
+	state                      connectionState
+	stateMut                   sync.RWMutex
+	inbound                    *messageExchangeSet
+	outbound                   *messageExchangeSet
+	handler                    Handler
+	nextMessageID              atomic.Uint32
+	events                     connectionEvents
+	commonStatsTags            map[string]string
+	relay                      *Relayer
 
 	// outboundHP is the host:port we used to create this outbound connection.
 	// It may not match remotePeerInfo.HostPort, in which case the connection is
@@ -262,20 +268,21 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
-		connID:          connID,
-		conn:            conn,
-		framePool:       framePool,
-		state:           initialState,
-		sendCh:          make(chan *Frame, sendBufferSize),
-		stopCh:          make(chan struct{}),
-		localPeerInfo:   peerInfo,
-		outboundHP:      outboundHP,
-		checksumType:    checksumType,
-		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
-		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handler:         channelHandler{ch},
-		events:          events,
-		commonStatsTags: ch.commonStatsTags,
+		connID:                 connID,
+		conn:                   conn,
+		framePool:              framePool,
+		state:                  initialState,
+		sendCh:                 make(chan *Frame, sendBufferSize),
+		stopCh:                 make(chan struct{}),
+		localPeerInfo:          peerInfo,
+		checkedProcessPrefixes: opts.CheckedProcessPrefixes,
+		outboundHP:             outboundHP,
+		checksumType:           checksumType,
+		inbound:                newMessageExchangeSet(log, messageExchangeSetInbound),
+		outbound:               newMessageExchangeSet(log, messageExchangeSetOutbound),
+		handler:                channelHandler{ch},
+		events:                 events,
+		commonStatsTags:        ch.commonStatsTags,
 	}
 	c.log = log
 	c.inbound.onRemoved = c.checkExchanges
@@ -286,6 +293,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 	if ch.relayHosts != nil {
 		c.relay = NewRelayer(ch, c)
 	}
+
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
 	return c
@@ -414,6 +422,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
 		c.remotePeerInfo.IsEphemeral = true
 	}
+	c.checkRemoteProcessNamePrefixes()
 
 	res := initRes{initMessage{id: frame.Header.ID}}
 	res.initParams = c.getInitParams()
@@ -548,6 +557,7 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 			c.remotePeerInfo.IsEphemeral = true
 		}
 		c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
+		c.checkRemoteProcessNamePrefixes()
 
 		c.state = connectionActive
 		return nil
@@ -964,4 +974,25 @@ func (c *Connection) closeNetwork() {
 			ErrField(err),
 		).Warn("Couldn't close connection to peer.")
 	}
+}
+
+// checkRemoteProcessNamePrefixes checks whether the remote peer's process name
+// matches the prefixes specified in the connection options. For efficiency, it's
+// called only once while handling the init req or res frame for this connection.
+func (c *Connection) checkRemoteProcessNamePrefixes() {
+	c.remoteProcessPrefixMatches = make([]bool, len(c.checkedProcessPrefixes))
+	for i, prefix := range c.checkedProcessPrefixes {
+		c.remoteProcessPrefixMatches[i] = strings.HasPrefix(c.remotePeerInfo.ProcessName, prefix)
+	}
+}
+
+// RemoteProcessPrefixMatches returns a slice of bools indicating whether the
+// remote peer's process name matches the prefixes specified in the connection
+// options. It's the caller's responsibility to match indices between the two
+// slices. Callers shouldn't mutate the returned slice.
+//
+// This method isn't covered by tchannel-go's API stability guarantee, and is
+// intended only for use in some relaying implementations.
+func (c *Connection) RemoteProcessPrefixMatches() []bool {
+	return c.remoteProcessPrefixMatches
 }

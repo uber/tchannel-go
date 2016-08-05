@@ -60,7 +60,7 @@ func TestAdvertisedTable(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		gotPeer, err := table.Get(testutils.FakeCallFrame{ServiceF: tt.svc})
+		gotPeer, err := table.Get(testutils.FakeCallFrame{ServiceF: tt.svc}, nil)
 		if len(tt.want) == 0 {
 			assert.Error(t, err, "Expected error for %v", tt.svc)
 			continue

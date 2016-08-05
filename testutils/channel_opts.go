@@ -131,6 +131,12 @@ func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	return o
 }
 
+// SetProcessPrefixes sets CheckProcessPrefixes in DefaultConnectionOptions.
+func (o *ChannelOpts) SetProcessPrefixes(prefixes ...string) *ChannelOpts {
+	o.DefaultConnectionOptions.CheckedProcessPrefixes = prefixes
+	return o
+}
+
 // SetTimeNow sets TimeNow in ChannelOptions.
 func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	o.TimeNow = timeNow

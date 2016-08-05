@@ -57,7 +57,7 @@ func (t *advertisedTable) addPeer(svc, hostPort string) {
 	t.serviceMapping[svc] = hostPorts
 }
 
-func (t *advertisedTable) Get(call relay.CallFrame) (relay.Peer, error) {
+func (t *advertisedTable) Get(call relay.CallFrame, _ relay.Conn) (relay.Peer, error) {
 	t.RLock()
 	defer t.RUnlock()
 

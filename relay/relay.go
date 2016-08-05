@@ -24,6 +24,14 @@
 // backwards-compatibility guarantee.
 package relay
 
+// Conn is an interface that exposes a bit of information about the underlying
+// connection.
+type Conn interface {
+	// RemoteProcessPrefixMatches checks whether the remote peer's process name
+	// matches a preconfigured list of prefixes.
+	RemoteProcessPrefixMatches() []bool
+}
+
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
 	// Caller is the name of the originating service.
@@ -40,7 +48,7 @@ type Hosts interface {
 	// Get returns the peer to forward the given call to.
 	// If a SystemError is returned, the error is forwarded. Otherwise
 	// a Declined error is returned to the caller.
-	Get(CallFrame) (Peer, error)
+	Get(CallFrame, Conn) (Peer, error)
 }
 
 // CallStats is a reporter for per-request stats.
