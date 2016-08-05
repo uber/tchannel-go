@@ -68,7 +68,7 @@ func TestTracingInjectorExtractor(t *testing.T) {
 	tracer.RegisterExtractor(zipkinSpanFormat, new(zipkinExtractor))
 
 	sp := tracer.StartSpan("x")
-	injectable := injectableSpan{}
+	var injectable injectableSpan
 	err := tracer.Inject(sp.Context(), zipkinSpanFormat, &injectable)
 	require.NoError(t, err)
 

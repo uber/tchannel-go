@@ -155,7 +155,7 @@ func (c *Connection) startOutboundSpan(ctx context.Context, serviceName, methodN
 	ext.PeerService.Set(span, serviceName)
 	setPeerHostPort(span, c.remotePeerInfo.HostPort)
 	span.SetTag("as", call.callReq.Headers[ArgScheme])
-	injectable := injectableSpan{}
+	var injectable injectableSpan
 	if err := injectable.initFromOpenTracing(span); err == nil {
 		call.callReq.Tracing = Span(injectable)
 	} else {
