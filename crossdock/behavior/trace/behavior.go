@@ -22,11 +22,11 @@ package trace
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/crossdock/log"
 
 	"github.com/crossdock/crossdock-go"
 	"github.com/opentracing/opentracing-go"

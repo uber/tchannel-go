@@ -22,9 +22,9 @@ package trace
 
 import (
 	"encoding/json"
-	"log"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/crossdock/log"
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 

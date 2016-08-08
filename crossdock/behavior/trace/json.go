@@ -21,9 +21,8 @@
 package trace
 
 import (
-	"log"
-
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/crossdock/log"
 	"github.com/uber/tchannel-go/json"
 
 	"golang.org/x/net/context"

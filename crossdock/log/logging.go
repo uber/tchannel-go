@@ -18,58 +18,25 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package main
+package log
 
 import (
-	"io"
-
-	"github.com/uber/tchannel-go/crossdock/client"
-	"github.com/uber/tchannel-go/crossdock/log"
-	"github.com/uber/tchannel-go/crossdock/server"
-
-	"github.com/crossdock/crossdock-go"
-	"github.com/opentracing/opentracing-go"
-	"github.com/uber/jaeger-client-go"
-	"github.com/uber/tchannel-go/crossdock/behavior/trace"
-	"github.com/uber/tchannel-go/crossdock/common"
+	stdlog "log"
 )
 
-func main() {
-	log.Enabled = true
+// Enabled controls logging
+var Enabled = false
 
-	tracer, tCloser := initTracer()
-	defer tCloser.Close()
-
-	server := &server.Server{Tracer: tracer}
-	if err := server.Start(); err != nil {
-		panic(err.Error())
+// Println is the equivalent of standard log.Println gated by Enabled flag
+func Println(msg string) {
+	if Enabled {
+		stdlog.Println(msg)
 	}
-	defer server.Close()
-
-	behavior := &trace.Behavior{
-		ServerPort: common.DefaultServerPort,
-		Tracer:     tracer,
-	}
-	behavior.Register(server.Ch)
-
-	client := &client.Client{
-		Behaviors: crossdock.Behaviors{
-			trace.BehaviorName: behavior.Run,
-		},
-	}
-
-	if err := client.Start(); err != nil {
-		panic(err.Error())
-	}
-	defer client.Close()
-
-	select {}
 }
 
-func initTracer() (opentracing.Tracer, io.Closer) {
-	t, c := jaeger.NewTracer(
-		"crossdock-go",
-		jaeger.NewConstSampler(false),
-		jaeger.NewLoggingReporter(jaeger.StdLogger))
-	return t, c
+// Printf is the equivalent of standard log.Printf gated by Enabled flag
+func Printf(format string, v ...interface{}) {
+	if Enabled {
+		stdlog.Printf(format, v...)
+	}
 }

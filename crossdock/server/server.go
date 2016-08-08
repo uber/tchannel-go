@@ -40,13 +40,13 @@
 package server
 
 import (
-	"log"
 	"strings"
 
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/crossdock/common"
+	"github.com/uber/tchannel-go/crossdock/log"
 )
 
 // Server implements S2-S3 servers
