@@ -28,6 +28,7 @@ import (
 	tchannel "github.com/uber/tchannel-go"
 
 	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
@@ -125,7 +126,14 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
-	origCtx = tchannel.ExtractInboundSpan(origCtx, call, headers, s.ch.Tracer())
+	var tracer opentracing.Tracer
+	if tracerProvider, ok := s.ch.(tchannel.TracerProvider); ok {
+		tracer = tracerProvider.Tracer()
+	} else {
+		tracer = opentracing.GlobalTracer()
+	}
+
+	origCtx = tchannel.ExtractInboundSpan(origCtx, call, headers, tracer)
 	ctx := s.ctxFn(origCtx, method, headers)
 
 	wp := getProtocolReader(reader)

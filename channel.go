@@ -300,9 +300,6 @@ type Registrar interface {
 
 	// Peers returns the peer list for this Registrar.
 	Peers() *PeerList
-
-	// Tracer returns OpenTracing Tracer this channel was configured with
-	Tracer() opentracing.Tracer
 }
 
 // Register registers a handler for a method.

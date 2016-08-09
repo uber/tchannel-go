@@ -34,6 +34,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+// TracerProvider returns an OpenTracing Tracer
+type TracerProvider interface {
+	Tracer() opentracing.Tracer
+}
+
 // zipkinSpanFormat defines a name for OpenTracing carrier format that tracer may support.
 // It is used to extract zipkin-style trace/span IDs from the OpenTracing Span, which are
 // otherwise not exposed explicitly.
