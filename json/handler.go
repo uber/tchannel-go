@@ -113,10 +113,8 @@ func Register(registrar tchannel.Registrar, funcs Handlers, onError func(context
 		if err != nil {
 			return fmt.Errorf("%v cannot be used as a handler: %v", m, err)
 		}
-		if tracerProvider, ok := registrar.(tchannel.TracerProvider); ok {
-			h.tracer = tracerProvider.Tracer
-		} else {
-			h.tracer = opentracing.GlobalTracer
+		h.tracer = func() {
+			return tchannel.TracerFromRegistrar(registrar)
 		}
 		handlers[m] = h
 		registrar.Register(handler, m)

@@ -34,11 +34,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-// TracerProvider returns an OpenTracing Tracer
-type TracerProvider interface {
-	Tracer() opentracing.Tracer
-}
-
 // zipkinSpanFormat defines a name for OpenTracing carrier format that tracer may support.
 // It is used to extract zipkin-style trace/span IDs from the OpenTracing Span, which are
 // otherwise not exposed explicitly.
@@ -262,4 +257,17 @@ func setPeerHostPort(span opentracing.Span, hostPort string) {
 			ext.PeerPort.Set(span, uint16(p))
 		}
 	}
+}
+
+type tracerProvider interface {
+	Tracer() opentracing.Tracer
+}
+
+// TracerFromRegistrar returns an OpenTracing Tracer embedded in the Registrar,
+// assuming that Registrar has a Tracer() method. Otherwise it returns default Global Tracer.
+func TracerFromRegistrar(registrar Registrar) opentracing.Tracer {
+	if tracerProvider, ok := registrar.(tracerProvider); ok {
+		return tracerProvider.Tracer()
+	}
+	return opentracing.GlobalTracer()
 }
