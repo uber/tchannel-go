@@ -167,7 +167,7 @@ func validateTrace(
 	baggage string,
 ) bool {
 	service = fmt.Sprintf("S%d(%s)", level, service)
-	checks := crossdock.Assert(t)
+	checks := crossdock.Checks(t)
 	s := true
 	s = checks.Equal(traceID, resp.Span.TraceID, "Trace ID must match in %s", service) && s
 	s = checks.Equal(baggage, resp.Span.Baggage, "Baggage must match in %s", service) && s
