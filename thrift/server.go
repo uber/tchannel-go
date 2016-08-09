@@ -125,7 +125,8 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
-	origCtx = tchannel.ExtractInboundSpan(origCtx, call, headers, s.ch.Tracer())
+	tracer := tchannel.TracerFromRegistrar(s.ch)
+	origCtx = tchannel.ExtractInboundSpan(origCtx, call, headers, tracer)
 	ctx := s.ctxFn(origCtx, method, headers)
 
 	wp := getProtocolReader(reader)

@@ -258,3 +258,16 @@ func setPeerHostPort(span opentracing.Span, hostPort string) {
 		}
 	}
 }
+
+type tracerProvider interface {
+	Tracer() opentracing.Tracer
+}
+
+// TracerFromRegistrar returns an OpenTracing Tracer embedded in the Registrar,
+// assuming that Registrar has a Tracer() method. Otherwise it returns default Global Tracer.
+func TracerFromRegistrar(registrar Registrar) opentracing.Tracer {
+	if tracerProvider, ok := registrar.(tracerProvider); ok {
+		return tracerProvider.Tracer()
+	}
+	return opentracing.GlobalTracer()
+}
