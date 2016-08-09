@@ -8,9 +8,11 @@ go:
   - 1.6
   - 1.7rc6
   - tip
+services:
+  - docker
 env:
   global:
-    - DOCKER_COMPOSE_VERSION=1.6.0
+    - DOCKER_COMPOSE_VERSION=1.8.0
     - COMMIT=${TRAVIS_COMMIT::8}
     # Set higher timeouts for Travis
     - TEST_TIMEOUT_SCALE=20
