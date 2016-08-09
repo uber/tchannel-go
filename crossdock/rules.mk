@@ -37,12 +37,16 @@ ifdef SHOULD_XDOCK
 	chmod +x docker-compose
 	sudo mv docker-compose /usr/local/bin
 	docker-compose version
+else
+	@echo Skipping installation of Docker
 endif
 
 .PHONY: crossdock_ci
 crossdock_ci:
 ifdef SHOULD_XDOCK
 	$(MAKE) crossdock
+else
+	@echo Skipping running crossdock tests
 endif
 
 .PHONY: crossdock_logs_ci
