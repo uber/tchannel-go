@@ -7,13 +7,17 @@ go:
   - 1.6
   - 1.7rc6
   - tip
-install: make install_ci
 env:
   global:
+    - DOCKER_VERSION=1.10.1-0~trusty
+    - DOCKER_COMPOSE_VERSION=1.6.0
+    - COMMIT=${TRAVIS_COMMIT::8}
     # Set higher timeouts for Travis
     - TEST_TIMEOUT_SCALE=20
+before_install: make install_docker_ci
+install: make install_ci
 script:
   - make test_ci
   - make cover_ci
   - make lint
-
+  - make crossdock_ci
