@@ -4,7 +4,8 @@ services:
     crossdock:
         image: crossdock/crossdock
         links:
-            - go, python
+            - go
+            - python
         environment:
             - WAIT_FOR=go
 
@@ -25,4 +26,5 @@ services:
 
     python:
         image: tchannelhub/xdock-py
+        ports:
             - "8080-8082"
