@@ -3,15 +3,11 @@ GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
 FMTABLE_MINOR_VERSIONS := 6
-XDOCKABLE_MINOR_VERSIONS := 6
 ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT := true
 endif
 ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT_FMT := true
-endif
-ifneq ($(filter $(XDOCKABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
-SHOULD_XDOCK := true
 endif
 
 PATH := $(GOPATH)/bin:$(PATH)

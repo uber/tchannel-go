@@ -26,7 +26,7 @@ crossdock-logs:
 
 .PHONY: install_docker_ci
 install_docker_ci:
-ifdef SHOULD_XDOCK
+ifdef CROSSDOCK
 	docker version
 	@echo "Installing docker-compose $${DOCKER_COMPOSE_VERSION:?'DOCKER_COMPOSE_VERSION env not set'}"
 	sudo rm -f /usr/local/bin/docker-compose
@@ -40,7 +40,7 @@ endif
 
 .PHONY: crossdock_ci
 crossdock_ci:
-ifdef SHOULD_XDOCK
+ifdef CROSSDOCK
 	$(MAKE) crossdock
 else
 	@echo Skipping running crossdock tests
@@ -48,6 +48,7 @@ endif
 
 .PHONY: crossdock_logs_ci
 crossdock_logs_ci:
-ifdef SHOULD_XDOCK
+ifdef CROSSDOCK
 	docker-compose -f $(XDOCK_YAML) logs
 endif
+
