@@ -38,12 +38,14 @@ crossdock_ci:
 ifdef CROSSDOCK
 	$(MAKE) crossdock
 else
-	@echo Skipping running crossdock tests
+	true
 endif
 
 .PHONY: crossdock_logs_ci
 crossdock_logs_ci:
 ifdef CROSSDOCK
 	docker-compose -f $(XDOCK_YAML) logs
+else
+	true
 endif
 
