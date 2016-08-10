@@ -43,6 +43,9 @@ var (
 	errUnknownID             = errors.New("non-callReq for inactive ID")
 )
 
+// relayConn implements the relay.Connection interface.
+type relayConn Connection
+
 type relayItem struct {
 	*time.Timer
 
@@ -278,7 +281,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	}
 
 	// Get the destination
-	selectedPeer, err := r.hosts.Get(f, r.conn)
+	selectedPeer, err := r.hosts.Get(f, (*relayConn)(r.conn))
 	cs.SetPeer(selectedPeer)
 	if err == nil && selectedPeer.HostPort == "" {
 		err = errInvalidPeerForGroup(f.Service())
@@ -475,6 +478,14 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 		r.conn.framePool.Release(f)
 	}
 	return true
+}
+
+func (r *relayConn) RemoteProcessPrefixMatches() []bool {
+	return (*Connection)(r).remoteProcessPrefixMatches
+}
+
+func (r *relayConn) RemoteHostPort() string {
+	return (*Connection)(r).RemotePeerInfo().HostPort
 }
 
 func frameTypeFor(f *Frame) frameType {
