@@ -33,8 +33,7 @@ type Conn interface {
 	// slices. Callers shouldn't mutate the returned slice.
 	RemoteProcessPrefixMatches() []bool
 
-	// RemotePeerInfo returns the peer info for the remote peer which contains
-	// the process name and host:port.
+	// RemoteHostPort returns the host:port of the remote peer.
 	RemoteHostPort() string
 }
 
