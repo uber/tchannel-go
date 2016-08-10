@@ -124,8 +124,13 @@ cover_profile: clean setup
 cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
-cover_ci: cover_profile
+cover_ci:
+ifdef CROSSDOCK
+	@echo Skipping coverage
+else
+	$(MAKE) cover_profile
 	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
+endif
 
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'

@@ -52,7 +52,7 @@ after_success:
 - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, REPO=$REPO, PR=$PR, BRANCH=$BRANCH, TAG=$TAG"
 - export DOCKER=$(if [ "$CROSSDOCK" == "true" ]; then echo docker; else echo true; fi)
 - $DOCKER login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-- $DOCKER docker build -f crossdock/Dockerfile -t $REPO:$COMMIT .
-- $DOCKER docker tag $REPO:$COMMIT $REPO:$TAG
-- $DOCKER docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER
-- $DOCKER && docker push $REPO
+- $DOCKER build -f crossdock/Dockerfile -t $REPO:$COMMIT .
+- $DOCKER tag $REPO:$COMMIT $REPO:$TAG
+- $DOCKER tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER
+- $DOCKER push $REPO
