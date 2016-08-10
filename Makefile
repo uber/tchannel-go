@@ -75,6 +75,9 @@ install_glide:
 
 install_ci: install_glide install_lint get_thrift install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
+ifdef CROSSDOCK
+	$(MAKE) install_docker_ci
+endif
 
 install_test:
 	go test -i $(TEST_ARG) $(ALL_PKGS)
