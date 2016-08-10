@@ -28,8 +28,14 @@ package relay
 // connection.
 type Conn interface {
 	// RemoteProcessPrefixMatches checks whether the remote peer's process name
-	// matches a preconfigured list of prefixes.
+	// matches a preconfigured list of prefixes specified in the connection
+	// options. It's the caller's responsibility to match indices between the two
+	// slices. Callers shouldn't mutate the returned slice.
 	RemoteProcessPrefixMatches() []bool
+
+	// RemotePeerInfo returns the peer info for the remote peer which contains
+	// the process name and host:port.
+	RemoteHostPort() string
 }
 
 // CallFrame is an interface that abstracts access to the call req frame.

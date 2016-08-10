@@ -985,14 +985,3 @@ func (c *Connection) checkRemoteProcessNamePrefixes() {
 		c.remoteProcessPrefixMatches[i] = strings.HasPrefix(c.remotePeerInfo.ProcessName, prefix)
 	}
 }
-
-// RemoteProcessPrefixMatches returns a slice of bools indicating whether the
-// remote peer's process name matches the prefixes specified in the connection
-// options. It's the caller's responsibility to match indices between the two
-// slices. Callers shouldn't mutate the returned slice.
-//
-// This method isn't covered by tchannel-go's API stability guarantee, and is
-// intended only for use in some relaying implementations.
-func (c *Connection) RemoteProcessPrefixMatches() []bool {
-	return c.remoteProcessPrefixMatches
-}

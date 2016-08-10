@@ -454,3 +454,38 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 		}
 	})
 }
+
+type hostsFunc func(relay.CallFrame, relay.Conn) (relay.Peer, error)
+
+func (f hostsFunc) Get(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+	return f(call, conn)
+}
+
+func TestRelayConnection(t *testing.T) {
+	var errTest = errors.New("test")
+	var wantHostPort string
+	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+		matches := conn.RemoteProcessPrefixMatches()
+		assert.Equal(t, []bool{true, true, true, false}, matches, "Unexpected prefix matches.")
+		assert.Equal(t, wantHostPort, conn.RemoteHostPort(), "Unexpected RemoteHostPort")
+		return relay.Peer{}, errTest
+	}
+
+	// Note: we cannot use WithTestServer since we override the RelayHosts.
+	opts := testutils.NewOpts().
+		SetServiceName("relay").
+		SetRelayHosts(hostsFunc(getHost)).
+		SetProcessPrefixes("nod", "nodejs-hyperbahn", "", "hyperbahn")
+	relay := testutils.NewServer(t, opts)
+	defer relay.Close()
+
+	// Create a client that is listening so we can set the expected host:port.
+	clientOpts := testutils.NewOpts().SetProcessName("nodejs-hyperbahn")
+	client := testutils.NewServer(t, clientOpts)
+	wantHostPort = client.PeerInfo().HostPort
+	defer client.Close()
+
+	err := testutils.CallEcho(client, relay.PeerInfo().HostPort, relay.ServiceName(), nil)
+	require.Error(t, err, "Expected CallEcho to fail")
+	assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+}
