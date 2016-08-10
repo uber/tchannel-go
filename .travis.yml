@@ -47,13 +47,12 @@ script:
 after_success:
 - export REPO=tchannelhub/xdock-go
 - export PR=https://api.github.com/repos/$TRAVIS_REPO_SLUG/pulls/$TRAVIS_PULL_REQUEST
-- export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH;
-  else echo `curl -s $PR | jq -r .head.ref`; fi)
-- export TAG=`if [ "$BRANCH" == "master" ]; then echo "latest"; else echo $BRANCH;
-  fi`
+- export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo `curl -s $PR | jq -r .head.ref`; fi)
+- export TAG=`if [ "$BRANCH" == "master" ]; then echo "latest"; else echo $BRANCH; fi`
 - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, REPO=$REPO, PR=$PR, BRANCH=$BRANCH, TAG=$TAG"
-- [ "$CROSSDOCK" == "true" ] && docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-- [ "$CROSSDOCK" == "true" ] && docker build -f crossdock/Dockerfile -t $REPO:$COMMIT .
-- [ "$CROSSDOCK" == "true" ] && docker tag $REPO:$COMMIT $REPO:$TAG
-- [ "$CROSSDOCK" == "true" ] && docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER
-- [ "$CROSSDOCK" == "true" ] && docker push $REPO
+- export DOCKER=$(if [ "$CROSSDOCK" == "true" ]; then echo docker; else echo true; fi)
+- $DOCKER login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+- $DOCKER docker build -f crossdock/Dockerfile -t $REPO:$COMMIT .
+- $DOCKER docker tag $REPO:$COMMIT $REPO:$TAG
+- $DOCKER docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER
+- $DOCKER && docker push $REPO
