@@ -93,7 +93,12 @@ fmt format:
 	go fmt $(ALL_PKGS)
 	echo
 
-test_ci: test
+test_ci:
+ifdef CROSSDOCK
+	$(MAKE) crossdock_ci
+else
+	$(MAKE) test
+endif
 
 test: clean setup install_test check_no_test_deps
 	@echo Testing packages:

@@ -42,7 +42,6 @@ script:
 - make test_ci
 - make cover_ci
 - make lint
-- make crossdock_ci
 
 after_success:
 - export REPO=tchannelhub/xdock-go
