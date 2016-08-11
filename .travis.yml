@@ -1,7 +1,3 @@
-sudo: required
-dist: trusty
-services:
-- docker
 
 language: go
 
@@ -19,6 +15,10 @@ matrix:
   include:
   - go: 1.6
     env: CROSSDOCK=true
+    sudo: required
+    dist: trusty
+    services:
+    - docker
 
 env:
   global:
