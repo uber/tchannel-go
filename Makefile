@@ -3,15 +3,11 @@ GO_VERSION := $(shell go version | awk '{ print $$3 }')
 GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
 LINTABLE_MINOR_VERSIONS := 5 6
 FMTABLE_MINOR_VERSIONS := 6
-XDOCKABLE_MINOR_VERSIONS := 6
 ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT := true
 endif
 ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
 SHOULD_LINT_FMT := true
-endif
-ifneq ($(filter $(XDOCKABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
-SHOULD_XDOCK := true
 endif
 
 PATH := $(GOPATH)/bin:$(PATH)
@@ -79,6 +75,9 @@ install_glide:
 
 install_ci: install_glide install_lint get_thrift install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
+ifdef CROSSDOCK
+	$(MAKE) install_docker_ci
+endif
 
 install_test:
 	go test -i $(TEST_ARG) $(ALL_PKGS)
@@ -97,7 +96,12 @@ fmt format:
 	go fmt $(ALL_PKGS)
 	echo
 
-test_ci: test
+test_ci:
+ifdef CROSSDOCK
+	$(MAKE) crossdock_ci
+else
+	$(MAKE) test
+endif
 
 test: clean setup install_test check_no_test_deps
 	@echo Testing packages:
@@ -120,8 +124,13 @@ cover_profile: clean setup
 cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
-cover_ci: cover_profile
+cover_ci:
+ifdef CROSSDOCK
+	@echo Skipping coverage
+else
+	$(MAKE) cover_profile
 	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
+endif
 
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
