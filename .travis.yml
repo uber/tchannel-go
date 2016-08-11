@@ -1,4 +1,4 @@
-
+sudo: false
 language: go
 
 cache:
