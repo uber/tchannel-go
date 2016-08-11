@@ -36,6 +36,7 @@ install_docker_ci:
 .PHONY: crossdock_ci
 crossdock_ci:
 ifdef CROSSDOCK
+	docker version
 	$(MAKE) crossdock
 else
 	true
