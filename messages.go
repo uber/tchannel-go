@@ -212,7 +212,7 @@ func (m *callReq) read(r *typed.ReadBuffer) error {
 }
 
 func (m *callReq) write(w *typed.WriteBuffer) error {
-	w.WriteUint32(uint32(m.TimeToLive.Seconds() * 1000))
+	w.WriteUint32(uint32(m.TimeToLive / time.Millisecond))
 	m.Tracing.write(w)
 	w.WriteLen8String(m.Service)
 	m.Headers.write(w)
