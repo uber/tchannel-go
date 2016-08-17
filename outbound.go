@@ -55,8 +55,11 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		// never get here.
 		return nil, ErrTimeoutRequired
 	}
+
+	// If the timeToLive is less than a millisecond, it will be encoded as 0 on
+	// the wire, hence we return a timeout immediately.
 	timeToLive := deadline.Sub(now)
-	if timeToLive <= 0 {
+	if timeToLive < time.Millisecond {
 		return nil, ErrTimeout
 	}
 
