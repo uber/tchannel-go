@@ -1,7 +1,7 @@
 struct Data {
-  1: bool b1,
-  2: string s2,
-  3: i32 i3
+  1: required bool b1,
+  2: required string s2,
+  3: required i32 i3
 }
 
 exception SimpleErr {
