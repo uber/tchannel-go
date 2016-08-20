@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strconv"
@@ -252,7 +253,17 @@ func ExtractInboundSpan(ctx context.Context, call *InboundCall, headers map[stri
 
 func setPeerHostPort(span opentracing.Span, hostPort string) {
 	if host, port, err := net.SplitHostPort(hostPort); err == nil {
-		ext.PeerHostname.Set(span, host)
+		if ip := net.ParseIP(host); ip != nil {
+			if ipv4 := ip.To4(); ipv4 != nil {
+				ext.PeerHostIPv4.Set(span, binary.BigEndian.Uint32(ipv4))
+			} else {
+				ext.PeerHostIPv6.Set(span, host)
+			}
+		} else if host == "localhost" {
+			ext.PeerHostIPv4.Set(span, uint32(127<<24|1))
+		} else {
+			ext.PeerHostname.Set(span, host)
+		}
 		if p, err := strconv.Atoi(port); err == nil {
 			ext.PeerPort.Set(span, uint16(p))
 		}
