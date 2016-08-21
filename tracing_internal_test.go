@@ -91,36 +91,36 @@ func TestSpanString(t *testing.T) {
 func TestSetPeerHostPort(t *testing.T) {
 	tracer := mocktracer.New()
 
-	span := tracer.StartSpan("x")
-	setPeerHostPort(span, "localhost:123")
-	span.Finish()
-	rawSpan := tracer.FinishedSpans()[0]
-	assert.Equal(t, uint32(127<<24|1), rawSpan.Tag(string(ext.PeerHostIPv4)))
-	assert.Equal(t, uint16(123), rawSpan.Tag(string(ext.PeerPort)))
-
-	span = tracer.StartSpan("x")
-	setPeerHostPort(span, "adhoc123:bad-port")
-	span.Finish()
-	rawSpan = tracer.FinishedSpans()[1]
-	assert.Equal(t, "adhoc123", rawSpan.Tag(string(ext.PeerHostname)))
-	assert.Nil(t, rawSpan.Tag(string(ext.PeerPort)))
-
-	span = tracer.StartSpan("x")
-	setPeerHostPort(span, "10.20.30.40:321")
-	span.Finish()
-	rawSpan = tracer.FinishedSpans()[2]
-	ip := (((10<<8)|20)<<8|30)<<8 | 40
-	assert.Equal(t, uint32(ip), rawSpan.Tag(string(ext.PeerHostIPv4)))
-	assert.Equal(t, uint16(321), rawSpan.Tag(string(ext.PeerPort)))
-
-	span = tracer.StartSpan("x")
 	ipv6 := []byte{1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 16}
-	assert.Equal(t, 16, len(ipv6))
-	setPeerHostPort(span, fmt.Sprintf("[%s]:789", net.IP(ipv6)))
-	span.Finish()
-	rawSpan = tracer.FinishedSpans()[3]
-	assert.Equal(t, "102:300::f10", rawSpan.Tag(string(ext.PeerHostIPv6)))
-	assert.Equal(t, uint16(789), rawSpan.Tag(string(ext.PeerPort)))
+	assert.Equal(t, net.IPv6len, len(ipv6))
+	ipv6hostPort := fmt.Sprintf("[%v]:789", net.IP(ipv6))
+
+	tests := []struct {
+		hostPort    string
+		wantHostTag string
+		wantHost    interface{}
+		wantPort    uint16
+	}{
+		{"adhoc123:bad-port", "peer.hostname", "adhoc123", 0},
+		{"adhoc123", "peer.hostname", "adhoc123", 0},
+		{"localhost:123", "peer.ipv4", uint32(127<<24 | 1), 123},
+		{"10.20.30.40:321", "peer.ipv4", uint32(10<<24 | 20<<16 | 30<<8 | 40), 321},
+		{ipv6hostPort, "peer.ipv6", "102:300::f10", 789},
+	}
+
+	for i, test := range tests {
+		span := tracer.StartSpan("x")
+		setPeerHostPort(span, test.hostPort)
+		span.Finish()
+		rawSpan := tracer.FinishedSpans()[i]
+		assert.Equal(t, test.wantHost, rawSpan.Tag(test.wantHostTag))
+		if test.wantPort != 0 {
+			assert.Equal(t, test.wantPort, rawSpan.Tag(string(ext.PeerPort)))
+		} else {
+			assert.Nil(t, rawSpan.Tag(string(ext.PeerPort)))
+		}
+		return
+	}
 }
 
 func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
