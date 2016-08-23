@@ -21,10 +21,7 @@
 package tchannel
 
 import (
-	"encoding/binary"
 	"fmt"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/uber/tchannel-go/trand"
@@ -154,7 +151,7 @@ func (c *Connection) startOutboundSpan(ctx context.Context, serviceName, methodN
 	}
 	ext.SpanKindRPCClient.Set(span)
 	ext.PeerService.Set(span, serviceName)
-	setPeerHostPort(span, c.remotePeerInfo.HostPort)
+	c.setPeerHostPort(span)
 	span.SetTag("as", call.callReq.Headers[ArgScheme])
 	var injectable injectableSpan
 	if err := injectable.initFromOpenTracing(span); err == nil {
@@ -206,7 +203,7 @@ func (c *Connection) extractInboundSpan(callReq *callReq) opentracing.Span {
 	span := c.Tracer().StartSpan(operationName, ext.RPCServerOption(spanCtx))
 	span.SetTag("as", callReq.Headers[ArgScheme])
 	ext.PeerService.Set(span, callReq.Headers[CallerName])
-	setPeerHostPort(span, c.remotePeerInfo.HostPort)
+	c.setPeerHostPort(span)
 	return span
 }
 
@@ -245,34 +242,24 @@ func ExtractInboundSpan(ctx context.Context, call *InboundCall, headers map[stri
 		span = tracer.StartSpan(call.MethodString(), ext.RPCServerOption(parent))
 		ext.PeerService.Set(span, call.CallerName())
 		span.SetTag("as", string(call.Format()))
-		setPeerHostPort(span, call.RemotePeer().HostPort)
+		call.conn.setPeerHostPort(span)
 		call.Response().span = span
 	}
 	return opentracing.ContextWithSpan(ctx, span)
 }
 
-func setPeerHostPort(span opentracing.Span, hostPort string) {
-	if host, port, err := net.SplitHostPort(hostPort); err == nil {
-		setPeerHost(span, host)
-		if p, err := strconv.Atoi(port); err == nil {
-			ext.PeerPort.Set(span, uint16(p))
-		}
-	} else {
-		setPeerHost(span, hostPort)
+func (c *Connection) setPeerHostPort(span opentracing.Span) {
+	if c.remotePeerAddress.ipv4 != 0 {
+		ext.PeerHostIPv4.Set(span, c.remotePeerAddress.ipv4)
 	}
-}
-
-func setPeerHost(span opentracing.Span, host string) {
-	if ip := net.ParseIP(host); ip != nil {
-		if ipv4 := ip.To4(); ipv4 != nil {
-			ext.PeerHostIPv4.Set(span, binary.BigEndian.Uint32(ipv4))
-		} else {
-			ext.PeerHostIPv6.Set(span, host)
-		}
-	} else if host == "localhost" {
-		ext.PeerHostIPv4.Set(span, uint32(127<<24|1))
-	} else {
-		ext.PeerHostname.Set(span, host)
+	if c.remotePeerAddress.ipv6 != "" {
+		ext.PeerHostIPv6.Set(span, c.remotePeerAddress.ipv6)
+	}
+	if c.remotePeerAddress.hostname != "" {
+		ext.PeerHostname.Set(span, c.remotePeerAddress.hostname)
+	}
+	if c.remotePeerAddress.port != 0 {
+		ext.PeerPort.Set(span, c.remotePeerAddress.port)
 	}
 }
 

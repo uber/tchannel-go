@@ -21,12 +21,14 @@
 package tchannel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -178,6 +180,15 @@ type Connection struct {
 	// ignoreRemotePeer is used to avoid a data race between setting the RemotePeerInfo
 	// and the connection failing, causing a read of the RemotePeerInfo at the same time.
 	ignoreRemotePeer bool
+
+	// remotePeerAddress is used as a cache for remote peer address parsed into individual
+	// components that can be used to set peer tags on OpenTracing Span.
+	remotePeerAddress struct {
+		ipv4     uint32
+		ipv6     string
+		hostname string
+		port     uint16
+	}
 }
 
 // nextConnID gives an ID for each connection for debugging purposes.
@@ -423,6 +434,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		c.remotePeerInfo.IsEphemeral = true
 	}
 	c.checkRemoteProcessNamePrefixes()
+	c.parseRemotePeerAddress()
 
 	res := initRes{initMessage{id: frame.Header.ID}}
 	res.initParams = c.getInitParams()
@@ -558,6 +570,7 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		}
 		c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
 		c.checkRemoteProcessNamePrefixes()
+		c.parseRemotePeerAddress()
 
 		c.state = connectionActive
 		return nil
@@ -983,5 +996,28 @@ func (c *Connection) checkRemoteProcessNamePrefixes() {
 	c.remoteProcessPrefixMatches = make([]bool, len(c.checkedProcessPrefixes))
 	for i, prefix := range c.checkedProcessPrefixes {
 		c.remoteProcessPrefixMatches[i] = strings.HasPrefix(c.remotePeerInfo.ProcessName, prefix)
+	}
+}
+
+// parseRemotePeerAddress parses remote peer info into individual components and
+// caches them on the Connection to be used to set peer tags on OpenTracing Span.
+func (c *Connection) parseRemotePeerAddress() {
+	address := c.remotePeerInfo.HostPort
+	if sHost, sPort, err := net.SplitHostPort(address); err == nil {
+		address = sHost
+		if p, err := strconv.ParseUint(sPort, 10, 16); err != nil {
+			c.remotePeerAddress.port = uint16(p)
+		}
+	}
+	if address == "localhost" {
+		c.remotePeerAddress.ipv4 = 127<<24 | 1
+	} else if ip := net.ParseIP(address); ip != nil {
+		if ip4 := ip.To4(); ip4 != nil {
+			c.remotePeerAddress.ipv4 = binary.BigEndian.Uint32(ip4)
+		} else {
+			c.remotePeerAddress.ipv6 = address
+		}
+	} else {
+		c.remotePeerAddress.hostname = address
 	}
 }

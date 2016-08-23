@@ -103,6 +103,7 @@ func TestSetPeerHostPort(t *testing.T) {
 	}{
 		{"adhoc123:bad-port", "peer.hostname", "adhoc123", 0},
 		{"adhoc123", "peer.hostname", "adhoc123", 0},
+		{"ip123.uswest.aws.com", "peer.hostname", "ip123.uswest.aws.com", 0},
 		{"localhost:123", "peer.ipv4", uint32(127<<24 | 1), 123},
 		{"10.20.30.40:321", "peer.ipv4", uint32(10<<24 | 20<<16 | 30<<8 | 40), 321},
 		{ipv6hostPort, "peer.ipv6", "102:300::f10", 789},
@@ -110,14 +111,20 @@ func TestSetPeerHostPort(t *testing.T) {
 
 	for i, test := range tests {
 		span := tracer.StartSpan("x")
-		setPeerHostPort(span, test.hostPort)
+		c := &Connection{
+			remotePeerInfo: PeerInfo{
+				HostPort: test.hostPort,
+			},
+		}
+		c.parseRemotePeerAddress()
+		c.setPeerHostPort(span)
 		span.Finish()
 		rawSpan := tracer.FinishedSpans()[i]
-		assert.Equal(t, test.wantHost, rawSpan.Tag(test.wantHostTag))
+		assert.Equal(t, test.wantHost, rawSpan.Tag(test.wantHostTag), "test %+v", test)
 		if test.wantPort != 0 {
-			assert.Equal(t, test.wantPort, rawSpan.Tag(string(ext.PeerPort)))
+			assert.Equal(t, test.wantPort, rawSpan.Tag(string(ext.PeerPort)), "test %+v", test)
 		} else {
-			assert.Nil(t, rawSpan.Tag(string(ext.PeerPort)))
+			assert.Nil(t, rawSpan.Tag(string(ext.PeerPort)), "test %+v", test)
 		}
 		return
 	}
