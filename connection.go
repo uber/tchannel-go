@@ -1005,7 +1005,7 @@ func (c *Connection) parseRemotePeerAddress() {
 	address := c.remotePeerInfo.HostPort
 	if sHost, sPort, err := net.SplitHostPort(address); err == nil {
 		address = sHost
-		if p, err := strconv.ParseUint(sPort, 10, 16); err != nil {
+		if p, err := strconv.ParseUint(sPort, 10, 16); err == nil {
 			c.remotePeerAddress.port = uint16(p)
 		}
 	}

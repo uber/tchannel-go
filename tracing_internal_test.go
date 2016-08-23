@@ -103,7 +103,7 @@ func TestSetPeerHostPort(t *testing.T) {
 	}{
 		{"adhoc123:bad-port", "peer.hostname", "adhoc123", 0},
 		{"adhoc123", "peer.hostname", "adhoc123", 0},
-		{"ip123.uswest.aws.com", "peer.hostname", "ip123.uswest.aws.com", 0},
+		{"ip123.uswest.aws.com:765", "peer.hostname", "ip123.uswest.aws.com", 765},
 		{"localhost:123", "peer.ipv4", uint32(127<<24 | 1), 123},
 		{"10.20.30.40:321", "peer.ipv4", uint32(10<<24 | 20<<16 | 30<<8 | 40), 321},
 		{ipv6hostPort, "peer.ipv6", "102:300::f10", 789},
@@ -126,7 +126,6 @@ func TestSetPeerHostPort(t *testing.T) {
 		} else {
 			assert.Nil(t, rawSpan.Tag(string(ext.PeerPort)), "test %+v", test)
 		}
-		return
 	}
 }
 
@@ -142,6 +141,7 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 		channelConnectionCommon: channelConnectionCommon{tracer: tracer},
 		remotePeerInfo:          PeerInfo{HostPort: "host:123"},
 	}
+	c.parseRemotePeerAddress()
 
 	// fail to extract with zipkin format, as MockTracer does not support it
 	assert.Nil(t, c.extractInboundSpan(callReq), "zipkin format not available")
