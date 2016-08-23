@@ -21,6 +21,8 @@
 package tchannel
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
 	"github.com/uber/tchannel-go/typed"
@@ -86,6 +88,47 @@ func TestSpanString(t *testing.T) {
 	assert.Equal(t, "TraceID=f,ParentID=0,SpanID=0", span.String())
 }
 
+func TestSetPeerHostPort(t *testing.T) {
+	tracer := mocktracer.New()
+
+	ipv6 := []byte{1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15, 16}
+	assert.Equal(t, net.IPv6len, len(ipv6))
+	ipv6hostPort := fmt.Sprintf("[%v]:789", net.IP(ipv6))
+
+	tests := []struct {
+		hostPort    string
+		wantHostTag string
+		wantHost    interface{}
+		wantPort    uint16
+	}{
+		{"adhoc123:bad-port", "peer.hostname", "adhoc123", 0},
+		{"adhoc123", "peer.hostname", "adhoc123", 0},
+		{"ip123.uswest.aws.com:765", "peer.hostname", "ip123.uswest.aws.com", 765},
+		{"localhost:123", "peer.ipv4", uint32(127<<24 | 1), 123},
+		{"10.20.30.40:321", "peer.ipv4", uint32(10<<24 | 20<<16 | 30<<8 | 40), 321},
+		{ipv6hostPort, "peer.ipv6", "102:300::f10", 789},
+	}
+
+	for i, test := range tests {
+		span := tracer.StartSpan("x")
+		c := &Connection{
+			remotePeerInfo: PeerInfo{
+				HostPort: test.hostPort,
+			},
+		}
+		c.parseRemotePeerAddress()
+		c.setPeerHostPort(span)
+		span.Finish()
+		rawSpan := tracer.FinishedSpans()[i]
+		assert.Equal(t, test.wantHost, rawSpan.Tag(test.wantHostTag), "test %+v", test)
+		if test.wantPort != 0 {
+			assert.Equal(t, test.wantPort, rawSpan.Tag(string(ext.PeerPort)), "test %+v", test)
+		} else {
+			assert.Nil(t, rawSpan.Tag(string(ext.PeerPort)), "test %+v", test)
+		}
+	}
+}
+
 func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 	tracer := mocktracer.New()
 	callReq := new(callReq)
@@ -98,6 +141,7 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 		channelConnectionCommon: channelConnectionCommon{tracer: tracer},
 		remotePeerInfo:          PeerInfo{HostPort: "host:123"},
 	}
+	c.parseRemotePeerAddress()
 
 	// fail to extract with zipkin format, as MockTracer does not support it
 	assert.Nil(t, c.extractInboundSpan(callReq), "zipkin format not available")
