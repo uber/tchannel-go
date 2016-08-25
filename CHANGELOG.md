@@ -5,7 +5,7 @@ Changelog
 
 * Integrate OpenTracing for distributed tracing and context propagation.
   As long as a Zipkin-style tracing is configured, TChannel frames still
-  send tracing information, and `CurrentSpan(ctx)` works as above.
+  send tracing information, and `CurrentSpan(ctx)` works as before.
   All tracer configuration must be handled through OpenTracing.
   (#426)
 * Improve error messages when using the json package and the host:port
@@ -13,7 +13,6 @@ Changelog
 * mockhyperbahn now using inbuilt TChannel relaying to implement in-process
   forwarding. (#472)
 * Drop go1.4 support and add support for go1.7.
-* Drop support for go1.4, update 1.7 to rc3 (#471)
 * Pass thrift.Context to the thrift.Server's response callback (#465)
 
 # 1.0.9
