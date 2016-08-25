@@ -23,4 +23,4 @@ package tchannel
 // VersionInfo identifies the version of the TChannel library.
 // Due to lack of proper package management, this version string will
 // be maintained manually.
-const VersionInfo = "1.0.10-dev"
+const VersionInfo = "1.1.0"
