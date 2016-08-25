@@ -113,33 +113,21 @@ func (o *ChannelOpts) SetStatsReporter(statsReporter tchannel.StatsReporter) *Ch
 	return o
 }
 
-// SetTraceReporter sets TraceReporter in ChannelOptions.
-func (o *ChannelOpts) SetTraceReporter(traceReporter tchannel.TraceReporter) *ChannelOpts {
-	o.TraceReporter = traceReporter
-	return o
-}
-
-// SetTraceReporterFactory sets TraceReporterFactory in ChannelOptions.
-func (o *ChannelOpts) SetTraceReporterFactory(factory tchannel.TraceReporterFactory) *ChannelOpts {
-	o.TraceReporterFactory = factory
-	return o
-}
-
 // SetFramePool sets FramePool in DefaultConnectionOptions.
 func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	o.DefaultConnectionOptions.FramePool = framePool
 	return o
 }
 
-// SetTimeNow sets TimeNow in ChannelOptions.
-func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
-	o.TimeNow = timeNow
+// SetProcessPrefixes sets CheckProcessPrefixes in DefaultConnectionOptions.
+func (o *ChannelOpts) SetProcessPrefixes(prefixes ...string) *ChannelOpts {
+	o.DefaultConnectionOptions.CheckedProcessPrefixes = prefixes
 	return o
 }
 
-// SetTraceSampleRate sets the TraceSampleRate in ChannelOptions.
-func (o *ChannelOpts) SetTraceSampleRate(sampleRate float64) *ChannelOpts {
-	o.ChannelOptions.TraceSampleRate = &sampleRate
+// SetTimeNow sets TimeNow in ChannelOptions.
+func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
+	o.TimeNow = timeNow
 	return o
 }
 
@@ -190,6 +178,13 @@ func (o *ChannelOpts) addPostFn(f func()) {
 // SetRelayHosts sets the channel's relay hosts, which enables relaying.
 func (o *ChannelOpts) SetRelayHosts(rh relay.Hosts) *ChannelOpts {
 	o.ChannelOptions.RelayHosts = rh
+	return o
+}
+
+// SetRelayLocal sets the channel's relay local handlers for service names
+// that should be handled by the relay channel itself.
+func (o *ChannelOpts) SetRelayLocal(relayLocal ...string) *ChannelOpts {
+	o.ChannelOptions.RelayLocalHandlers = relayLocal
 	return o
 }
 

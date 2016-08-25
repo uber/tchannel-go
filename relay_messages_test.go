@@ -17,10 +17,12 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+
 package tchannel
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -178,10 +180,20 @@ func writeHeaders(w *typed.WriteBuffer, num uint8) {
 	}
 	// One of the headers should be caller name.
 	callerNameHeader := uint8(rand.Intn(int(num)) + 1)
+	// If possible, one of the other headers should be routing delegate.
+	delegateHeader := uint8(math.MaxUint8)
+	if num > 1 {
+		delegateHeader = callerNameHeader + 1
+	}
 	for i := uint8(1); i <= num; i++ {
 		if i == callerNameHeader {
 			w.WriteLen8String("cn")
 			w.WriteLen8String("fake-caller")
+			continue
+		}
+		if i == delegateHeader {
+			w.WriteLen8String("rd")
+			w.WriteLen8String("fake-delegate")
 			continue
 		}
 		w.WriteLen8String(fmt.Sprintf("k%d", i)) // key
@@ -217,6 +229,17 @@ func TestLazyCallReqCaller(t *testing.T) {
 			assert.Equal(t, []byte(nil), cr.Caller(), "Unexpected caller name.")
 		} else {
 			assert.Equal(t, "fake-caller", string(cr.Caller()), "Caller name mismatch")
+		}
+	})
+}
+
+func TestLazyCallReqRoutingDelegate(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		if crt&reqHasHeaders == 0 {
+			assert.Equal(t, []byte(nil), cr.RoutingDelegate(), "Unexpected routing delegate.")
+		} else {
+			assert.Equal(t, "fake-delegate", string(cr.RoutingDelegate()), "Routing delegate mismatch.")
 		}
 	})
 }

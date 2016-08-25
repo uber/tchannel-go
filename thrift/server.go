@@ -125,6 +125,8 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
+	tracer := tchannel.TracerFromRegistrar(s.ch)
+	origCtx = tchannel.ExtractInboundSpan(origCtx, call, headers, tracer)
 	ctx := s.ctxFn(origCtx, method, headers)
 
 	wp := getProtocolReader(reader)
@@ -168,7 +170,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	err = writer.Close()
 
 	if handler.postResponseCB != nil {
-		handler.postResponseCB(method, resp)
+		handler.postResponseCB(ctx, method, resp)
 	}
 
 	return err

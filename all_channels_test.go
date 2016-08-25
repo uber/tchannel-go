@@ -28,6 +28,8 @@ import (
 )
 
 func TestAllChannelsRegistered(t *testing.T) {
+	introspectOpts := &IntrospectionOptions{IncludeOtherChannels: true}
+
 	ch1_1, err := NewChannel("ch1", nil)
 	require.NoError(t, err, "Channel create failed")
 	ch1_2, err := NewChannel("ch1", nil)
@@ -35,19 +37,19 @@ func TestAllChannelsRegistered(t *testing.T) {
 	ch2_1, err := NewChannel("ch2", nil)
 	require.NoError(t, err, "Channel create failed")
 
-	state := ch1_1.IntrospectState(nil)
+	state := ch1_1.IntrospectState(introspectOpts)
 	assert.Equal(t, 1, len(state.OtherChannels["ch1"]))
 	assert.Equal(t, 1, len(state.OtherChannels["ch2"]))
 
 	ch1_2.Close()
 
-	state = ch1_1.IntrospectState(nil)
+	state = ch1_1.IntrospectState(introspectOpts)
 	assert.Equal(t, 0, len(state.OtherChannels["ch1"]))
 	assert.Equal(t, 1, len(state.OtherChannels["ch2"]))
 
 	ch2_2, err := NewChannel("ch2", nil)
 
-	state = ch1_1.IntrospectState(nil)
+	state = ch1_1.IntrospectState(introspectOpts)
 	require.NoError(t, err, "Channel create failed")
 	assert.Equal(t, 0, len(state.OtherChannels["ch1"]))
 	assert.Equal(t, 2, len(state.OtherChannels["ch2"]))
@@ -56,7 +58,7 @@ func TestAllChannelsRegistered(t *testing.T) {
 	ch2_1.Close()
 	ch2_2.Close()
 
-	state = ch1_1.IntrospectState(nil)
+	state = ch1_1.IntrospectState(introspectOpts)
 	assert.Equal(t, 0, len(state.OtherChannels["ch1"]))
 	assert.Equal(t, 0, len(state.OtherChannels["ch2"]))
 }

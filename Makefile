@@ -35,6 +35,8 @@ export GOPATH := $(VENDOR_PATH):$(GOPATH)
 TEST_HOST=127.0.0.1
 TEST_PORT=0
 
+-include crossdock/rules.mk
+
 all: test examples
 
 packages_test:
@@ -73,6 +75,9 @@ install_glide:
 
 install_ci: install_glide install_lint get_thrift install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
+ifdef CROSSDOCK
+	$(MAKE) install_docker_ci
+endif
 
 install_test:
 	go test -i $(TEST_ARG) $(ALL_PKGS)
@@ -91,7 +96,12 @@ fmt format:
 	go fmt $(ALL_PKGS)
 	echo
 
-test_ci: test
+test_ci:
+ifdef CROSSDOCK
+	$(MAKE) crossdock_ci
+else
+	$(MAKE) test
+endif
 
 test: clean setup install_test check_no_test_deps
 	@echo Testing packages:
@@ -114,8 +124,13 @@ cover_profile: clean setup
 cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
-cover_ci: cover_profile
+cover_ci:
+ifdef CROSSDOCK
+	@echo Skipping coverage
+else
+	$(MAKE) cover_profile
 	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
+endif
 
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
@@ -133,12 +148,11 @@ else
 	@echo "Not checking gofmt on" $(GO_VERSION)
 endif
 	@echo "Checking for unresolved FIXMEs"
-	-git grep -i fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
+	-git grep -i -n fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
 else
 	@echo "Skipping linters on" $(GO_VERSION)
 endif
-
 
 thrift_example: thrift_gen
 	go build -o $(BUILD)/examples/thrift       ./examples/thrift/main.go

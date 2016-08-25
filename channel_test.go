@@ -25,6 +25,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/mocktracer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +69,6 @@ func TestStats(t *testing.T) {
 	peerInfo := ch.PeerInfo()
 	tags := ch.StatsTags()
 	assert.NotNil(t, ch.StatsReporter(), "StatsReporter missing")
-	assert.NotNil(t, ch.TraceReporter(), "TraceReporter missing")
 	assert.Equal(t, peerInfo.ProcessName, tags["app"], "app tag")
 	assert.Equal(t, peerInfo.ServiceName, tags["service"], "service tag")
 	assert.Equal(t, hostname, tags["host"], "hostname tag")
@@ -111,4 +112,26 @@ func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
 	assert.NotNil(t, ch.peers.peersByHostPort["127.0.0.1:3000"])
 	assert.NotNil(t, sub.peers.peersByHostPort["127.0.0.1:3000"])
 	assert.Nil(t, isolatedSub.peers.peersByHostPort["127.0.0.1:3000"])
+}
+
+func TestChannelTracerMethod(t *testing.T) {
+	mockTracer := mocktracer.New()
+	ch, err := NewChannel("svc", &ChannelOptions{
+		Tracer: mockTracer,
+	})
+	require.NoError(t, err)
+	defer ch.Close()
+	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer passed at initialization")
+
+	ch, err = NewChannel("svc", &ChannelOptions{})
+	require.NoError(t, err)
+	defer ch.Close()
+	assert.EqualValues(t, opentracing.GlobalTracer(), ch.Tracer(), "expecting default tracer")
+
+	// because ch.Tracer() function is doing dynamic lookup, we can change global tracer
+	origTracer := opentracing.GlobalTracer()
+	defer opentracing.InitGlobalTracer(origTracer)
+
+	opentracing.InitGlobalTracer(mockTracer)
+	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer set as global tracer")
 }

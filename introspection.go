@@ -39,6 +39,10 @@ type IntrospectionOptions struct {
 
 	// IncludeTombstones will include tombstones when introspecting relays.
 	IncludeTombstones bool `json:"includeTombstones"`
+
+	// IncludeOtherChannels will include basic information about other chanenls
+	// created in the same process as this channel.
+	IncludeOtherChannels bool `json:"includeOtherChannels"`
 }
 
 // RuntimeVersion includes version information about the runtime and
@@ -217,6 +221,10 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 
 // IntrospectOthers returns the ChannelInfo for all other channels in this process.
 func (ch *Channel) IntrospectOthers(opts *IntrospectionOptions) map[string][]ChannelInfo {
+	if !opts.IncludeOtherChannels {
+		return nil
+	}
+
 	channelMap.Lock()
 	defer channelMap.Unlock()
 

@@ -27,7 +27,10 @@ import (
 	"time"
 )
 
-var _callerNameKeyBytes = []byte(CallerName)
+var (
+	_callerNameKeyBytes      = []byte(CallerName)
+	_routingDelegateKeyBytes = []byte(RoutingDelegate)
+)
 
 const (
 	// Common to many frame types.
@@ -83,8 +86,7 @@ func (cr lazyCallRes) OK() bool {
 type lazyCallReq struct {
 	*Frame
 
-	caller []byte
-	method []byte
+	caller, method, delegate []byte
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -114,6 +116,8 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 
 		if bytes.Equal(key, _callerNameKeyBytes) {
 			cr.caller = val
+		} else if bytes.Equal(key, _routingDelegateKeyBytes) {
+			cr.delegate = val
 		}
 	}
 
@@ -139,10 +143,14 @@ func (f lazyCallReq) Service() []byte {
 	return f.Payload[_serviceNameIndex : _serviceNameIndex+l]
 }
 
-// Method returns the name of the method being called. It panics if called for
-// a non-callReq frame.
+// Method returns the name of the method being called.
 func (f lazyCallReq) Method() []byte {
 	return f.method
+}
+
+// RoutingDelegate returns the routing delegate for this call req, if any.
+func (f lazyCallReq) RoutingDelegate() []byte {
+	return f.delegate
 }
 
 // TTL returns the time to live for this callReq.
@@ -154,6 +162,11 @@ func (f lazyCallReq) TTL() time.Duration {
 // Span returns the Span
 func (f lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)
+}
+
+// HasMoreFragments returns whether the callReq has more fragments.
+func (f lazyCallReq) HasMoreFragments() bool {
+	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

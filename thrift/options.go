@@ -20,7 +20,10 @@
 
 package thrift
 
-import "github.com/apache/thrift/lib/go/thrift"
+import (
+	"github.com/apache/thrift/lib/go/thrift"
+	"golang.org/x/net/context"
+)
 
 // RegisterOption is the interface for options to Register.
 type RegisterOption interface {
@@ -30,7 +33,7 @@ type RegisterOption interface {
 // PostResponseCB registers a callback that is run after a response has been
 // compeltely processed (e.g. written to the channel).
 // This gives the server a chance to clean up resources from the response object
-type PostResponseCB func(method string, response thrift.TStruct)
+type PostResponseCB func(ctx context.Context, method string, response thrift.TStruct)
 
 type optPostResponse PostResponseCB
 

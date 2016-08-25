@@ -384,3 +384,108 @@ func TestRelayOutgoingConnectionsEphemeral(t *testing.T) {
 		require.NoError(t, testutils.CallEcho(ts.Server(), ts.HostPort(), "s2", nil), "CallEcho failed")
 	})
 }
+
+func TestRelayHandleLocalCall(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly().
+		SetRelayLocal("relay", "tchannel", "test").
+		// We make a call to "test" for an unknown method.
+		AddLogFilter("Couldn't find handler.", 1)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s2 := ts.NewServer(serviceNameOpts("s2"))
+		testutils.RegisterEcho(s2, nil)
+
+		client := ts.NewClient(nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), "s2")
+
+		testutils.RegisterEcho(ts.Relay(), nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), "relay")
+
+		// Sould get a bad request for "test" since the channel does not handle it.
+		err := testutils.CallEcho(client, ts.HostPort(), "test", nil)
+		assert.Equal(t, ErrCodeBadRequest, GetSystemErrorCode(err), "Expected BadRequest for test")
+
+		// But an unknown service causes declined
+		err = testutils.CallEcho(client, ts.HostPort(), "unknown", nil)
+		assert.Equal(t, ErrCodeDeclined, GetSystemErrorCode(err), "Expected Declined for unknown")
+	})
+}
+
+func TestRelayHandleLargeLocalCall(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly().
+		SetRelayLocal("relay").
+		AddLogFilter("Received fragmented callReq", 1).
+		// Expect 4 callReqContinues for 256 kb payload that we cannot relay.
+		AddLogFilter("Failed to relay frame.", 4)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		client := ts.NewClient(nil)
+		testutils.RegisterEcho(ts.Relay(), nil)
+
+		// This large call should fail with a bad request.
+		err := testutils.CallEcho(client, ts.HostPort(), "relay", &raw.Args{
+			Arg2: testutils.RandBytes(128 * 1024),
+			Arg3: testutils.RandBytes(128 * 1024),
+		})
+		if assert.Equal(t, ErrCodeBadRequest, GetSystemErrorCode(err), "Expected BadRequest for large call to relay") {
+			assert.Contains(t, err.Error(), "cannot receive fragmented calls")
+		}
+
+		// We may get an error before the call is finished flushing.
+		// Do a ping to ensure everything has been flushed.
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+		require.NoError(t, client.Ping(ctx, ts.HostPort()), "Ping failed")
+	})
+}
+
+func TestRelayMakeOutgoingCall(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		svr1 := ts.Relay()
+		svr2 := ts.NewServer(testutils.NewOpts().SetServiceName("svc2"))
+		testutils.RegisterEcho(svr2, nil)
+
+		sizes := []int{128, 1024, 128 * 1024}
+		for _, size := range sizes {
+			err := testutils.CallEcho(svr1, ts.HostPort(), "svc2", &raw.Args{
+				Arg2: testutils.RandBytes(size),
+				Arg3: testutils.RandBytes(size),
+			})
+			assert.NoError(t, err, "Echo with size %v failed", size)
+		}
+	})
+}
+
+type hostsFunc func(relay.CallFrame, relay.Conn) (relay.Peer, error)
+
+func (f hostsFunc) Get(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+	return f(call, conn)
+}
+
+func TestRelayConnection(t *testing.T) {
+	var errTest = errors.New("test")
+	var wantHostPort string
+	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+		matches := conn.RemoteProcessPrefixMatches()
+		assert.Equal(t, []bool{true, true, true, false}, matches, "Unexpected prefix matches.")
+		assert.Equal(t, wantHostPort, conn.RemoteHostPort(), "Unexpected RemoteHostPort")
+		return relay.Peer{}, errTest
+	}
+
+	// Note: we cannot use WithTestServer since we override the RelayHosts.
+	opts := testutils.NewOpts().
+		SetServiceName("relay").
+		SetRelayHosts(hostsFunc(getHost)).
+		SetProcessPrefixes("nod", "nodejs-hyperbahn", "", "hyperbahn")
+	relay := testutils.NewServer(t, opts)
+	defer relay.Close()
+
+	// Create a client that is listening so we can set the expected host:port.
+	clientOpts := testutils.NewOpts().SetProcessName("nodejs-hyperbahn")
+	client := testutils.NewServer(t, clientOpts)
+	wantHostPort = client.PeerInfo().HostPort
+	defer client.Close()
+
+	err := testutils.CallEcho(client, relay.PeerInfo().HostPort, relay.ServiceName(), nil)
+	require.Error(t, err, "Expected CallEcho to fail")
+	assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+}

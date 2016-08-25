@@ -211,7 +211,7 @@ func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 // addRelay adds a relay in front of the test server, altering public methods as
 // necessary to route traffic through the relay.
 func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
-	ts.relayHosts = NewSimpleRelayHosts(map[string][]string{
+	ts.relayHosts = NewSimpleRelayHosts(ts, map[string][]string{
 		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
 	})
 
@@ -368,7 +368,6 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 
 func comparableState(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) *tchannel.RuntimeState {
 	s := ch.IntrospectState(opts)
-	s.OtherChannels = nil
 	s.SubChannels = nil
 	s.Peers = nil
 	return s

@@ -21,6 +21,7 @@
 package json
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRetryJSONCall(t *testing.T) {
@@ -53,4 +55,18 @@ func TestRetryJSONCall(t *testing.T) {
 	err := client.Call(ctx, "test", nil, &res)
 	assert.NoError(t, err, "Call should succeed")
 	assert.Equal(t, 5, count, "Handler should have been invoked 5 times")
+}
+
+func TestRetryJSONNoConnect(t *testing.T) {
+	ch := testutils.NewClient(t, nil)
+	ch.Peers().Add("0.0.0.0:0")
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	var res map[string]interface{}
+	client := NewClient(ch, ch.ServiceName(), nil)
+	err := client.Call(ctx, "test", nil, &res)
+	require.Error(t, err, "Call should fail")
+	assert.True(t, strings.HasPrefix(err.Error(), "connect: "), "Error does not contain expected prefix: %v", err.Error())
 }

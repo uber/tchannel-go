@@ -36,7 +36,7 @@ const (
 )
 
 type tchannelCtxParams struct {
-	span                    *Span
+	tracingDisabled         bool
 	call                    IncomingCall
 	options                 *CallOptions
 	retryOptions            *RetryOptions
@@ -76,9 +76,7 @@ func getTChannelParams(ctx context.Context) *tchannelCtxParams {
 
 // NewContext returns a new root context used to make TChannel requests.
 func NewContext(timeout time.Duration) (context.Context, context.CancelFunc) {
-	return NewContextBuilder(timeout).
-		setSpan(NewRootSpan()).
-		Build()
+	return NewContextBuilder(timeout).Build()
 }
 
 // WrapContextForTest returns a copy of the given Context that is associated with the call.
@@ -90,10 +88,9 @@ func WrapContextForTest(ctx context.Context, call IncomingCall) context.Context 
 }
 
 // newIncomingContext creates a new context for an incoming call with the given span.
-func newIncomingContext(call IncomingCall, timeout time.Duration, span *Span) (context.Context, context.CancelFunc) {
+func newIncomingContext(call IncomingCall, timeout time.Duration) (context.Context, context.CancelFunc) {
 	return NewContextBuilder(timeout).
 		setIncomingCall(call).
-		setSpan(span).
 		Build()
 }
 
@@ -105,17 +102,16 @@ func CurrentCall(ctx context.Context) IncomingCall {
 	return nil
 }
 
-// CurrentSpan returns the Span value for the provided Context
-func CurrentSpan(ctx context.Context) *Span {
-	if params := getTChannelParams(ctx); params != nil {
-		return params.span
-	}
-	return nil
-}
-
 func currentCallOptions(ctx context.Context) *CallOptions {
 	if params := getTChannelParams(ctx); params != nil {
 		return params.options
 	}
 	return nil
+}
+
+func isTracingDisabled(ctx context.Context) bool {
+	if params := getTChannelParams(ctx); params != nil {
+		return params.tracingDisabled
+	}
+	return false
 }
