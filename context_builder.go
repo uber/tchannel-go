@@ -29,6 +29,18 @@ import (
 // ContextBuilder stores all TChannel-specific parameters that will
 // be stored inside of a context.
 type ContextBuilder struct {
+	// TracingDisabled disables trace reporting for calls using this context.
+	TracingDisabled bool
+
+	// hideListeningOnOutbound disables sending the listening server's host:port
+	// when creating new outgoing connections.
+	hideListeningOnOutbound bool
+
+	// replaceParentHeaders is set to true when SetHeaders() method is called.
+	// It forces headers from ParentContext to be ignored. When false, parent
+	// headers will be merged with headers accumulated by the builder.
+	replaceParentHeaders bool
+
 	// If Timeout is zero, Build will default to defaultTimeout.
 	Timeout time.Duration
 
@@ -38,18 +50,11 @@ type ContextBuilder struct {
 	// CallOptions are TChannel call options for the specific call.
 	CallOptions *CallOptions
 
-	// TracingDisabled disables trace reporting for calls using this context.
-	TracingDisabled bool
-
 	// RetryOptions are the retry options for this call.
 	RetryOptions *RetryOptions
 
 	// ConnectTimeout is the timeout for creating a TChannel connection.
 	ConnectTimeout time.Duration
-
-	// hideListeningOnOutbound disables sending the listening server's host:port
-	// when creating new outgoing connections.
-	hideListeningOnOutbound bool
 
 	// ParentContext to build the new context from. If empty, context.Background() is used.
 	// The new (child) context inherits a number of properties from the parent context:
@@ -59,11 +64,6 @@ type ContextBuilder struct {
 
 	// Hidden fields: we do not want users outside of tchannel to set these.
 	incomingCall IncomingCall
-
-	// replaceParentHeaders is set to true when SetHeaders() method is called.
-	// It forces headers from ParentContext to be ignored. When false, parent
-	// headers will be merged with headers accumulated by the builder.
-	replaceParentHeaders bool
 }
 
 // NewContextBuilder returns a builder that can be used to create a Context.
