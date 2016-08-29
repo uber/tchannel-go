@@ -37,11 +37,11 @@ const (
 
 type tchannelCtxParams struct {
 	tracingDisabled         bool
+	hideListeningOnOutbound bool
 	call                    IncomingCall
 	options                 *CallOptions
 	retryOptions            *RetryOptions
 	connectTimeout          time.Duration
-	hideListeningOnOutbound bool
 }
 
 // IncomingCall exposes properties for incoming calls through the context.

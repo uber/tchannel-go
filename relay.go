@@ -49,11 +49,11 @@ type relayConn Connection
 type relayItem struct {
 	*time.Timer
 
-	stats       relay.CallStats
 	remapID     uint32
-	destination *Relayer
 	tomb        bool
 	local       bool
+	stats       relay.CallStats
+	destination *Relayer
 	span        Span
 }
 
