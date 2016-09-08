@@ -276,7 +276,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	if _, ok := r.outbound.Get(f.Header.ID); ok {
 		r.logger.WithFields(
 			LogField{"id", f.Header.ID},
-			LogField{"caller", string(f.Caller())},
+			LogField{"source", string(f.Caller())},
 			LogField{"dest", string(f.Service())},
 			LogField{"method", string(f.Method())},
 		).Warn("received duplicate callReq")
@@ -307,7 +307,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),
-			LogField{"caller", string(f.Caller())},
+			LogField{"source", string(f.Caller())},
 			LogField{"dest", string(f.Service())},
 			LogField{"method", string(f.Method())},
 			LogField{"selectedPeer", selectedPeer},
@@ -475,7 +475,7 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	if cr.HasMoreFragments() {
 		r.logger.WithFields(
 			LogField{"id", cr.Header.ID},
-			LogField{"caller", string(cr.Caller())},
+			LogField{"source", string(cr.Caller())},
 			LogField{"dest", string(cr.Service())},
 			LogField{"method", string(cr.Method())},
 		).Error("Received fragmented callReq intended for local relay channel, can only handle unfragmented calls.")
