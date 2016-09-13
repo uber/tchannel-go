@@ -30,6 +30,7 @@ func TestSetHeaders(t *testing.T) {
 	tests := []struct {
 		format          Format
 		routingDelegate string
+		routingKey      string
 		expectedHeaders transportHeaders
 	}{
 		{
@@ -49,12 +50,21 @@ func TestSetHeaders(t *testing.T) {
 				RoutingDelegate: "xpr",
 			},
 		},
+		{
+			format:     JSON,
+			routingKey: "canary",
+			expectedHeaders: transportHeaders{
+				ArgScheme:  JSON.String(),
+				RoutingKey: "canary",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		callOpts := &CallOptions{
 			Format:          tt.format,
 			RoutingDelegate: tt.routingDelegate,
+			RoutingKey:      tt.routingKey,
 		}
 		headers := make(transportHeaders)
 		callOpts.setHeaders(headers)

@@ -168,6 +168,11 @@ const (
 	// RoutingDelegate header identifies an intermediate service which knows
 	// how to route the request to the intended recipient.
 	RoutingDelegate TransportHeaderName = "rd"
+
+	// RoutingKey header identifies a traffic group containing instances of the
+	// requested service. A relay may use the routing key over the service if
+	// it knows about traffic groups.
+	RoutingKey TransportHeaderName = "rk"
 )
 
 // transportHeaders are passed as part of a CallReq/CallRes
