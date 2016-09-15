@@ -47,6 +47,9 @@ type CallFrame interface {
 	Method() []byte
 	// RoutingDelegate is the name of the routing delegate, if any.
 	RoutingDelegate() []byte
+	// RoutingKey may refer to an alternate traffic group instead of the
+	// traffic group identified by the service name.
+	RoutingKey() []byte
 }
 
 // Hosts allows external wrappers to inject peer selection logic for
@@ -58,7 +61,8 @@ type Hosts interface {
 	Get(CallFrame, Conn) (Peer, error)
 }
 
-// CallStats is a reporter for per-request stats.
+// CallStats is a reporter for per-request stats. The Succeeded, Failed, and End
+// methods should be safe for concurrent use.
 //
 // Because call res frames don't include the OK bit, we can't wait until the
 // last frame of a relayed RPC to decide whether or not the RPC succeeded.

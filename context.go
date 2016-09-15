@@ -37,11 +37,11 @@ const (
 
 type tchannelCtxParams struct {
 	tracingDisabled         bool
+	hideListeningOnOutbound bool
 	call                    IncomingCall
 	options                 *CallOptions
 	retryOptions            *RetryOptions
 	connectTimeout          time.Duration
-	hideListeningOnOutbound bool
 }
 
 // IncomingCall exposes properties for incoming calls through the context.
@@ -51,6 +51,10 @@ type IncomingCall interface {
 
 	// ShardKey returns the shard key from the ShardKey transport header.
 	ShardKey() string
+
+	// RoutingKey returns the routing key (referring to a traffic group) from
+	// RoutingKey transport header.
+	RoutingKey() string
 
 	// RoutingDelegate returns the routing delegate from RoutingDelegate
 	// transport header.

@@ -238,3 +238,17 @@ func TestCannotRegisterOrGetAfterSetHandler(t *testing.T) {
 	assert.Panics(t, func() { ch.GetSubChannel("foo").Register(anotherHandler, "bar") })
 	assert.Panics(t, func() { ch.GetSubChannel("foo").GetHandlers() })
 }
+
+func TestGetSubchannelOptionsOnNew(t *testing.T) {
+	ch := testutils.NewServer(t, nil)
+	defer ch.Close()
+
+	peers := ch.GetSubChannel("s", Isolated).Peers()
+	want := peers.Add("1.1.1.1:1")
+
+	peers2 := ch.GetSubChannel("s", Isolated).Peers()
+	assert.Equal(t, peers, peers2, "Get isolated subchannel should not clear existing peers")
+	peer, err := peers2.Get(nil)
+	require.NoError(t, err, "Should get peer")
+	assert.Equal(t, want, peer, "Unexpected peer")
+}

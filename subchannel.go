@@ -173,7 +173,7 @@ func (c *SubChannel) Tracer() opentracing.Tracer {
 }
 
 // Register a new subchannel for the given serviceName
-func (subChMap *subChannelMap) registerNewSubChannel(serviceName string, ch *Channel) *SubChannel {
+func (subChMap *subChannelMap) registerNewSubChannel(serviceName string, ch *Channel) (_ *SubChannel, added bool) {
 	subChMap.Lock()
 	defer subChMap.Unlock()
 
@@ -182,12 +182,12 @@ func (subChMap *subChannelMap) registerNewSubChannel(serviceName string, ch *Cha
 	}
 
 	if sc, ok := subChMap.subchannels[serviceName]; ok {
-		return sc
+		return sc, false
 	}
 
 	sc := newSubChannel(serviceName, ch)
 	subChMap.subchannels[serviceName] = sc
-	return sc
+	return sc, true
 }
 
 // Get subchannel if, we have one
@@ -199,9 +199,9 @@ func (subChMap *subChannelMap) get(serviceName string) (*SubChannel, bool) {
 }
 
 // GetOrAdd a subchannel for the given serviceName on the map
-func (subChMap *subChannelMap) getOrAdd(serviceName string, ch *Channel) *SubChannel {
+func (subChMap *subChannelMap) getOrAdd(serviceName string, ch *Channel) (_ *SubChannel, added bool) {
 	if sc, ok := subChMap.get(serviceName); ok {
-		return sc
+		return sc, false
 	}
 
 	return subChMap.registerNewSubChannel(serviceName, ch)
