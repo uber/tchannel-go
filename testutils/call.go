@@ -37,6 +37,9 @@ type FakeIncomingCall struct {
 	// RemotePeerF is the calling service's peer info.
 	RemotePeerF tchannel.PeerInfo
 
+	// RoutingKeyF is the routing key.
+	RoutingKeyF string
+
 	// RoutingDelegateF is the routing delegate.
 	RoutingDelegateF string
 }
@@ -49,6 +52,11 @@ func (f *FakeIncomingCall) CallerName() string {
 // ShardKey returns the shard key as specified in the fake call.
 func (f *FakeIncomingCall) ShardKey() string {
 	return f.ShardKeyF
+}
+
+// RoutingKey returns the routing delegate as specified in the fake call.
+func (f *FakeIncomingCall) RoutingKey() string {
+	return f.RoutingKeyF
 }
 
 // RoutingDelegate returns the routing delegate as specified in the fake call.
@@ -65,6 +73,7 @@ func (f *FakeIncomingCall) RemotePeer() tchannel.PeerInfo {
 func (f *FakeIncomingCall) CallOptions() *tchannel.CallOptions {
 	return &tchannel.CallOptions{
 		ShardKey:        f.ShardKey(),
+		RoutingKey:      f.RoutingKey(),
 		RoutingDelegate: f.RoutingDelegate(),
 	}
 }
@@ -76,7 +85,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
-	ServiceF, MethodF, CallerF, RoutingDelegateF string
+	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
 }
 
 var _ relay.CallFrame = FakeCallFrame{}
@@ -94,6 +103,11 @@ func (f FakeCallFrame) Method() []byte {
 // Caller returns the caller field.
 func (f FakeCallFrame) Caller() []byte {
 	return []byte(f.CallerF)
+}
+
+// RoutingKey returns the routing delegate field.
+func (f FakeCallFrame) RoutingKey() []byte {
+	return []byte(f.RoutingKeyF)
 }
 
 // RoutingDelegate returns the routing delegate field.

@@ -184,10 +184,10 @@ type Connection struct {
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
 	// components that can be used to set peer tags on OpenTracing Span.
 	remotePeerAddress struct {
+		port     uint16
 		ipv4     uint32
 		ipv6     string
 		hostname string
-		port     uint16
 	}
 }
 

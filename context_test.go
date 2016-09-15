@@ -75,6 +75,29 @@ func TestRoutingDelegatePropagates(t *testing.T) {
 	})
 }
 
+func TestRoutingKeyPropagates(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		peerInfo := ch.PeerInfo()
+		testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{
+				Arg3: []byte(CurrentCall(ctx).RoutingKey()),
+			}, nil
+		})
+
+		ctx, cancel := NewContextBuilder(time.Second).Build()
+		defer cancel()
+		_, arg3, _, err := raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, "", string(arg3), "Expected no routing key header")
+
+		ctx, cancel = NewContextBuilder(time.Second).SetRoutingKey("canary").Build()
+		defer cancel()
+		_, arg3, _, err = raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, "canary", string(arg3), "Expected routing key header to be set")
+	})
+}
+
 func TestShardKeyPropagates(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
 		peerInfo := ch.PeerInfo()

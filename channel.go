@@ -340,9 +340,11 @@ func (ch *Channel) createCommonStats() {
 // GetSubChannel returns a SubChannel for the given service name. If the subchannel does not
 // exist, it is created.
 func (ch *Channel) GetSubChannel(serviceName string, opts ...SubChannelOption) *SubChannel {
-	sub := ch.subChannels.getOrAdd(serviceName, ch)
-	for _, opt := range opts {
-		opt(sub)
+	sub, added := ch.subChannels.getOrAdd(serviceName, ch)
+	if added {
+		for _, opt := range opts {
+			opt(sub)
+		}
 	}
 	return sub
 }

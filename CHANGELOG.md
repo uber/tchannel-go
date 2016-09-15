@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# v1.2.0
+
+* Adds support for routing keys (the TChannel rk transport header).
+
 # v1.1.0
 
 * Integrate OpenTracing for distributed tracing and context propagation.

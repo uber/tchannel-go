@@ -40,12 +40,12 @@ var (
 )
 
 type readableFragment struct {
+	isDone       bool
 	flags        byte
 	checksumType ChecksumType
 	checksum     []byte
 	contents     *typed.ReadBuffer
 	onDone       func()
-	isDone       bool
 }
 
 func (f *readableFragment) done() {

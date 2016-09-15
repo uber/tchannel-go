@@ -49,11 +49,11 @@ type relayConn Connection
 type relayItem struct {
 	*time.Timer
 
-	stats       relay.CallStats
 	remapID     uint32
-	destination *Relayer
 	tomb        bool
 	local       bool
+	stats       relay.CallStats
+	destination *Relayer
 	span        Span
 }
 
@@ -274,7 +274,12 @@ func (r *Relayer) canHandleNewCall() bool {
 
 func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection, bool, error) {
 	if _, ok := r.outbound.Get(f.Header.ID); ok {
-		r.logger.WithFields(LogField{"id", f.Header.ID}).Warn("received duplicate callReq")
+		r.logger.WithFields(
+			LogField{"id", f.Header.ID},
+			LogField{"source", string(f.Caller())},
+			LogField{"dest", string(f.Service())},
+			LogField{"method", string(f.Method())},
+		).Warn("received duplicate callReq")
 		cs.Failed("relay-" + ErrCodeProtocol.MetricsKey())
 		// TODO: this is a protocol error, kill the connection.
 		return nil, false, errors.New("callReq with already active ID")
@@ -302,6 +307,9 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),
+			LogField{"source", string(f.Caller())},
+			LogField{"dest", string(f.Service())},
+			LogField{"method", string(f.Method())},
 			LogField{"selectedPeer", selectedPeer},
 		).Warn("Failed to connect to relay host.")
 		cs.Failed("relay-connection-failed")
@@ -467,7 +475,8 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	if cr.HasMoreFragments() {
 		r.logger.WithFields(
 			LogField{"id", cr.Header.ID},
-			LogField{"service", string(cr.Service())},
+			LogField{"source", string(cr.Caller())},
+			LogField{"dest", string(cr.Service())},
 			LogField{"method", string(cr.Method())},
 		).Error("Received fragmented callReq intended for local relay channel, can only handle unfragmented calls.")
 		r.conn.SendSystemError(f.Header.ID, cr.Span(), errRelayMethodFragmented)
