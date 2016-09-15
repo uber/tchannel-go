@@ -21,9 +21,6 @@
 package tchannel
 
 import (
-	"fmt"
-	"math"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -36,6 +33,9 @@ type testCallReq int
 
 const (
 	reqHasHeaders testCallReq = (1 << iota)
+	reqHasCaller
+	reqHasDelegate
+	reqHasRoutingKey
 	reqHasChecksum
 	reqTotalCombinations
 	reqHasAll testCallReq = reqTotalCombinations - 1
@@ -45,7 +45,7 @@ func (cr testCallReq) req() lazyCallReq {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
-	f := NewFrame(100)
+	f := NewFrame(200)
 	fh := fakeHeader()
 	f.Header = fh
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
@@ -56,11 +56,20 @@ func (cr testCallReq) req() lazyCallReq {
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
 
-	if cr&reqHasHeaders == 0 {
-		writeHeaders(payload, 0)
-	} else {
-		writeHeaders(payload, 3)
+	headers := make(map[string]string)
+	if cr&reqHasHeaders != 0 {
+		addRandomHeaders(headers)
 	}
+	if cr&reqHasCaller != 0 {
+		headers["cn"] = "fake-caller"
+	}
+	if cr&reqHasDelegate != 0 {
+		headers["rd"] = "fake-delegate"
+	}
+	if cr&reqHasRoutingKey != 0 {
+		headers["rk"] = "fake-routingkey"
+	}
+	writeHeaders(payload, headers)
 
 	if cr&reqHasChecksum == 0 {
 		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
@@ -113,11 +122,11 @@ func (cr testCallRes) res() lazyCallRes {
 		payload.WriteSingleByte(0) // code ok
 	}
 
-	if cr&resHasHeaders == 0 {
-		writeHeaders(payload, 0)
-	} else {
-		writeHeaders(payload, 3)
+	headers := make(map[string]string)
+	if cr&resHasHeaders != 0 {
+		addRandomHeaders(headers)
 	}
+	writeHeaders(payload, headers)
 
 	if cr&resHasChecksum == 0 {
 		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
@@ -173,31 +182,17 @@ func withLazyErrorCombinations(f func(ec SystemErrCode)) {
 	}
 }
 
-func writeHeaders(w *typed.WriteBuffer, num uint8) {
-	w.WriteSingleByte(num) // number of headers
-	if num == 0 {
-		return
-	}
-	// One of the headers should be caller name.
-	callerNameHeader := uint8(rand.Intn(int(num)) + 1)
-	// If possible, one of the other headers should be routing delegate.
-	delegateHeader := uint8(math.MaxUint8)
-	if num > 1 {
-		delegateHeader = callerNameHeader + 1
-	}
-	for i := uint8(1); i <= num; i++ {
-		if i == callerNameHeader {
-			w.WriteLen8String("cn")
-			w.WriteLen8String("fake-caller")
-			continue
-		}
-		if i == delegateHeader {
-			w.WriteLen8String("rd")
-			w.WriteLen8String("fake-delegate")
-			continue
-		}
-		w.WriteLen8String(fmt.Sprintf("k%d", i)) // key
-		w.WriteLen8String(fmt.Sprintf("v%d", i)) // value
+func addRandomHeaders(headers map[string]string) {
+	headers["k1"] = "v1"
+	headers["k222222"] = ""
+	headers["k3"] = "thisisalonglongkey"
+}
+
+func writeHeaders(w *typed.WriteBuffer, headers map[string]string) {
+	w.WriteSingleByte(byte(len(headers))) // number of headers
+	for k, v := range headers {
+		w.WriteLen8String(k)
+		w.WriteLen8String(v)
 	}
 }
 
@@ -225,7 +220,7 @@ func TestLazyCallReqService(t *testing.T) {
 func TestLazyCallReqCaller(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
-		if crt&reqHasHeaders == 0 {
+		if crt&reqHasCaller == 0 {
 			assert.Equal(t, []byte(nil), cr.Caller(), "Unexpected caller name.")
 		} else {
 			assert.Equal(t, "fake-caller", string(cr.Caller()), "Caller name mismatch")
@@ -236,10 +231,21 @@ func TestLazyCallReqCaller(t *testing.T) {
 func TestLazyCallReqRoutingDelegate(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
-		if crt&reqHasHeaders == 0 {
+		if crt&reqHasDelegate == 0 {
 			assert.Equal(t, []byte(nil), cr.RoutingDelegate(), "Unexpected routing delegate.")
 		} else {
 			assert.Equal(t, "fake-delegate", string(cr.RoutingDelegate()), "Routing delegate mismatch.")
+		}
+	})
+}
+
+func TestLazyCallReqRoutingKey(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		if crt&reqHasRoutingKey == 0 {
+			assert.Equal(t, []byte(nil), cr.RoutingKey(), "Unexpected routing key.")
+		} else {
+			assert.Equal(t, "fake-routingkey", string(cr.RoutingKey()), "Routing key mismatch.")
 		}
 	})
 }

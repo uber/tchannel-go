@@ -47,8 +47,13 @@ type CallOptions struct {
 	// RequestState stores request state across retry attempts.
 	RequestState *RequestState
 
-	// RoutingDelegate identifies a service capable of routing a request to its
-	// intended recipient.
+	// RoutingKey identifies the destined traffic group. Relays may favor the
+	// routing key over the service name to route the request to a specialized
+	// traffic group.
+	RoutingKey string
+
+	// RoutingDelegate identifies a traffic group capable of routing a request
+	// to an instance of the intended service.
 	RoutingDelegate string
 
 	// callerName can only be used when forwarding a request. It can only be set internally,
@@ -70,6 +75,9 @@ func (c *CallOptions) overrideHeaders(headers transportHeaders) {
 	}
 	if c.ShardKey != "" {
 		headers[ShardKey] = c.ShardKey
+	}
+	if c.RoutingKey != "" {
+		headers[RoutingKey] = c.RoutingKey
 	}
 	if c.RoutingDelegate != "" {
 		headers[RoutingDelegate] = c.RoutingDelegate

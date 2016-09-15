@@ -239,6 +239,11 @@ func (call *InboundCall) ShardKey() string {
 	return call.headers[ShardKey]
 }
 
+// RoutingKey returns the routing key from the RoutingKey transport header.
+func (call *InboundCall) RoutingKey() string {
+	return call.headers[RoutingKey]
+}
+
 // RoutingDelegate returns the routing delegate from the RoutingDelegate transport header.
 func (call *InboundCall) RoutingDelegate() string {
 	return call.headers[RoutingDelegate]
@@ -256,6 +261,7 @@ func (call *InboundCall) CallOptions() *CallOptions {
 		Format:          call.Format(),
 		ShardKey:        call.ShardKey(),
 		RoutingDelegate: call.RoutingDelegate(),
+		RoutingKey:      call.RoutingKey(),
 	}
 }
 

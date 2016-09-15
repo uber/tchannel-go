@@ -115,6 +115,15 @@ func (cb *ContextBuilder) SetFormat(f Format) *ContextBuilder {
 	return cb
 }
 
+// SetRoutingKey sets the RoutingKey call options ("rk" transport header).
+func (cb *ContextBuilder) SetRoutingKey(rk string) *ContextBuilder {
+	if cb.CallOptions == nil {
+		cb.CallOptions = new(CallOptions)
+	}
+	cb.CallOptions.RoutingKey = rk
+	return cb
+}
+
 // SetRoutingDelegate sets the RoutingDelegate call options ("rd" transport header).
 func (cb *ContextBuilder) SetRoutingDelegate(rd string) *ContextBuilder {
 	if cb.CallOptions == nil {

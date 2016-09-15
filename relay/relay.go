@@ -47,6 +47,9 @@ type CallFrame interface {
 	Method() []byte
 	// RoutingDelegate is the name of the routing delegate, if any.
 	RoutingDelegate() []byte
+	// RoutingKey may refer to an alternate traffic group instead of the
+	// traffic group identified by the service name.
+	RoutingKey() []byte
 }
 
 // Hosts allows external wrappers to inject peer selection logic for
