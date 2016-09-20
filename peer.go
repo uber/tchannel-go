@@ -273,6 +273,7 @@ type Peer struct {
 	scCount uint32
 
 	// connections are mutable, and are protected by the mutex.
+	newConnLock         sync.Mutex
 	inboundConnections  []*Connection
 	outboundConnections []*Connection
 	chosenCount         atomic.Uint64
@@ -341,6 +342,15 @@ func (p *Peer) getActiveConn() (*Connection, bool) {
 // GetConnection returns an active connection to this peer. If no active connections
 // are found, it will create a new outbound connection and return it.
 func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
+	if activeConn, ok := p.getActiveConn(); ok {
+		return activeConn, nil
+	}
+
+	// Lock here to restrict new connection creation attempts to one goroutine
+	p.newConnLock.Lock()
+	defer p.newConnLock.Unlock()
+
+	// Check active connections again in case someone else got ahead of us.
 	if activeConn, ok := p.getActiveConn(); ok {
 		return activeConn, nil
 	}
