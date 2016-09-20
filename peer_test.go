@@ -201,11 +201,11 @@ func TestPeerGetConnectionWithNoActiveConnections(t *testing.T) {
 			wg          sync.WaitGroup
 			lock        sync.Mutex
 			conn        *Connection
-			numRequests = 10
+			concurrency = 10
 			p           = client.Peers().Add(hostPort)
 		)
 
-		for i := 0; i < numRequests; i++ {
+		for i := 0; i < concurrency; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()

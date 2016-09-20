@@ -346,6 +346,7 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 		return activeConn, nil
 	}
 
+	// Lock here to restrict new connection creation attempts to one goroutine
 	p.newConnLock.Lock()
 	defer p.newConnLock.Unlock()
 
