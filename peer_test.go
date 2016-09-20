@@ -189,6 +189,48 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 	})
 }
 
+func TestPeerGetConnectionWithNoActiveConnections(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		var (
+			wg          sync.WaitGroup
+			lock        sync.Mutex
+			conn        *Connection
+			numRequests = 10
+			p           = client.Peers().Add(hostPort)
+		)
+
+		for i := 0; i < numRequests; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				c, err := p.GetConnection(ctx)
+				require.NoError(t, err, "GetConnection failed")
+
+				lock.Lock()
+				defer lock.Unlock()
+
+				if conn == nil {
+					conn = c
+				} else {
+					assert.Equal(t, conn, c, "Expected the same active connection")
+				}
+
+			}()
+		}
+
+		wg.Wait()
+
+		_, outbound := p.NumConnections()
+		assert.Equal(t, 1, outbound, "Expected 1 active outbound connetion")
+	})
+}
+
 func TestInboundEphemeralPeerRemoved(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
