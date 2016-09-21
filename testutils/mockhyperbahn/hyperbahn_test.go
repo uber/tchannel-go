@@ -151,9 +151,12 @@ func TestMockIgnoresDown(t *testing.T) {
 	// If moe2 is brought down, all calls should now be sent to moe1.
 	moe2.Close()
 
-	// Make a small number of calls to make sure that the mock notices moe is down.
-	for i := 0; i < 10; i++ {
-		raw.CallSC(ctx, client.GetSubChannel("moe"), "echo", nil, nil)
+	// Wait for the mock HB to have 0 connections to moe
+	for start := time.Now(); time.Since(start) < time.Second; time.Sleep(time.Millisecond) {
+		in, out := mockHB.Channel().Peers().GetOrAdd(moe2.PeerInfo().HostPort).NumConnections()
+		if in+out == 0 {
+			break
+		}
 	}
 
 	// Make sure that all calls succeed (they should all go to moe2)
