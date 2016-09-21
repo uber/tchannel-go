@@ -164,6 +164,7 @@ type Connection struct {
 	events                     connectionEvents
 	commonStatsTags            map[string]string
 	relay                      *Relayer
+	dispatcher                 Dispatcher
 
 	// outboundHP is the host:port we used to create this outbound connection.
 	// It may not match remotePeerInfo.HostPort, in which case the connection is
@@ -267,6 +268,8 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		framePool = DefaultFramePool
 	}
 
+	dispatcher := NewGoroutineDispatcher(ch.log)
+
 	connID := nextConnID.Inc()
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
@@ -294,6 +297,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		handler:                channelHandler{ch},
 		events:                 events,
 		commonStatsTags:        ch.commonStatsTags,
+		dispatcher:             dispatcher,
 	}
 	c.log = log
 	c.inbound.onRemoved = c.checkExchanges

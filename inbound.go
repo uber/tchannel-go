@@ -132,7 +132,9 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response.commonStatsTags = call.commonStatsTags
 
 	setResponseHeaders(call.headers, response.headers)
-	go c.dispatchInbound(c.connID, callReq.ID(), call, frame)
+	c.dispatcher.Dispatch(call, func() {
+		c.dispatchInbound(c.connID, callReq.ID(), call, frame)
+	})
 	return false
 }
 
