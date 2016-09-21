@@ -29,6 +29,7 @@ import (
 	"github.com/uber/tchannel-go/hyperbahn"
 	hthrift "github.com/uber/tchannel-go/hyperbahn/gen-go/hyperbahn"
 	"github.com/uber/tchannel-go/json"
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/thrift"
 )
 
@@ -40,13 +41,28 @@ type Mock struct {
 	respCh          chan int
 	advertised      []string
 	discoverResults map[string][]string
-	table           *advertisedTable
+}
+
+type mockTable struct {
+	ch *tchannel.Channel
+}
+
+func (mt *mockTable) Get(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+	serviceName := string(call.Service())
+	sc := mt.ch.GetSubChannel(serviceName, tchannel.Isolated)
+	peer, err := sc.Peers().Get(nil)
+	if err != nil {
+		return relay.Peer{}, err
+	}
+
+	return relay.Peer{
+		HostPort: peer.HostPort(),
+	}, nil
 }
 
 // New returns a mock Hyperbahn server that can be used for testing.
 func New() (*Mock, error) {
-	table := newAdvertisedTable()
-
+	table := &mockTable{}
 	ch, err := tchannel.NewChannel("hyperbahn", &tchannel.ChannelOptions{
 		RelayHosts:         table,
 		RelayLocalHandlers: []string{"hyperbahn"},
@@ -54,12 +70,11 @@ func New() (*Mock, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	table.ch = ch
 	mh := &Mock{
 		ch:              ch,
 		respCh:          make(chan int),
 		discoverResults: make(map[string][]string),
-		table:           table,
 	}
 	if err := json.Register(ch, json.Handlers{"ad": mh.adHandler}, nil); err != nil {
 		return nil, err
@@ -108,11 +123,23 @@ func (h *Mock) Configuration() hyperbahn.Configuration {
 	}
 }
 
+// Channel returns the underlying tchannel that implements relaying.
+func (h *Mock) Channel() *tchannel.Channel {
+	return h.ch
+}
+
+// getSC returns the isolated subchannel for the service.
+func (h *Mock) getSC(svc string) *tchannel.SubChannel {
+	return h.ch.GetSubChannel(svc, tchannel.Isolated)
+}
+
 func (h *Mock) adHandler(ctx json.Context, req *hyperbahn.AdRequest) (*hyperbahn.AdResponse, error) {
+	callerHostPort := tchannel.CurrentCall(ctx).RemotePeer().HostPort
 	h.Lock()
 	for _, s := range req.Services {
 		h.advertised = append(h.advertised, s.Name)
-		h.table.addPeer(s.Name, tchannel.CurrentCall(ctx).RemotePeer().HostPort)
+		sc := h.ch.GetSubChannel(s.Name, tchannel.Isolated)
+		sc.Peers().Add(callerHostPort)
 	}
 	h.Unlock()
 
