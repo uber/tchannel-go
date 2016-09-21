@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber-go/atomic"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
 	"github.com/uber/tchannel-go/raw"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
 )
 
 var config = struct {
@@ -152,12 +152,11 @@ func TestMockIgnoresDown(t *testing.T) {
 	moe2.Close()
 
 	// Wait for the mock HB to have 0 connections to moe
-	for start := time.Now(); time.Since(start) < time.Second; time.Sleep(time.Millisecond) {
+	ok := testutils.WaitFor(time.Second, func() bool {
 		in, out := mockHB.Channel().Peers().GetOrAdd(moe2.PeerInfo().HostPort).NumConnections()
-		if in+out == 0 {
-			break
-		}
-	}
+		return in+out == 0
+	})
+	require.True(t, ok, "Failed waiting for mock HB to have 0 connections")
 
 	// Make sure that all calls succeed (they should all go to moe2)
 	moe1Called.Store(false)

@@ -128,11 +128,6 @@ func (h *Mock) Channel() *tchannel.Channel {
 	return h.ch
 }
 
-// getSC returns the isolated subchannel for the service.
-func (h *Mock) getSC(svc string) *tchannel.SubChannel {
-	return h.ch.GetSubChannel(svc, tchannel.Isolated)
-}
-
 func (h *Mock) adHandler(ctx json.Context, req *hyperbahn.AdRequest) (*hyperbahn.AdResponse, error) {
 	callerHostPort := tchannel.CurrentCall(ctx).RemotePeer().HostPort
 	h.Lock()
