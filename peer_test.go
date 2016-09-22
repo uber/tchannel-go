@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/atomic"
+	"golang.org/x/net/context"
 )
 
 func fakePeer(t *testing.T, ch *Channel, hostPort string) *Peer {
@@ -186,6 +187,17 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 		c, err := p.GetConnection(ctx)
 		require.NoError(t, err, "GetConnection failed")
 		assert.Equal(t, c2, c, "Expected second active connection")
+	})
+}
+
+func TestPeerConnectCanceled(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ctx, cancel := NewContext(109 * time.Millisecond)
+		cancel()
+
+		_, err := ch.Connect(ctx, "10.255.255.1:1")
+		require.Error(t, err, "Connect should fail")
+		assert.EqualError(t, context.Canceled, err.Error(), "Unknown error")
 	})
 }
 

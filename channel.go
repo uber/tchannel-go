@@ -489,6 +489,10 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 		OnExchangeUpdated:  ch.exchangeUpdated,
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, GetContextError(err)
+	}
+
 	c, err := ch.newOutboundConnection(getTimeout(ctx), hostPort, events)
 	if err != nil {
 		return nil, err

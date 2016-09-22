@@ -63,6 +63,10 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, ErrTimeout
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, GetContextError(err)
+	}
+
 	if !c.pendingExchangeMethodAdd() {
 		// Connection is closed, no need to do anything.
 		return nil, ErrInvalidConnectionState
