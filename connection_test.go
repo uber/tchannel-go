@@ -301,6 +301,23 @@ func TestNoTimeout(t *testing.T) {
 	})
 }
 
+func TestCancelled(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
+		ctx, cancel := NewContext(time.Second)
+
+		// Make a call first to make sure we have a connection.
+		// We want to test the BeginCall path.
+		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", []byte("Headers"), []byte("Body"))
+		assert.NoError(t, err, "Call failed")
+
+		// Now cancel the context.
+		cancel()
+		_, _, _, err = raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", []byte("Headers"), []byte("Body"))
+		assert.Equal(t, context.Canceled, err, "Unexpected error when making call with canceled context")
+	})
+}
+
 func TestNoServiceNaming(t *testing.T) {
 	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
