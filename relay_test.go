@@ -489,3 +489,14 @@ func TestRelayConnection(t *testing.T) {
 	require.Error(t, err, "Expected CallEcho to fail")
 	assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
 }
+
+func TestRelayUsesRootPeers(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+		client := testutils.NewClient(t, nil)
+		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
+		assert.NoError(t, err, "Echo failed")
+		assert.Len(t, ts.Relay().Peers().Copy(), 0, "Peers should not be modified by relay")
+	})
+}
