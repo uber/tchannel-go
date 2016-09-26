@@ -1,6 +1,7 @@
 package tchannel
 
 import (
+	"fmt"
 	"runtime"
 )
 
@@ -16,9 +17,11 @@ func recoverFn(logger Logger, call *InboundCall) {
 		const size = 64 << 10
 		buf := make([]byte, size)
 		buf = buf[:runtime.Stack(buf, false)]
+		panicStr := fmt.Sprintf("%v", r)
 		log := logger.WithFields(
+			LogField{"panic", panicStr},
 			LogField{"serviceName", call.ServiceName()},
-			LogField{"method", call.Method()},
+			LogField{"method", call.MethodString()},
 			LogField{"callerName", call.CallerName()},
 			LogField{"stack", buf},
 		)
