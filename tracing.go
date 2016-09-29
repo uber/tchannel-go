@@ -182,7 +182,7 @@ func InjectOutboundSpan(response *OutboundCallResponse, headers map[string]strin
 		response.log.WithFields(ErrField(err)).Error("Failed to inject tracing span.")
 	}
 	if len(newHeaders) == 0 {
-		return headers
+		return headers // Tracer did not add any tracing headers, so return the original map
 	}
 	for k, v := range headers {
 		newHeaders[k] = v
