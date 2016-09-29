@@ -49,6 +49,11 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, errConnectionUnknownState{"beginCall", state}
 	}
 
+	// Check for cancelled/timedout context errors
+	if err := GetContextError(ctx.Err()); err != nil {
+		return nil, err
+	}
+
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		// This case is handled by validateCall, so we should
@@ -74,7 +79,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	defer c.pendingExchangeMethodDone()
 
 	requestID := c.NextMessageID()
-	mex, err := c.outbound.newExchange(ctx, c.framePool, messageTypeCallReq, requestID, mexChannelBufferSize)
+	mex, err := c.outbound.newExchange(ctx, c.framePool, messageTypeCallReq, requestID, mexChannelBufferSize, nil)
 	if err != nil {
 		return nil, err
 	}

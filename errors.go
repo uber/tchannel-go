@@ -44,7 +44,7 @@ const (
 	// on another peer if the request is safe to retry.
 	ErrCodeTimeout SystemErrCode = 0x01
 
-	// ErrCodeCancelled indicates that the request was cancelled on the peer.  Callers
+	// ErrCodeCancelled indicates that the request was cancelled on the peer. Callers
 	// can retry the request on the same or another peer if the request is safe to retry
 	ErrCodeCancelled SystemErrCode = 0x02
 
@@ -81,11 +81,11 @@ var (
 	// ErrServerBusy is a SystemError indicating the server is busy
 	ErrServerBusy = NewSystemError(ErrCodeBusy, "server busy")
 
-	// ErrRequestCancelled is a SystemError indicating the request has been cancelled on the peer
-	ErrRequestCancelled = NewSystemError(ErrCodeCancelled, "request cancelled")
+	// ErrRequestCanceled is a SystemError indicating the request has been cancelled on the peer
+	ErrRequestCanceled = NewSystemError(ErrCodeCancelled, "context canceled")
 
 	// ErrTimeout is a SytemError indicating the request has timed out
-	ErrTimeout = NewSystemError(ErrCodeTimeout, "timeout")
+	ErrTimeout = NewSystemError(ErrCodeTimeout, "context deadline exceeded")
 
 	// ErrTimeoutRequired is a SystemError indicating that timeouts must be specified.
 	ErrTimeoutRequired = NewSystemError(ErrCodeBadRequest, "timeout required")
@@ -107,7 +107,7 @@ func (c SystemErrCode) MetricsKey() string {
 	case ErrCodeTimeout:
 		return "timeout"
 	case ErrCodeCancelled:
-		return "cancelled"
+		return "canceled"
 	case ErrCodeBusy:
 		return "busy"
 	case ErrCodeDeclined:
@@ -170,6 +170,9 @@ func (se SystemError) Message() string {
 func GetContextError(err error) error {
 	if err == context.DeadlineExceeded {
 		return ErrTimeout
+	}
+	if err == context.Canceled {
+		return ErrRequestCanceled
 	}
 	return err
 }

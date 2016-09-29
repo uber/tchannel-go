@@ -314,7 +314,7 @@ func TestCancelled(t *testing.T) {
 		// Now cancel the context.
 		cancel()
 		_, _, _, err = raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", []byte("Headers"), []byte("Body"))
-		assert.Equal(t, context.Canceled, err, "Unexpected error when making call with canceled context")
+		assert.Equal(t, ErrRequestCanceled, err, "Unexpected error when making call with canceled context")
 	})
 }
 
@@ -639,18 +639,46 @@ func TestReadTimeout(t *testing.T) {
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		sn := ts.ServiceName()
 		calls := relaytest.NewMockStats()
-
 		for i := 0; i < 10; i++ {
-			ctx, cancel := NewContext(time.Second)
+			ctx, _ := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-				defer cancel()
 				return nil, ErrTimeout
 			}
 			ts.RegisterFunc("call", handler)
 
 			_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "call", nil, nil)
-			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
+			assert.Equal(t, err, ErrTimeout, "Call should fail due to timeout")
 			calls.Add(sn, sn, "call").Failed("timeout").End()
+		}
+
+		ts.AssertRelayStats(calls)
+	})
+}
+
+func TestReadCanceled(t *testing.T) {
+	// The error frame may fail to send since the connection closes before the handler sends it
+	// or the handler connection may be closed as it sends when the other side closes the conn.
+	opts := testutils.NewOpts().
+		AddLogFilter("Couldn't send outbound error frame", 1).
+		AddLogFilter("Connection error", 1, "site", "read frames").
+		AddLogFilter("Connection error", 1, "site", "write frames").
+		AddLogFilter("simpleHandler OnError", 1,
+			"error", "failed to send error frame, connection state connectionClosed")
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		sn := ts.ServiceName()
+		calls := relaytest.NewMockStats()
+		for i := 0; i < 10; i++ {
+			ctx, cancel := NewContext(time.Second)
+			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				defer cancel()
+				return nil, ErrRequestCanceled
+			}
+			ts.RegisterFunc("call", handler)
+
+			_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "call", nil, nil)
+			assert.Equal(t, err, ErrRequestCanceled, "Call should fail due to cancel")
+			calls.Add(sn, sn, "call").Failed("canceled").End()
 		}
 
 		ts.AssertRelayStats(calls)
@@ -677,6 +705,16 @@ func TestWriteTimeout(t *testing.T) {
 		assert.Equal(t, ErrTimeout, err, "Write should fail with timeout")
 
 		ts.AssertRelayStats(relaytest.NewMockStats())
+	})
+}
+
+func TestWriteCanceled(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ctx, cancel := NewContext(testutils.Timeout(1 * time.Second))
+		cancel()
+
+		_, err := ch.BeginCall(ctx, hostPort, ch.ServiceName(), "call", nil)
+		assert.Equal(t, ErrRequestCanceled, err, "Write should fail with canceled")
 	})
 }
 

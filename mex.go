@@ -96,6 +96,7 @@ type messageExchange struct {
 	msgType   messageType
 	mexset    *messageExchangeSet
 	framePool FramePool
+	cancel    context.CancelFunc
 
 	shutdownAtomic atomic.Uint32
 	errChNotified  atomic.Uint32
@@ -141,6 +142,11 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 		}
 		return mex.errCh.err
 	}
+}
+
+func (mex *messageExchange) cancelPeerFrame(frame *Frame) error {
+	mex.cancel()
+	return ErrRequestCanceled
 }
 
 func (mex *messageExchange) checkFrame(frame *Frame) error {
@@ -246,12 +252,12 @@ func (mex *messageExchange) shutdown() {
 	mex.mexset.removeExchange(mex.msgID)
 }
 
-// inboundTimeout is called when an exchange times out, but a handler may still be
+// inboundExpired is called when an exchange expires, but a handler may still be
 // running in the background. Since the handler may still write to the exchange, we
 // cannot shutdown the exchange, but we should remove it from the connection's
 // exchange list.
-func (mex *messageExchange) inboundTimeout() {
-	mex.mexset.timeoutExchange(mex.msgID)
+func (mex *messageExchange) inboundExpired() {
+	mex.mexset.expireExchange(mex.msgID)
 }
 
 // A messageExchangeSet manages a set of active message exchanges.  It is
@@ -273,7 +279,7 @@ type messageExchangeSet struct {
 
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
-	timeoutExchanges map[uint32]struct{}
+	expiredExchanges map[uint32]struct{}
 	shutdown         bool
 }
 
@@ -283,7 +289,7 @@ func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
 		name:             name,
 		log:              log.WithFields(LogField{"exchange", name}),
 		exchanges:        make(map[uint32]*messageExchange),
-		timeoutExchanges: make(map[uint32]struct{}),
+		expiredExchanges: make(map[uint32]struct{}),
 	}
 }
 
@@ -304,7 +310,7 @@ func (mexset *messageExchangeSet) addExchange(mex *messageExchange) error {
 
 // newExchange creates and adds a new message exchange to this set
 func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool FramePool,
-	msgType messageType, msgID uint32, bufferSize int) (*messageExchange, error) {
+	msgType messageType, msgID uint32, bufferSize int, cancel func()) (*messageExchange, error) {
 	if mexset.log.Enabled(LogLevelDebug) {
 		mexset.log.Debugf("Creating new %s message exchange for [%v:%d]", mexset.name, msgType, msgID)
 	}
@@ -317,6 +323,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		errCh:     newErrNotifier(),
 		mexset:    mexset,
 		framePool: framePool,
+		cancel:    cancel,
 	}
 
 	mexset.Lock()
@@ -353,8 +360,8 @@ func (mexset *messageExchangeSet) deleteExchange(msgID uint32) (found, timedOut 
 		return true, false
 	}
 
-	if _, timedOut := mexset.timeoutExchanges[msgID]; timedOut {
-		delete(mexset.timeoutExchanges, msgID)
+	if _, expired := mexset.expiredExchanges[msgID]; expired {
+		delete(mexset.expiredExchanges, msgID)
 		return false, true
 	}
 
@@ -370,10 +377,10 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 	}
 
 	mexset.Lock()
-	found, timedOut := mexset.deleteExchange(msgID)
+	found, expired := mexset.deleteExchange(msgID)
 	mexset.Unlock()
 
-	if !found && !timedOut {
+	if !found && !expired {
 		mexset.log.WithFields(
 			LogField{"msgID", msgID},
 		).Error("Tried to remove exchange multiple times")
@@ -386,21 +393,22 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 	mexset.onRemoved()
 }
 
-// timeoutExchange is similar to removeExchange, however it does not decrement
+// expireExchange is similar to removeExchange, however it does not decrement
 // the sendChRefs wait group, since there could still be a handler running that
 // will write to the send channel.
-func (mexset *messageExchangeSet) timeoutExchange(msgID uint32) {
+func (mexset *messageExchangeSet) expireExchange(msgID uint32) {
 	mexset.log.Debugf("Removing %s message exchange %d due to timeout", mexset.name, msgID)
 
 	mexset.Lock()
-	found, timedOut := mexset.deleteExchange(msgID)
-	if found || timedOut {
-		// Record in timeoutExchange if we deleted the exchange.
-		mexset.timeoutExchanges[msgID] = struct{}{}
+	// TODO(aniketp): explore if cancel can be called everytime we expire an exchange
+	found, expired := mexset.deleteExchange(msgID)
+	if found || expired {
+		// Record in expiredExchanges if we deleted the exchange.
+		mexset.expiredExchanges[msgID] = struct{}{}
 	}
 	mexset.Unlock()
 
-	if timedOut {
+	if expired {
 		mexset.log.WithFields(LogField{"msgID", msgID}).Error("Exchange timed out already")
 	}
 
@@ -440,6 +448,31 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 
 	if err := mex.forwardPeerFrame(frame); err != nil {
 		mexset.log.Infof("Unable to forward frame %v length %v to %s: %v",
+			frame.Header, frame.Header.FrameSize(), mexset.name, err)
+		return err
+	}
+
+	return nil
+}
+
+func (mexset *messageExchangeSet) cancelPeerFrame(frame *Frame) error {
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("canceling %s %s", mexset.name, frame.Header)
+	}
+
+	mexset.RLock()
+	mex := mexset.exchanges[frame.Header.ID]
+	mexset.RUnlock()
+
+	if mex == nil {
+		// This is ok since the exchange might have expired or been cancelled
+		mexset.log.Infof("received cancel frame %s for %s message exchange that no longer exists",
+			frame.Header, mexset.name)
+		return nil
+	}
+
+	if err := mex.cancelPeerFrame(frame); err != nil {
+		mexset.log.Infof("Unable to cancel frame %v length %v to %s: %v",
 			frame.Header, frame.Header.FrameSize(), mexset.name, err)
 		return err
 	}

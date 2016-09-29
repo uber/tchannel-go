@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/atomic"
-	"golang.org/x/net/context"
 )
 
 func fakePeer(t *testing.T, ch *Channel, hostPort string) *Peer {
@@ -197,7 +196,7 @@ func TestPeerConnectCanceled(t *testing.T) {
 
 		_, err := ch.Connect(ctx, "10.255.255.1:1")
 		require.Error(t, err, "Connect should fail")
-		assert.EqualError(t, context.Canceled, err.Error(), "Unknown error")
+		assert.EqualError(t, ErrRequestCanceled, err.Error(), "Unknown error")
 	})
 }
 

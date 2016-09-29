@@ -39,6 +39,7 @@ const (
 	messageTypePingReq         messageType = 0xd0
 	messageTypePingRes         messageType = 0xd1
 	messageTypeError           messageType = 0xFF
+	messageTypeCallReqCancel   messageType = 0xc0
 )
 
 //go:generate stringer -type=messageType

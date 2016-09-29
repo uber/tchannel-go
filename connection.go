@@ -383,7 +383,7 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	}
 	defer c.pendingExchangeMethodDone()
 
-	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
+	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1, nil)
 	if err != nil {
 		return c.connectionError("create init req", err)
 	}
@@ -465,7 +465,7 @@ func (c *Connection) ping(ctx context.Context) error {
 	defer c.pendingExchangeMethodDone()
 
 	req := &pingReq{id: c.NextMessageID()}
-	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
+	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1, nil)
 	if err != nil {
 		return c.connectionError("create ping exchange", err)
 	}
@@ -789,7 +789,7 @@ func (c *Connection) readFrames(_ uint32) {
 
 func (c *Connection) handleFrameRelay(frame *Frame) bool {
 	switch frame.Header.messageType {
-	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypeCallReqCancel:
 		if err := c.relay.Relay(frame); err != nil {
 			c.log.WithFields(
 				ErrField(err),
@@ -826,6 +826,8 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 		releaseFrame = c.handlePingRes(frame)
 	case messageTypeError:
 		releaseFrame = c.handleError(frame)
+	case messageTypeCallReqCancel:
+		releaseFrame = c.handleCallReqCancel(frame)
 	default:
 		// TODO(mmihic): Log and close connection with protocol error
 		c.log.WithFields(

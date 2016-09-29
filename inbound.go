@@ -73,7 +73,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	}
 	defer c.pendingExchangeMethodDone()
 
-	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
+	mex, err := c.inbound.newExchange(ctx, c.framePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize, cancel)
 	if err != nil {
 		if err == errDuplicateMex {
 			err = errInboundRequestAlreadyActive
@@ -147,6 +147,13 @@ func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 	return false
 }
 
+func (c *Connection) handleCallReqCancel(frame *Frame) bool {
+	if err := c.inbound.cancelPeerFrame(frame); err != nil {
+		return true
+	}
+	return false
+}
+
 // createStatsTags creates the common stats tags, if they are not already created.
 func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 	call.commonStatsTags = map[string]string{
@@ -183,7 +190,10 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		select {
 		case <-call.mex.ctx.Done():
 			if call.mex.ctx.Err() == context.DeadlineExceeded {
-				call.mex.inboundTimeout()
+				call.mex.inboundExpired()
+			}
+			if call.mex.ctx.Err() == context.Canceled {
+				call.mex.inboundExpired()
 			}
 		case <-call.mex.errCh.c:
 			if c.log.Enabled(LogLevelDebug) {
