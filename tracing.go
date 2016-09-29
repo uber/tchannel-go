@@ -166,21 +166,28 @@ func (c *Connection) startOutboundSpan(ctx context.Context, serviceName, methodN
 // when the outbound call is initiated. The tracing API is used to serialize the span
 // into the application `headers`, which will propagate tracing context to the server.
 // Returns modified headers containing serialized tracing context.
+//
+// Sometimes caller pass a shared instance of the `headers` map, so instead of modifying
+// it we clone it into the new map (assuming that Tracer actually injects some tracing keys).
 func InjectOutboundSpan(response *OutboundCallResponse, headers map[string]string) map[string]string {
 	span := response.span
 	if span == nil {
 		return headers
 	}
-	if headers == nil {
-		headers = make(map[string]string)
-	}
-	carrier := tracingHeadersCarrier(headers)
+	newHeaders := make(map[string]string)
+	carrier := tracingHeadersCarrier(newHeaders)
 	if err := span.Tracer().Inject(span.Context(), opentracing.TextMap, carrier); err != nil {
 		// Something had to go seriously wrong for Inject to fail, usually a setup problem.
 		// A good Tracer implementation may also emit a metric.
 		response.log.WithFields(ErrField(err)).Error("Failed to inject tracing span.")
 	}
-	return headers
+	if len(newHeaders) == 0 {
+		return headers // Tracer did not add any tracing headers, so return the original map
+	}
+	for k, v := range headers {
+		newHeaders[k] = v
+	}
+	return newHeaders
 }
 
 // extractInboundSpan attempts to create a new OpenTracing Span for inbound request
