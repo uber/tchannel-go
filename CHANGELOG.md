@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# v1.2.1
+
+* Fix data race on headers when making concurrent calls using the same context. (#505)
+
 # v1.2.0
 
 * Adds support for routing keys (the TChannel rk transport header).
@@ -13,7 +17,7 @@ Changelog
   All tracer configuration must be handled through OpenTracing.
   (#426)
 * Improve error messages when using the json package and the host:port
-  fails to connect. (475)
+  fails to connect. (#475)
 * mockhyperbahn now using inbuilt TChannel relaying to implement in-process
   forwarding. (#472)
 * Drop go1.4 support and add support for go1.7.
