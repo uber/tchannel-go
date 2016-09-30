@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/atomic"
+	"golang.org/x/net/context"
 )
 
 func fakePeer(t *testing.T, ch *Channel, hostPort string) *Peer {
@@ -186,6 +187,59 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 		c, err := p.GetConnection(ctx)
 		require.NoError(t, err, "GetConnection failed")
 		assert.Equal(t, c2, c, "Expected second active connection")
+	})
+}
+
+func TestPeerConnectCanceled(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		ctx, cancel := NewContext(109 * time.Millisecond)
+		cancel()
+
+		_, err := ch.Connect(ctx, "10.255.255.1:1")
+		require.Error(t, err, "Connect should fail")
+		assert.EqualError(t, context.Canceled, err.Error(), "Unknown error")
+	})
+}
+
+func TestPeerGetConnectionWithNoActiveConnections(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		var (
+			wg          sync.WaitGroup
+			lock        sync.Mutex
+			conn        *Connection
+			concurrency = 10
+			p           = client.Peers().Add(hostPort)
+		)
+
+		for i := 0; i < concurrency; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				c, err := p.GetConnection(ctx)
+				require.NoError(t, err, "GetConnection failed")
+
+				lock.Lock()
+				defer lock.Unlock()
+
+				if conn == nil {
+					conn = c
+				} else {
+					assert.Equal(t, conn, c, "Expected the same active connection")
+				}
+
+			}()
+		}
+
+		wg.Wait()
+
+		_, outbound := p.NumConnections()
+		assert.Equal(t, 1, outbound, "Expected 1 active outbound connetion")
 	})
 }
 

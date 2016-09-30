@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -136,5 +137,46 @@ func TestTracingSpanAttributes(t *testing.T) {
 		assert.NotNil(t, child.Tag("peer.ipv4"))
 		assert.NotNil(t, parent.Tag("peer.port"))
 		assert.NotNil(t, child.Tag("peer.port"))
+	})
+}
+
+// Per https://github.com/uber/tchannel-go/issues/505, concurrent client calls
+// made with the same shared map used as headers were causing panic due to
+// concurrent writes to the map when injecting tracing headers.
+func TestReusableHeaders(t *testing.T) {
+	opts := &testutils.ChannelOpts{
+		ChannelOptions: ChannelOptions{Tracer: mocktracer.New()},
+	}
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+		jsonHandler := &JSONHandler{TraceHandler: testtracing.TraceHandler{Ch: ch}, t: t}
+		json.Register(ch, json.Handlers{"call": jsonHandler.callJSON}, jsonHandler.onError)
+
+		span := ch.Tracer().StartSpan("client")
+		traceID := span.(*mocktracer.MockSpan).SpanContext.TraceID // for validation
+		ctx := opentracing.ContextWithSpan(context.Background(), span)
+
+		sharedHeaders := map[string]string{"life": "42"}
+		ctx, cancel := NewContextBuilder(2 * time.Second).
+			SetHeaders(sharedHeaders).
+			SetParentContext(ctx).
+			Build()
+		defer cancel()
+
+		peer := ch.Peers().GetOrAdd(ch.PeerInfo().HostPort)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 42; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var response testtracing.TracingResponse
+				err := json.CallPeer(json.Wrap(ctx), peer, ch.ServiceName(),
+					"call", &testtracing.TracingRequest{}, &response)
+				assert.NoError(t, err, "json.Call failed")
+				assert.EqualValues(t, traceID, response.TraceID, "traceID must match")
+			}()
+		}
+		wg.Wait()
+		assert.Equal(t, map[string]string{"life": "42"}, sharedHeaders, "headers unchanged")
 	})
 }

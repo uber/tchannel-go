@@ -32,6 +32,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/atomic"
 )
 
 var config = struct {
@@ -55,6 +56,19 @@ func setupServer() (*hyperbahn.Client, error) {
 	}
 
 	return client, client.Advertise()
+}
+
+func newAdvertisedEchoServer(t *testing.T, name string, mockHB *mockhyperbahn.Mock, f func()) *tchannel.Channel {
+	server := testutils.NewServer(t, &testutils.ChannelOpts{
+		ServiceName: name,
+	})
+	testutils.RegisterEcho(server, f)
+
+	hbClient, err := hyperbahn.NewClient(server, mockHB.Configuration(), nil)
+	require.NoError(t, err, "Failed to set up Hyperbahn client")
+	require.NoError(t, hbClient.Advertise(), "Advertise failed")
+
+	return server
 }
 
 func TestMockHyperbahn(t *testing.T) {
@@ -93,23 +107,12 @@ func TestMockForwards(t *testing.T) {
 	require.NoError(t, err, "Failed to set up mock hyperbahm")
 
 	called := false
-	server := testutils.NewServer(t, &testutils.ChannelOpts{
-		ServiceName: "svr",
-	})
-	testutils.RegisterEcho(server, func() {
+	server := newAdvertisedEchoServer(t, "svr", mockHB, func() {
 		called = true
 	})
-
-	serverHyp, err := hyperbahn.NewClient(server, mockHB.Configuration(), nil)
-	require.NoError(t, err, "Failed to set up Hyperbahn client")
-	require.NoError(t, serverHyp.Advertise(), "Advertise failed")
-
-	client := testutils.NewServer(t, &testutils.ChannelOpts{
-		ServiceName: "client",
-	})
-	clientHyp, err := hyperbahn.NewClient(client, mockHB.Configuration(), nil)
-	require.NoError(t, err, "Failed to set up Hyperbahn client")
-	require.NoError(t, clientHyp.Advertise(), "Advertise failed")
+	defer server.Close()
+	client := newAdvertisedEchoServer(t, "client", mockHB, nil)
+	defer client.Close()
 
 	ctx, cancel := tchannel.NewContext(time.Second)
 	defer cancel()
@@ -117,4 +120,52 @@ func TestMockForwards(t *testing.T) {
 	_, _, _, err = raw.CallSC(ctx, client.GetSubChannel("svr"), "echo", nil, nil)
 	require.NoError(t, err, "Call failed")
 	require.True(t, called, "Advertised server was not called")
+}
+
+func TestMockIgnoresDown(t *testing.T) {
+	mockHB, err := mockhyperbahn.New()
+	require.NoError(t, err, "Failed to set up mock hyperbahm")
+
+	var (
+		moe1Called atomic.Bool
+		moe2Called atomic.Bool
+	)
+
+	moe1 := newAdvertisedEchoServer(t, "moe", mockHB, func() { moe1Called.Store(true) })
+	defer moe1.Close()
+	moe2 := newAdvertisedEchoServer(t, "moe", mockHB, func() { moe2Called.Store(true) })
+	defer moe2.Close()
+	client := newAdvertisedEchoServer(t, "client", mockHB, nil)
+
+	ctx, cancel := tchannel.NewContext(time.Second)
+	defer cancel()
+
+	for i := 0; i < 20; i++ {
+		_, _, _, err = raw.CallSC(ctx, client.GetSubChannel("moe"), "echo", nil, nil)
+		assert.NoError(t, err, "Call failed")
+	}
+
+	require.True(t, moe1Called.Load(), "moe1 not called")
+	require.True(t, moe2Called.Load(), "moe2 not called")
+
+	// If moe2 is brought down, all calls should now be sent to moe1.
+	moe2.Close()
+
+	// Wait for the mock HB to have 0 connections to moe
+	ok := testutils.WaitFor(time.Second, func() bool {
+		in, out := mockHB.Channel().Peers().GetOrAdd(moe2.PeerInfo().HostPort).NumConnections()
+		return in+out == 0
+	})
+	require.True(t, ok, "Failed waiting for mock HB to have 0 connections")
+
+	// Make sure that all calls succeed (they should all go to moe2)
+	moe1Called.Store(false)
+	moe2Called.Store(false)
+	for i := 0; i < 20; i++ {
+		_, _, _, err = raw.CallSC(ctx, client.GetSubChannel("moe"), "echo", nil, nil)
+		assert.NoError(t, err, "Call failed")
+	}
+
+	require.True(t, moe1Called.Load(), "moe1 not called")
+	require.False(t, moe2Called.Load(), "moe2 should not be called after Close")
 }

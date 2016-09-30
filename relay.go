@@ -176,7 +176,7 @@ type Relayer struct {
 	// It stores remappings for all response frames read on this connection.
 	inbound *relayItems
 
-	peers   *PeerList
+	peers   *RootPeerList
 	conn    *Connection
 	logger  Logger
 	pending atomic.Uint32
@@ -190,7 +190,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		localHandler: ch.relayLocal,
 		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
 		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
-		peers:        ch.Peers(),
+		peers:        ch.rootPeers(),
 		conn:         conn,
 		logger:       conn.log,
 	}
