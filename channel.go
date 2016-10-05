@@ -330,7 +330,7 @@ func (ch *Channel) createCommonStats() {
 	}
 	host, err := os.Hostname()
 	if err != nil {
-		ch.log.Infof("channel failed to get host: %v", err)
+		ch.log.WithFields(ErrField(err)).Info("Channel creation failed to get host.")
 		return
 	}
 	ch.commonStatsTags["host"] = host
@@ -576,7 +576,7 @@ func (ch *Channel) addConnectionToPeer(hostPort string, c *Connection, direction
 			LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
 			LogField{"direction", direction},
 			ErrField(err),
-		).Warn("Failed to add connection to peer")
+		).Warn("Failed to add connection to peer.")
 	}
 
 	ch.updatePeer(p)
@@ -676,7 +676,7 @@ func (ch *Channel) State() ChannelState {
 // 2. When all incoming connections are drained, the connection blocks new outgoing calls.
 // 3. When all connections are drainged, the channel's state is updated to Closed.
 func (ch *Channel) Close() {
-	ch.Logger().Infof("Channel.Close called")
+	ch.Logger().Info("Channel.Close called.")
 	var connections []*Connection
 	ch.mutable.Lock()
 
