@@ -213,6 +213,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		PeerInfo: PeerInfo{
 			ProcessName: processName,
 			HostPort:    ephemeralHostPort,
+			IsEphemeral: true,
 		},
 		ServiceName: serviceName,
 	}
@@ -250,6 +251,7 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.state = ChannelListening
 
 	mutable.peerInfo.HostPort = l.Addr().String()
+	mutable.peerInfo.IsEphemeral = false
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
 
 	peerInfo := mutable.peerInfo

@@ -531,3 +531,8 @@ func (p *Peer) callOnUpdateComplete() {
 		f(p)
 	}
 }
+
+// isEphemeralHostPort returns if hostPort is the default ephemeral hostPort.
+func isEphemeralHostPort(hostPort string) bool {
+	return hostPort == "" || hostPort == ephemeralHostPort
+}
