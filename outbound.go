@@ -294,7 +294,13 @@ func (c *Connection) handleError(frame *Frame) bool {
 	}
 
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.log.Infof("Failed to forward error frame %v to mex, error: %v", frame.Header, errMsg)
+		c.log.WithFields(
+			LogField{"frameHeader", frame.Header.String()},
+			LogField{"id", errMsg.id},
+			LogField{"errorMessage", errMsg.message},
+			LogField{"errorCode", errMsg.errCode},
+			ErrField(err),
+		).Info("Failed to forward error frame.")
 		return true
 	}
 

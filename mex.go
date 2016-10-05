@@ -324,16 +324,15 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 	mexset.Unlock()
 
 	if addErr != nil {
+		logger := mexset.log.WithFields(
+			LogField{"msgID", mex.msgID},
+			LogField{"msgType", mex.msgType},
+			LogField{"exchange", mexset.name},
+		)
 		if addErr == errMexSetShutdown {
-			mexset.log.WithFields(
-				LogField{"msgID", mex.msgID},
-				LogField{"msgType", mex.msgType},
-			).Warn("Attempted to create new mex after mexset shutdown")
+			logger.Warn("Attempted to create new mex after mexset shutdown.")
 		} else if addErr == errDuplicateMex {
-			mexset.log.WithFields(
-				LogField{"msgID", mex.msgID},
-				LogField{"newType", mex.msgType},
-			).Warn("Duplicate msg ID for active and new mex.")
+			logger.Warn("Duplicate msg ID for active and new mex.")
 		}
 
 		return nil, addErr
@@ -433,14 +432,20 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 
 	if mex == nil {
 		// This is ok since the exchange might have expired or been cancelled
-		mexset.log.Infof("received frame %s for %s message exchange that no longer exists",
-			frame.Header, mexset.name)
+		mexset.log.WithFields(
+			LogField{"frameHeader", frame.Header.String()},
+			LogField{"exchange", mexset.name},
+		).Info("Received frame for unknown message exchange.")
 		return nil
 	}
 
 	if err := mex.forwardPeerFrame(frame); err != nil {
-		mexset.log.Infof("Unable to forward frame %v length %v to %s: %v",
-			frame.Header, frame.Header.FrameSize(), mexset.name, err)
+		mexset.log.WithFields(
+			LogField{"frameHeader", frame.Header.String()},
+			LogField{"frameSize", frame.Header.FrameSize()},
+			LogField{"exchange", mexset.name},
+			ErrField(err),
+		).Info("Failed to forward frame.")
 		return err
 	}
 

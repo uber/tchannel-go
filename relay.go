@@ -279,7 +279,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 			LogField{"source", string(f.Caller())},
 			LogField{"dest", string(f.Service())},
 			LogField{"method", string(f.Method())},
-		).Warn("received duplicate callReq")
+		).Warn("Received duplicate callReq.")
 		cs.Failed("relay-" + ErrCodeProtocol.MetricsKey())
 		// TODO: this is a protocol error, kill the connection.
 		return nil, false, errors.New("callReq with already active ID")
