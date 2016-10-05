@@ -101,7 +101,9 @@ func (l *RootPeerList) onClosedConnRemoved(peer *Peer) {
 		l.Lock()
 		delete(l.peersByHostPort, hostPort)
 		l.Unlock()
-		l.channel.Logger().Infof("Removed peer %s from root peer list", hostPort)
+		l.channel.Logger().WithFields(
+			LogField{"hostPort", hostPort},
+		).Info("Removed peer from root peer list.")
 	}
 }
 

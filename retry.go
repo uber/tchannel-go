@@ -232,12 +232,16 @@ func (ch *Channel) RunWithRetry(runCtx context.Context, f RetriableFunc) error {
 		}
 		if !opts.RetryOn.CanRetry(err) {
 			if ch.log.Enabled(LogLevelInfo) {
-				ch.log.Infof("Failed after non-retriable error: %v", err)
+				ch.log.WithFields(ErrField(err)).Info("Failed after non-retriable error.")
 			}
 			return err
 		}
 
-		ch.log.Infof("Retrying request after it failed with error %v on attempt %v/%v", err, rs.Attempt, opts.MaxAttempts)
+		ch.log.WithFields(
+			ErrField(err),
+			LogField{"attempt", rs.Attempt},
+			LogField{"maxAttempts", opts.MaxAttempts},
+		).Info("Retrying request after retryable error.")
 	}
 
 	// Too many retries, return the last error

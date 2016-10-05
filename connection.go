@@ -229,8 +229,16 @@ func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string,
 	conn, err := net.DialTimeout("tcp", hostPort, timeout)
 	if err != nil {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
-			ch.log.WithFields(LogField{"hostPort", hostPort}, LogField{"timeout", timeout}).Infof("Outbound net.Dial timed out")
+			ch.log.WithFields(
+				LogField{"hostPort", hostPort},
+				LogField{"timeout", timeout},
+			).Info("Outbound net.Dial timed out.")
 			err = ErrTimeout
+		} else {
+			ch.log.WithFields(
+				ErrField(err),
+				LogField{"hostPort", hostPort},
+			).Info("Outbound net.Dial failed.")
 		}
 		return nil, err
 	}
@@ -660,8 +668,10 @@ func (c *Connection) SendSystemError(id uint32, span Span, err error) error {
 	return c.withStateRLock(func() error {
 		// Errors cannot be sent if the connection has been closed.
 		if c.state == connectionClosed {
-			c.log.Infof("Could not send error frame to %s on closed conn for %d : %v",
-				c.remotePeerInfo, id, err)
+			c.log.WithFields(
+				LogField{"remotePeer", c.remotePeerInfo},
+				LogField{"id", id},
+			).Info("Could not send error frame on closed connection.")
 			return fmt.Errorf("failed to send error frame, connection state %v", c.state)
 		}
 
