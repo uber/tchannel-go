@@ -23,6 +23,7 @@ package tchannel
 import (
 	"container/heap"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -530,4 +531,9 @@ func (p *Peer) callOnUpdateComplete() {
 	if f != nil {
 		f(p)
 	}
+}
+
+// isEphemeralHostPort returns if hostPort is the default ephemeral hostPort.
+func isEphemeralHostPort(hostPort string) bool {
+	return hostPort == "" || hostPort == ephemeralHostPort || strings.HasSuffix(hostPort, ":0")
 }
