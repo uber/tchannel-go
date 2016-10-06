@@ -140,7 +140,7 @@ type ConnectionRuntimeState struct {
 	LocalHostPort    string                  `json:"localHostPort"`
 	RemoteHostPort   string                  `json:"remoteHostPort"`
 	OutboundHostPort string                  `json:"outboundHostPort"`
-	IsEphemeral      bool                    `json:"isEphemeral"`
+	RemotePeer       PeerInfo                `json:"remotePeer"`
 	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
 	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
 	Relayer          RelayerRuntimeState     `json:"relayer"`
@@ -335,7 +335,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		LocalHostPort:    c.conn.LocalAddr().String(),
 		RemoteHostPort:   c.conn.RemoteAddr().String(),
 		OutboundHostPort: c.outboundHP,
-		IsEphemeral:      c.remotePeerInfo.IsEphemeral,
+		RemotePeer:       c.remotePeerInfo,
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
 	}

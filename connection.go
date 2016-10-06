@@ -1011,6 +1011,11 @@ func (c *Connection) parseRemotePeerAddress() {
 		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
 		c.remotePeerInfo.IsEphemeral = true
 	}
+	c.log = c.log.WithFields(
+		LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
+		LogField{"remoteIsEphemeral", c.remotePeerInfo.IsEphemeral},
+		LogField{"remoteProcess", c.remotePeerInfo.ProcessName},
+	)
 
 	address := c.remotePeerInfo.HostPort
 	if sHost, sPort, err := net.SplitHostPort(address); err == nil {
