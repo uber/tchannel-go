@@ -112,6 +112,9 @@ func TestSetPeerHostPort(t *testing.T) {
 	for i, test := range tests {
 		span := tracer.StartSpan("x")
 		c := &Connection{
+			channelConnectionCommon: channelConnectionCommon{
+				log: NullLogger,
+			},
 			remotePeerInfo: PeerInfo{
 				HostPort: test.hostPort,
 			},
@@ -138,8 +141,11 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 		CallerName: "caller",
 	}
 	c := Connection{
-		channelConnectionCommon: channelConnectionCommon{tracer: tracer},
-		remotePeerInfo:          PeerInfo{HostPort: "host:123"},
+		channelConnectionCommon: channelConnectionCommon{
+			log:    NullLogger,
+			tracer: tracer,
+		},
+		remotePeerInfo: PeerInfo{HostPort: "host:123"},
 	}
 	c.parseRemotePeerAddress()
 
