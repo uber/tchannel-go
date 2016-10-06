@@ -42,13 +42,13 @@ import (
 // PeerInfo contains information about a TChannel peer
 type PeerInfo struct {
 	// The host and port that can be used to contact the peer, as encoded by net.JoinHostPort
-	HostPort string
+	HostPort string `json:"hostPort"`
 
 	// The logical process name for the peer, used for only for logging / debugging
-	ProcessName string
+	ProcessName string `json:"processName"`
 
 	// IsEphemeral returns whether the remote host:port is ephemeral (e.g. not listening).
-	IsEphemeral bool
+	IsEphemeral bool `json:"isEphemeral"`
 }
 
 func (p PeerInfo) String() string {
@@ -65,7 +65,7 @@ type LocalPeerInfo struct {
 	PeerInfo
 
 	// ServiceName is the service name for the local peer.
-	ServiceName string
+	ServiceName string `json:"serviceName"`
 }
 
 func (p LocalPeerInfo) String() string {
@@ -1011,6 +1011,11 @@ func (c *Connection) parseRemotePeerAddress() {
 		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
 		c.remotePeerInfo.IsEphemeral = true
 	}
+	c.log = c.log.WithFields(
+		LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
+		LogField{"remoteIsEphemeral", c.remotePeerInfo.IsEphemeral},
+		LogField{"remoteProcess", c.remotePeerInfo.ProcessName},
+	)
 
 	address := c.remotePeerInfo.HostPort
 	if sHost, sPort, err := net.SplitHostPort(address); err == nil {
