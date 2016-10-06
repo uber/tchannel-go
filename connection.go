@@ -55,9 +55,9 @@ func (p PeerInfo) String() string {
 	return fmt.Sprintf("%s(%s)", p.HostPort, p.ProcessName)
 }
 
-// IsEphemeralHostPort returns if hostPort is the default ephemeral hostPort.
+// IsEphemeralHostPort returns whether the connection is from an ephemeral host:port.
 func (p PeerInfo) IsEphemeralHostPort() bool {
-	return p.HostPort == "" || p.HostPort == ephemeralHostPort
+	return p.IsEphemeral
 }
 
 // LocalPeerInfo adds service name to the peer info, only required for the local peer.
@@ -437,10 +437,7 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		c.protocolError(id, fmt.Errorf("header %v is required", InitParamProcessName))
 		return
 	}
-	if c.remotePeerInfo.IsEphemeralHostPort() {
-		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
-		c.remotePeerInfo.IsEphemeral = true
-	}
+
 	c.checkRemoteProcessNamePrefixes()
 	c.parseRemotePeerAddress()
 
@@ -572,10 +569,6 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		}
 
 		c.remotePeerInfo.HostPort = res.initParams[InitParamHostPort]
-		if c.remotePeerInfo.IsEphemeralHostPort() {
-			c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
-			c.remotePeerInfo.IsEphemeral = true
-		}
 		c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
 		c.checkRemoteProcessNamePrefixes()
 		c.parseRemotePeerAddress()
@@ -1012,6 +1005,13 @@ func (c *Connection) checkRemoteProcessNamePrefixes() {
 // parseRemotePeerAddress parses remote peer info into individual components and
 // caches them on the Connection to be used to set peer tags on OpenTracing Span.
 func (c *Connection) parseRemotePeerAddress() {
+	// If the remote host:port is ephemeral, use the socket address as the
+	// host:port and set IsEphemeral to true.
+	if isEphemeralHostPort(c.remotePeerInfo.HostPort) {
+		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
+		c.remotePeerInfo.IsEphemeral = true
+	}
+
 	address := c.remotePeerInfo.HostPort
 	if sHost, sPort, err := net.SplitHostPort(address); err == nil {
 		address = sHost
