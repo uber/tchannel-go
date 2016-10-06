@@ -328,6 +328,7 @@ func (c *Connection) IsActive() bool {
 }
 
 func (c *Connection) callOnActive() {
+	c.log.Info("Connection is active.")
 	if f := c.events.OnActive; f != nil {
 		f(c)
 	}
@@ -943,7 +944,9 @@ func (c *Connection) checkExchanges() {
 			go c.closeSendCh(c.connID)
 		}
 
-		c.log.Debugf("checkExchanges updated connection state to %v", updated)
+		c.log.WithFields(
+			LogField{"newState", updated},
+		).Info("Connection state updated during shutdown.")
 		c.callOnCloseStateChange()
 	}
 }
@@ -951,7 +954,7 @@ func (c *Connection) checkExchanges() {
 // Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
 // before finally marking the connection state as closed.
 func (c *Connection) Close() error {
-	c.log.Debugf("Connection Close")
+	c.log.Info("Connection.Close called.")
 
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
