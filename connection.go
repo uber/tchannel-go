@@ -30,7 +30,10 @@ import (
 	"time"
 
 	"github.com/uber-go/atomic"
+	"github.com/uber/tchannel-go/tos"
 	"golang.org/x/net/context"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 const (
@@ -129,6 +132,12 @@ type ConnectionOptions struct {
 
 	// The type of checksum to use when sending messages.
 	ChecksumType ChecksumType
+
+	// ToS class name marked on outbound connection. Supply a DiffServ
+	// compliant name, tos.AF11 tos.CS1 .. etc,
+	// tos.Lowdelay, tos.Throughput, tos.Reliabiltiy or tos.Lowcost
+	// from the tchannel tos package
+	TosPriority tos.ToS
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -237,7 +246,24 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	return co
 }
 
-func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
+func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) error {
+	// Verify we are using a TCP socket
+	if tcpAddr, ok := c.RemoteAddr().(*net.TCPAddr); ok {
+		// Handle dual stack listeners and set Traffic Class
+		if tcpAddr.IP.To16() != nil && tcpAddr.IP.To4() == nil {
+			if err := ipv6.NewConn(c).SetTrafficClass(int(tosPriority)); err != nil {
+				return err
+			}
+		} else if tcpAddr.IP.To4() != nil {
+			if err := ipv4.NewConn(c).SetTOS(int(tosPriority)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) (*Connection, error) {
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
@@ -279,6 +305,12 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		commonStatsTags:   ch.commonStatsTags,
 	}
 
+	if tosPriority := opts.TosPriority; tosPriority > 0 {
+		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
+			return nil, err
+		}
+	}
+
 	c.nextMessageID.Store(initialID)
 	c.log = log
 	c.inbound.onRemoved = c.checkExchanges
@@ -295,7 +327,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
-	return c
+	return c, nil
 }
 
 func (c *Connection) onExchangeAdded() {

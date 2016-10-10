@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +37,7 @@ import (
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
+	"github.com/uber/tchannel-go/tos"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -830,4 +832,43 @@ func TestConnectionIDs(t *testing.T) {
 		assert.Equal(t, []uint32{1}, outbound, "Unexpected outbound IDs")
 		assert.Equal(t, []uint32{1}, inbound, "Unexpected outbound IDs")
 	})
+}
+
+func TestTosPriority(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	opts := testutils.NewOpts().SetServiceName("s1").SetTosPriority(tos.Lowdelay)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
+
+		outbound, err := ts.Server().BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
+		require.NoError(t, err, "BeginCall failed")
+
+		_, outboundNetConn := OutboundConnection(outbound)
+		connTosPriority, err := IsTosPriority(outboundNetConn, tos.Lowdelay)
+		require.NoError(t, err, "Checking TOS priority failed")
+		assert.Equal(t, connTosPriority, true)
+		_, _, _, err = raw.WriteArgs(outbound, []byte("arg2"), []byte("arg3"))
+		require.NoError(t, err, "Failed to write to outbound conn")
+	})
+}
+
+func TestUnmarshalTosPriority(t *testing.T) {
+	expected := tos.Lowdelay
+
+	var TosBit tos.ToS
+	err := TosBit.UnmarshalText([]byte("Lowdelay"))
+	if assert.NoError(t, err, "JSON unmarshal failed") {
+		assert.Equal(t, expected, TosBit, "JSON config mismatch")
+	}
+}
+
+func TestMarshalTosPriority(t *testing.T) {
+	expected := "\"Lowdelay\""
+
+	v, err := json.Marshal(tos.Lowdelay)
+	if assert.NoError(t, err, "Marshal failed") {
+		assert.Equal(t, expected, string(v), "Marshal mis match")
+	}
 }

@@ -27,7 +27,10 @@ import (
 	"net"
 	"time"
 
+	"github.com/uber/tchannel-go/tos"
 	"golang.org/x/net/context"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 // MexChannelBufferSize is the size of the message exchange channel buffer.
@@ -65,6 +68,20 @@ func (c *Connection) Ping(ctx context.Context) error {
 func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	conn := call.conn
 	return conn, conn.conn
+}
+
+// Return true if the connection matches the passed DiffServ Name.
+func IsTosPriority(c net.Conn, tosPriority tos.ToS) (bool, error) {
+	var connTosPriority int
+	var err error
+
+	if c.RemoteAddr().(*net.TCPAddr).IP.To16() != nil && c.RemoteAddr().(*net.TCPAddr).IP.To4() == nil {
+		connTosPriority, err = ipv6.NewConn(c).TrafficClass()
+	} else if c.RemoteAddr().(*net.TCPAddr).IP.To4() != nil {
+		connTosPriority, err = ipv4.NewConn(c).TOS()
+	}
+
+	return (connTosPriority == int(tosPriority)), err
 }
 
 // InboundConnection returns the underlying connection for an incoming call.
