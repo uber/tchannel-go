@@ -182,8 +182,12 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	go func() {
 		select {
 		case <-call.mex.ctx.Done():
-			if call.mex.ctx.Err() == context.DeadlineExceeded {
-				call.mex.inboundTimeout()
+			// checking if message exchange timedout or was cancelled
+			// only two possible errors at this step:
+			// context.DeadlineExceeded
+			// context.Canceled
+			if call.mex.ctx.Err() != nil {
+				call.mex.inboundExpired()
 			}
 		case <-call.mex.errCh.c:
 			if c.log.Enabled(LogLevelDebug) {
