@@ -314,7 +314,7 @@ func TestCancelled(t *testing.T) {
 		// Now cancel the context.
 		cancel()
 		_, _, _, err = raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", []byte("Headers"), []byte("Body"))
-		assert.Equal(t, context.Canceled, err, "Unexpected error when making call with canceled context")
+		assert.Equal(t, ErrRequestCancelled, err, "Unexpected error when making call with canceled context")
 	})
 }
 
@@ -644,13 +644,13 @@ func TestReadTimeout(t *testing.T) {
 			ctx, cancel := NewContext(time.Second)
 			handler := func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				defer cancel()
-				return nil, ErrTimeout
+				return nil, ErrRequestCancelled
 			}
 			ts.RegisterFunc("call", handler)
 
 			_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "call", nil, nil)
-			assert.Equal(t, err, context.Canceled, "Call should fail due to cancel")
-			calls.Add(sn, sn, "call").Failed("timeout").End()
+			assert.Equal(t, err, ErrRequestCancelled, "Call should fail due to cancel")
+			calls.Add(sn, sn, "call").Failed("cancelled").End()
 		}
 
 		ts.AssertRelayStats(calls)
