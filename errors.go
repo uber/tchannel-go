@@ -171,6 +171,9 @@ func GetContextError(err error) error {
 	if err == context.DeadlineExceeded {
 		return ErrTimeout
 	}
+	if err == context.Canceled {
+		return ErrRequestCancelled
+	}
 	return err
 }
 
