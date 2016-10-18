@@ -57,7 +57,7 @@ func (h *jsonHandler) callDownstream(ctx context.Context, target *Downstream) (*
 }
 
 func (h *jsonHandler) handleJSON(ctx json.Context, req *Request) (*Response, error) {
-	return h.b.prepareResponse(nil, ctx, req.Downstream)
+	return h.b.prepareResponse(ctx, nil, req.Downstream)
 }
 
 func (h *jsonHandler) onError(ctx context.Context, err error) {

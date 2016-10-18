@@ -48,7 +48,7 @@ func (h *thriftHandler) Call(ctx thrift.Context, arg *gen.Data) (*gen.Data, erro
 	if err != nil {
 		return nil, err
 	}
-	res, err := h.b.prepareResponse(nil, ctx, req.Downstream)
+	res, err := h.b.prepareResponse(ctx, nil, req.Downstream)
 	if err != nil {
 		return nil, err
 	}
