@@ -110,16 +110,16 @@ func TestNoSpanObserved(t *testing.T) {
 func TestPrepareResponseErrors(t *testing.T) {
 	b := &Behavior{}
 	ctx := context.Background()
-	_, err := b.prepareResponse(nil, ctx, nil)
+	_, err := b.prepareResponse(ctx, nil, nil)
 	assert.Equal(t, errNoSpanObserved, err)
 
 	span := opentracing.GlobalTracer().StartSpan("test")
 	ctx = opentracing.ContextWithSpan(ctx, span)
-	res, err := b.prepareResponse(nil, ctx, nil)
+	res, err := b.prepareResponse(ctx, nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "", res.Span.TraceID)
 
-	_, err = b.prepareResponse(nil, ctx, &Downstream{
+	_, err = b.prepareResponse(ctx, nil, &Downstream{
 		Encoding: "invalid",
 	})
 	assert.Equal(t, errUnsupportedEncoding, err)

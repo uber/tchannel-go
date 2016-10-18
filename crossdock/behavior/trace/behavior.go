@@ -153,7 +153,7 @@ func (b *Behavior) startTrace(t crossdock.T, req *Request, sampled bool, baggage
 	defer cancel()
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
-	return b.prepareResponse(t, ctx, req.Downstream)
+	return b.prepareResponse(ctx, t, req.Downstream)
 }
 
 func validateTrace(
@@ -192,7 +192,7 @@ func randomBaggage() string {
 	return fmt.Sprintf("%x", n)
 }
 
-func (b *Behavior) prepareResponse(t crossdock.T, ctx context.Context, reqDwn *Downstream) (*Response, error) {
+func (b *Behavior) prepareResponse(ctx context.Context, t crossdock.T, reqDwn *Downstream) (*Response, error) {
 	log.Printf("prepareResponse: reqDwn=%v", reqDwn)
 	logSpan(ctx)
 	observedSpan, err := observeSpan(ctx)
