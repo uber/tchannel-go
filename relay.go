@@ -260,16 +260,18 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 	}
 }
 
-func (r *Relayer) canHandleNewCall() bool {
+func (r *Relayer) canHandleNewCall() (bool, connectionState) {
 	var canHandle bool
+	var curState connectionState
 	r.conn.withStateRLock(func() error {
-		canHandle = r.conn.state == connectionActive
+		curState = r.conn.state
+		canHandle = curState == connectionActive
 		if canHandle {
 			r.pending.Inc()
 		}
 		return nil
 	})
-	return canHandle
+	return canHandle, curState
 }
 
 func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection, bool, error) {
@@ -326,18 +328,21 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	}
 
 	callStats := r.stats.Begin(f)
-	if !r.canHandleNewCall() {
-		callStats.Failed("relay-channel-closed")
+	if canHandle, state := r.canHandleNewCall(); !canHandle {
+		callStats.Failed("relay-conn-inactive")
 		callStats.End()
-		return ErrChannelClosed
+		err := errConnNotActive{"incoming", state}
+		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
+		return err
 	}
 
 	// Get a remote connection and check whether it can handle this call.
 	remoteConn, ok, err := r.getDestination(f, callStats)
 	if err == nil && ok {
-		if !remoteConn.relay.canHandleNewCall() {
-			err = NewSystemError(ErrCodeNetwork, "selected closed connection, retry")
-			callStats.Failed("relay-connection-closed")
+		if canHandle, state := remoteConn.relay.canHandleNewCall(); !canHandle {
+			err = NewWrappedSystemError(ErrCodeNetwork, errConnNotActive{"selected remote", state})
+			callStats.Failed("relay-remote-inactive")
+			r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
 		}
 	}
 	if err != nil || !ok {

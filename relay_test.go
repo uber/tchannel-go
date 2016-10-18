@@ -500,3 +500,46 @@ func TestRelayUsesRootPeers(t *testing.T) {
 		assert.Len(t, ts.Relay().Peers().Copy(), 0, "Peers should not be modified by relay")
 	})
 }
+
+// Ensure that if the relay recieves a call on a connection that is not active,
+// it declines the call, and increments a relay-conn-inactive stat.
+func TestRelayRejectsDuringClose(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly().
+		AddLogFilter("Failed to relay frame.", 1, "error", "incoming connection is not active: connectionStartClose")
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		gotCall := make(chan struct{})
+		block := make(chan struct{})
+
+		testutils.RegisterEcho(ts.Server(), func() {
+			close(gotCall)
+			<-block
+		})
+
+		client := ts.NewClient(nil)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		}()
+
+		<-gotCall
+		// Close the relay so that it stops accepting more calls.
+		ts.Relay().Close()
+		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
+		require.Error(t, err, "Expect call to fail after relay is shutdown")
+		assert.Contains(t, err.Error(), "incoming connection is not active")
+		close(block)
+
+		// We have a successful call that ran in the goroutine
+		// and a failed call that we just checked the error on.
+		calls := relaytest.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
+			SetPeer(relay.Peer{HostPort: ts.Server().PeerInfo().HostPort}).
+			Succeeded().End()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
+			// No peer is set since we rejected the call before selecting one.
+			Failed("relay-conn-inactive").End()
+		ts.AssertRelayStats(calls)
+	})
+}
