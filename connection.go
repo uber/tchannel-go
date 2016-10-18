@@ -230,14 +230,14 @@ func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string,
 	if err != nil {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			ch.log.WithFields(
-				LogField{"hostPort", hostPort},
+				LogField{"remoteHostPort", hostPort},
 				LogField{"timeout", timeout},
 			).Info("Outbound net.Dial timed out.")
 			err = ErrTimeout
 		} else {
 			ch.log.WithFields(
 				ErrField(err),
-				LogField{"hostPort", hostPort},
+				LogField{"remoteHostPort", hostPort},
 			).Info("Outbound net.Dial failed.")
 		}
 		return nil, err
@@ -282,7 +282,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		{"remoteAddr", conn.RemoteAddr()},
 	}...)
 	peerInfo := ch.PeerInfo()
-	log.Debugf("created for %v (%v) local: %v remote: %v",
+	log.Debugf("Connection created for %v (%v) local: %v remote: %v",
 		peerInfo.ServiceName, peerInfo.ProcessName, conn.LocalAddr(), conn.RemoteAddr())
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
