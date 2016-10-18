@@ -261,8 +261,11 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 }
 
 func (r *Relayer) canHandleNewCall() (bool, connectionState) {
-	var canHandle bool
-	var curState connectionState
+	var (
+		canHandle bool
+		curState  connectionState
+	)
+
 	r.conn.withStateRLock(func() error {
 		curState = r.conn.state
 		canHandle = curState == connectionActive
