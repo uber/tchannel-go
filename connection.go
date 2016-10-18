@@ -972,6 +972,11 @@ func (c *Connection) Close() error {
 		return err
 	}
 
+	c.log.WithFields(
+		LogField{"newState", c.readState()},
+	).Info("Connection state updated in Close.")
+	c.callOnCloseStateChange()
+
 	// Check all in-flight requests to see whether we can transition the Close state.
 	c.checkExchanges()
 
