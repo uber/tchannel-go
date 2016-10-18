@@ -1096,6 +1096,49 @@ func TestConnectToPeerHostPortMismatch(t *testing.T) {
 	})
 }
 
+// Test ensures that a closing connection does not count in NumConnections.
+// NumConnections should only include connections that be used to make calls.
+func TestPeerConnectionsClosing(t *testing.T) {
+	// Disable the relay since we check the host:port directly.
+	opts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		unblock := make(chan struct{})
+		gotCall := make(chan struct{})
+		testutils.RegisterEcho(ts.Server(), func() {
+			close(gotCall)
+			<-unblock
+		})
+
+		client := ts.NewServer(nil)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		}()
+
+		// Wait for the call to be received before checking connections..
+		<-gotCall
+		peer := ts.Server().Peers().GetOrAdd(client.PeerInfo().HostPort)
+		in, out := peer.NumConnections()
+		assert.Equal(t, 1, in+out, "Unexpected number of incoming connections")
+
+		// Now when we try to close the channel, all the connections will change
+		// state, and should no longer count as active connections.
+		conn, err := peer.GetConnection(nil)
+		require.NoError(t, err, "Failed to get connection")
+		require.True(t, conn.IsActive(), "Connection should be active")
+
+		ts.Server().Close()
+		require.False(t, conn.IsActive(), "Connection should not be active after Close")
+		in, out = peer.NumConnections()
+		assert.Equal(t, 0, in+out, "Inactive connections should not be included in peer LAST")
+
+		close(unblock)
+		wg.Wait()
+	})
+}
+
 func BenchmarkAddPeers(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ch := testutils.NewClient(b, nil)

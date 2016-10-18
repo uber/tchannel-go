@@ -525,7 +525,12 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 		// Hostport is unknown until we get init resp.
 		return
 	}
-	p := ch.rootPeers().GetOrAdd(c.remotePeerInfo.HostPort)
+
+	p, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort)
+	if !ok {
+		return
+	}
+
 	ch.updatePeer(p)
 }
 
@@ -593,6 +598,7 @@ func (ch *Channel) outboundConnectionActive(c *Connection) {
 }
 
 // removeClosedConn removes a connection if it's closed.
+// Until a connection is fully closed, the channel must keep track of it.
 func (ch *Channel) removeClosedConn(c *Connection) {
 	if c.readState() != connectionClosed {
 		return
