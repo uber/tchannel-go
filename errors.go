@@ -200,3 +200,12 @@ func GetSystemErrorMessage(err error) string {
 
 	return err.Error()
 }
+
+type errConnNotActive struct {
+	info  string
+	state connectionState
+}
+
+func (e errConnNotActive) Error() string {
+	return fmt.Sprintf("%v connection is not active: %v", e.info, e.state)
+}

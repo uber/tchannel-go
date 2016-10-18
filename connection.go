@@ -508,8 +508,8 @@ func (c *Connection) handlePingReq(frame *Frame) {
 	}
 	defer c.pendingExchangeMethodDone()
 
-	if c.readState() != connectionActive {
-		c.protocolError(frame.Header.ID, fmt.Errorf("connection state is not active"))
+	if state := c.readState(); state != connectionActive {
+		c.protocolError(frame.Header.ID, errConnNotActive{"ping on incoming", state})
 		return
 	}
 
