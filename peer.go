@@ -440,8 +440,10 @@ func (p *Peer) removeConnection(connsPtr *[]*Connection, changed *Connection) bo
 }
 
 // connectionStateChanged is called when one of the peers' connections states changes.
+// All non-active connections are removed from the peer. The connection will
+// still be tracked by the channel until it's completely closed.
 func (p *Peer) connectionCloseStateChange(changed *Connection) {
-	if changed.readState() != connectionClosed {
+	if changed.IsActive() {
 		return
 	}
 
