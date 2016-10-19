@@ -540,3 +540,49 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 		ts.AssertRelayStats(calls)
 	})
 }
+
+func TestSilentDrop(t *testing.T) {
+	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+		return relay.Peer{}, relay.RateLimitDropError{}
+	}
+
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHosts(hostsFunc(getHost))
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		gotCall := make(chan struct{})
+		testutils.RegisterEcho(ts.Server(), func() {
+			close(gotCall)
+		})
+
+		client := ts.NewClient(nil)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
+			require.Equal(t, ErrTimeout, err, "Expected CallEcho to fail")
+			defer wg.Done()
+		}()
+
+		ticker := time.NewTicker(300 * time.Millisecond)
+		timedOut := false
+		select {
+		case _ = <-gotCall:
+			break
+		case _ = <-ticker.C:
+			timedOut = true
+			close(gotCall)
+			break
+
+		}
+		assert.True(t, timedOut, "expected server to time out")
+		wg.Wait()
+
+		calls := relaytest.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").Failed("relay-dropped").End()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").Failed("timeout").End()
+		ts.AssertRelayStats(calls)
+	})
+}
