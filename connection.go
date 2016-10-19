@@ -328,7 +328,11 @@ func (c *Connection) IsActive() bool {
 }
 
 func (c *Connection) callOnActive() {
-	c.log.Info("Connection is active.")
+	msg := "Inbound connection is active."
+	if c.outboundHP != "" {
+		msg = "Outbound connection is active."
+	}
+	c.log.Info(msg)
 	if f := c.events.OnActive; f != nil {
 		f(c)
 	}
