@@ -540,3 +540,46 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 		ts.AssertRelayStats(calls)
 	})
 }
+
+func TestRelayRateLimitDrop(t *testing.T) {
+	droppedPeer := relay.Peer{
+		Pool: "$dropped",
+		Zone: "zone",
+	}
+	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+		return droppedPeer, relay.RateLimitDropError{}
+	}
+
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHosts(hostsFunc(getHost))
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		var gotCall bool
+		testutils.RegisterEcho(ts.Server(), func() {
+			gotCall = true
+		})
+
+		client := ts.NewClient(nil)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			// We want to use a low timeout here since the test waits for this
+			// call to timeout.
+			ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
+			defer cancel()
+			_, _, _, err := raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+			require.Equal(t, ErrTimeout, err, "Expected CallEcho to fail")
+			defer wg.Done()
+		}()
+
+		wg.Wait()
+		assert.False(t, gotCall, "Server should not receive a call")
+
+		calls := relaytest.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
+			SetPeer(droppedPeer).
+			Failed("relay-dropped").End()
+		ts.AssertRelayStats(calls)
+	})
+}

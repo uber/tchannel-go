@@ -297,6 +297,12 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 		err = errInvalidPeerForGroup(f.Service())
 	}
 	if err != nil {
+		// If we have a RateLimitDropError we record the statistic, but
+		// we *don't* send an error frame back to the client.
+		if _, silentlyDrop := err.(relay.RateLimitDropError); silentlyDrop {
+			cs.Failed("relay-dropped")
+			return nil, false, nil
+		}
 		if _, ok := err.(SystemError); !ok {
 			err = NewSystemError(ErrCodeDeclined, err.Error())
 		}

@@ -99,3 +99,15 @@ type Peer struct {
 	// to, which is also useful for stats.
 	Zone string
 }
+
+// RateLimitDropError is the error that should be returned from
+// RelayHosts.Get if the request should be dropped silently.
+// This is bit of a hack, because rate limiting of this nature isn't part of
+// the actual TChannel protocol.
+// The relayer will record that it has dropped the packet, but *won't* notify
+// the client.
+type RateLimitDropError struct{}
+
+func (e RateLimitDropError) Error() string {
+	return "frame dropped silently due to rate limiting"
+}
