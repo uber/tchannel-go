@@ -202,7 +202,7 @@ func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
 // NewServer returns a server with log and channel state verification.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 	ch := ts.addChannel(newServer, opts.Copy())
-	if ts.HasRelay() {
+	if ts.relayHosts != nil {
 		ts.relayHosts.Add(ch.ServiceName(), ch.PeerInfo().HostPort)
 	}
 	return ch
@@ -211,13 +211,18 @@ func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 // addRelay adds a relay in front of the test server, altering public methods as
 // necessary to route traffic through the relay.
 func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
-	ts.relayHosts = NewSimpleRelayHosts(ts, map[string][]string{
-		ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
-	})
-
 	opts := parentOpts.Copy()
+
+	relayHosts := opts.ChannelOptions.RelayHosts
+	if relayHosts == nil {
+		ts.relayHosts = NewSimpleRelayHosts(ts, map[string][]string{
+			ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
+		})
+		relayHosts = ts.relayHosts
+	}
+
 	opts.ServiceName = "relay"
-	opts.ChannelOptions.RelayHosts = ts.relayHosts
+	opts.ChannelOptions.RelayHosts = relayHosts
 	opts.RelayStats = ts.relayStats
 
 	ts.addChannel(newServer, opts)
