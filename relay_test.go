@@ -541,7 +541,7 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 	})
 }
 
-func TestSilentDrop(t *testing.T) {
+func TestRelayRateLimitDrop(t *testing.T) {
 	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
 		return relay.Peer{}, relay.RateLimitDropError{}
 	}
@@ -549,11 +549,10 @@ func TestSilentDrop(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHosts(hostsFunc(getHost))
-
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
-		gotCall := make(chan struct{})
+		var gotCall bool
 		testutils.RegisterEcho(ts.Server(), func() {
-			close(gotCall)
+			gotCall = true
 		})
 
 		client := ts.NewClient(nil)
@@ -561,28 +560,20 @@ func TestSilentDrop(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
-			err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
+			// We want to use a low timeout here since the test waits for this
+			// call to timeout.
+			ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
+			defer cancel()
+			_, _, _, err := raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
 			require.Equal(t, ErrTimeout, err, "Expected CallEcho to fail")
 			defer wg.Done()
 		}()
 
-		ticker := time.NewTicker(300 * time.Millisecond)
-		timedOut := false
-		select {
-		case _ = <-gotCall:
-			break
-		case _ = <-ticker.C:
-			timedOut = true
-			close(gotCall)
-			break
-
-		}
-		assert.True(t, timedOut, "expected server to time out")
 		wg.Wait()
+		assert.False(t, gotCall, "Server should not receive a call")
 
 		calls := relaytest.NewMockStats()
 		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").Failed("relay-dropped").End()
-		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").Failed("timeout").End()
 		ts.AssertRelayStats(calls)
 	})
 }
