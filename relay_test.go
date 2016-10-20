@@ -542,8 +542,12 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 }
 
 func TestRelayRateLimitDrop(t *testing.T) {
+	droppedPeer := relay.Peer{
+		Pool: "$dropped",
+		Zone: "zone",
+	}
 	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
-		return relay.Peer{}, relay.RateLimitDropError{}
+		return droppedPeer, relay.RateLimitDropError{}
 	}
 
 	opts := testutils.NewOpts().
@@ -573,7 +577,9 @@ func TestRelayRateLimitDrop(t *testing.T) {
 		assert.False(t, gotCall, "Server should not receive a call")
 
 		calls := relaytest.NewMockStats()
-		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").Failed("relay-dropped").End()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
+			SetPeer(droppedPeer).
+			Failed("relay-dropped").End()
 		ts.AssertRelayStats(calls)
 	})
 }
