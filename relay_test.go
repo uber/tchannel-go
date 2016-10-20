@@ -471,23 +471,20 @@ func TestRelayConnection(t *testing.T) {
 		return relay.Peer{}, errTest
 	}
 
-	// Note: we cannot use WithTestServer since we override the RelayHosts.
 	opts := testutils.NewOpts().
-		SetServiceName("relay").
+		SetRelayOnly().
 		SetRelayHosts(hostsFunc(getHost)).
 		SetProcessPrefixes("nod", "nodejs-hyperbahn", "", "hyperbahn")
-	relay := testutils.NewServer(t, opts)
-	defer relay.Close()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		// Create a client that is listening so we can set the expected host:port.
+		clientOpts := testutils.NewOpts().SetProcessName("nodejs-hyperbahn")
+		client := ts.NewServer(clientOpts)
+		wantHostPort = client.PeerInfo().HostPort
 
-	// Create a client that is listening so we can set the expected host:port.
-	clientOpts := testutils.NewOpts().SetProcessName("nodejs-hyperbahn")
-	client := testutils.NewServer(t, clientOpts)
-	wantHostPort = client.PeerInfo().HostPort
-	defer client.Close()
-
-	err := testutils.CallEcho(client, relay.PeerInfo().HostPort, relay.ServiceName(), nil)
-	require.Error(t, err, "Expected CallEcho to fail")
-	assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
+		require.Error(t, err, "Expected CallEcho to fail")
+		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+	})
 }
 
 func TestRelayUsesRootPeers(t *testing.T) {
