@@ -465,8 +465,8 @@ func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint
 }
 
 func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
-	// Entomb it so that we don't get unknown exchange errors for further calls
-	// to this relay item.
+	// Entomb it so that we don't get unknown exchange errors on further frames
+	// for this call.
 	item, ok := items.Entomb(id, _relayTombTTL)
 	if !ok {
 		return
