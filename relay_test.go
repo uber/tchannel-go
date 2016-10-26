@@ -607,7 +607,7 @@ func TestRelayStalledConnection(t *testing.T) {
 		}
 		ts.Register(HandlerFunc(stallHandler), "echo")
 
-		ctx, cancel := NewContext(time.Second)
+		ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
 		defer cancel()
 
 		client := ts.NewClient(nil)
@@ -645,7 +645,7 @@ func TestRelayStalledConnection(t *testing.T) {
 		// trying to read arguments till the timeout.
 		select {
 		case <-stallComplete:
-		case <-time.After(time.Second):
+		case <-time.After(testutils.Timeout(300 * time.Millisecond)):
 			t.Fatalf("Stall handler did not complete")
 		}
 
