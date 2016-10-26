@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"errors"
+	"io"
 	"runtime"
 	"strings"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils"
+	"github.com/uber/tchannel-go/testutils/testreader"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -580,6 +582,78 @@ func TestRelayRateLimitDrop(t *testing.T) {
 		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
 			SetPeer(droppedPeer).
 			Failed("relay-dropped").End()
+		ts.AssertRelayStats(calls)
+	})
+}
+
+// Test that a stalled connection to a single server does not block all calls
+// from that server, and we have stats to capture that this is happening.
+func TestRelayStalledConnection(t *testing.T) {
+	opts := testutils.NewOpts().
+		DisableLogVerification(). // we expect warnings due to removed relay item.
+		SetSendBufferSize(10).    // We want to hit the buffer size earlier.
+		SetServiceName("s1").
+		SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
+		testutils.RegisterEcho(s2, nil)
+
+		stall := make(chan struct{})
+		stallComplete := make(chan struct{})
+		stallHandler := func(ctx context.Context, call *InboundCall) {
+			<-stall
+			raw.ReadArgs(call)
+			close(stallComplete)
+		}
+		ts.Register(HandlerFunc(stallHandler), "echo")
+
+		ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
+		defer cancel()
+
+		client := ts.NewClient(nil)
+		call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), "echo", nil)
+		require.NoError(t, err, "BeginCall failed")
+		writer, err := call.Arg2Writer()
+		require.NoError(t, err, "Arg2Writer failed")
+		go io.Copy(writer, testreader.Looper([]byte("test")))
+
+		// Try to read the response which might get an error.
+		readDone := make(chan struct{})
+		go func() {
+			defer close(readDone)
+
+			_, err := call.Response().Arg2Reader()
+			if assert.Error(t, err, "Expected error while reading") {
+				assert.Contains(t, err.Error(), "frame was not sent to remote side")
+			}
+		}()
+
+		// Wait for the reader to error out.
+		select {
+		case <-time.After(testutils.Timeout(10 * time.Second)):
+			t.Fatalf("Test timed out waiting for reader to fail")
+		case <-readDone:
+			cancel()
+			close(stall)
+		}
+
+		// We should be able to make calls to s2 even if s1 is stalled.
+		testutils.AssertEcho(t, client, ts.HostPort(), "s2")
+
+		// The server channel will not close until the stall handler receives
+		// an error. Since we don't propagate cancels, the handler will keep
+		// trying to read arguments till the timeout.
+		select {
+		case <-stallComplete:
+		case <-time.After(testutils.Timeout(300 * time.Millisecond)):
+			t.Fatalf("Stall handler did not complete")
+		}
+
+		calls := relaytest.NewMockStats()
+		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
+			Failed("relay-dest-conn-slow").End()
+		calls.Add(client.PeerInfo().ServiceName, "s2", "echo").
+			Succeeded().End()
 		ts.AssertRelayStats(calls)
 	})
 }

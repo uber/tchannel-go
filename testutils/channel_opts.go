@@ -125,6 +125,12 @@ func (o *ChannelOpts) SetProcessPrefixes(prefixes ...string) *ChannelOpts {
 	return o
 }
 
+// SetSendBufferSize sets the SendBufferSize in DefaultConnectionOptions.
+func (o *ChannelOpts) SetSendBufferSize(bufSize int) *ChannelOpts {
+	o.DefaultConnectionOptions.SendBufferSize = bufSize
+	return o
+}
+
 // SetTimeNow sets TimeNow in ChannelOptions.
 func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	o.TimeNow = timeNow

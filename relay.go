@@ -40,6 +40,7 @@ const _relayTombTTL = 3 * time.Second
 
 var (
 	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
+	errFrameNotSent          = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
 	errUnknownID             = errors.New("non-callReq for inactive ID")
 )
 
@@ -219,7 +220,8 @@ func (r *Relayer) Relay(f *Frame) error {
 }
 
 // Receive receives frames intended for this connection.
-func (r *Relayer) Receive(f *Frame, fType frameType) {
+// It returns whether the frame was sent and a reason for failure if it failed.
+func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason string) {
 	id := f.Header.ID
 
 	// If we receive a response frame, we expect to find that ID in our outbound.
@@ -231,7 +233,7 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 		r.logger.WithFields(
 			LogField{"id", id},
 		).Warn("Received a frame without a RelayItem.")
-		return
+		return false, "relay-not-found"
 	}
 
 	// call res frames don't include the OK bit, so we can't wait until the last
@@ -250,14 +252,25 @@ func (r *Relayer) Receive(f *Frame, fType frameType) {
 	// may be released to the frame pool at any point.
 	finished := finishesCall(f)
 
-	// TODO: Add some sort of timeout here to avoid blocking forever on a
-	// stalled connection.
-	r.conn.sendCh <- f
+	select {
+	case r.conn.sendCh <- f:
+	default:
+		// Buffer is full, so drop this frame and cancel the call.
+		r.logger.WithFields(
+			LogField{"id", id},
+		).Warn("Dropping call due to slow connection to destination.")
+
+		items := r.receiverItems(fType)
+		r.failRelayItem(items, id, "relay-dest-conn-slow")
+		return false, "relay-dest-conn-slow"
+	}
 
 	if finished {
 		items := r.receiverItems(fType)
 		r.finishRelayItem(items, id)
 	}
+
+	return true, ""
 }
 
 func (r *Relayer) canHandleNewCall() (bool, connectionState) {
@@ -363,6 +376,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return err
 	}
 
+	origID := f.Header.ID
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
 	span := f.Span()
@@ -371,7 +385,12 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, callStats)
 
 	f.Header.ID = destinationID
-	relayToDest.destination.Receive(f.Frame, requestFrame)
+	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
+	if !sent {
+		r.failRelayItem(r.outbound, origID, failure)
+		return nil
+	}
+
 	return nil
 }
 
@@ -401,7 +420,11 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	// Once we call Receive on the frame, we lose ownership of the frame.
 	finished := finishesCall(f)
 
-	item.destination.Receive(f, frameType)
+	sent, failure := item.destination.Receive(f, frameType)
+	if !sent {
+		r.failRelayItem(items, originalID, failure)
+		return nil
+	}
 
 	if finished {
 		r.finishRelayItem(items, originalID)
@@ -435,6 +458,22 @@ func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint
 	if isOriginator {
 		r.conn.SendSystemError(id, item.span, ErrTimeout)
 		item.stats.Failed("timeout")
+		item.stats.End()
+	}
+
+	r.decrementPending()
+}
+
+func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
+	// Entomb it so that we don't get unknown exchange errors on further frames
+	// for this call.
+	item, ok := items.Entomb(id, _relayTombTTL)
+	if !ok {
+		return
+	}
+	if item.stats != nil {
+		r.conn.SendSystemError(id, item.span, errFrameNotSent)
+		item.stats.Failed(failure)
 		item.stats.End()
 	}
 
