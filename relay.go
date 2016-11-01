@@ -31,12 +31,13 @@ import (
 	"github.com/uber-go/atomic"
 )
 
-// _maxRelayTombs is the maximum number of tombs we'll accumulate in a single
-// relayItems.
-const _maxRelayTombs = 3e4
-
-// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
-const _relayTombTTL = 3 * time.Second
+const (
+	// _maxRelayTombs is the maximum number of tombs we'll accumulate in a
+	// single relayItems.
+	_maxRelayTombs = 3e4
+	// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
+	_relayTombTTL = 3 * time.Second
+)
 
 var (
 	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
