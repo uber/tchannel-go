@@ -375,8 +375,8 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 		}()
 
 		select {
-		case <-time.After(testutils.Timeout(100 * time.Millisecond)):
-			t.Fatal("Failed to clamp timeout to 1ms.")
+		case <-time.After(testutils.Timeout(10 * clampTTL)):
+			t.Fatal("Failed to clamp timeout.")
 		case <-ctx.Done():
 		}
 	})
