@@ -21,12 +21,14 @@
 package tchannel
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/uber/tchannel-go/typed"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testCallReq int
@@ -261,6 +263,24 @@ func TestLazyCallReqTTL(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req()
 		assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Failed to parse TTL from frame.")
+	})
+}
+
+func TestLazyCallReqSetTTL(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		require.NoError(t, cr.SetTTL(time.Second), "Unexpected error setting TTL.")
+		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
+	})
+}
+
+func TestLazyCallReqSetInvalidTTL(t *testing.T) {
+	tooBig := time.Duration(math.MaxUint32+1) * time.Millisecond
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		require.Error(t, cr.SetTTL(-1*time.Second), "Expected setting a negative TTL to be an error.")
+		require.Error(t, cr.SetTTL(tooBig), "Expected error when setting a TTL that overflows uint32.")
+		assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Expected erroneous SetTTL calls to leave TTL unchanged.")
 	})
 }
 
