@@ -46,7 +46,8 @@ var (
 )
 
 const (
-	ephemeralHostPort = "0.0.0.0:0"
+	ephemeralHostPort      = "0.0.0.0:0"
+	defaultRelayMaxTimeout = 2 * time.Minute
 )
 
 // ChannelOptions are used to control parameters on a create a TChannel
@@ -71,6 +72,10 @@ type ChannelOptions struct {
 	// The list of service names that should be handled locally by this channel.
 	// This is an unstable API - breaking changes are likely.
 	RelayLocalHandlers []string
+
+	// The maximum allowable timeout for relayed calls (longer timeouts are
+	// clamped to this value). Passing zero uses the default of 2m.
+	RelayMaxTimeout time.Duration
 
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
@@ -121,6 +126,7 @@ type Channel struct {
 	connectionOptions ConnectionOptions
 	peers             *PeerList
 	relayHosts        relay.Hosts
+	relayMaxTimeout   time.Duration
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -191,6 +197,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayStats = opts.RelayStats
 	}
 
+	if opts.RelayMaxTimeout <= 0 {
+		opts.RelayMaxTimeout = defaultRelayMaxTimeout
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log: logger.WithFields(
@@ -206,6 +216,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 		connectionOptions: opts.DefaultConnectionOptions,
 		relayHosts:        opts.RelayHosts,
+		relayMaxTimeout:   opts.RelayMaxTimeout,
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 

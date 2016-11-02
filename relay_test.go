@@ -339,6 +339,35 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 	})
 }
 
+func TestLargeTimeoutsAreClamped(t *testing.T) {
+	opts := serviceNameOpts("echo-service").SetRelayOnly().SetRelayMaxTimeout(time.Millisecond)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		srv := ts.Server()
+		client := ts.NewClient(nil)
+
+		unblock := make(chan struct{})
+		defer close(unblock) // let server shut down cleanly
+		testutils.RegisterEcho(srv, func() {
+			<-unblock
+		})
+
+		ctx, cancel := NewContext(time.Minute) // should be clamped
+		go func() {
+			defer cancel()
+			_, _, _, err := raw.Call(ctx, client, ts.HostPort(), "echo-service", "echo", nil, nil)
+			require.Error(t, err)
+			code := GetSystemErrorCode(err)
+			assert.Equal(t, ErrCodeTimeout, code)
+		}()
+
+		select {
+		case <-time.After(testutils.Timeout(100 * time.Millisecond)):
+			t.Fatal("Failed to clamp timeout to 1ms.")
+		case <-ctx.Done():
+		}
+	})
+}
+
 // TestRelayStress makes many concurrent calls and ensures that
 // we don't try to reuse any frames once they've been released.
 func TestRelayConcurrentCalls(t *testing.T) {

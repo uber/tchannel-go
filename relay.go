@@ -161,8 +161,9 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	stats relay.Stats
-	hosts relay.Hosts
+	stats      relay.Stats
+	hosts      relay.Hosts
+	maxTimeout time.Duration
 
 	// localHandlers is the set of service names that are handled by the local
 	// channel.
@@ -189,6 +190,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
 		stats:        ch.relayStats,
 		hosts:        ch.RelayHosts(),
+		maxTimeout:   ch.relayMaxTimeout,
 		localHandler: ch.relayLocal,
 		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
 		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
@@ -380,6 +382,9 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	origID := f.Header.ID
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
+	if ttl > r.maxTimeout {
+		ttl = r.maxTimeout
+	}
 	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
