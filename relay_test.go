@@ -340,18 +340,32 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 }
 
 func TestLargeTimeoutsAreClamped(t *testing.T) {
-	opts := serviceNameOpts("echo-service").SetRelayOnly().SetRelayMaxTimeout(time.Millisecond)
+	const (
+		clampTTL = time.Millisecond
+		longTTL  = time.Minute
+	)
+
+	opts := serviceNameOpts("echo-service").
+		SetRelayOnly().
+		SetRelayMaxTimeout(clampTTL).
+		DisableLogVerification() // handler returns after deadline
+
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		srv := ts.Server()
 		client := ts.NewClient(nil)
 
 		unblock := make(chan struct{})
 		defer close(unblock) // let server shut down cleanly
-		testutils.RegisterEcho(srv, func() {
+		testutils.RegisterFunc(srv, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			now := time.Now()
+			deadline, ok := ctx.Deadline()
+			assert.True(t, ok, "Expected deadline to be set in handler.")
+			assert.True(t, deadline.Sub(now) <= clampTTL, "Expected relay to clamp TTL sent to backend.")
 			<-unblock
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
 		})
 
-		ctx, cancel := NewContext(time.Minute) // should be clamped
+		ctx, cancel := NewContext(longTTL)
 		go func() {
 			defer cancel()
 			_, _, _, err := raw.Call(ctx, client, ts.HostPort(), "echo-service", "echo", nil, nil)
