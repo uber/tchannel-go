@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -37,6 +38,8 @@ const (
 	_maxRelayTombs = 3e4
 	// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
 	_relayTombTTL = 3 * time.Second
+	// _defaultRelayMaxTimeout is the default max TTL for relayed calls.
+	_defaultRelayMaxTimeout = 2 * time.Minute
 )
 
 var (
@@ -585,4 +588,19 @@ func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
 	default:
 		return false, ""
 	}
+}
+
+func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
+	maxMillis := d / time.Millisecond
+	if maxMillis >= 1 && maxMillis <= math.MaxUint32 {
+		return d
+	}
+	if d == 0 {
+		return _defaultRelayMaxTimeout
+	}
+	logger.WithFields(
+		LogField{"configuredMaxTimeout", d},
+		LogField{"defaultMaxTimeout", _defaultRelayMaxTimeout},
+	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
+	return _defaultRelayMaxTimeout
 }

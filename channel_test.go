@@ -90,10 +90,11 @@ func TestRelayMaxTTL(t *testing.T) {
 		expected time.Duration
 	}{
 		{time.Second, time.Second},
-		{-time.Second, defaultRelayMaxTimeout},
-		{0, defaultRelayMaxTimeout},
+		{-time.Second, _defaultRelayMaxTimeout},
+		{0, _defaultRelayMaxTimeout},
+		{time.Microsecond, _defaultRelayMaxTimeout},
 		{math.MaxUint32 * time.Millisecond, math.MaxUint32 * time.Millisecond},
-		{(math.MaxUint32 + 1) * time.Millisecond, defaultRelayMaxTimeout},
+		{(math.MaxUint32 + 1) * time.Millisecond, _defaultRelayMaxTimeout},
 	}
 
 	for _, tt := range tests {

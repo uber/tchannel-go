@@ -23,7 +23,6 @@ package tchannel
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -46,10 +45,7 @@ var (
 	ErrNoServiceName = errors.New("no service name provided")
 )
 
-const (
-	ephemeralHostPort      = "0.0.0.0:0"
-	defaultRelayMaxTimeout = 2 * time.Minute
-)
+const ephemeralHostPort = "0.0.0.0:0"
 
 // ChannelOptions are used to control parameters on a create a TChannel
 type ChannelOptions struct {
@@ -202,17 +198,6 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayStats = opts.RelayStats
 	}
 
-	maxMillis := opts.RelayMaxTimeout / time.Millisecond
-	if opts.RelayMaxTimeout == 0 {
-		opts.RelayMaxTimeout = defaultRelayMaxTimeout
-	} else if opts.RelayMaxTimeout < 0 || maxMillis > math.MaxUint32 {
-		logger.WithFields(
-			LogField{"configuredMaxTimeout", opts.RelayMaxTimeout},
-			LogField{"defaultMaxTimeout", defaultRelayMaxTimeout},
-		).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
-		opts.RelayMaxTimeout = defaultRelayMaxTimeout
-	}
-
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger,
@@ -226,7 +211,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 		connectionOptions: opts.DefaultConnectionOptions,
 		relayHosts:        opts.RelayHosts,
-		relayMaxTimeout:   opts.RelayMaxTimeout,
+		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
