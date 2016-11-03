@@ -384,16 +384,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	ttl := f.TTL()
 	if ttl > r.maxTimeout {
 		ttl = r.maxTimeout
-		if err := f.SetTTL(r.maxTimeout); err != nil {
-			originalTTL := f.TTL()
-			r.logger.WithFields(
-				ErrField(err),
-				LogField{"maxTTL", r.maxTimeout},
-				LogField{"originalTTL", originalTTL},
-			).Warn("Failed to clamp callreq TTL to max.")
-			// The max TTL is misconfigured, don't use it.
-			ttl = originalTTL
-		}
+		f.SetTTL(r.maxTimeout)
 	}
 	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.

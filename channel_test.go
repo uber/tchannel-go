@@ -22,8 +22,10 @@ package tchannel
 
 import (
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/mocktracer"
@@ -80,6 +82,27 @@ func TestStats(t *testing.T) {
 		assert.Equal(t, v, subTags[k], "subchannel missing tag %v", k)
 	}
 	assert.Equal(t, "subch", subTags["subchannel"], "subchannel tag missing")
+}
+
+func TestRelayMaxTTL(t *testing.T) {
+	tests := []struct {
+		max      time.Duration
+		expected time.Duration
+	}{
+		{time.Second, time.Second},
+		{-time.Second, defaultRelayMaxTimeout},
+		{0, defaultRelayMaxTimeout},
+		{math.MaxUint32 * time.Millisecond, math.MaxUint32 * time.Millisecond},
+		{(math.MaxUint32 + 1) * time.Millisecond, defaultRelayMaxTimeout},
+	}
+
+	for _, tt := range tests {
+		ch, err := NewChannel("svc", &ChannelOptions{
+			RelayMaxTimeout: tt.max,
+		})
+		assert.NoError(t, err, "Unexpected error when creating channel.")
+		assert.Equal(t, ch.relayMaxTimeout, tt.expected, "Unexpected max timeout on channel.")
+	}
 }
 
 func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {

@@ -23,9 +23,7 @@ package tchannel
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"math"
 	"time"
 )
 
@@ -33,9 +31,6 @@ var (
 	_callerNameKeyBytes      = []byte(CallerName)
 	_routingDelegateKeyBytes = []byte(RoutingDelegate)
 	_routingKeyKeyBytes      = []byte(RoutingKey)
-
-	errTTLNegative = errors.New("can't set a negative TTL")
-	errTTLOverflow = errors.New("TTL overflows uint32")
 )
 
 const (
@@ -172,17 +167,10 @@ func (f lazyCallReq) TTL() time.Duration {
 	return time.Duration(ttl) * time.Millisecond
 }
 
-func (f lazyCallReq) SetTTL(d time.Duration) error {
-	if d < 0 {
-		return errTTLNegative
-	}
-	millis := d / time.Millisecond
-	if millis > math.MaxUint32 {
-		return errTTLOverflow
-	}
-	ttl := uint32(millis)
+// SetTTL overwrites the frame's TTL.
+func (f lazyCallReq) SetTTL(d time.Duration) {
+	ttl := uint32(d / time.Millisecond)
 	binary.BigEndian.PutUint32(f.Payload[_ttlIndex:_ttlIndex+_ttlLen], ttl)
-	return nil
 }
 
 // Span returns the Span

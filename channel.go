@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -172,15 +173,19 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		opts = &ChannelOptions{}
 	}
 
-	logger := opts.Logger
-	if logger == nil {
-		logger = NullLogger
-	}
-
 	processName := opts.ProcessName
 	if processName == "" {
 		processName = fmt.Sprintf("%s[%d]", filepath.Base(os.Args[0]), os.Getpid())
 	}
+
+	logger := opts.Logger
+	if logger == nil {
+		logger = NullLogger
+	}
+	logger = logger.WithFields(
+		LogField{"service", serviceName},
+		LogField{"process", processName},
+	)
 
 	statsReporter := opts.StatsReporter
 	if statsReporter == nil {
@@ -197,15 +202,20 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayStats = opts.RelayStats
 	}
 
-	if opts.RelayMaxTimeout <= 0 {
+	maxMillis := opts.RelayMaxTimeout / time.Millisecond
+	if opts.RelayMaxTimeout == 0 {
+		opts.RelayMaxTimeout = defaultRelayMaxTimeout
+	} else if opts.RelayMaxTimeout < 0 || maxMillis > math.MaxUint32 {
+		logger.WithFields(
+			LogField{"configuredMaxTimeout", opts.RelayMaxTimeout},
+			LogField{"defaultMaxTimeout", defaultRelayMaxTimeout},
+		).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 		opts.RelayMaxTimeout = defaultRelayMaxTimeout
 	}
 
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
-			log: logger.WithFields(
-				LogField{"service", serviceName},
-				LogField{"process", processName}),
+			log:           logger,
 			relayStats:    relayStats,
 			relayLocal:    toStringSet(opts.RelayLocalHandlers),
 			statsReporter: statsReporter,

@@ -365,19 +365,21 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
 		})
 
-		ctx, cancel := NewContext(longTTL)
+		done := make(chan struct{})
 		go func() {
+			ctx, cancel := NewContext(longTTL)
 			defer cancel()
 			_, _, _, err := raw.Call(ctx, client, ts.HostPort(), "echo-service", "echo", nil, nil)
 			require.Error(t, err)
 			code := GetSystemErrorCode(err)
 			assert.Equal(t, ErrCodeTimeout, code)
+			close(done)
 		}()
 
 		select {
 		case <-time.After(testutils.Timeout(10 * clampTTL)):
 			t.Fatal("Failed to clamp timeout.")
-		case <-ctx.Done():
+		case <-done:
 		}
 	})
 }
