@@ -194,6 +194,12 @@ func (o *ChannelOpts) SetRelayLocal(relayLocal ...string) *ChannelOpts {
 	return o
 }
 
+// SetRelayMaxTimeout sets the maximum allowable timeout for relayed calls.
+func (o *ChannelOpts) SetRelayMaxTimeout(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.RelayMaxTimeout = d
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue

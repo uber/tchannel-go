@@ -167,6 +167,12 @@ func (f lazyCallReq) TTL() time.Duration {
 	return time.Duration(ttl) * time.Millisecond
 }
 
+// SetTTL overwrites the frame's TTL.
+func (f lazyCallReq) SetTTL(d time.Duration) {
+	ttl := uint32(d / time.Millisecond)
+	binary.BigEndian.PutUint32(f.Payload[_ttlIndex:_ttlIndex+_ttlLen], ttl)
+}
+
 // Span returns the Span
 func (f lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)

@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -31,12 +32,15 @@ import (
 	"github.com/uber-go/atomic"
 )
 
-// _maxRelayTombs is the maximum number of tombs we'll accumulate in a single
-// relayItems.
-const _maxRelayTombs = 3e4
-
-// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
-const _relayTombTTL = 3 * time.Second
+const (
+	// _maxRelayTombs is the maximum number of tombs we'll accumulate in a
+	// single relayItems.
+	_maxRelayTombs = 3e4
+	// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
+	_relayTombTTL = 3 * time.Second
+	// _defaultRelayMaxTimeout is the default max TTL for relayed calls.
+	_defaultRelayMaxTimeout = 2 * time.Minute
+)
 
 var (
 	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
@@ -160,8 +164,9 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	stats relay.Stats
-	hosts relay.Hosts
+	stats      relay.Stats
+	hosts      relay.Hosts
+	maxTimeout time.Duration
 
 	// localHandlers is the set of service names that are handled by the local
 	// channel.
@@ -188,6 +193,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
 		stats:        ch.relayStats,
 		hosts:        ch.RelayHosts(),
+		maxTimeout:   ch.relayMaxTimeout,
 		localHandler: ch.relayLocal,
 		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
 		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
@@ -379,6 +385,10 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	origID := f.Header.ID
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
+	if ttl > r.maxTimeout {
+		ttl = r.maxTimeout
+		f.SetTTL(r.maxTimeout)
+	}
 	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
@@ -578,4 +588,19 @@ func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
 	default:
 		return false, ""
 	}
+}
+
+func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
+	maxMillis := d / time.Millisecond
+	if maxMillis > 0 && maxMillis <= math.MaxUint32 {
+		return d
+	}
+	if d == 0 {
+		return _defaultRelayMaxTimeout
+	}
+	logger.WithFields(
+		LogField{"configuredMaxTimeout", d},
+		LogField{"defaultMaxTimeout", _defaultRelayMaxTimeout},
+	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
+	return _defaultRelayMaxTimeout
 }
