@@ -592,7 +592,7 @@ func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
 
 func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 	maxMillis := d / time.Millisecond
-	if maxMillis >= 1 && maxMillis <= math.MaxUint32 {
+	if maxMillis > 0 && maxMillis <= math.MaxUint32 {
 		return d
 	}
 	if d == 0 {
