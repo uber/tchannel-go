@@ -264,6 +264,14 @@ func TestLazyCallReqTTL(t *testing.T) {
 	})
 }
 
+func TestLazyCallReqSetTTL(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		cr.SetTTL(time.Second)
+		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
+	})
+}
+
 func TestLazyCallResRejectsOtherFrames(t *testing.T) {
 	assertWrappingPanics(
 		t,

@@ -339,6 +339,51 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 	})
 }
 
+func TestLargeTimeoutsAreClamped(t *testing.T) {
+	const (
+		clampTTL = time.Millisecond
+		longTTL  = time.Minute
+	)
+
+	opts := serviceNameOpts("echo-service").
+		SetRelayOnly().
+		SetRelayMaxTimeout(clampTTL).
+		DisableLogVerification() // handler returns after deadline
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		srv := ts.Server()
+		client := ts.NewClient(nil)
+
+		unblock := make(chan struct{})
+		defer close(unblock) // let server shut down cleanly
+		testutils.RegisterFunc(srv, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			now := time.Now()
+			deadline, ok := ctx.Deadline()
+			assert.True(t, ok, "Expected deadline to be set in handler.")
+			assert.True(t, deadline.Sub(now) <= clampTTL, "Expected relay to clamp TTL sent to backend.")
+			<-unblock
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		})
+
+		done := make(chan struct{})
+		go func() {
+			ctx, cancel := NewContext(longTTL)
+			defer cancel()
+			_, _, _, err := raw.Call(ctx, client, ts.HostPort(), "echo-service", "echo", nil, nil)
+			require.Error(t, err)
+			code := GetSystemErrorCode(err)
+			assert.Equal(t, ErrCodeTimeout, code)
+			close(done)
+		}()
+
+		select {
+		case <-time.After(testutils.Timeout(10 * clampTTL)):
+			t.Fatal("Failed to clamp timeout.")
+		case <-done:
+		}
+	})
+}
+
 // TestRelayStress makes many concurrent calls and ensures that
 // we don't try to reuse any frames once they've been released.
 func TestRelayConcurrentCalls(t *testing.T) {
