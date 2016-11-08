@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -40,7 +41,7 @@ type IntrospectionOptions struct {
 	// IncludeTombstones will include tombstones when introspecting relays.
 	IncludeTombstones bool `json:"includeTombstones"`
 
-	// IncludeOtherChannels will include basic information about other chanenls
+	// IncludeOtherChannels will include basic information about other channels
 	// created in the same process as this channel.
 	IncludeOtherChannels bool `json:"includeOtherChannels"`
 }
@@ -151,6 +152,7 @@ type RelayerRuntimeState struct {
 	Count         int               `json:"count"`
 	InboundItems  RelayItemSetState `json:"inboundItems"`
 	OutboundItems RelayItemSetState `json:"outboundItems"`
+	MaxTimeout    time.Duration     `json:"maxTimeout"`
 }
 
 // ExchangeSetRuntimeState is the runtime state for a message exchange set.
@@ -352,6 +354,7 @@ func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeStat
 		Count:         count,
 		InboundItems:  r.inbound.IntrospectState(opts, "inbound"),
 		OutboundItems: r.outbound.IntrospectState(opts, "outbound"),
+		MaxTimeout:    r.maxTimeout,
 	}
 }
 
