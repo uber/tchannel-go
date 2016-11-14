@@ -83,9 +83,8 @@ func TestRelay(t *testing.T) {
 		}
 
 		calls := relaytest.NewMockStats()
-		peer := relay.Peer{HostPort: ts.Server().PeerInfo().HostPort}
 		for _ = range tests {
-			calls.Add("client", "test", "echo").SetPeer(peer).Succeeded().End()
+			calls.Add("client", "test", "echo").Succeeded().End()
 		}
 		ts.AssertRelayStats(calls)
 	})
@@ -172,50 +171,43 @@ func TestRelayIDClash(t *testing.T) {
 func TestRelayErrorsOnGetPeer(t *testing.T) {
 	busyErr := NewSystemError(ErrCodeBusy, "busy")
 	tests := []struct {
-		desc      string
-		addPeer   func(*testutils.SimpleRelayHosts)
-		statsKey  string
-		statsPeer relay.Peer
-		wantErr   error
+		desc       string
+		returnPeer string
+		returnErr  error
+		statsKey   string
+		wantErr    error
 	}{
 		{
-			desc:     "No peer mappings, return empty Peer",
-			addPeer:  func(_ *testutils.SimpleRelayHosts) {},
-			statsKey: "relay-declined",
-			wantErr:  NewSystemError(ErrCodeDeclined, `invalid peer for "svc"`),
+			desc:       "No peer and no error",
+			returnPeer: "",
+			returnErr:  nil,
+			statsKey:   "relay-bad-relay-host",
+			wantErr:    NewSystemError(ErrCodeDeclined, `bad relay host implementation`),
 		},
 		{
-			desc: "System error getting peer",
-			addPeer: func(rh *testutils.SimpleRelayHosts) {
-				rh.AddError("svc", busyErr)
-			},
-			statsKey: "relay-busy",
-			wantErr:  busyErr,
+			desc:      "System error getting peer",
+			returnErr: busyErr,
+			statsKey:  "relay-busy",
+			wantErr:   busyErr,
 		},
 		{
-			desc: "Unknown error getting peer",
-			addPeer: func(rh *testutils.SimpleRelayHosts) {
-				rh.AddError("svc", errors.New("unknown"))
-			},
-			statsKey: "relay-declined",
-			wantErr:  NewSystemError(ErrCodeDeclined, "unknown"),
-		},
-		{
-			desc: "No host:port on peer",
-			addPeer: func(rh *testutils.SimpleRelayHosts) {
-				rh.AddPeer("svc", "", "pool", "zone")
-			},
+			desc:      "Unknown error getting peer",
+			returnErr: errors.New("unknown"),
 			statsKey:  "relay-declined",
-			statsPeer: relay.Peer{Zone: "zone", Pool: "pool"},
-			wantErr:   NewSystemError(ErrCodeDeclined, `invalid peer for "svc"`),
+			wantErr:   NewSystemError(ErrCodeDeclined, "unknown"),
 		},
 	}
 
 	for _, tt := range tests {
-		opts := testutils.NewOpts().SetRelayOnly()
-		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
-			tt.addPeer(ts.RelayHosts())
+		f := func(relay.CallFrame, relay.Conn) (string, error) {
+			return tt.returnPeer, tt.returnErr
+		}
 
+		opts := testutils.NewOpts().
+			SetRelayHost(relaytest.HostFunc(f)).
+			SetRelayOnly().
+			DisableLogVerification() // some of the test cases cause warnings.
+		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 			client := ts.NewClient(nil)
 			err := testutils.CallEcho(client, ts.HostPort(), "svc", nil)
 			if !assert.Error(t, err, "Call to unknown service should fail") {
@@ -226,7 +218,6 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 
 			calls := relaytest.NewMockStats()
 			calls.Add(client.PeerInfo().ServiceName, "svc", "echo").
-				SetPeer(tt.statsPeer).
 				Failed(tt.statsKey).End()
 			ts.AssertRelayStats(calls)
 		})
@@ -395,7 +386,7 @@ func TestRelayConcurrentCalls(t *testing.T) {
 			benchmark.WithServiceName("s1"),
 		)
 		defer server.Close()
-		ts.RelayHosts().Add("s1", server.HostPort())
+		ts.RelayHost().Add("s1", server.HostPort())
 
 		client := benchmark.NewClient([]string{ts.HostPort()},
 			benchmark.WithNoDurations(),
@@ -454,6 +445,11 @@ func TestRelayHandleLocalCall(t *testing.T) {
 		// But an unknown service causes declined
 		err = testutils.CallEcho(client, ts.HostPort(), "unknown", nil)
 		assert.Equal(t, ErrCodeDeclined, GetSystemErrorCode(err), "Expected Declined for unknown")
+
+		calls := relaytest.NewMockStats()
+		calls.Add(client.ServiceName(), "s2", "echo").Succeeded().End()
+		calls.Add(client.ServiceName(), "unknown", "echo").Failed("relay-declined").End()
+		ts.AssertRelayStats(calls)
 	})
 }
 
@@ -502,25 +498,19 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 	})
 }
 
-type hostsFunc func(relay.CallFrame, relay.Conn) (relay.Peer, error)
-
-func (f hostsFunc) Get(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
-	return f(call, conn)
-}
-
 func TestRelayConnection(t *testing.T) {
 	var errTest = errors.New("test")
 	var wantHostPort string
-	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
+	getHost := func(call relay.CallFrame, conn relay.Conn) (string, error) {
 		matches := conn.RemoteProcessPrefixMatches()
 		assert.Equal(t, []bool{true, true, true, false}, matches, "Unexpected prefix matches.")
 		assert.Equal(t, wantHostPort, conn.RemoteHostPort(), "Unexpected RemoteHostPort")
-		return relay.Peer{}, errTest
+		return "", errTest
 	}
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHosts(hostsFunc(getHost)).
+		SetRelayHost(relaytest.HostFunc(getHost)).
 		SetProcessPrefixes("nod", "nodejs-hyperbahn", "", "hyperbahn")
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// Create a client that is listening so we can set the expected host:port.
@@ -579,7 +569,6 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 		// and a failed call that we just checked the error on.
 		calls := relaytest.NewMockStats()
 		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
-			SetPeer(relay.Peer{HostPort: ts.Server().PeerInfo().HostPort}).
 			Succeeded().End()
 		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
 			// No peer is set since we rejected the call before selecting one.
@@ -589,17 +578,13 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 }
 
 func TestRelayRateLimitDrop(t *testing.T) {
-	droppedPeer := relay.Peer{
-		Pool: "$dropped",
-		Zone: "zone",
-	}
-	getHost := func(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
-		return droppedPeer, relay.RateLimitDropError{}
+	getHost := func(call relay.CallFrame, conn relay.Conn) (string, error) {
+		return "", relay.RateLimitDropError{}
 	}
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHosts(hostsFunc(getHost))
+		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		var gotCall bool
 		testutils.RegisterEcho(ts.Server(), func() {
@@ -625,7 +610,6 @@ func TestRelayRateLimitDrop(t *testing.T) {
 
 		calls := relaytest.NewMockStats()
 		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
-			SetPeer(droppedPeer).
 			Failed("relay-dropped").End()
 		ts.AssertRelayStats(calls)
 	})
@@ -700,5 +684,37 @@ func TestRelayStalledConnection(t *testing.T) {
 		calls.Add(client.PeerInfo().ServiceName, "s2", "echo").
 			Succeeded().End()
 		ts.AssertRelayStats(calls)
+	})
+}
+
+func TestRelayThroughSeparateRelay(t *testing.T) {
+	opts := testutils.NewOpts().
+		SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		serverHP := ts.Server().PeerInfo().HostPort
+		dummyFactory := func(relay.CallFrame, relay.Conn) (string, error) {
+			panic("should not get invoked")
+		}
+		relay2Opts := testutils.NewOpts().SetRelayHost(relaytest.HostFunc(dummyFactory))
+		relay2 := ts.NewServer(relay2Opts)
+
+		// Override where the peers come from.
+		ts.RelayHost().SetChannel(relay2)
+		relay2.GetSubChannel(ts.ServiceName(), Isolated).Peers().Add(serverHP)
+
+		testutils.RegisterEcho(ts.Server(), nil)
+		client := ts.NewClient(nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		numConns := func(p PeerRuntimeState) int {
+			return len(p.InboundConnections) + len(p.OutboundConnections)
+		}
+
+		// Verify that there are no connections from ts.Relay() to the server.
+		introspected := ts.Relay().IntrospectState(nil)
+		assert.Zero(t, numConns(introspected.RootPeers[serverHP]), "Expected no connections from relay to server")
+
+		introspected = relay2.IntrospectState(nil)
+		assert.Equal(t, 1, numConns(introspected.RootPeers[serverHP]), "Expected 1 connection from relay2 to server")
 	})
 }

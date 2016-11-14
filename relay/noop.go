@@ -19,21 +19,3 @@
 // THE SOFTWARE.
 
 package relay
-
-type noopStats struct{}
-
-// NewNoopStats returns a no-op implementation of Stats.
-func NewNoopStats() Stats {
-	return noopStats{}
-}
-
-func (n noopStats) Begin(_ CallFrame) CallStats {
-	return noopCallStats{}
-}
-
-type noopCallStats struct{}
-
-func (n noopCallStats) Succeeded()      {}
-func (n noopCallStats) Failed(_ string) {}
-func (n noopCallStats) SetPeer(_ Peer)  {}
-func (n noopCallStats) End()            {}

@@ -309,7 +309,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 	c.inbound.onAdded = c.onExchangeAdded
 	c.outbound.onAdded = c.onExchangeAdded
 
-	if ch.relayHosts != nil {
+	if ch.relayHost != nil {
 		c.relay = NewRelayer(ch, c)
 	}
 

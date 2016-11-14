@@ -29,7 +29,7 @@ import (
 	"github.com/uber/tchannel-go/hyperbahn"
 	hthrift "github.com/uber/tchannel-go/hyperbahn/gen-go/hyperbahn"
 	"github.com/uber/tchannel-go/json"
-	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/thrift"
 )
 
@@ -43,34 +43,16 @@ type Mock struct {
 	discoverResults map[string][]string
 }
 
-type mockTable struct {
-	ch *tchannel.Channel
-}
-
-func (mt *mockTable) Get(call relay.CallFrame, conn relay.Conn) (relay.Peer, error) {
-	serviceName := string(call.Service())
-	sc := mt.ch.GetSubChannel(serviceName, tchannel.Isolated)
-	peer, err := sc.Peers().Get(nil)
-	if err != nil {
-		return relay.Peer{}, err
-	}
-
-	return relay.Peer{
-		HostPort: peer.HostPort(),
-	}, nil
-}
-
 // New returns a mock Hyperbahn server that can be used for testing.
 func New() (*Mock, error) {
-	table := &mockTable{}
+	stubHost := relaytest.NewStubRelayHost()
 	ch, err := tchannel.NewChannel("hyperbahn", &tchannel.ChannelOptions{
-		RelayHosts:         table,
+		RelayHost:          stubHost,
 		RelayLocalHandlers: []string{"hyperbahn"},
 	})
 	if err != nil {
 		return nil, err
 	}
-	table.ch = ch
 	mh := &Mock{
 		ch:              ch,
 		respCh:          make(chan int),
