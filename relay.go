@@ -304,7 +304,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 			LogField{"dest", string(f.Service())},
 			LogField{"method", string(f.Method())},
 		).Warn("Received duplicate callReq.")
-		cs.Failed("relay-" + ErrCodeProtocol.MetricsKey())
+		cs.Failed(ErrCodeProtocol.relayMetricsKey())
 		// TODO: this is a protocol error, kill the connection.
 		return nil, false, errors.New("callReq with already active ID")
 	}
@@ -325,7 +325,7 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 		if _, ok := err.(SystemError); !ok {
 			err = NewSystemError(ErrCodeDeclined, err.Error())
 		}
-		cs.Failed("relay-" + GetSystemErrorCode(err).MetricsKey())
+		cs.Failed(GetSystemErrorCode(err).relayMetricsKey())
 		r.conn.SendSystemError(f.Header.ID, f.Span(), err)
 		return nil, false, nil
 	}

@@ -125,6 +125,31 @@ func (c SystemErrCode) MetricsKey() string {
 	}
 }
 
+func (c SystemErrCode) relayMetricsKey() string {
+	switch c {
+	case ErrCodeInvalid:
+		return "relay-invalid"
+	case ErrCodeTimeout:
+		return "relay-timeout"
+	case ErrCodeCancelled:
+		return "relay-cancelled"
+	case ErrCodeBusy:
+		return "relay-busy"
+	case ErrCodeDeclined:
+		return "relay-declined"
+	case ErrCodeUnexpected:
+		return "relay-unexpected-error"
+	case ErrCodeBadRequest:
+		return "relay-bad-request"
+	case ErrCodeNetwork:
+		return "relay-network-error"
+	case ErrCodeProtocol:
+		return "relay-protocol-error"
+	default:
+		return "relay-" + c.String()
+	}
+}
+
 // A SystemError is a system-level error, containing an error code and message
 // TODO(mmihic): Probably we want to hide this interface, and let application code
 // just deal with standard raw errors.
