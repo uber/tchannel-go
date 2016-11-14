@@ -66,3 +66,10 @@ func TestSystemError(t *testing.T) {
 	code := GetSystemErrorCode(ErrTimeout)
 	assert.Equal(t, ErrCodeTimeout, code, "tchannel timeout error produces ErrCodeTimeout")
 }
+
+func TestRelayMetricsKey(t *testing.T) {
+	for i := 0; i <= 256; i++ {
+		code := SystemErrCode(i)
+		assert.Equal(t, "relay-"+code.MetricsKey(), code.relayMetricsKey(), "Unexpected relay metrics key for %v", code)
+	}
+}
