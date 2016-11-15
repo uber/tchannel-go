@@ -51,10 +51,12 @@ type TestServer struct {
 	// relayIdx is the index of the relay channel, if any, in the channels slice.
 	relayIdx int
 
-	// relayHosts is the relayer's SimpleRelayHosts (if any).
-	relayHosts *SimpleRelayHosts
+	// relayHost is the relayer's StubRelayHost (if any).
+	relayHost *relaytest.StubRelayHost
 
-	// relayStats is the channel's relaying stats (if any).
+	// relayStats is the backing stats for the relay.
+	// Note: if a user passes a custom RelayHosts that does not implement
+	// relayStatter, then this will be nil, and relay stats cannot be verified.
 	relayStats *relaytest.MockStats
 
 	// channels is the list of channels created for this TestServer. The first
@@ -70,12 +72,15 @@ type TestServer struct {
 	postFns        []func()
 }
 
+type relayStatter interface {
+	Stats() *relaytest.MockStats
+}
+
 // NewTestServer constructs a TestServer.
 func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	ts := &TestServer{
 		TB:            t,
 		channelStates: make(map[*tchannel.Channel]*tchannel.RuntimeState),
-		relayStats:    relaytest.NewMockStats(),
 		introspectOpts: &tchannel.IntrospectionOptions{
 			IncludeExchanges:  true,
 			IncludeTombstones: true,
@@ -142,9 +147,9 @@ func (ts *TestServer) Relay() *tchannel.Channel {
 	return nil
 }
 
-// RelayHosts returns the stub RelayHosts for mapping service names to peers.
-func (ts *TestServer) RelayHosts() *SimpleRelayHosts {
-	return ts.relayHosts
+// RelayHost returns the stub RelayHost for mapping service names to peers.
+func (ts *TestServer) RelayHost() *relaytest.StubRelayHost {
+	return ts.relayHost
 }
 
 // HostPort returns the host:port for clients to connect to. Note that this may
@@ -190,6 +195,12 @@ func (ts *TestServer) AssertRelayStats(expected *relaytest.MockStats) {
 	if !ts.HasRelay() {
 		return
 	}
+
+	if ts.relayStats == nil {
+		ts.TB.Error("Cannot verify relay stats, passed in RelayStats does not implement relayStatter")
+		return
+	}
+
 	ts.relayStats.AssertEqual(ts, expected)
 }
 
@@ -202,8 +213,8 @@ func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
 // NewServer returns a server with log and channel state verification.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 	ch := ts.addChannel(newServer, opts.Copy())
-	if ts.relayHosts != nil {
-		ts.relayHosts.Add(ch.ServiceName(), ch.PeerInfo().HostPort)
+	if ts.relayHost != nil {
+		ts.relayHost.Add(ch.ServiceName(), ch.PeerInfo().HostPort)
 	}
 	return ch
 }
@@ -213,19 +224,24 @@ func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
 	opts := parentOpts.Copy()
 
-	relayHosts := opts.ChannelOptions.RelayHosts
-	if relayHosts == nil {
-		ts.relayHosts = NewSimpleRelayHosts(ts, map[string][]string{
-			ts.Server().ServiceName(): []string{ts.Server().PeerInfo().HostPort},
-		})
-		relayHosts = ts.relayHosts
+	relayHost := opts.ChannelOptions.RelayHost
+	if relayHost == nil {
+		ts.relayHost = relaytest.NewStubRelayHost()
+		relayHost = ts.relayHost
 	}
 
 	opts.ServiceName = "relay"
-	opts.ChannelOptions.RelayHosts = relayHosts
-	opts.RelayStats = ts.relayStats
+	opts.ChannelOptions.RelayHost = relayHost
 
 	ts.addChannel(newServer, opts)
+	if ts.relayHost != nil {
+		ts.relayHost.Add(ts.Server().ServiceName(), ts.Server().PeerInfo().HostPort)
+	}
+
+	if statter, ok := relayHost.(relayStatter); ok {
+		ts.relayStats = statter.Stats()
+	}
+
 	ts.relayIdx = len(ts.channels) - 1
 }
 

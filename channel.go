@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/tnet"
 
 	"github.com/opentracing/opentracing-go"
@@ -60,11 +59,7 @@ type ChannelOptions struct {
 
 	// The host:port selection implementation to use for relaying. This is an
 	// unstable API - breaking changes are likely.
-	RelayHosts relay.Hosts
-
-	// The stats implementation to use for relaying. This is an unstable API -
-	// breaking changes are likely.
-	RelayStats relay.Stats
+	RelayHost RelayHost
 
 	// The list of service names that should be handled locally by this channel.
 	// This is an unstable API - breaking changes are likely.
@@ -122,7 +117,7 @@ type Channel struct {
 	commonStatsTags   map[string]string
 	connectionOptions ConnectionOptions
 	peers             *PeerList
-	relayHosts        relay.Hosts
+	relayHost         RelayHost
 	relayMaxTimeout   time.Duration
 
 	// mutable contains all the members of Channel which are mutable.
@@ -139,7 +134,6 @@ type Channel struct {
 // and can be copied directly from the channel to the connection.
 type channelConnectionCommon struct {
 	log           Logger
-	relayStats    relay.Stats
 	relayLocal    map[string]struct{}
 	statsReporter StatsReporter
 	tracer        opentracing.Tracer
@@ -193,15 +187,9 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeNow = time.Now
 	}
 
-	relayStats := relay.NewNoopStats()
-	if opts.RelayStats != nil {
-		relayStats = opts.RelayStats
-	}
-
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger,
-			relayStats:    relayStats,
 			relayLocal:    toStringSet(opts.RelayLocalHandlers),
 			statsReporter: statsReporter,
 			subChannels:   &subChannelMap{},
@@ -210,7 +198,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		},
 
 		connectionOptions: opts.DefaultConnectionOptions,
-		relayHosts:        opts.RelayHosts,
+		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 	}
 	ch.peers = newRootPeerList(ch).newChild()
@@ -230,6 +218,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.registerInternal()
 
 	registerNewChannel(ch)
+
+	if opts.RelayHost != nil {
+		opts.RelayHost.SetChannel(ch)
+	}
 	return ch, nil
 }
 
@@ -713,9 +705,9 @@ func (ch *Channel) Close() {
 	removeClosedChannel(ch)
 }
 
-// RelayHosts returns the channel's relay hosts, if any.
-func (ch *Channel) RelayHosts() relay.Hosts {
-	return ch.relayHosts
+// RelayHost returns the channel's RelayHost, if any.
+func (ch *Channel) RelayHost() RelayHost {
+	return ch.relayHost
 }
 
 func toStringSet(ss []string) map[string]struct{} {

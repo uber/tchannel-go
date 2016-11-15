@@ -22,6 +22,7 @@ package relaytest
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -38,12 +39,7 @@ type MockCallStats struct {
 	succeeded  int
 	failedMsgs []string
 	ended      int
-	peer       *relay.Peer
 	wg         *sync.WaitGroup
-
-	// By default, we don't verify peers, as we get unique host:ports and
-	// verifying constantly lead to a lot of noise in tests.
-	verifyPeer bool
 }
 
 // Succeeded marks the RPC as succeeded.
@@ -54,12 +50,6 @@ func (m *MockCallStats) Succeeded() {
 // Failed marks the RPC as failed for the provided reason.
 func (m *MockCallStats) Failed(reason string) {
 	m.failedMsgs = append(m.failedMsgs, reason)
-}
-
-// SetPeer sets the peer for the current call.
-func (m *MockCallStats) SetPeer(peer relay.Peer) {
-	m.verifyPeer = true
-	m.peer = &peer
 }
 
 // End halts timer and metric collection for the RPC.
@@ -85,12 +75,6 @@ func (f *FluentMockCallStats) Failed(reason string) *FluentMockCallStats {
 	return f
 }
 
-// SetPeer sets the peer for the current call.
-func (f *FluentMockCallStats) SetPeer(peer relay.Peer) *FluentMockCallStats {
-	f.MockCallStats.SetPeer(peer)
-	return f
-}
-
 // MockStats is a testing spy for the Stats interface.
 type MockStats struct {
 	mu    sync.Mutex
@@ -106,7 +90,7 @@ func NewMockStats() *MockStats {
 }
 
 // Begin starts collecting metrics for an RPC.
-func (m *MockStats) Begin(f relay.CallFrame) relay.CallStats {
+func (m *MockStats) Begin(f relay.CallFrame) *MockCallStats {
 	return m.Add(string(f.Caller()), string(f.Service()), string(f.Method())).MockCallStats
 }
 
@@ -132,7 +116,7 @@ func (m *MockStats) AssertEqual(t testing.TB, expected *MockStats) {
 	expected.mu.Lock()
 	defer expected.mu.Unlock()
 
-	if assert.Equal(t, len(expected.stats), len(m.stats), "Found calls along unexpected edges.") {
+	if assert.Equal(t, getEdges(expected.stats), getEdges(m.stats), "Found calls along unexpected edges.") {
 		for edge := range expected.stats {
 			m.assertEdgeEqual(t, expected, edge)
 		}
@@ -163,10 +147,6 @@ func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actua
 	assert.Equal(t, expected.failedMsgs, actual.failedMsgs, "Unexpected reasons for RPC failure.")
 	assert.Equal(t, expected.ended, actual.ended, "Unexpected number of calls to End.")
 
-	if expected.verifyPeer {
-		assert.Equal(t, expected.peer, actual.peer, "Unexpected peer used for the call")
-	}
-
 	if t.Failed() {
 		// The default testify output is often insufficient.
 		t.Logf("\nExpected relayed stats were:\n\t%+v\nActual relayed stats were:\n\t%+v\n", expected, actual)
@@ -175,4 +155,13 @@ func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actua
 
 func (m *MockStats) tripleToKey(caller, callee, procedure string) string {
 	return fmt.Sprintf("%s->%s::%s", caller, callee, procedure)
+}
+
+func getEdges(m map[string][]*MockCallStats) []string {
+	edges := make([]string, 0, len(m))
+	for k := range m {
+		edges = append(edges, k)
+	}
+	sort.Strings(edges)
+	return edges
 }
