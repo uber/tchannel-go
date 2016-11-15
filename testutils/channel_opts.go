@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
-	"github.com/uber/tchannel-go/relay"
 
 	"github.com/uber-go/atomic"
 )
@@ -181,9 +180,9 @@ func (o *ChannelOpts) addPostFn(f func()) {
 	o.postFns = append(o.postFns, f)
 }
 
-// SetRelayHosts sets the channel's relay hosts, which enables relaying.
-func (o *ChannelOpts) SetRelayHosts(rh relay.Hosts) *ChannelOpts {
-	o.ChannelOptions.RelayHosts = rh
+// SetRelayHost sets the channel's RelayHost, which enables relaying.
+func (o *ChannelOpts) SetRelayHost(rh tchannel.RelayHost) *ChannelOpts {
+	o.ChannelOptions.RelayHost = rh
 	return o
 }
 

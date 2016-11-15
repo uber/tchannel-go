@@ -45,6 +45,7 @@ const (
 var (
 	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
 	errFrameNotSent          = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
+	errBadRelayHost          = NewSystemError(ErrCodeDeclined, "bad relay host implementation")
 	errUnknownID             = errors.New("non-callReq for inactive ID")
 )
 
@@ -57,7 +58,7 @@ type relayItem struct {
 	remapID     uint32
 	tomb        bool
 	local       bool
-	stats       relay.CallStats
+	call        RelayCall
 	destination *Relayer
 	span        Span
 }
@@ -164,8 +165,7 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	stats      relay.Stats
-	hosts      relay.Hosts
+	relayHost  RelayHost
 	maxTimeout time.Duration
 
 	// localHandlers is the set of service names that are handled by the local
@@ -191,8 +191,7 @@ type Relayer struct {
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	return &Relayer{
-		stats:        ch.relayStats,
-		hosts:        ch.RelayHosts(),
+		relayHost:    ch.RelayHost(),
 		maxTimeout:   ch.relayMaxTimeout,
 		localHandler: ch.relayLocal,
 		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
@@ -201,11 +200,6 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		conn:         conn,
 		logger:       conn.log,
 	}
-}
-
-// Hosts returns the RelayHosts guiding peer selection.
-func (r *Relayer) Hosts() relay.Hosts {
-	return r.hosts
 }
 
 // Relay is called for each frame that is read on the connection.
@@ -248,9 +242,9 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		// If we've gotten a response frame, we're the originating relayer and
 		// should handle stats.
 		if succeeded, failMsg := determinesCallSuccess(f); succeeded {
-			item.stats.Succeeded()
+			item.call.Succeeded()
 		} else if len(failMsg) > 0 {
-			item.stats.Failed(failMsg)
+			item.call.Failed(failMsg)
 		}
 	}
 
@@ -296,7 +290,7 @@ func (r *Relayer) canHandleNewCall() (bool, connectionState) {
 	return canHandle, curState
 }
 
-func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection, bool, error) {
+func (r *Relayer) getDestination(f lazyCallReq, call RelayCall) (*Connection, bool, error) {
 	if _, ok := r.outbound.Get(f.Header.ID); ok {
 		r.logger.WithFields(
 			LogField{"id", f.Header.ID},
@@ -304,33 +298,18 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 			LogField{"dest", string(f.Service())},
 			LogField{"method", string(f.Method())},
 		).Warn("Received duplicate callReq.")
-		cs.Failed(ErrCodeProtocol.relayMetricsKey())
+		call.Failed(ErrCodeProtocol.relayMetricsKey())
 		// TODO: this is a protocol error, kill the connection.
 		return nil, false, errors.New("callReq with already active ID")
 	}
 
 	// Get the destination
-	selectedPeer, err := r.hosts.Get(f, (*relayConn)(r.conn))
-	cs.SetPeer(selectedPeer)
-	if err == nil && selectedPeer.HostPort == "" {
-		err = errInvalidPeerForGroup(f.Service())
+	peer, ok := call.Destination()
+	if !ok {
+		call.Failed("relay-bad-relay-host")
+		r.conn.SendSystemError(f.Header.ID, f.Span(), errBadRelayHost)
+		return nil, false, errBadRelayHost
 	}
-	if err != nil {
-		// If we have a RateLimitDropError we record the statistic, but
-		// we *don't* send an error frame back to the client.
-		if _, silentlyDrop := err.(relay.RateLimitDropError); silentlyDrop {
-			cs.Failed("relay-dropped")
-			return nil, false, nil
-		}
-		if _, ok := err.(SystemError); !ok {
-			err = NewSystemError(ErrCodeDeclined, err.Error())
-		}
-		cs.Failed(GetSystemErrorCode(err).relayMetricsKey())
-		r.conn.SendSystemError(f.Header.ID, f.Span(), err)
-		return nil, false, nil
-	}
-
-	peer := r.peers.GetOrAdd(selectedPeer.HostPort)
 
 	// TODO: Should connections use the call timeout? Or a separate timeout?
 	remoteConn, err := peer.getConnectionRelay(f.TTL())
@@ -340,9 +319,9 @@ func (r *Relayer) getDestination(f lazyCallReq, cs relay.CallStats) (*Connection
 			LogField{"source", string(f.Caller())},
 			LogField{"dest", string(f.Service())},
 			LogField{"method", string(f.Method())},
-			LogField{"selectedPeer", selectedPeer},
+			LogField{"selectedPeer", peer},
 		).Warn("Failed to connect to relay host.")
-		cs.Failed("relay-connection-failed")
+		call.Failed("relay-connection-failed")
 		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeNetwork, err))
 		return nil, false, nil
 	}
@@ -355,21 +334,42 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return nil
 	}
 
-	callStats := r.stats.Begin(f)
+	call, err := r.relayHost.Start(f, (*relayConn)(r.conn))
+	if err != nil {
+		// If we have a RateLimitDropError we record the statistic, but
+		// we *don't* send an error frame back to the client.
+		if _, silentlyDrop := err.(relay.RateLimitDropError); silentlyDrop {
+			if call != nil {
+				call.Failed("relay-dropped")
+				call.End()
+			}
+			return nil
+		}
+		if _, ok := err.(SystemError); !ok {
+			err = NewSystemError(ErrCodeDeclined, err.Error())
+		}
+		if call != nil {
+			call.Failed(GetSystemErrorCode(err).relayMetricsKey())
+			call.End()
+		}
+		r.conn.SendSystemError(f.Header.ID, f.Span(), err)
+		return nil
+	}
+
 	if canHandle, state := r.canHandleNewCall(); !canHandle {
-		callStats.Failed("relay-conn-inactive")
-		callStats.End()
+		call.Failed("relay-conn-inactive")
+		call.End()
 		err := errConnNotActive{"incoming", state}
 		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
 		return err
 	}
 
 	// Get a remote connection and check whether it can handle this call.
-	remoteConn, ok, err := r.getDestination(f, callStats)
+	remoteConn, ok, err := r.getDestination(f, call)
 	if err == nil && ok {
 		if canHandle, state := remoteConn.relay.canHandleNewCall(); !canHandle {
 			err = NewWrappedSystemError(ErrCodeNetwork, errConnNotActive{"selected remote", state})
-			callStats.Failed("relay-remote-inactive")
+			call.Failed("relay-remote-inactive")
 			r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
 		}
 	}
@@ -378,7 +378,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		// state to handle this call. Since we already incremented pending on
 		// the current relay, we need to decrement it.
 		r.decrementPending()
-		callStats.End()
+		call.End()
 		return err
 	}
 
@@ -392,7 +392,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
-	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, callStats)
+	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
 	f.Header.ID = destinationID
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
@@ -443,9 +443,9 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
-func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, cs relay.CallStats) relayItem {
+func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, call RelayCall) relayItem {
 	item := relayItem{
-		stats:       cs,
+		call:        call,
 		remapID:     remapID,
 		destination: destination,
 		span:        span,
@@ -467,8 +467,8 @@ func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint
 	}
 	if isOriginator {
 		r.conn.SendSystemError(id, item.span, ErrTimeout)
-		item.stats.Failed("timeout")
-		item.stats.End()
+		item.call.Failed("timeout")
+		item.call.End()
 	}
 
 	r.decrementPending()
@@ -481,10 +481,10 @@ func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
 	if !ok {
 		return
 	}
-	if item.stats != nil {
+	if item.call != nil {
 		r.conn.SendSystemError(id, item.span, errFrameNotSent)
-		item.stats.Failed(failure)
-		item.stats.End()
+		item.call.Failed(failure)
+		item.call.End()
 	}
 
 	r.decrementPending()
@@ -495,8 +495,8 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 	if !ok {
 		return
 	}
-	if item.stats != nil {
-		item.stats.End()
+	if item.call != nil {
+		item.call.End()
 	}
 	r.decrementPending()
 }
@@ -569,10 +569,6 @@ func frameTypeFor(f *Frame) frameType {
 	default:
 		panic(fmt.Sprintf("unsupported frame type: %v", t))
 	}
-}
-
-func errInvalidPeerForGroup(group []byte) error {
-	return NewSystemError(ErrCodeDeclined, "invalid peer for %q", group)
 }
 
 func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {

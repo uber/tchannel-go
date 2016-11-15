@@ -52,54 +52,6 @@ type CallFrame interface {
 	RoutingKey() []byte
 }
 
-// Hosts allows external wrappers to inject peer selection logic for
-// relaying.
-type Hosts interface {
-	// Get returns the peer to forward the given call to.
-	// If a SystemError is returned, the error is forwarded. Otherwise
-	// a Declined error is returned to the caller.
-	Get(CallFrame, Conn) (Peer, error)
-}
-
-// CallStats is a reporter for per-request stats. The Succeeded, Failed, and End
-// methods should be safe for concurrent use.
-//
-// Because call res frames don't include the OK bit, we can't wait until the
-// last frame of a relayed RPC to decide whether or not the RPC succeeded.
-// Instead, we mark the call successful or failed as we see the relevant frame,
-// but we wait to end any timers until the last frame of the response.
-type CallStats interface {
-	// SetPeer is called once a peer has been selected for this call.
-	// Note: This may not be called if a call fails before peer selection.
-	SetPeer(Peer)
-
-	// The call succeeded (possibly after retrying).
-	Succeeded()
-	// The RPC failed.
-	Failed(reason string)
-	// End stats collection for this RPC. Will be called exactly once.
-	End()
-}
-
-// Stats is a CallStats factory.
-type Stats interface {
-	Begin(CallFrame) CallStats
-}
-
-// Peer represents the destination selected for a call.
-type Peer struct {
-	// HostPort of the peer that was selected.
-	HostPort string
-
-	// Pool allows the peer selection to specify a pool that this Peer belongs
-	// to, which may be useful when reporting stats.
-	Pool string
-
-	// Zone allows the peer selection to specify the zone that this Peer belongs
-	// to, which is also useful for stats.
-	Zone string
-}
-
 // RateLimitDropError is the error that should be returned from
 // RelayHosts.Get if the request should be dropped silently.
 // This is bit of a hack, because rate limiting of this nature isn't part of

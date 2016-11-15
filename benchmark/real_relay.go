@@ -21,10 +21,12 @@
 package benchmark
 
 import (
+	"errors"
 	"os"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/relay/relaytest"
 
 	"github.com/uber-go/atomic"
 )
@@ -34,14 +36,14 @@ type fixedHosts struct {
 	pickI atomic.Int32
 }
 
-func (fh *fixedHosts) Get(call relay.CallFrame, _ relay.Conn) (relay.Peer, error) {
-	peers := fh.hosts[string(call.Service())]
+func (fh *fixedHosts) Get(cf relay.CallFrame, _ relay.Conn) (string, error) {
+	peers := fh.hosts[string(cf.Service())]
 	if len(peers) == 0 {
-		return relay.Peer{}, nil
+		return "", errors.New("no peers")
 	}
 
 	pickI := int(fh.pickI.Inc()-1) % len(peers)
-	return relay.Peer{HostPort: peers[pickI]}, nil
+	return peers[pickI], nil
 }
 
 type realRelay struct {
@@ -53,8 +55,8 @@ type realRelay struct {
 func NewRealRelay(services map[string][]string) (Relay, error) {
 	hosts := &fixedHosts{hosts: services}
 	ch, err := tchannel.NewChannel("relay", &tchannel.ChannelOptions{
-		RelayHosts: hosts,
-		Logger:     tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
+		RelayHost: relaytest.HostFunc(hosts.Get),
+		Logger:    tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
 	})
 	if err != nil {
 		return nil, err
