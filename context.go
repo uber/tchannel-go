@@ -60,6 +60,9 @@ type IncomingCall interface {
 	// transport header.
 	RoutingDelegate() string
 
+	// LocalPeer returns the local peer information.
+	LocalPeer() LocalPeerInfo
+
 	// RemotePeer returns the caller's peer information.
 	// If the caller is an ephemeral peer, then the HostPort cannot be used to make new
 	// connections to the caller.

@@ -116,6 +116,7 @@ func TestRoundTrip(t *testing.T) {
 		call, err := ts.Server().BeginCall(ctx, ts.HostPort(), ts.ServiceName(), "echo", &CallOptions{Format: JSON})
 		require.NoError(t, err)
 		assert.NotEmpty(t, call.RemotePeer().HostPort)
+		assert.Equal(t, ts.Server().PeerInfo(), call.LocalPeer(), "Unexpected local peer")
 
 		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(testArg2))
 		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(testArg3))
@@ -194,6 +195,7 @@ func TestRemotePeer(t *testing.T) {
 			gotPeer := make(chan PeerInfo, 1)
 			ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 				gotPeer <- CurrentCall(ctx).RemotePeer()
+				assert.Equal(t, ts.Server().PeerInfo(), CurrentCall(ctx).LocalPeer())
 				return &raw.Res{}, nil
 			})
 
