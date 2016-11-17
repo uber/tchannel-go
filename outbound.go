@@ -211,7 +211,12 @@ func (call *OutboundCall) Arg3Writer() (ArgWriter, error) {
 	return call.arg3Writer()
 }
 
-// RemotePeer returns the peer information for this call.
+// LocalPeer returns the local peer information for this call.
+func (call *OutboundCall) LocalPeer() LocalPeerInfo {
+	return call.conn.localPeerInfo
+}
+
+// RemotePeer returns the remote peer information for this call.
 func (call *OutboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }

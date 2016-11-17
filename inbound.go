@@ -253,7 +253,12 @@ func (call *InboundCall) RoutingDelegate() string {
 	return call.headers[RoutingDelegate]
 }
 
-// RemotePeer returns the caller's peer info.
+// LocalPeer returns the local peer information for this call.
+func (call *InboundCall) LocalPeer() LocalPeerInfo {
+	return call.conn.localPeerInfo
+}
+
+// RemotePeer returns the remote peer information for this call.
 func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }
