@@ -37,6 +37,9 @@ type FakeIncomingCall struct {
 	// RemotePeerF is the calling service's peer info.
 	RemotePeerF tchannel.PeerInfo
 
+	// LocalPeerF is the local service's peer info.
+	LocalPeerF tchannel.LocalPeerInfo
+
 	// RoutingKeyF is the routing key.
 	RoutingKeyF string
 
@@ -64,7 +67,12 @@ func (f *FakeIncomingCall) RoutingDelegate() string {
 	return f.RoutingDelegateF
 }
 
-// RemotePeer returns the caller's peer info.
+// LocalPeer returns the local peer information for this call.
+func (f *FakeIncomingCall) LocalPeer() tchannel.LocalPeerInfo {
+	return f.LocalPeerF
+}
+
+// RemotePeer returns the remote peer information for this call.
 func (f *FakeIncomingCall) RemotePeer() tchannel.PeerInfo {
 	return f.RemotePeerF
 }
