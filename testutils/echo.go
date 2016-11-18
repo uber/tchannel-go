@@ -66,7 +66,7 @@ func AssertEcho(tb testing.TB, src *tchannel.Channel, targetHostPort, targetServ
 
 // RegisterEcho registers an echo endpoint on the given channel. The optional provided
 // function is run before the handler returns.
-func RegisterEcho(src *tchannel.Channel, f func()) {
+func RegisterEcho(src tchannel.Registrar, f func()) {
 	RegisterFunc(src, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 		if f != nil {
 			f()

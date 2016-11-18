@@ -75,7 +75,7 @@ func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 }
 
 type rawFuncHandler struct {
-	ch *tchannel.Channel
+	ch tchannel.Registrar
 	f  func(context.Context, *raw.Args) (*raw.Res, error)
 }
 
@@ -91,7 +91,7 @@ func (h rawFuncHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, e
 }
 
 // RegisterFunc registers a function as a handler for the given method name.
-func RegisterFunc(ch *tchannel.Channel, name string,
+func RegisterFunc(ch tchannel.Registrar, name string,
 	f func(ctx context.Context, args *raw.Args) (*raw.Res, error)) {
 
 	ch.Register(raw.Wrap(rawFuncHandler{ch, f}), name)
