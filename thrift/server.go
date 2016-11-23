@@ -133,6 +133,10 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	success, resp, err := handler.server.Handle(ctx, method, wp.protocol)
 	thriftProtocolPool.Put(wp)
 
+	if handler.postResponseCB != nil {
+		defer handler.postResponseCB(ctx, method, resp)
+	}
+
 	if err != nil {
 		if _, ok := err.(thrift.TProtocolException); ok {
 			// We failed to parse the Thrift generated code, so convert the error to bad request.
@@ -168,10 +172,6 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	resp.Write(wp.protocol)
 	thriftProtocolPool.Put(wp)
 	err = writer.Close()
-
-	if handler.postResponseCB != nil {
-		handler.postResponseCB(ctx, method, resp)
-	}
 
 	return err
 }
