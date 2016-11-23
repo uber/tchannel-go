@@ -134,9 +134,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	thriftProtocolPool.Put(wp)
 
 	if handler.postResponseCB != nil {
-		defer func() {
-			handler.postResponseCB(ctx, method, resp)
-		}()
+		defer handler.postResponseCB(ctx, method, resp)
 	}
 
 	if err != nil {
