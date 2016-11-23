@@ -283,6 +283,51 @@ func TestRegisterPostResponseCB(t *testing.T) {
 	})
 }
 
+func TestRegisterPostResponseCBCalledOnError(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		var createdCtx Context
+		ctxKey := "key"
+		ctxValue := "value"
+
+		args.server.SetContextFn(func(ctx context.Context, method string, headers map[string]string) Context {
+			createdCtx = WithHeaders(context.WithValue(ctx, ctxKey, ctxValue), headers)
+			return createdCtx
+		})
+
+		arg := &gen.Data{
+			B1: true,
+			S2: "str",
+			I3: 102,
+		}
+
+		retErr := thrift.NewTProtocolException(fmt.Errorf("expected error"))
+
+		called := make(chan struct{})
+		cb := func(reqCtx context.Context, method string, response thrift.TStruct) {
+			assert.Equal(t, "Call", method)
+			assert.Equal(t, createdCtx, reqCtx)
+			assert.Equal(t, ctxValue, reqCtx.Value(ctxKey))
+			assert.Nil(t, response)
+			close(called)
+		}
+		args.server.Register(gen.NewTChanSimpleServiceServer(args.s1), OptPostResponse(cb))
+
+		args.s1.On("Call", ctxArg(), arg).Return(nil, retErr)
+		res, err := args.c1.Call(ctx, arg)
+		require.Error(t, err, "Call succeeded instead of failed")
+		require.Nil(t, res, "Call returned value and an error")
+		sysErr, ok := err.(tchannel.SystemError)
+		require.True(t, ok, "Call return error not a system error")
+		assert.Equal(t, tchannel.ErrCodeBadRequest, sysErr.Code(), "Call return error value wrong")
+		assert.Equal(t, retErr.Error(), sysErr.Message(), "Call return error value wrong")
+		select {
+		case <-time.After(time.Second):
+			t.Errorf("post-response callback not called")
+		case <-called:
+		}
+	})
+}
+
 func TestThriftTimeout(t *testing.T) {
 	withSetup(t, func(ctx Context, args testArgs) {
 		handler := make(chan struct{})
