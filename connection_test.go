@@ -727,6 +727,10 @@ func TestNetDialTimeout(t *testing.T) {
 }
 
 func TestNetDialCancelContext(t *testing.T) {
+	if runtime.Version() < "go1.7" {
+		t.Skipf("go version is < 1.7")
+	}
+
 	// timeoutHostPort uses a blackholed address (RFC 6890) with a port
 	// reserved for documentation. This address should always cause a timeout.
 	const timeoutHostPort = "192.18.0.254:44444"
