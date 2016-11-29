@@ -726,10 +726,6 @@ func TestNetDialTimeout(t *testing.T) {
 	assert.True(t, d >= timeoutPeriod, "Timeout should take more than %v, took %v", timeoutPeriod, d)
 }
 
-func TestNetDialCancelContext(t *testing.T) {
-	testNetDialCancelContext(t)
-}
-
 func TestConnectTimeout(t *testing.T) {
 	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {

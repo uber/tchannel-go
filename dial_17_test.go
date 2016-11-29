@@ -33,7 +33,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 )
 
-func testNetDialCancelContext(t *testing.T) {
+func TestNetDialCancelContext(t *testing.T) {
 	// timeoutHostPort uses a blackholed address (RFC 6890) with a port
 	// reserved for documentation. This address should always cause a timeout.
 	const timeoutHostPort = "192.18.0.254:44444"
