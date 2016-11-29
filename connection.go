@@ -224,9 +224,19 @@ const (
 
 //go:generate stringer -type=connectionState
 
+func getTimeout(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return DefaultConnectTimeout
+	}
+
+	return deadline.Sub(time.Now())
+}
+
 // Creates a new Connection around an outbound connection initiated to a peer
-func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string, events connectionEvents) (*Connection, error) {
-	conn, err := net.DialTimeout("tcp", hostPort, timeout)
+func (ch *Channel) newOutboundConnection(ctx context.Context, hostPort string, events connectionEvents) (*Connection, error) {
+	timeout := getTimeout(ctx)
+	conn, err := dialContext(ctx, hostPort)
 	if err != nil {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			ch.log.WithFields(
@@ -234,6 +244,11 @@ func (ch *Channel) newOutboundConnection(timeout time.Duration, hostPort string,
 				LogField{"timeout", timeout},
 			).Info("Outbound net.Dial timed out.")
 			err = ErrTimeout
+		} else if ctx.Err() == context.Canceled {
+			ch.log.WithFields(
+				LogField{"remoteHostPort", hostPort},
+			).Info("Outbound net.Dial was cancelled.")
+			err = errDialCancelled
 		} else {
 			ch.log.WithFields(
 				ErrField(err),
