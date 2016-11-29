@@ -727,38 +727,7 @@ func TestNetDialTimeout(t *testing.T) {
 }
 
 func TestNetDialCancelContext(t *testing.T) {
-	if runtime.Version() < "go1.7" {
-		t.Skipf("go version is < 1.7")
-	}
-
-	// timeoutHostPort uses a blackholed address (RFC 6890) with a port
-	// reserved for documentation. This address should always cause a timeout.
-	const timeoutHostPort = "192.18.0.254:44444"
-	timeoutPeriod := testutils.Timeout(50 * time.Millisecond)
-
-	client := testutils.NewClient(t, nil)
-	defer client.Close()
-
-	started := time.Now()
-	ctx, cancel := NewContext(time.Minute)
-
-	go func() {
-		time.Sleep(timeoutPeriod)
-		cancel()
-	}()
-
-	err := client.Ping(ctx, timeoutHostPort)
-	if !assert.Error(t, err, "Ping to blackhole address should fail") {
-		return
-	}
-
-	if strings.Contains(err.Error(), "network is unreachable") {
-		t.Skipf("Skipping test, as network interface may not be available")
-	}
-
-	d := time.Since(started)
-	assert.Equal(t, ErrCodeCancelled, GetSystemErrorCode(err), "Ping expected to fail with timeout")
-	assert.True(t, d <= 2*timeoutPeriod, "Timeout should take less than %v, took %v", timeoutPeriod, d)
+	testNetDialCancelContext(t)
 }
 
 func TestConnectTimeout(t *testing.T) {
