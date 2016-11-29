@@ -60,6 +60,6 @@ func TestNetDialCancelContext(t *testing.T) {
 	}
 
 	d := time.Since(started)
-	assert.Equal(t, ErrCodeCancelled, GetSystemErrorCode(err), "Ping expected to fail with timeout")
-	assert.True(t, d <= 2*timeoutPeriod, "Timeout should take less than %v, took %v", timeoutPeriod, d)
+	assert.Equal(t, ErrCodeCancelled, GetSystemErrorCode(err), "Ping expected to fail with context cancelled")
+	assert.True(t, d < 2*timeoutPeriod, "Timeout should take less than %v, took %v", 2*timeoutPeriod, d)
 }
