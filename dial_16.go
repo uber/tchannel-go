@@ -23,8 +23,9 @@
 package tchannel
 
 import (
-	"context"
 	"net"
+
+	"golang.org/x/net/context"
 )
 
 func dialContext(ctx context.Context, hostPort string) (net.Conn, error) {
