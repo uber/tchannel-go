@@ -719,3 +719,48 @@ func TestRelayThroughSeparateRelay(t *testing.T) {
 		assert.Equal(t, 1, numConns(introspected.RootPeers[serverHP]), "Expected 1 connection from relay2 to server")
 	})
 }
+
+func TestRelayConcurrentNewConnectionAttempts(t *testing.T) {
+	opts := testutils.NewOpts().SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		// Create a server that is slow to accept connections by using
+		// a frame relay to slow down the initial message.
+		slowServer := testutils.NewServer(t, serviceNameOpts("slow-server"))
+		defer slowServer.Close()
+		testutils.RegisterEcho(slowServer, nil)
+
+		var delayed bool
+		relayFunc := func(outgoing bool, f *Frame) *Frame {
+			if !delayed {
+				time.Sleep(testutils.Timeout(50 * time.Millisecond))
+				delayed = true
+			}
+			return f
+		}
+
+		slowHP, close := testutils.FrameRelay(t, slowServer.PeerInfo().HostPort, relayFunc)
+		defer close()
+		ts.RelayHost().Add("slow-server", slowHP)
+
+		// Make concurrent calls to trigger concurrent getConnectionRelay calls.
+		var wg sync.WaitGroup
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			// Create client and get dest host:port in the main goroutine to avoid races.
+			client := ts.NewClient(nil)
+			relayHostPort := ts.HostPort()
+			go func() {
+				defer wg.Done()
+				testutils.AssertEcho(t, client, relayHostPort, "slow-server")
+			}()
+		}
+		wg.Wait()
+
+		// Verify that the slow server only received a single connection.
+		inboundConns := 0
+		for _, state := range slowServer.IntrospectState(nil).RootPeers {
+			inboundConns += len(state.InboundConnections)
+		}
+		assert.Equal(t, 1, inboundConns, "Expected a single inbound connection to the server")
+	})
+}
