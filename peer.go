@@ -360,11 +360,20 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 	return p.Connect(ctx)
 }
 
-// getConnectionRelay gets a connection, and uses the given timeout if a new
-// connection is required.
+// getConnectionRelay gets a connection, and uses the given timeout to lazily
+// create a context if a new connection is required.
 func (p *Peer) getConnectionRelay(timeout time.Duration) (*Connection, error) {
 	if conn, ok := p.getActiveConn(); ok {
 		return conn, nil
+	}
+
+	// Lock here to restrict new connection creation attempts to one goroutine
+	p.newConnLock.Lock()
+	defer p.newConnLock.Unlock()
+
+	// Check active connections again in case someone else got ahead of us.
+	if activeConn, ok := p.getActiveConn(); ok {
+		return activeConn, nil
 	}
 
 	// When the relay creates outbound connections, we don't want those services
