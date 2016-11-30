@@ -729,11 +729,11 @@ func TestRelayConcurrentNewConnectionAttempts(t *testing.T) {
 		defer slowServer.Close()
 		testutils.RegisterEcho(slowServer, nil)
 
-		var delayed bool
+		var delayed atomic.Bool
 		relayFunc := func(outgoing bool, f *Frame) *Frame {
-			if !delayed {
+			if !delayed.Load() {
 				time.Sleep(testutils.Timeout(50 * time.Millisecond))
-				delayed = true
+				delayed.Store(true)
 			}
 			return f
 		}
