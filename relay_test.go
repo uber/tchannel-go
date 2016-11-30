@@ -375,7 +375,7 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 	})
 }
 
-// TestRelayStress makes many concurrent calls and ensures that
+// TestRelayConcurrentCalls makes many concurrent calls and ensures that
 // we don't try to reuse any frames once they've been released.
 func TestRelayConcurrentCalls(t *testing.T) {
 	pool := NewProtectMemFramePool()
@@ -390,7 +390,8 @@ func TestRelayConcurrentCalls(t *testing.T) {
 
 		client := benchmark.NewClient([]string{ts.HostPort()},
 			benchmark.WithNoDurations(),
-			benchmark.WithNoLibrary(),
+			// TODO(prashant): Enable once we have control over concurrency with NoLibrary.
+			// benchmark.WithNoLibrary(),
 			benchmark.WithNumClients(20),
 			benchmark.WithServiceName("s1"),
 			benchmark.WithTimeout(time.Minute),
