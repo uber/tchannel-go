@@ -226,3 +226,19 @@ func TestContextBuilderParentContextSpan(t *testing.T) {
 
 	goroutines.VerifyNoLeaks(t, nil)
 }
+
+func TestContextWrap(t *testing.T) {
+	ctxNoHeaders, cancel := NewContextBuilder(time.Second).Build()
+	defer cancel()
+
+	ctxWithHeaders, cancel := NewContextBuilder(time.Second).AddHeader("h1", "v1").Build()
+	defer cancel()
+
+	ctxNoHeaders = Wrap(context.WithValue(ctxNoHeaders, "1", "2"))
+	assert.Equal(t, "2", ctxNoHeaders.Value("1"), "Missing value in context")
+	assert.Nil(t, ctxNoHeaders.Headers(), "Context should have no headers")
+
+	ctxWithHeaders = Wrap(context.WithValue(ctxWithHeaders, "1", "2"))
+	assert.Equal(t, "2", ctxNoHeaders.Value("1"), "Missing value in context")
+	assert.Equal(t, map[string]string{"h1": "v1"}, ctxWithHeaders.Headers(), "Headers lost after Wrap")
+}
