@@ -227,18 +227,62 @@ func TestContextBuilderParentContextSpan(t *testing.T) {
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
-func TestContextWrap(t *testing.T) {
-	ctxNoHeaders, cancel := NewContextBuilder(time.Second).Build()
-	defer cancel()
+func TestContextWrapClone(t *testing.T) {
+	tests := []struct {
+		msg         string
+		ctxFn       func() ContextWithHeaders
+		wantHeaders map[string]string
+		wantValue   interface{}
+	}{
+		{
+			msg: "Basic context",
+			ctxFn: func() ContextWithHeaders {
+				ctxNoHeaders, _ := NewContextBuilder(time.Second).Build()
+				return ctxNoHeaders
+			},
+			wantHeaders: nil,
+			wantValue:   nil,
+		},
+		{
+			msg: "Wrap basic context with value",
+			ctxFn: func() ContextWithHeaders {
+				ctxNoHeaders, _ := NewContextBuilder(time.Second).Build()
+				return Wrap(context.WithValue(ctxNoHeaders, "1", "2"))
+			},
+			wantHeaders: nil,
+			wantValue:   "2",
+		},
+		{
+			msg: "Wrap context with headers and value",
+			ctxFn: func() ContextWithHeaders {
+				ctxWithHeaders, _ := NewContextBuilder(time.Second).AddHeader("h1", "v1").Build()
+				return Wrap(context.WithValue(ctxWithHeaders, "1", "2"))
+			},
+			wantHeaders: map[string]string{"h1": "v1"},
+			wantValue:   "2",
+		},
+	}
 
-	ctxWithHeaders, cancel := NewContextBuilder(time.Second).AddHeader("h1", "v1").Build()
-	defer cancel()
+	for _, tt := range tests {
+		for _, clone := range []bool{false, true} {
+			origCtx := tt.ctxFn()
+			ctx := origCtx
+			if clone {
+				ctx = origCtx.Clone()
+			}
 
-	ctxNoHeaders = Wrap(context.WithValue(ctxNoHeaders, "1", "2"))
-	assert.Equal(t, "2", ctxNoHeaders.Value("1"), "Missing value in context")
-	assert.Nil(t, ctxNoHeaders.Headers(), "Context should have no headers")
+			assert.Equal(t, tt.wantValue, ctx.Value("1"), "%v: Unexpected value", tt.msg)
+			assert.Equal(t, tt.wantHeaders, ctx.Headers(), "%v: Unexpected headers", tt.msg)
 
-	ctxWithHeaders = Wrap(context.WithValue(ctxWithHeaders, "1", "2"))
-	assert.Equal(t, "2", ctxNoHeaders.Value("1"), "Missing value in context")
-	assert.Equal(t, map[string]string{"h1": "v1"}, ctxWithHeaders.Headers(), "Headers lost after Wrap")
+			respHeaders := map[string]string{"r": "v"}
+			ctx.SetResponseHeaders(respHeaders)
+			assert.Equal(t, respHeaders, ctx.ResponseHeaders(), "%v: Unexpected response headers", tt.msg)
+
+			if clone {
+				// If we're working with a clone, changes to response headers should not
+				// affect the original context.
+				assert.Nil(t, origCtx.ResponseHeaders(), "%v: Clone modified original context's headers", tt.msg)
+			}
+		}
+	}
 }
