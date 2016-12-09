@@ -78,6 +78,18 @@ func (c headerCtx) SetResponseHeaders(headers map[string]string) {
 	panic("SetResponseHeaders called on ContextWithHeaders not created via WrapWithHeaders")
 }
 
+// Wrap wraps an existing context.Context into a ContextWithHeaders.
+// If the underlying context has headers, they are preserved.
+func Wrap(ctx context.Context) ContextWithHeaders {
+	hctx := headerCtx{Context: ctx}
+	if h := hctx.headers(); h != nil {
+		return hctx
+	}
+
+	// If there is no header container, we should create an empty one.
+	return WrapWithHeaders(ctx, nil)
+}
+
 // WrapWithHeaders returns a Context that can be used to make a call with request headers.
 // If the parent `ctx` is already an instance of ContextWithHeaders, its existing headers
 // will be ignored. In order to merge new headers with parent headers, use ContextBuilder.
