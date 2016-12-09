@@ -37,10 +37,16 @@ import (
 )
 
 func TestWrapContext(t *testing.T) {
-	ctx, cancel := NewContext(time.Second)
+	tctx, cancel := NewContext(time.Second)
 	defer cancel()
-	actual := Wrap(ctx)
-	assert.NotNil(t, actual, "Should not return nil.")
+
+	headers := map[string]string{"h1": "v1"}
+	ctx := context.WithValue(WithHeaders(tctx, headers), "1", "2")
+	wrapped := Wrap(ctx)
+	assert.NotNil(t, wrapped, "Should not return nil.")
+
+	assert.Equal(t, headers, wrapped.Headers(), "Unexpected headers")
+	assert.Equal(t, "2", wrapped.Value("1"), "Unexpected value")
 }
 
 func TestContextBuilder(t *testing.T) {

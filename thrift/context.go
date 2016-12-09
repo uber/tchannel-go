@@ -33,12 +33,12 @@ type Context tchannel.ContextWithHeaders
 // NewContext returns a Context that can be used to make Thrift calls.
 func NewContext(timeout time.Duration) (Context, context.CancelFunc) {
 	ctx, cancel := tchannel.NewContext(timeout)
-	return tchannel.WrapWithHeaders(ctx, nil), cancel
+	return Wrap(ctx), cancel
 }
 
 // Wrap returns a Thrift Context that wraps around a Context.
 func Wrap(ctx context.Context) Context {
-	return tchannel.WrapWithHeaders(ctx, nil)
+	return tchannel.Wrap(ctx)
 }
 
 // WithHeaders returns a Context that can be used to make a call with request headers.
