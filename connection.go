@@ -191,8 +191,8 @@ type Connection struct {
 	}
 }
 
-// nextConnID gives an ID for each connection for debugging purposes.
-var nextConnID atomic.Uint32
+// _nextConnID is used to allocate unique IDs to every connection for debugging purposes.
+var _nextConnID atomic.Uint32
 
 type connectionState int
 
@@ -290,7 +290,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		framePool = DefaultFramePool
 	}
 
-	connID := nextConnID.Inc()
+	connID := _nextConnID.Inc()
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
 		{"localAddr", conn.LocalAddr()},

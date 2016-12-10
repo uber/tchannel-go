@@ -32,6 +32,7 @@ import (
 	"github.com/uber/tchannel-go/tnet"
 
 	"github.com/opentracing/opentracing-go"
+	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -113,6 +114,7 @@ const (
 type Channel struct {
 	channelConnectionCommon
 
+	chID              uint32
 	createdStack      string
 	commonStatsTags   map[string]string
 	connectionOptions ConnectionOptions
@@ -140,6 +142,9 @@ type channelConnectionCommon struct {
 	subChannels   *subChannelMap
 	timeNow       func() time.Time
 }
+
+// _nextChID is used to allocate unique IDs to every channel for debugging purposes.
+var _nextChID atomic.Uint32
 
 // Tracer returns the OpenTracing Tracer for this channel. If no tracer was provided
 // in the configuration, returns opentracing.GlobalTracer(). Note that this approach
@@ -187,16 +192,20 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeNow = time.Now
 	}
 
+	chID := _nextChID.Inc()
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
-			log:           logger,
+			log: logger.WithFields(
+				LogField{"chID", chID},
+				LogField{"service", serviceName},
+				LogField{"process", processName}),
 			relayLocal:    toStringSet(opts.RelayLocalHandlers),
 			statsReporter: statsReporter,
 			subChannels:   &subChannelMap{},
 			timeNow:       timeNow,
 			tracer:        opts.Tracer,
 		},
-
+		chID:              chID,
 		connectionOptions: opts.DefaultConnectionOptions,
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
@@ -639,12 +648,14 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 		updateTo = ChannelInboundClosed
 	}
 
+	var updatedToState ChannelState
 	if updateTo > 0 {
 		ch.mutable.Lock()
 		// Recheck the state as it's possible another goroutine changed the state
 		// from what we expected, and so we might make a stale change.
 		if ch.mutable.state == chState {
 			ch.mutable.state = updateTo
+			updatedToState = updateTo
 		}
 		ch.mutable.Unlock()
 		chState = updateTo
@@ -652,6 +663,15 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 
 	c.log.Debugf("ConnectionCloseStateChange channel state = %v connection minState = %v",
 		chState, minState)
+
+	if updatedToState == ChannelClosed {
+		ch.onClosed()
+	}
+}
+
+func (ch *Channel) onClosed() {
+	removeClosedChannel(ch)
+	ch.log.Infof("Channel closed.")
 }
 
 // Closed returns whether this channel has been closed with .Close()
@@ -675,6 +695,7 @@ func (ch *Channel) State() ChannelState {
 func (ch *Channel) Close() {
 	ch.Logger().Info("Channel.Close called.")
 	var connections []*Connection
+	var channelClosed bool
 	ch.mutable.Lock()
 
 	if ch.mutable.l != nil {
@@ -684,6 +705,7 @@ func (ch *Channel) Close() {
 	ch.mutable.state = ChannelStartClose
 	if len(ch.mutable.conns) == 0 {
 		ch.mutable.state = ChannelClosed
+		channelClosed = true
 	}
 	for _, c := range ch.mutable.conns {
 		connections = append(connections, c)
@@ -693,7 +715,10 @@ func (ch *Channel) Close() {
 	for _, c := range connections {
 		c.Close()
 	}
-	removeClosedChannel(ch)
+
+	if channelClosed {
+		ch.onClosed()
+	}
 }
 
 // RelayHost returns the channel's RelayHost, if any.
