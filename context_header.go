@@ -34,6 +34,10 @@ type ContextWithHeaders interface {
 
 	// SetResponseHeaders sets the given response headers on the context.
 	SetResponseHeaders(map[string]string)
+
+	// Child creates a child context which stores headers separately from
+	// the parent context.
+	Child() ContextWithHeaders
 }
 
 type headerCtx struct {
@@ -76,6 +80,16 @@ func (c headerCtx) SetResponseHeaders(headers map[string]string) {
 		return
 	}
 	panic("SetResponseHeaders called on ContextWithHeaders not created via WrapWithHeaders")
+}
+
+// Child creates a child context with a separate container for headers.
+func (c headerCtx) Child() ContextWithHeaders {
+	var headersCopy headersContainer
+	if h := c.headers(); h != nil {
+		headersCopy = *h
+	}
+
+	return Wrap(context.WithValue(c.Context, contextKeyHeaders, &headersCopy))
 }
 
 // Wrap wraps an existing context.Context into a ContextWithHeaders.
