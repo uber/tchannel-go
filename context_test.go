@@ -227,7 +227,7 @@ func TestContextBuilderParentContextSpan(t *testing.T) {
 	goroutines.VerifyNoLeaks(t, nil)
 }
 
-func TestContextWrapClone(t *testing.T) {
+func TestContextWrapChild(t *testing.T) {
 	tests := []struct {
 		msg         string
 		ctxFn       func() ContextWithHeaders
@@ -264,11 +264,11 @@ func TestContextWrapClone(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		for _, clone := range []bool{false, true} {
+		for _, child := range []bool{false, true} {
 			origCtx := tt.ctxFn()
 			ctx := origCtx
-			if clone {
-				ctx = origCtx.Clone()
+			if child {
+				ctx = origCtx.Child()
 			}
 
 			assert.Equal(t, tt.wantValue, ctx.Value("1"), "%v: Unexpected value", tt.msg)
@@ -278,10 +278,10 @@ func TestContextWrapClone(t *testing.T) {
 			ctx.SetResponseHeaders(respHeaders)
 			assert.Equal(t, respHeaders, ctx.ResponseHeaders(), "%v: Unexpected response headers", tt.msg)
 
-			if clone {
-				// If we're working with a clone, changes to response headers should not
-				// affect the original context.
-				assert.Nil(t, origCtx.ResponseHeaders(), "%v: Clone modified original context's headers", tt.msg)
+			if child {
+				// If we're working with a child context, changes to response headers
+				// should not affect the original context.
+				assert.Nil(t, origCtx.ResponseHeaders(), "%v: Child modified original context's headers", tt.msg)
 			}
 		}
 	}

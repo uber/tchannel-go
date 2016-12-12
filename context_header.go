@@ -35,9 +35,9 @@ type ContextWithHeaders interface {
 	// SetResponseHeaders sets the given response headers on the context.
 	SetResponseHeaders(map[string]string)
 
-	// Clone creates a copy of the context which stores headers separately from
+	// Child creates a child context which stores headers separately from
 	// the parent context.
-	Clone() ContextWithHeaders
+	Child() ContextWithHeaders
 }
 
 type headerCtx struct {
@@ -82,8 +82,8 @@ func (c headerCtx) SetResponseHeaders(headers map[string]string) {
 	panic("SetResponseHeaders called on ContextWithHeaders not created via WrapWithHeaders")
 }
 
-// Clone creates a copy of the context with a separate container for headers.
-func (c headerCtx) Clone() ContextWithHeaders {
+// Child creates a child context with a separate container for headers.
+func (c headerCtx) Child() ContextWithHeaders {
 	var headersCopy headersContainer
 	if h := c.headers(); h != nil {
 		headersCopy = *h
