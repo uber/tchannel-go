@@ -552,10 +552,6 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	return true
 }
 
-func (r *relayConn) RemoteProcessPrefixMatches() []bool {
-	return (*Connection)(r).remoteProcessPrefixMatches
-}
-
 func (r *relayConn) RemoteHostPort() string {
 	return (*Connection)(r).RemotePeerInfo().HostPort
 }

@@ -503,16 +503,13 @@ func TestRelayConnection(t *testing.T) {
 	var errTest = errors.New("test")
 	var wantHostPort string
 	getHost := func(call relay.CallFrame, conn relay.Conn) (string, error) {
-		matches := conn.RemoteProcessPrefixMatches()
-		assert.Equal(t, []bool{true, true, true, false}, matches, "Unexpected prefix matches.")
 		assert.Equal(t, wantHostPort, conn.RemoteHostPort(), "Unexpected RemoteHostPort")
 		return "", errTest
 	}
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(relaytest.HostFunc(getHost)).
-		SetProcessPrefixes("nod", "nodejs-hyperbahn", "", "hyperbahn")
+		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		// Create a client that is listening so we can set the expected host:port.
 		clientOpts := testutils.NewOpts().SetProcessName("nodejs-hyperbahn")

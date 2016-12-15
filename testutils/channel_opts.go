@@ -118,12 +118,6 @@ func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	return o
 }
 
-// SetProcessPrefixes sets CheckProcessPrefixes in DefaultConnectionOptions.
-func (o *ChannelOpts) SetProcessPrefixes(prefixes ...string) *ChannelOpts {
-	o.DefaultConnectionOptions.CheckedProcessPrefixes = prefixes
-	return o
-}
-
 // SetSendBufferSize sets the SendBufferSize in DefaultConnectionOptions.
 func (o *ChannelOpts) SetSendBufferSize(bufSize int) *ChannelOpts {
 	o.DefaultConnectionOptions.SendBufferSize = bufSize
