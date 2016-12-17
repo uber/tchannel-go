@@ -187,7 +187,7 @@ func TestHeadersForwarded(t *testing.T) {
 		"forward": handler.forward,
 		"leaf":    handler.leaf,
 	}, handler.onError))
-	assert.NoError(t, ch.ListenAndServe(":0"))
+	assert.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
 
 	rootArg := &ForwardArgs{
 		Service:   "svc",

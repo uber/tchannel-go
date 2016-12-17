@@ -218,7 +218,7 @@ func TestRetryNetConnect(t *testing.T) {
 	defer cancel()
 
 	closedAddr := testutils.GetClosedHostPort(t)
-	listenC, err := net.Listen("tcp", ":0")
+	listenC, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err, "Listen failed")
 	defer listenC.Close()
 
