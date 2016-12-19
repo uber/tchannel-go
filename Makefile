@@ -13,7 +13,7 @@ endif
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
 ALL_PKGS := $(shell glide nv)
-PROD_PKGS := . ./http ./hyperbahn ./json ./pprof ./raw ./relay ./stats ./thrift $(EXAMPLES)
+PROD_PKGS := . ./http ./hyperbahn ./json ./pprof ./raw ./relay ./stats ./thrift ./timers $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
 BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release

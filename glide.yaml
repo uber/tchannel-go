@@ -47,3 +47,4 @@ import:
 - package: github.com/opentracing/opentracing-go
 - package: github.com/uber/jaeger-client-go
 - package: github.com/crossdock/crossdock-go
+- package: github.com/andres-erbsen/clock
