@@ -562,6 +562,7 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 		require.Error(t, err, "Expect call to fail after relay is shutdown")
 		assert.Contains(t, err.Error(), "incoming connection is not active")
 		close(block)
+		wg.Wait()
 
 		// We have a successful call that ran in the goroutine
 		// and a failed call that we just checked the error on.
