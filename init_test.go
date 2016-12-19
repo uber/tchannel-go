@@ -89,7 +89,7 @@ func TestUnexpectedInitReq(t *testing.T) {
 		ch, err := NewChannel("test", nil)
 		require.NoError(t, err)
 		defer ch.Close()
-		require.NoError(t, ch.ListenAndServe(":0"))
+		require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
 		hostPort := ch.PeerInfo().HostPort
 
 		conn, err := net.Dial("tcp", hostPort)
@@ -202,7 +202,7 @@ func TestHandleInitReqNewVersion(t *testing.T) {
 	ch, err := NewChannel("test", nil)
 	require.NoError(t, err)
 	defer ch.Close()
-	require.NoError(t, ch.ListenAndServe(":0"))
+	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
 	hostPort := ch.PeerInfo().HostPort
 
 	conn, err := net.Dial("tcp", hostPort)
@@ -330,7 +330,7 @@ func TestInitReqGetsError(t *testing.T) {
 }
 
 func newListener(t *testing.T) net.Listener {
-	l, err := net.Listen("tcp", ":0")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err, "Listen failed")
 	return l
 }

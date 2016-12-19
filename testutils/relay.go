@@ -45,7 +45,7 @@ type frameRelay struct {
 }
 
 func (r *frameRelay) listen() (listenHostPort string, cancel func()) {
-	conn, err := net.Listen("tcp", ":0")
+	conn, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(r.t, err, "net.Listen failed")
 
 	go func() {
