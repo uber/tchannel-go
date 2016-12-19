@@ -1,6 +1,18 @@
 Changelog
 =========
 
+# v1.2.2
+
+* Add a unique channel ID for introspection (#548)
+* Don't drop existing headers on a context when using Wrap(ctx) (#547)
+* Setting response headers is not goroutine safe, allow using a child context
+  for parallel sub-requests (#549).
+* Fix context cancellation not cancelling Dial attempts (#541)
+* Expose local peer information on {Inbound,Outbound}Call (#537)
+* Only select active connections for calls (#521)
+* Add remote peer info to connection logger and introspection (#514)
+* Treat hostPorts ending in ":0" in the init headers as ephemeral (#513)
+
 # v1.2.1
 
 * Fix data race on headers when making concurrent calls using the same context. (#505)
