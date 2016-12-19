@@ -18,13 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel
+package tchannel_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 func TestAllChannelsRegistered(t *testing.T) {
@@ -42,6 +46,8 @@ func TestAllChannelsRegistered(t *testing.T) {
 	assert.Equal(t, 1, len(state.OtherChannels["ch2"]))
 
 	ch1_2.Close()
+	// TODO: replace this sleep with a callback hook.
+	time.Sleep(testutils.Timeout(10 * time.Millisecond))
 
 	state = ch1_1.IntrospectState(introspectOpts)
 	assert.Equal(t, 0, len(state.OtherChannels["ch1"]))
@@ -57,6 +63,8 @@ func TestAllChannelsRegistered(t *testing.T) {
 	ch1_1.Close()
 	ch2_1.Close()
 	ch2_2.Close()
+	// TODO: replace this sleep with a callback hook.
+	time.Sleep(testutils.Timeout(10 * time.Millisecond))
 
 	state = ch1_1.IntrospectState(introspectOpts)
 	assert.Equal(t, 0, len(state.OtherChannels["ch1"]))

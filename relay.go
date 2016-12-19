@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/timers"
 
 	"github.com/uber-go/atomic"
 )
@@ -40,6 +41,9 @@ const (
 	_relayTombTTL = 3 * time.Second
 	// _defaultRelayMaxTimeout is the default max TTL for relayed calls.
 	_defaultRelayMaxTimeout = 2 * time.Minute
+	// _defaultRelayTimeoutTick is the default tick duration for processing
+	// relay timeouts.
+	_defaultRelayTimeoutTick = 5 * time.Millisecond
 )
 
 var (
@@ -53,7 +57,7 @@ var (
 type relayConn Connection
 
 type relayItem struct {
-	*time.Timer
+	*timers.Timer
 
 	remapID     uint32
 	tomb        bool
@@ -67,14 +71,16 @@ type relayItems struct {
 	sync.RWMutex
 
 	logger Logger
+	wheel  *timers.Wheel
 	tombs  uint64
 	items  map[uint32]relayItem
 }
 
-func newRelayItems(logger Logger) *relayItems {
+func newRelayItems(logger Logger, wheel *timers.Wheel) *relayItems {
 	return &relayItems{
 		items:  make(map[uint32]relayItem),
 		logger: logger,
+		wheel:  wheel,
 	}
 }
 
@@ -150,9 +156,7 @@ func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) (relayItem, bo
 	r.items[id] = item
 	r.Unlock()
 
-	// TODO: We should be clearing these out in batches, rather than creating
-	// individual timers for each item.
-	time.AfterFunc(deleteAfter, func() { r.Delete(id) })
+	r.wheel.AfterFunc(deleteAfter, func() { r.Delete(id) })
 	return item, true
 }
 
@@ -165,8 +169,10 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	relayHost  RelayHost
-	maxTimeout time.Duration
+	relayHost   RelayHost
+	maxTimeout  time.Duration
+	timeoutTick time.Duration
+	wheel       *timers.Wheel
 
 	// localHandlers is the set of service names that are handled by the local
 	// channel.
@@ -190,12 +196,15 @@ type Relayer struct {
 
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
+	wheel := ch.relayTimeoutWheel
 	return &Relayer{
 		relayHost:    ch.RelayHost(),
 		maxTimeout:   ch.relayMaxTimeout,
+		timeoutTick:  ch.relayTimeoutTick,
+		wheel:        wheel,
 		localHandler: ch.relayLocal,
-		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
-		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
+		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"}), wheel),
+		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"}), wheel),
 		peers:        ch.rootPeers(),
 		conn:         conn,
 		logger:       conn.log,
@@ -455,7 +464,7 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	if isOriginator {
 		items = r.outbound
 	}
-	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
+	item.Timer = r.wheel.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
 	items.Add(id, item)
 	return item
 }
@@ -595,4 +604,18 @@ func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 		LogField{"defaultMaxTimeout", _defaultRelayMaxTimeout},
 	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 	return _defaultRelayMaxTimeout
+}
+
+func validateRelayTimeoutTick(d time.Duration, logger Logger) time.Duration {
+	if d > 0 {
+		return d
+	}
+	if d == 0 {
+		return _defaultRelayTimeoutTick
+	}
+	logger.WithFields(
+		LogField{"configuredTimeoutTick", d},
+		LogField{"defaultTimeoutTick", _defaultRelayTimeoutTick},
+	).Warn("Configured RelayTimeoutTick is invalid, using default instead.")
+	return _defaultRelayTimeoutTick
 }

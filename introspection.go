@@ -156,6 +156,7 @@ type RelayerRuntimeState struct {
 	InboundItems  RelayItemSetState `json:"inboundItems"`
 	OutboundItems RelayItemSetState `json:"outboundItems"`
 	MaxTimeout    time.Duration     `json:"maxTimeout"`
+	TimeoutTick   time.Duration     `json:"timeoutTick"`
 }
 
 // ExchangeSetRuntimeState is the runtime state for a message exchange set.
@@ -360,6 +361,7 @@ func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeStat
 		InboundItems:  r.inbound.IntrospectState(opts, "inbound"),
 		OutboundItems: r.outbound.IntrospectState(opts, "outbound"),
 		MaxTimeout:    r.maxTimeout,
+		TimeoutTick:   r.timeoutTick,
 	}
 }
 
