@@ -35,6 +35,8 @@ import (
 
 	"syscall"
 
+	"os/exec"
+
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -470,4 +472,14 @@ func forceReleaseUnusedMemory() {
 	}
 
 	fmt.Println("max-rss", usage.Maxrss)
+
+	// VM info from the OS
+	cmd := exec.Command("cat", "/proc/self/status")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("cat /proic failed", err)
+		return
+	}
+
+	fmt.Println(string(out))
 }
