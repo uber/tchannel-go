@@ -35,7 +35,7 @@ import (
 
 	"syscall"
 
-	"os/exec"
+	"os"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
@@ -452,6 +452,8 @@ func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 	ts.CloseAndVerify()
 }
 
+var vmBuf [10000]byte
+
 // The timer wheels we allocate on relay channels are large enough that the Go
 // runtime doesn't release their memory back to the OS immediately.  Since we
 // create and destroy them so quickly during tests, we quickly exceed the
@@ -474,12 +476,18 @@ func forceReleaseUnusedMemory() {
 	fmt.Println("max-rss", usage.Maxrss)
 
 	// VM info from the OS
-	cmd := exec.Command("cat", "/proc/self/status")
-	out, err := cmd.CombinedOutput()
+	f, err := os.Open("/proc/self/status")
 	if err != nil {
-		fmt.Println("cat /proic failed", err)
+		fmt.Println("open proc status failed", err)
+		return
+	}
+	defer f.Close()
+
+	n, err := f.Read(vmBuf[:])
+	if err != nil {
+		fmt.Println("Read failed", err)
 		return
 	}
 
-	fmt.Println(string(out))
+	fmt.Println(string(vmBuf[:n]))
 }
