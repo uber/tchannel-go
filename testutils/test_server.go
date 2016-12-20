@@ -47,6 +47,14 @@ import (
 // Has a previous test already leaked a goroutine?
 var _leakedGoroutine = atomic.NewInt32(0)
 
+func init() {
+	go func() {
+		time.Sleep(time.Second)
+		fmt.Println("1 second passed")
+		forceReleaseUnusedMemory()
+	}()
+}
+
 // A TestServer encapsulates a TChannel server, a client factory, and functions
 // to ensure that we're not leaking resources.
 type TestServer struct {
@@ -118,14 +126,15 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 			noRelayOpts := chanOpts.Copy()
 			noRelayOpts.DisableRelay = true
 			withServer(t, noRelayOpts, f)
+			forceReleaseUnusedMemory()
 		}
 
 		// Run with the relay, unless the user has disabled it.
 		if !chanOpts.DisableRelay {
 			withServer(t, chanOpts.Copy(), f)
+			forceReleaseUnusedMemory()
 		}
 	}
-	forceReleaseUnusedMemory()
 }
 
 // SetVerifyOpts specifies the options we'll use during teardown to verify that
