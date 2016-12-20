@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +32,8 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+
+	"syscall"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
@@ -457,6 +458,16 @@ func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 //
 // Work around this issue by forcing a GC and free.
 func forceReleaseUnusedMemory() {
-	runtime.GC()
-	debug.FreeOSMemory()
+	// runtime.GC()
+	// debug.FreeOSMemory()
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	fmt.Println("alloc", stats.Alloc, "total-alloc", stats.TotalAlloc, "sys", stats.Sys, "mallocs", stats.Mallocs, "heap-alloc", stats.HeapAlloc)
+	var usage syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
+		fmt.Println("rusage failed", err)
+		return
+	}
+
+	fmt.Println("max-rss", usage.Maxrss)
 }
