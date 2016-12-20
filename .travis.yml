@@ -22,6 +22,7 @@ matrix:
 
 env:
   global:
+  - GODEBUG=gctrace=1
   - DOCKER_COMPOSE_VERSION=1.8.0
   - COMMIT=${TRAVIS_COMMIT::8}
   # Set higher timeouts for Travis
