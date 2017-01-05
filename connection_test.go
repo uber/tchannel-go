@@ -154,6 +154,11 @@ func TestDefaultFormat(t *testing.T) {
 }
 
 func TestRemotePeer(t *testing.T) {
+	wantVersion := PeerVersion{
+		Language:        "go",
+		LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+		TChannelVersion: VersionInfo,
+	}
 	tests := []struct {
 		name       string
 		remote     func(*testutils.TestServer) *Channel
@@ -167,6 +172,7 @@ func TestRemotePeer(t *testing.T) {
 					HostPort:    state.RootPeers[ts.HostPort()].OutboundConnections[0].LocalHostPort,
 					IsEphemeral: true,
 					ProcessName: state.LocalPeer.ProcessName,
+					Version:     wantVersion,
 				}
 			},
 		},
@@ -178,6 +184,7 @@ func TestRemotePeer(t *testing.T) {
 					HostPort:    state.LocalPeer.HostPort,
 					IsEphemeral: false,
 					ProcessName: state.LocalPeer.ProcessName,
+					Version:     wantVersion,
 				}
 			},
 		},
