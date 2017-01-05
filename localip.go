@@ -54,18 +54,12 @@ func scoreAddr(iface net.Interface, addr net.Addr) (int, net.IP) {
 	return score, ip
 }
 
-// ListenIP returns the IP to bind to in Listen. It tries to find an IP that can be used
-// by other machines to reach this machine.
-func ListenIP() (net.IP, error) {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
+func listenIP(interfaces []net.Interface) (net.IP, error) {
 	bestScore := -1
 	var bestIP net.IP
 	// Select the highest scoring IP as the best IP.
 	for _, iface := range interfaces {
+
 		addrs, err := iface.Addrs()
 		if err != nil {
 			// Skip this interface if there is an error.
@@ -86,4 +80,14 @@ func ListenIP() (net.IP, error) {
 	}
 
 	return bestIP, nil
+}
+
+// ListenIP returns the IP to bind to in Listen. It tries to find an IP that can be used
+// by other machines to reach this machine.
+func ListenIP() (net.IP, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	return listenIP(interfaces)
 }
