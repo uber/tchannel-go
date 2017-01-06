@@ -51,7 +51,13 @@ func newState(v *parser.Thrift, all map[string]parseState) *State {
 		typedefs[k] = i64Type
 	}
 
-	return &State{typedefs, createIncludes(v), all}
+	return &State{typedefs, nil, all}
+}
+
+func setIncludes(all map[string]parseState) {
+	for _, v := range all {
+		v.global.includes = createIncludes(v.ast, all)
+	}
 }
 
 func (s *State) isBasicType(thriftType string) bool {
