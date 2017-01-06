@@ -485,7 +485,7 @@ func forceReleaseUnusedMemory() {
 	fmt.Println("max-rss", usage.Maxrss)
 
 	// VM info from the OS
-	f, err := os.Open("/proc/self/limits")
+	f, err := os.Open("/proc/self/statm")
 	if err != nil {
 		fmt.Println("open proc status failed", err)
 		return
@@ -498,5 +498,5 @@ func forceReleaseUnusedMemory() {
 		return
 	}
 
-	fmt.Println("proc limits", string(vmBuf[:n]))
+	fmt.Println("proc statm: vmsize,resident,shared,text,0,data,0", string(vmBuf[:n]))
 }
