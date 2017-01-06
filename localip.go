@@ -59,7 +59,6 @@ func listenIP(interfaces []net.Interface) (net.IP, error) {
 	var bestIP net.IP
 	// Select the highest scoring IP as the best IP.
 	for _, iface := range interfaces {
-
 		addrs, err := iface.Addrs()
 		if err != nil {
 			// Skip this interface if there is an error.

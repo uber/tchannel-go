@@ -28,7 +28,9 @@ import (
 )
 
 func TestScoreAddr(t *testing.T) {
-	testIP := net.ParseIP("10.0.1.2")
+	ipv4 := net.ParseIP("10.0.1.2")
+	ipv6 := net.ParseIP("2001:db8:a0b:12f0::1")
+
 	tests := []struct {
 		msg    string
 		iface  net.Interface
@@ -39,30 +41,30 @@ func TestScoreAddr(t *testing.T) {
 		{
 			msg:    "non-local up ipv4 IPNet address",
 			iface:  net.Interface{Flags: net.FlagUp},
-			addr:   &net.IPNet{IP: testIP},
+			addr:   &net.IPNet{IP: ipv4},
 			want:   500,
-			wantIP: testIP,
+			wantIP: ipv4,
 		},
 		{
 			msg:    "non-local up ipv4 IPAddr address",
 			iface:  net.Interface{Flags: net.FlagUp},
-			addr:   &net.IPNet{IP: testIP},
+			addr:   &net.IPAddr{IP: ipv4},
 			want:   500,
-			wantIP: testIP,
+			wantIP: ipv4,
 		},
 		{
 			msg:    "non-local down ipv4 address",
 			iface:  net.Interface{},
-			addr:   &net.IPNet{IP: testIP},
+			addr:   &net.IPNet{IP: ipv4},
 			want:   400,
-			wantIP: testIP,
+			wantIP: ipv4,
 		},
 		{
 			msg:    "non-local down ipv6 address",
 			iface:  net.Interface{},
-			addr:   &net.IPAddr{IP: net.ParseIP("2001:db8:a0b:12f0::1")},
+			addr:   &net.IPAddr{IP: ipv6},
 			want:   100,
-			wantIP: net.ParseIP("2001:db8:a0b:12f0::1"),
+			wantIP: ipv6,
 		},
 		{
 			msg:   "unknown address type",
