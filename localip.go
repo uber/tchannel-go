@@ -21,9 +21,15 @@
 package tchannel
 
 import (
+	"bytes"
 	"errors"
 	"net"
 )
+
+// Docker MAC addresses are 02:42:ac:11:00:00 to 02:42:ac:11:ff:ff.
+// See: https://docs.docker.com/v1.7/articles/networking/
+// We want to prefix match on the first 4 bytes.
+var _dockerPrefix = []byte(mustParseMAC("02:42:ac:11:00:00")[0:4])
 
 // scoreAddr scores how likely the given addr is to be a remote address and returns the
 // IP to use when listening. Any address which receives a negative score should not be used.
@@ -50,6 +56,9 @@ func scoreAddr(iface net.Interface, addr net.Addr) (int, net.IP) {
 		if iface.Flags&net.FlagUp != 0 {
 			score += 100
 		}
+	}
+	if bytes.HasPrefix(iface.HardwareAddr, _dockerPrefix) {
+		score -= 50
 	}
 	return score, ip
 }
@@ -89,4 +98,12 @@ func ListenIP() (net.IP, error) {
 		return nil, err
 	}
 	return listenIP(interfaces)
+}
+
+func mustParseMAC(s string) net.HardwareAddr {
+	addr, err := net.ParseMAC(s)
+	if err != nil {
+		panic(err)
+	}
+	return addr
 }
