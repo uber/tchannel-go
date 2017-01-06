@@ -39,6 +39,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+// PeerVersion contains version related information for a specific peer.
+// These values are extracted from the init headers.
+type PeerVersion struct {
+	Language        string `json:"language"`
+	LanguageVersion string `json:"languageVersion"`
+	TChannelVersion string `json:"tchannelVersion"`
+}
+
 // PeerInfo contains information about a TChannel peer
 type PeerInfo struct {
 	// The host and port that can be used to contact the peer, as encoded by net.JoinHostPort
@@ -49,6 +57,9 @@ type PeerInfo struct {
 
 	// IsEphemeral returns whether the remote host:port is ephemeral (e.g. not listening).
 	IsEphemeral bool `json:"isEphemeral"`
+
+	// Version returns the version information for the remote peer.
+	Version PeerVersion `json:"version"`
 }
 
 func (p PeerInfo) String() string {
@@ -441,17 +452,10 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		return
 	}
 
-	var ok bool
-	if c.remotePeerInfo.HostPort, ok = req.initParams[InitParamHostPort]; !ok {
-		c.protocolError(id, fmt.Errorf("header %v is required", InitParamHostPort))
+	if err := c.parseRemotePeer(req.initParams); err != nil {
+		c.protocolError(id, err)
 		return
 	}
-	if c.remotePeerInfo.ProcessName, ok = req.initParams[InitParamProcessName]; !ok {
-		c.protocolError(id, fmt.Errorf("header %v is required", InitParamProcessName))
-		return
-	}
-
-	c.parseRemotePeerAddress()
 
 	res := initRes{initMessage{id: frame.Header.ID}}
 	res.initParams = c.getInitParams()
@@ -563,12 +567,9 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		c.protocolError(frame.Header.ID, fmt.Errorf("unsupported protocol version %d from peer", res.Version))
 		return true
 	}
-	if _, ok := res.initParams[InitParamHostPort]; !ok {
-		c.protocolError(frame.Header.ID, fmt.Errorf("header %v is required", InitParamHostPort))
-		return true
-	}
-	if _, ok := res.initParams[InitParamProcessName]; !ok {
-		c.protocolError(frame.Header.ID, fmt.Errorf("header %v is required", InitParamProcessName))
+
+	if err := c.parseRemotePeer(res.initParams); err != nil {
+		c.protocolError(frame.Header.ID, err)
 		return true
 	}
 
@@ -1008,6 +1009,22 @@ func (c *Connection) closeNetwork() {
 			ErrField(err),
 		).Warn("Couldn't close connection to peer.")
 	}
+}
+
+func (c *Connection) parseRemotePeer(p initParams) error {
+	var ok bool
+	if c.remotePeerInfo.HostPort, ok = p[InitParamHostPort]; !ok {
+		return fmt.Errorf("header %v is required", InitParamHostPort)
+	}
+	if c.remotePeerInfo.ProcessName, ok = p[InitParamProcessName]; !ok {
+		return fmt.Errorf("header %v is required", InitParamProcessName)
+	}
+
+	c.parseRemotePeerAddress()
+	c.remotePeerInfo.Version.Language = p[InitParamTChannelLanguage]
+	c.remotePeerInfo.Version.LanguageVersion = p[InitParamTChannelLanguageVersion]
+	c.remotePeerInfo.Version.TChannelVersion = p[InitParamTChannelVersion]
+	return nil
 }
 
 // parseRemotePeerAddress parses remote peer info into individual components and
