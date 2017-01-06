@@ -26,10 +26,8 @@ ARCH := $(shell uname -m)
 THRIFT_REL := ./scripts/travis/thrift-release/$(PLATFORM)-$(ARCH)
 
 OLD_GOPATH := $(GOPATH)
-VENDOR_PATH := $(PWD)/.tmp/vendor
 
 export PATH := $(realpath $(THRIFT_REL)):$(PATH)
-export GOPATH := $(VENDOR_PATH):$(GOPATH)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -58,9 +56,6 @@ get_thrift:
 # Note that glide itself is still executed against the original GOPATH.
 install:
 	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
-	rm -rf $(VENDOR_PATH)
-	mkdir -p $(VENDOR_PATH)
-	mv vendor $(VENDOR_PATH)/src
 
 install_lint:
 ifdef SHOULD_LINT
