@@ -129,9 +129,10 @@ func processFile(opts processOptions) error {
 }
 
 type parseState struct {
-	ast      *parser.Thrift
-	global   *State
-	services []*Service
+	ast       *parser.Thrift
+	namespace string
+	global    *State
+	services  []*Service
 }
 
 // parseTemplates returns a list of Templates that must be rendered given the template files.
@@ -171,9 +172,22 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 		if err != nil {
 			return nil, fmt.Errorf("wrap services failed: %v", err)
 		}
-		allParsed[filename] = parseState{v, state, services}
+
+		namespace := getNamespace(filename, v)
+		allParsed[filename] = parseState{v, namespace, state, services}
 	}
+	setIncludes(allParsed)
 	return allParsed, setExtends(allParsed)
+}
+
+func getNamespace(filename string, v *parser.Thrift) string {
+	if ns, ok := v.Namespaces["go"]; ok {
+		return ns
+	}
+
+	base := filepath.Base(filename)
+	base = strings.TrimSuffix(base, filepath.Ext(base))
+	return strings.ToLower(base)
 }
 
 func generateCode(outputFile string, template *Template, pkg string, state parseState) error {
