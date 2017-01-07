@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -462,6 +463,8 @@ func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 }
 
 var vmBuf [10000]byte
+var releaseMemLock sync.Mutex
+var lastStats runtime.MemStats
 
 // The timer wheels we allocate on relay channels are large enough that the Go
 // runtime doesn't release their memory back to the OS immediately.  Since we
@@ -471,11 +474,17 @@ var vmBuf [10000]byte
 //
 // Work around this issue by forcing a GC and free.
 func forceReleaseUnusedMemory() {
+	releaseMemLock.Lock()
+	defer releaseMemLock.Unlock()
+
 	// runtime.GC()
 	// debug.FreeOSMemory()
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	fmt.Println("alloc", stats.Alloc, "total-alloc", stats.TotalAlloc, "sys", stats.Sys, "mallocs", stats.Mallocs, "heap-alloc", stats.HeapAlloc)
+	fmt.Println("diff in total-alloc", stats.TotalAlloc-lastStats.TotalAlloc, "sys", stats.Sys-lastStats.Sys)
+
+	lastStats = stats
 	var usage syscall.Rusage
 	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
 		fmt.Println("rusage failed", err)
