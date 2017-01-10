@@ -45,7 +45,7 @@ func (cr testCallReq) req() lazyCallReq {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
-	f := NewFrame(200)
+	f := NewFrame()
 	fh := fakeHeader()
 	f.Header = fh
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
@@ -99,7 +99,7 @@ const (
 )
 
 func (cr testCallRes) res() lazyCallRes {
-	f := NewFrame(100)
+	f := NewFrame()
 	fh := FrameHeader{
 		size:        uint16(0xFF34),
 		messageType: messageTypeCallRes,
@@ -146,7 +146,7 @@ func withLazyCallResCombinations(f func(cr testCallRes)) {
 }
 
 func (ec SystemErrCode) fakeErrFrame() lazyError {
-	f := NewFrame(100)
+	f := NewFrame()
 	fh := FrameHeader{
 		size:        uint16(0xFF34),
 		messageType: messageTypeError,

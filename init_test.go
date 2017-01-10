@@ -34,7 +34,7 @@ import (
 )
 
 func writeMessage(w io.Writer, msg message) error {
-	f := NewFrame(MaxFramePayloadSize)
+	f := NewFrame()
 	if err := f.write(msg); err != nil {
 		return err
 	}
@@ -42,7 +42,7 @@ func writeMessage(w io.Writer, msg message) error {
 }
 
 func readFrame(r io.Reader) (*Frame, error) {
-	f := NewFrame(MaxFramePayloadSize)
+	f := NewFrame()
 	return f, f.ReadIn(r)
 }
 

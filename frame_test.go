@@ -73,7 +73,7 @@ func TestFraming(t *testing.T) {
 }
 
 func TestPartialRead(t *testing.T) {
-	f := NewFrame(MaxFramePayloadSize)
+	f := NewFrame()
 	f.Header.size = FrameHeaderSize + 2134
 	f.Header.messageType = messageTypeCallReq
 	f.Header.ID = 0xDEADBEED
@@ -88,7 +88,7 @@ func TestPartialRead(t *testing.T) {
 	assert.Equal(t, f.Header.size, uint16(buf.Len()), "frame size should match written bytes")
 
 	// Read the data back, from a reader that fragments.
-	f2 := NewFrame(MaxFramePayloadSize)
+	f2 := NewFrame()
 	require.NoError(t, f2.ReadIn(iotest.OneByteReader(buf)))
 
 	// Ensure header and payload are the same.
@@ -97,7 +97,7 @@ func TestPartialRead(t *testing.T) {
 }
 
 func TestEmptyPayload(t *testing.T) {
-	f := NewFrame(MaxFramePayloadSize)
+	f := NewFrame()
 	m := &pingRes{id: 1}
 	require.NoError(t, f.write(m))
 
@@ -114,7 +114,7 @@ func TestEmptyPayload(t *testing.T) {
 
 func TestReservedBytes(t *testing.T) {
 	// Set up a frame with non-zero values
-	f := NewFrame(MaxFramePayloadSize)
+	f := NewFrame()
 	reader := testreader.Looper([]byte{^byte(0)})
 	io.ReadFull(reader, f.Payload)
 	f.Header.read(typed.NewReadBuffer(f.Payload))
@@ -137,7 +137,7 @@ func TestReservedBytes(t *testing.T) {
 }
 
 func TestMessageType(t *testing.T) {
-	frame := NewFrame(MaxFramePayloadSize)
+	frame := NewFrame()
 	err := frame.write(&callReq{Service: "foo"})
 	require.NoError(t, err, "Error writing message to frame.")
 	assert.Equal(t, messageTypeCallReq, frame.messageType(), "Failed to read message type from frame.")

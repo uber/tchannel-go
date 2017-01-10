@@ -64,7 +64,7 @@ func (p *RecordingFramePool) Get() *Frame {
 	p.Lock()
 	defer p.Unlock()
 
-	frame := NewFrame(MaxFramePayloadSize)
+	frame := NewFrame()
 	p.allocations[frame] = recordStack()
 	return frame
 }

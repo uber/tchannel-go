@@ -125,6 +125,7 @@ func NewFrame() *Frame {
 	return f
 }
 
+// updateBufferSize grows the internal buffer
 func (f *Frame) updateBufferSize(payloadCapacity int) {
 	newBuffer := make([]byte, payloadCapacity)
 	copy(newBuffer, f.buffer)
