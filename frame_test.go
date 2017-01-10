@@ -77,6 +77,7 @@ func TestPartialRead(t *testing.T) {
 	f.Header.size = FrameHeaderSize + 2134
 	f.Header.messageType = messageTypeCallReq
 	f.Header.ID = 0xDEADBEED
+	f.updateBufferSize(int(f.Header.FrameSize()))
 
 	// We set the full payload but only the first 2134 bytes should be written.
 	for i := 0; i < len(f.Payload); i++ {
