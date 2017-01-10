@@ -32,7 +32,7 @@ func TestFinishesCallResponses(t *testing.T) {
 		{messageTypeCallReq, 0x04, false},
 	}
 	for _, tt := range tests {
-		f := NewFrame(100)
+		f := NewFrame()
 		fh := FrameHeader{
 			size:        uint16(0xFF34),
 			messageType: tt.msgType,
