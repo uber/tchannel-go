@@ -39,7 +39,7 @@ var DisabledFramePool = disabledFramePool{}
 
 type disabledFramePool struct{}
 
-func (p disabledFramePool) Get() *Frame      { return NewFrame(MaxFramePayloadSize) }
+func (p disabledFramePool) Get() *Frame      { return NewFrame() }
 func (p disabledFramePool) Release(f *Frame) {}
 
 type syncFramePool struct {
@@ -49,7 +49,7 @@ type syncFramePool struct {
 // NewSyncFramePool returns a frame pool that uses a sync.Pool.
 func NewSyncFramePool() FramePool {
 	return &syncFramePool{
-		pool: &sync.Pool{New: func() interface{} { return NewFrame(MaxFramePayloadSize) }},
+		pool: &sync.Pool{New: func() interface{} { return NewFrame() }},
 	}
 }
 
@@ -73,7 +73,7 @@ func (c channelFramePool) Get() *Frame {
 	case frame := <-c:
 		return frame
 	default:
-		return NewFrame(MaxFramePayloadSize)
+		return NewFrame()
 	}
 }
 

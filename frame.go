@@ -38,6 +38,9 @@ const (
 
 	// MaxFramePayloadSize is the maximum size of the payload for a single frame
 	MaxFramePayloadSize = MaxFrameSize - FrameHeaderSize
+
+	// initialPayloadCapacity is the initial capacity for the payload buffer
+	initialPayloadCapacity = 1024
 )
 
 // FrameHeader is the header for a frame, containing the MessageType and size
@@ -116,12 +119,18 @@ type Frame struct {
 }
 
 // NewFrame allocates a new frame with the given payload capacity
-func NewFrame(payloadCapacity int) *Frame {
+func NewFrame() *Frame {
 	f := &Frame{}
-	f.buffer = make([]byte, payloadCapacity+FrameHeaderSize)
+	f.updateBufferSize(initialPayloadCapacity)
+	return f
+}
+
+func (f *Frame) updateBufferSize(payloadCapacity int) {
+	newBuffer := make([]byte, payloadCapacity)
+	copy(newBuffer, f.buffer)
+	f.buffer = newBuffer
 	f.Payload = f.buffer[FrameHeaderSize:]
 	f.headerBuffer = f.buffer[:FrameHeaderSize]
-	return f
 }
 
 // ReadIn reads the frame from the given io.Reader
@@ -162,8 +171,19 @@ func (f *Frame) WriteOut(w io.Writer) error {
 	return nil
 }
 
-// SizedPayload returns the slice of the payload actually used, as defined by the header
+// SizedPayload returns the slice of the payload actually used, as defined by
+// the header. This method will grow the size of the internal buffer if
+// necessary.
 func (f *Frame) SizedPayload() []byte {
+	needed := int(FrameHeaderSize + f.Header.PayloadSize())
+	sz := cap(f.buffer)
+	if sz < needed {
+		for sz < needed {
+			sz <<= 1
+		}
+		f.updateBufferSize(sz)
+
+	}
 	return f.Payload[:f.Header.PayloadSize()]
 }
 

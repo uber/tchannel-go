@@ -1,8 +1,8 @@
-hash: 111bdf9797d23d4b9f8833a9780e382dd53153af70ad286f99815cea4c2fdf4b
-updated: 2016-08-05T18:02:17.171302481-04:00
+hash: b4f64e94739bf6ca3b979bab59e231a6fdd32e7529dd984535b20380624ba7be
+updated: 2017-01-09T17:21:52.421865991-08:00
 imports:
 - name: github.com/apache/thrift
-  version: 0e9fed1e12ed066865e46c6903782b2ef95f4650
+  version: fac3f69725f507872e6d68afea5debd020ce2580
   subpackages:
   - lib/go/thrift
 - name: github.com/bmizerany/perks
@@ -10,24 +10,25 @@ imports:
   subpackages:
   - quantile
 - name: github.com/cactus/go-statsd-client
-  version: 91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d
+  version: d8eabe07bc70ff9ba6a56836cde99d1ea3d005f7
   subpackages:
   - statsd
 - name: github.com/crossdock/crossdock-go
-  version: 228792ab861c86f8900b2db0439577feef9ec9d8
+  version: 049aabb0122b03bc9bd30cab8f3f91fb60166361
   subpackages:
   - assert
   - require
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 346938d642f2ec3594ed81d874461961cd0faa76
   subpackages:
   - spew
 - name: github.com/jessevdk/go-flags
-  version: f2785f5820ec967043de79c8be97edfc464ca745
+  version: 4e64e4a4e2552194cf594243e23aa9baf3b4297e
 - name: github.com/opentracing/opentracing-go
-  version: 855519783f479520497c6b3445611b05fc42f009
+  version: 5e5abf838007b08f96ae057bc182636a178da0b9
   subpackages:
   - ext
+  - log
   - mocktracer
 - name: github.com/pmezard/go-difflib
   version: 792786c7400a136282c1664665ae0a8db921c6c2
@@ -44,26 +45,27 @@ imports:
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: d77da356e56a7428ad25149ca77381849a6a5232
+  version: 2402e8e7a02fc811447d11f881aa9746cdc57983
   subpackages:
   - assert
   - mock
   - require
 - name: github.com/uber-go/atomic
-  version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
+  version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
 - name: github.com/uber/jaeger-client-go
-  version: 9342cec8070f1d9bbf56f8df1d7a885ed8cb015d
+  version: f424dfca4cd0a040ee8a28976f422aed25771b4a
   subpackages:
+  - internal/spanlog
+  - thrift-gen/agent
   - thrift-gen/sampling
   - thrift-gen/zipkincore
   - transport
   - utils
-  - thrift-gen/agent
 - name: golang.org/x/net
-  version: b400c2eff1badec7022a8c8f5bea058b6315eed7
+  version: 77412025ac6f6821b4938edeb45af939de5cccec
   subpackages:
   - context
   - context/ctxhttp
 - name: gopkg.in/yaml.v2
-  version: a83829b6f1293c91addabc89d0571c246397bbf4
-devImports: []
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
+testImports: []
