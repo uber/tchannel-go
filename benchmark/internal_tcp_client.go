@@ -70,7 +70,7 @@ func (c *internalTCPClient) readConn() {
 	defer close(c.responseIDs)
 
 	wantFirstID := true
-	f := tchannel.NewFrame(tchannel.MaxFrameSize)
+	f := tchannel.NewFrame()
 	for {
 		err := f.ReadIn(c.conn)
 		if err != nil {

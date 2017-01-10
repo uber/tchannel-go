@@ -102,7 +102,7 @@ func (r *frameRelay) relayConn(c net.Conn) {
 func (r *frameRelay) relayBetween(outgoing bool, c net.Conn, outC net.Conn) {
 	defer r.wg.Done()
 
-	frame := tchannel.NewFrame(tchannel.MaxFramePayloadSize)
+	frame := tchannel.NewFrame()
 	for {
 		err := frame.ReadIn(c)
 		if err == io.EOF {

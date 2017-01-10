@@ -145,7 +145,7 @@ func TestFramesReleased(t *testing.T) {
 type dirtyFramePool struct{}
 
 func (p dirtyFramePool) Get() *Frame {
-	f := NewFrame(MaxFramePayloadSize)
+	f := NewFrame()
 	reader := testreader.Looper([]byte{^byte(0)})
 	io.ReadFull(reader, f.Payload)
 	return f

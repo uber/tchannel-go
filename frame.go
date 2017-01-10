@@ -176,12 +176,14 @@ func (f *Frame) WriteOut(w io.Writer) error {
 // the header. This method will grow the size of the internal buffer if
 // necessary.
 func (f *Frame) SizedPayload() []byte {
-	needed := int(FrameHeaderSize + f.Header.PayloadSize())
+	needed := int(f.Header.size + f.Header.PayloadSize())
 	sz := cap(f.buffer)
+	fmt.Printf("needed = %d, sz = %d\n", needed, sz)
 	if sz < needed {
 		for sz < needed {
 			sz <<= 1
 		}
+		fmt.Printf("new sz = %d\n", sz)
 		f.updateBufferSize(sz)
 
 	}

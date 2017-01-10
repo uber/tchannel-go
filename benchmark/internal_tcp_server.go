@@ -74,7 +74,7 @@ func (s *internalTCPServer) handleConn(conn net.Conn) {
 
 	var lastID uint32
 
-	f := tchannel.NewFrame(tchannel.MaxFrameSize)
+	f := tchannel.NewFrame()
 	for {
 		if err := f.ReadIn(conn); err != nil {
 			return
