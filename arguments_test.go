@@ -23,10 +23,9 @@ package tchannel
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"strings"
 	"testing"
-
-	"io/ioutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

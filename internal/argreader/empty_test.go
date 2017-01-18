@@ -24,9 +24,10 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/uber/tchannel-go/testutils/testreader"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/testutils/testreader"
 )
 
 func TestEnsureEmptySuccess(t *testing.T) {
@@ -37,9 +38,9 @@ func TestEnsureEmptySuccess(t *testing.T) {
 
 func TestEnsureEmptyHasBytes(t *testing.T) {
 	reader := bytes.NewReader([]byte{1, 2, 3})
-	err := EnsureEmpty(reader, "has bytes")
+	err := EnsureEmpty(reader, "T")
 	require.Error(t, err, "ensureEmpty should fail when there's bytes")
-	assert.Contains(t, err.Error(), "found unexpected bytes")
+	assert.Equal(t, err.Error(), "found unexpected bytes after T, found (upto 128 bytes): 010203")
 }
 
 func TestEnsureEmptyError(t *testing.T) {

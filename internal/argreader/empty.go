@@ -23,15 +23,25 @@ package argreader
 import (
 	"fmt"
 	"io"
+	"sync"
 )
+
+var _bufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 128)
+		return &b
+	},
+}
 
 // EnsureEmpty ensures that the specified reader is empty. If the reader is
 // not empty, it returns an error with the specified stage in the message.
 func EnsureEmpty(r io.Reader, stage string) error {
-	buf := make([]byte, 128)
-	n, err := r.Read(buf)
+	buf := _bufPool.Get().(*[]byte)
+	defer _bufPool.Put(buf)
+
+	n, err := r.Read(*buf)
 	if n > 0 {
-		return fmt.Errorf("found unexpected bytes after %s, found (upto 128 bytes): %x", stage, buf)
+		return fmt.Errorf("found unexpected bytes after %s, found (upto 128 bytes): %x", stage, (*buf)[:n])
 	}
 	if err == io.EOF {
 		return nil
