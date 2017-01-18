@@ -25,6 +25,8 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+
+	"github.com/uber/tchannel-go/internal/argreader"
 )
 
 // ArgReader is the interface for the arg2 and arg3 streams on an
@@ -72,6 +74,9 @@ func (r ArgReadHelper) read(f func() error) error {
 		return r.err
 	}
 	if err := f(); err != nil {
+		return err
+	}
+	if err := argreader.EnsureEmpty(r.reader, "read arg"); err != nil {
 		return err
 	}
 	return r.reader.Close()
