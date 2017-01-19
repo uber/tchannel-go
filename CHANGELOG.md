@@ -1,6 +1,18 @@
 Changelog
 =========
 
+# v1.2.3
+
+* Improve error messages when an argument reader is closed without
+  reading the EOF. (#567)
+* thrift: Fix an issue where we return `nil` if we expected a Thrift exception
+  but none was found (e.g., exception is from the future). (#566)
+* Fix ListenIP selecting docker interfaces over physical networks. (#565)
+* Fix for error when a Thrift payload has completed decoding and attempts
+  to close the argument reader without waiting till EOF.  (#564)
+* thrift-gen: Fix "namespace go" being ignored even though the Apache thrift
+  generated code was respecting it. (#559)
+
 # v1.2.2
 
 * Add a unique channel ID for introspection (#548)
