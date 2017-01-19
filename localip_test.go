@@ -63,6 +63,16 @@ func TestScoreAddr(t *testing.T) {
 			wantIP: ipv4,
 		},
 		{
+			msg: "non-local up ipv4 address, local MAC address",
+			iface: net.Interface{
+				Flags:        net.FlagUp,
+				HardwareAddr: mustParseMAC("02:42:9c:52:fc:86"),
+			},
+			addr:   &net.IPNet{IP: ipv4},
+			want:   450,
+			wantIP: ipv4,
+		},
+		{
 			msg:    "non-local down ipv4 address",
 			iface:  net.Interface{},
 			addr:   &net.IPNet{IP: ipv4},
