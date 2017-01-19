@@ -23,6 +23,8 @@ package tchannel
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,6 +72,15 @@ func TestJSONInputOutput(t *testing.T) {
 	assert.True(t, reader.closed)
 	assert.Equal(t, "Foo", outObj.Name)
 	assert.Equal(t, 20756, outObj.Value)
+}
+
+func TestReadNotEmpty(t *testing.T) {
+	// Note: The contents need to be larger than the default buffer size of bufio.NewReader.
+	r := bytes.NewReader([]byte("{}" + strings.Repeat("{}\n", 10000)))
+
+	var data map[string]interface{}
+	reader := NewArgReader(ioutil.NopCloser(r), nil)
+	require.Error(t, reader.ReadJSON(&data), "Read should fail due to extra bytes")
 }
 
 func BenchmarkArgReaderWriter(b *testing.B) {

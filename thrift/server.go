@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	tchannel "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/internal/argreader"
 
 	"github.com/apache/thrift/lib/go/thrift"
 	"golang.org/x/net/context"
@@ -116,6 +117,11 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	if err != nil {
 		return err
 	}
+
+	if err := argreader.EnsureEmpty(reader, "reading request headers"); err != nil {
+		return err
+	}
+
 	if err := reader.Close(); err != nil {
 		return err
 	}
@@ -146,6 +152,10 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		reader.Close()
 		call.Response().SendSystemError(err)
 		return nil
+	}
+
+	if err := argreader.EnsureEmpty(reader, "reading request body"); err != nil {
+		return err
 	}
 	if err := reader.Close(); err != nil {
 		return err
