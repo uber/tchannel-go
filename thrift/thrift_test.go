@@ -44,8 +44,8 @@ import (
 )
 
 // Generate the service mocks using go generate.
-//go:generate mockery -name TChanSimpleService
-//go:generate mockery -name TChanSecondService
+//go:generate mockery -dir ./gen-go/test -name TChanSimpleService
+//go:generate mockery -dir ./gen-go/test -name TChanSecondService
 
 type testArgs struct {
 	server *Server
@@ -154,6 +154,26 @@ func TestThriftError(t *testing.T) {
 		got := args.c1.Simple(ctx)
 		require.Error(t, got)
 		require.Equal(t, thriftErr, got)
+	})
+}
+
+func TestThriftUnknownError(t *testing.T) {
+	thriftErr := &gen.NewErr_{
+		Message: "new error",
+	}
+
+	withSetup(t, func(ctx Context, args testArgs) {
+		// When "Simple" is called, actually call a separate similar looking method
+		// SimpleFuture which has a new exception that the client side of Simple
+		// does not know how to handle.
+		args.s1.On("SimpleFuture", ctxArg()).Return(thriftErr)
+		tClient := NewClient(args.clientCh, args.serverCh.ServiceName(), nil)
+		rewriteMethodClient := rewriteMethodClient{tClient, "SimpleFuture"}
+		simpleClient := gen.NewTChanSimpleServiceClient(rewriteMethodClient)
+
+		got := simpleClient.Simple(ctx)
+		require.Error(t, got)
+		assert.Contains(t, got.Error(), "no result or unknown exception")
 	})
 }
 
@@ -457,9 +477,7 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	args.serverCh, args.server = setupServer(t, args.s1, args.s2)
 	defer args.serverCh.Close()
 
-	// Get client1
-	args.clientCh = testutils.NewClient(t, nil)
-	args.c1, args.c2 = getClients(t, args.serverCh.PeerInfo(), args.serverCh.ServiceName(), args.clientCh)
+	args.clientCh, args.c1, args.c2 = getClients(t, args.serverCh.PeerInfo(), args.serverCh.ServiceName(), args.clientCh)
 
 	f(ctx, args)
 
@@ -475,7 +493,7 @@ func setupServer(t *testing.T, h *mocks.TChanSimpleService, sh *mocks.TChanSecon
 	return ch, server
 }
 
-func getClients(t *testing.T, serverInfo tchannel.LocalPeerInfo, svcName string, clientCh *tchannel.Channel) (gen.TChanSimpleService, gen.TChanSecondService) {
+func getClients(t *testing.T, serverInfo tchannel.LocalPeerInfo, svcName string, clientCh *tchannel.Channel) (*tchannel.Channel, gen.TChanSimpleService, gen.TChanSecondService) {
 	ch := testutils.NewClient(t, nil)
 
 	ch.Peers().Add(serverInfo.HostPort)
@@ -483,7 +501,7 @@ func getClients(t *testing.T, serverInfo tchannel.LocalPeerInfo, svcName string,
 
 	simpleClient := gen.NewTChanSimpleServiceClient(client)
 	secondClient := gen.NewTChanSecondServiceClient(client)
-	return simpleClient, secondClient
+	return ch, simpleClient, secondClient
 }
 
 func withReader(t *testing.T, readerFn func() (tchannel.ArgReader, error), f func(r tchannel.ArgReader) error) {
@@ -504,4 +522,13 @@ func withWriter(t *testing.T, writerFn func() (tchannel.ArgWriter, error), f fun
 	require.NoError(t, err, "Failed to write contents")
 
 	require.NoError(t, writer.Close(), "Failed to close Writer")
+}
+
+type rewriteMethodClient struct {
+	client    TChanClient
+	rewriteTo string
+}
+
+func (c rewriteMethodClient) Call(ctx Context, serviceName, methodName string, req, resp thrift.TStruct) (success bool, err error) {
+	return c.client.Call(ctx, serviceName, c.rewriteTo, req, resp)
 }

@@ -8,9 +8,14 @@ exception SimpleErr {
   1: string message
 }
 
+exception NewErr {
+  1: string message
+}
+
 service SimpleService {
   Data Call(1: Data arg)
   void Simple() throws (1: SimpleErr simpleErr)
+  void SimpleFuture() throws (1: SimpleErr simpleErr, 2: NewErr newErr)
 }
 
 service SecondService {

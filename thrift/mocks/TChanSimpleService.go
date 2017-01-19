@@ -29,21 +29,48 @@ type TChanSimpleService struct {
 	mock.Mock
 }
 
-func (m *TChanSimpleService) Call(ctx thrift.Context, arg *test.Data) (*test.Data, error) {
-	ret := m.Called(ctx, arg)
+func (_m *TChanSimpleService) Call(_ctx thrift.Context, _arg *test.Data) (*test.Data, error) {
+	ret := _m.Called(_ctx, _arg)
 
 	var r0 *test.Data
-	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(*test.Data)
+	if rf, ok := ret.Get(0).(func(thrift.Context, *test.Data) *test.Data); ok {
+		r0 = rf(_ctx, _arg)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*test.Data)
+		}
 	}
-	r1 := ret.Error(1)
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(thrift.Context, *test.Data) error); ok {
+		r1 = rf(_ctx, _arg)
+	} else {
+		r1 = ret.Error(1)
+	}
 
 	return r0, r1
 }
-func (m *TChanSimpleService) Simple(ctx thrift.Context) error {
-	ret := m.Called(ctx)
+func (_m *TChanSimpleService) Simple(_ctx thrift.Context) error {
+	ret := _m.Called(_ctx)
 
-	r0 := ret.Error(0)
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context) error); ok {
+		r0 = rf(_ctx)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+func (_m *TChanSimpleService) SimpleFuture(_ctx thrift.Context) error {
+	ret := _m.Called(_ctx)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(thrift.Context) error); ok {
+		r0 = rf(_ctx)
+	} else {
+		r0 = ret.Error(0)
+	}
 
 	return r0
 }

@@ -77,11 +77,14 @@ func {{ .ClientConstructor }}(client thrift.TChanClient) {{ .Interface }} {
 		}
 		success, err := c.client.Call(ctx, c.thriftService, "{{ .ThriftName }}", &args, &resp)
 		if err == nil && !success {
+			switch {
 			{{ range .Exceptions }}
-				if e := resp.{{ .ArgStructName }}; e != nil {
-					err = e
-				}
+			case resp.{{ .ArgStructName }} != nil:
+				err = resp.{{ .ArgStructName }}
 			{{ end }}
+			default:
+				err = fmt.Errorf("received no result or unknown exception for {{ .ThriftName }}")
+			}
 		}
 
 		{{ if .HasReturn }}

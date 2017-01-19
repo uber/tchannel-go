@@ -43,11 +43,13 @@ func (c *tchanHyperbahnClient) Discover(ctx thrift.Context, query *DiscoveryQuer
 	}
 	success, err := c.client.Call(ctx, c.thriftService, "discover", &args, &resp)
 	if err == nil && !success {
-		if e := resp.NoPeersAvailable; e != nil {
-			err = e
-		}
-		if e := resp.InvalidServiceName; e != nil {
-			err = e
+		switch {
+		case resp.NoPeersAvailable != nil:
+			err = resp.NoPeersAvailable
+		case resp.InvalidServiceName != nil:
+			err = resp.InvalidServiceName
+		default:
+			err = fmt.Errorf("received no result or unknown exception for discover")
 		}
 	}
 
