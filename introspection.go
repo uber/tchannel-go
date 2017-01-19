@@ -216,7 +216,7 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 		CreatedStack:   ch.createdStack,
 		LocalPeer:      ch.PeerInfo(),
 		SubChannels:    ch.subChannels.IntrospectState(opts),
-		RootPeers:      ch.rootPeers().IntrospectState(opts),
+		RootPeers:      ch.RootPeers().IntrospectState(opts),
 		Peers:          ch.Peers().IntrospectList(opts),
 		NumConnections: numConns,
 		Connections:    connIDs,
