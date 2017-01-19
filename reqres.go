@@ -116,7 +116,7 @@ func (w *reqResWriter) newFragment(initial bool, checksum Checksum) (*writableFr
 	message := w.messageForFragment(initial)
 
 	// Create the frame
-	frame := w.conn.framePool.Get()
+	frame := w.conn.opts.FramePool.Get()
 	frame.Header.ID = w.mex.msgID
 	frame.Header.messageType = message.messageType()
 

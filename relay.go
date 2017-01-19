@@ -547,7 +547,7 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	}
 
 	if release := r.conn.handleFrameNoRelay(f); release {
-		r.conn.framePool.Release(f)
+		r.conn.opts.FramePool.Release(f)
 	}
 	return true
 }
