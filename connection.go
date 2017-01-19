@@ -132,7 +132,7 @@ type ConnectionOptions struct {
 	// The frame pool, allowing better management of frame buffers. Defaults to using raw heap.
 	FramePool FramePool
 
-	// The size of receive channel buffers. Defaults to 512.
+	// NOTE: This is deprecated and not used for anything.
 	RecvBufferSize int
 
 	// The size of send channel buffers. Defaults to 512.
@@ -253,9 +253,6 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	if co.SendBufferSize <= 0 {
 		co.SendBufferSize = defaultConnectionBufferSize
 	}
-	if co.RecvBufferSize <= 0 {
-		co.RecvBufferSize = defaultConnectionBufferSize
-	}
 	return co
 }
 
@@ -312,7 +309,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		conn:            conn,
 		opts:            opts,
 		state:           initialState,
-		sendCh:          make(chan *Frame, opts.RecvBufferSize),
+		sendCh:          make(chan *Frame, opts.SendBufferSize),
 		stopCh:          make(chan struct{}),
 		localPeerInfo:   peerInfo,
 		outboundHP:      outboundHP,
