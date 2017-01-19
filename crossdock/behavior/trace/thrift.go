@@ -39,6 +39,8 @@ func (b *Behavior) registerThrift(ch *tchannel.Channel) {
 }
 
 type thriftHandler struct {
+	gen.TChanSimpleService // leave nil so calls to unimplemented methods panic.
+
 	ch *tchannel.Channel
 	b  *Behavior
 }
@@ -53,10 +55,6 @@ func (h *thriftHandler) Call(ctx thrift.Context, arg *gen.Data) (*gen.Data, erro
 		return nil, err
 	}
 	return responseToThrift(res)
-}
-
-func (h *thriftHandler) Simple(ctx thrift.Context) error {
-	panic("Simple not implemented")
 }
 
 func (h *thriftHandler) callDownstream(ctx context.Context, target *Downstream) (*Response, error) {

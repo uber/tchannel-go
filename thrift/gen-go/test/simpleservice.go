@@ -19,6 +19,7 @@ type SimpleService interface {
 	//  - Arg
 	Call(arg *Data) (r *Data, err error)
 	Simple() (err error)
+	SimpleFuture() (err error)
 }
 
 type SimpleServiceClient struct {
@@ -200,6 +201,85 @@ func (p *SimpleServiceClient) recvSimple() (err error) {
 	return
 }
 
+func (p *SimpleServiceClient) SimpleFuture() (err error) {
+	if err = p.sendSimpleFuture(); err != nil {
+		return
+	}
+	return p.recvSimpleFuture()
+}
+
+func (p *SimpleServiceClient) sendSimpleFuture() (err error) {
+	oprot := p.OutputProtocol
+	if oprot == nil {
+		oprot = p.ProtocolFactory.GetProtocol(p.Transport)
+		p.OutputProtocol = oprot
+	}
+	p.SeqId++
+	if err = oprot.WriteMessageBegin("SimpleFuture", thrift.CALL, p.SeqId); err != nil {
+		return
+	}
+	args := SimpleServiceSimpleFutureArgs{}
+	if err = args.Write(oprot); err != nil {
+		return
+	}
+	if err = oprot.WriteMessageEnd(); err != nil {
+		return
+	}
+	return oprot.Flush()
+}
+
+func (p *SimpleServiceClient) recvSimpleFuture() (err error) {
+	iprot := p.InputProtocol
+	if iprot == nil {
+		iprot = p.ProtocolFactory.GetProtocol(p.Transport)
+		p.InputProtocol = iprot
+	}
+	method, mTypeId, seqId, err := iprot.ReadMessageBegin()
+	if err != nil {
+		return
+	}
+	if method != "SimpleFuture" {
+		err = thrift.NewTApplicationException(thrift.WRONG_METHOD_NAME, "SimpleFuture failed: wrong method name")
+		return
+	}
+	if p.SeqId != seqId {
+		err = thrift.NewTApplicationException(thrift.BAD_SEQUENCE_ID, "SimpleFuture failed: out of sequence response")
+		return
+	}
+	if mTypeId == thrift.EXCEPTION {
+		error4 := thrift.NewTApplicationException(thrift.UNKNOWN_APPLICATION_EXCEPTION, "Unknown Exception")
+		var error5 error
+		error5, err = error4.Read(iprot)
+		if err != nil {
+			return
+		}
+		if err = iprot.ReadMessageEnd(); err != nil {
+			return
+		}
+		err = error5
+		return
+	}
+	if mTypeId != thrift.REPLY {
+		err = thrift.NewTApplicationException(thrift.INVALID_MESSAGE_TYPE_EXCEPTION, "SimpleFuture failed: invalid message type")
+		return
+	}
+	result := SimpleServiceSimpleFutureResult{}
+	if err = result.Read(iprot); err != nil {
+		return
+	}
+	if err = iprot.ReadMessageEnd(); err != nil {
+		return
+	}
+	if result.SimpleErr != nil {
+		err = result.SimpleErr
+		return
+	} else if result.NewErr_ != nil {
+		err = result.NewErr_
+		return
+	}
+	return
+}
+
 type SimpleServiceProcessor struct {
 	processorMap map[string]thrift.TProcessorFunction
 	handler      SimpleService
@@ -220,10 +300,11 @@ func (p *SimpleServiceProcessor) ProcessorMap() map[string]thrift.TProcessorFunc
 
 func NewSimpleServiceProcessor(handler SimpleService) *SimpleServiceProcessor {
 
-	self4 := &SimpleServiceProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
-	self4.processorMap["Call"] = &simpleServiceProcessorCall{handler: handler}
-	self4.processorMap["Simple"] = &simpleServiceProcessorSimple{handler: handler}
-	return self4
+	self6 := &SimpleServiceProcessor{handler: handler, processorMap: make(map[string]thrift.TProcessorFunction)}
+	self6.processorMap["Call"] = &simpleServiceProcessorCall{handler: handler}
+	self6.processorMap["Simple"] = &simpleServiceProcessorSimple{handler: handler}
+	self6.processorMap["SimpleFuture"] = &simpleServiceProcessorSimpleFuture{handler: handler}
+	return self6
 }
 
 func (p *SimpleServiceProcessor) Process(iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
@@ -236,12 +317,12 @@ func (p *SimpleServiceProcessor) Process(iprot, oprot thrift.TProtocol) (success
 	}
 	iprot.Skip(thrift.STRUCT)
 	iprot.ReadMessageEnd()
-	x5 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
+	x7 := thrift.NewTApplicationException(thrift.UNKNOWN_METHOD, "Unknown function "+name)
 	oprot.WriteMessageBegin(name, thrift.EXCEPTION, seqId)
-	x5.Write(oprot)
+	x7.Write(oprot)
 	oprot.WriteMessageEnd()
 	oprot.Flush()
-	return false, x5
+	return false, x7
 
 }
 
@@ -326,6 +407,58 @@ func (p *simpleServiceProcessorSimple) Process(seqId int32, iprot, oprot thrift.
 		}
 	}
 	if err2 = oprot.WriteMessageBegin("Simple", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+type simpleServiceProcessorSimpleFuture struct {
+	handler SimpleService
+}
+
+func (p *simpleServiceProcessorSimpleFuture) Process(seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := SimpleServiceSimpleFutureArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("SimpleFuture", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush()
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	result := SimpleServiceSimpleFutureResult{}
+	var err2 error
+	if err2 = p.handler.SimpleFuture(); err2 != nil {
+		switch v := err2.(type) {
+		case *SimpleErr:
+			result.SimpleErr = v
+		case *NewErr_:
+			result.NewErr_ = v
+		default:
+			x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing SimpleFuture: "+err2.Error())
+			oprot.WriteMessageBegin("SimpleFuture", thrift.EXCEPTION, seqId)
+			x.Write(oprot)
+			oprot.WriteMessageEnd()
+			oprot.Flush()
+			return true, err2
+		}
+	}
+	if err2 = oprot.WriteMessageBegin("SimpleFuture", thrift.REPLY, seqId); err2 != nil {
 		err = err2
 	}
 	if err2 = result.Write(oprot); err == nil && err2 != nil {
@@ -697,4 +830,203 @@ func (p *SimpleServiceSimpleResult) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("SimpleServiceSimpleResult(%+v)", *p)
+}
+
+type SimpleServiceSimpleFutureArgs struct {
+}
+
+func NewSimpleServiceSimpleFutureArgs() *SimpleServiceSimpleFutureArgs {
+	return &SimpleServiceSimpleFutureArgs{}
+}
+
+func (p *SimpleServiceSimpleFutureArgs) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		if err := iprot.Skip(fieldTypeId); err != nil {
+			return err
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *SimpleServiceSimpleFutureArgs) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("SimpleFuture_args"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *SimpleServiceSimpleFutureArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("SimpleServiceSimpleFutureArgs(%+v)", *p)
+}
+
+// Attributes:
+//  - SimpleErr
+//  - NewErr_
+type SimpleServiceSimpleFutureResult struct {
+	SimpleErr *SimpleErr `thrift:"simpleErr,1" db:"simpleErr" json:"simpleErr,omitempty"`
+	NewErr_   *NewErr_   `thrift:"newErr,2" db:"newErr" json:"newErr,omitempty"`
+}
+
+func NewSimpleServiceSimpleFutureResult() *SimpleServiceSimpleFutureResult {
+	return &SimpleServiceSimpleFutureResult{}
+}
+
+var SimpleServiceSimpleFutureResult_SimpleErr_DEFAULT *SimpleErr
+
+func (p *SimpleServiceSimpleFutureResult) GetSimpleErr() *SimpleErr {
+	if !p.IsSetSimpleErr() {
+		return SimpleServiceSimpleFutureResult_SimpleErr_DEFAULT
+	}
+	return p.SimpleErr
+}
+
+var SimpleServiceSimpleFutureResult_NewErr__DEFAULT *NewErr_
+
+func (p *SimpleServiceSimpleFutureResult) GetNewErr_() *NewErr_ {
+	if !p.IsSetNewErr_() {
+		return SimpleServiceSimpleFutureResult_NewErr__DEFAULT
+	}
+	return p.NewErr_
+}
+func (p *SimpleServiceSimpleFutureResult) IsSetSimpleErr() bool {
+	return p.SimpleErr != nil
+}
+
+func (p *SimpleServiceSimpleFutureResult) IsSetNewErr_() bool {
+	return p.NewErr_ != nil
+}
+
+func (p *SimpleServiceSimpleFutureResult) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if err := p.ReadField1(iprot); err != nil {
+				return err
+			}
+		case 2:
+			if err := p.ReadField2(iprot); err != nil {
+				return err
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *SimpleServiceSimpleFutureResult) ReadField1(iprot thrift.TProtocol) error {
+	p.SimpleErr = &SimpleErr{}
+	if err := p.SimpleErr.Read(iprot); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.SimpleErr), err)
+	}
+	return nil
+}
+
+func (p *SimpleServiceSimpleFutureResult) ReadField2(iprot thrift.TProtocol) error {
+	p.NewErr_ = &NewErr_{}
+	if err := p.NewErr_.Read(iprot); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.NewErr_), err)
+	}
+	return nil
+}
+
+func (p *SimpleServiceSimpleFutureResult) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("SimpleFuture_result"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if err := p.writeField1(oprot); err != nil {
+		return err
+	}
+	if err := p.writeField2(oprot); err != nil {
+		return err
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *SimpleServiceSimpleFutureResult) writeField1(oprot thrift.TProtocol) (err error) {
+	if p.IsSetSimpleErr() {
+		if err := oprot.WriteFieldBegin("simpleErr", thrift.STRUCT, 1); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:simpleErr: ", p), err)
+		}
+		if err := p.SimpleErr.Write(oprot); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.SimpleErr), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 1:simpleErr: ", p), err)
+		}
+	}
+	return err
+}
+
+func (p *SimpleServiceSimpleFutureResult) writeField2(oprot thrift.TProtocol) (err error) {
+	if p.IsSetNewErr_() {
+		if err := oprot.WriteFieldBegin("newErr", thrift.STRUCT, 2); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:newErr: ", p), err)
+		}
+		if err := p.NewErr_.Write(oprot); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.NewErr_), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 2:newErr: ", p), err)
+		}
+	}
+	return err
+}
+
+func (p *SimpleServiceSimpleFutureResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("SimpleServiceSimpleFutureResult(%+v)", *p)
 }
