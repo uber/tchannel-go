@@ -20,16 +20,13 @@
 
 package main
 
-import (
-	"strings"
-
-	"github.com/samuel/go-thrift/parser"
-)
+import "github.com/samuel/go-thrift/parser"
 
 // Include represents a single include statement in the Thrift file.
 type Include struct {
 	key  string
 	file string
+	pkg  string
 }
 
 // Import returns the go import to use for this package.
@@ -42,15 +39,17 @@ func (i *Include) Import() string {
 
 // Package returns the package selector for this package.
 func (i *Include) Package() string {
-	return strings.ToLower(i.key)
+	return i.pkg
 }
 
-func createIncludes(parsed *parser.Thrift) map[string]*Include {
+func createIncludes(parsed *parser.Thrift, all map[string]parseState) map[string]*Include {
 	includes := make(map[string]*Include)
 	for k, v := range parsed.Includes {
+		included := all[v]
 		includes[k] = &Include{
 			key:  k,
 			file: v,
+			pkg:  included.namespace,
 		}
 	}
 	return includes

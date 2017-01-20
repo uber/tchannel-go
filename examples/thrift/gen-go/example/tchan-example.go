@@ -55,6 +55,10 @@ func (c *tchanBaseClient) BaseCall(ctx thrift.Context) error {
 	args := BaseBaseCallArgs{}
 	success, err := c.client.Call(ctx, c.thriftService, "BaseCall", &args, &resp)
 	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for BaseCall")
+		}
 	}
 
 	return err
@@ -136,6 +140,10 @@ func (c *tchanFirstClient) AppError(ctx thrift.Context) error {
 	args := FirstAppErrorArgs{}
 	success, err := c.client.Call(ctx, c.thriftService, "AppError", &args, &resp)
 	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for AppError")
+		}
 	}
 
 	return err
@@ -148,6 +156,10 @@ func (c *tchanFirstClient) Echo(ctx thrift.Context, msg string) (string, error) 
 	}
 	success, err := c.client.Call(ctx, c.thriftService, "Echo", &args, &resp)
 	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for Echo")
+		}
 	}
 
 	return resp.GetSuccess(), err
@@ -158,6 +170,10 @@ func (c *tchanFirstClient) Healthcheck(ctx thrift.Context) (*HealthCheckRes, err
 	args := FirstHealthcheckArgs{}
 	success, err := c.client.Call(ctx, c.thriftService, "Healthcheck", &args, &resp)
 	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for Healthcheck")
+		}
 	}
 
 	return resp.GetSuccess(), err
@@ -289,6 +305,10 @@ func (c *tchanSecondClient) Test(ctx thrift.Context) error {
 	args := SecondTestArgs{}
 	success, err := c.client.Call(ctx, c.thriftService, "Test", &args, &resp)
 	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for Test")
+		}
 	}
 
 	return err

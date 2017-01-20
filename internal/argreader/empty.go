@@ -18,32 +18,33 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package mocks
+package argreader
 
-import "github.com/stretchr/testify/mock"
+import (
+	"fmt"
+	"io"
+	"sync"
+)
 
-import "github.com/uber/tchannel-go/thrift"
-
-type TChanSecondService struct {
-	mock.Mock
+var _bufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 128)
+		return &b
+	},
 }
 
-func (_m *TChanSecondService) Echo(_ctx thrift.Context, _arg string) (string, error) {
-	ret := _m.Called(_ctx, _arg)
+// EnsureEmpty ensures that the specified reader is empty. If the reader is
+// not empty, it returns an error with the specified stage in the message.
+func EnsureEmpty(r io.Reader, stage string) error {
+	buf := _bufPool.Get().(*[]byte)
+	defer _bufPool.Put(buf)
 
-	var r0 string
-	if rf, ok := ret.Get(0).(func(thrift.Context, string) string); ok {
-		r0 = rf(_ctx, _arg)
-	} else {
-		r0 = ret.Get(0).(string)
+	n, err := r.Read(*buf)
+	if n > 0 {
+		return fmt.Errorf("found unexpected bytes after %s, found (upto 128 bytes): %x", stage, (*buf)[:n])
 	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, string) error); ok {
-		r1 = rf(_ctx, _arg)
-	} else {
-		r1 = ret.Error(1)
+	if err == io.EOF {
+		return nil
 	}
-
-	return r0, r1
+	return err
 }

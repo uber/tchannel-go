@@ -26,10 +26,8 @@ ARCH := $(shell uname -m)
 THRIFT_REL := ./scripts/travis/thrift-release/$(PLATFORM)-$(ARCH)
 
 OLD_GOPATH := $(GOPATH)
-VENDOR_PATH := $(PWD)/.tmp/vendor
 
 export PATH := $(realpath $(THRIFT_REL)):$(PATH)
-export GOPATH := $(VENDOR_PATH):$(GOPATH)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -58,9 +56,6 @@ get_thrift:
 # Note that glide itself is still executed against the original GOPATH.
 install:
 	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
-	rm -rf $(VENDOR_PATH)
-	mkdir -p $(VENDOR_PATH)
-	mv vendor $(VENDOR_PATH)/src
 
 install_lint:
 ifdef SHOULD_LINT
@@ -176,7 +171,6 @@ thrift_gen:
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift --outputDir examples/keyvalue/gen-go
 	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/example.thrift --outputDir examples/thrift/gen-go
 	$(BUILD)/thrift-gen --generateThrift --inputFile hyperbahn/hyperbahn.thrift --outputDir hyperbahn/gen-go
-	rm -rf trace/thrift/gen-go/tcollector && $(BUILD)/thrift-gen --generateThrift --inputFile trace/tcollector.thrift --outputDir trace/thrift/gen-go/
 
 release_thrift_gen: clean setup
 	GOOS=linux GOARCH=amd64 go build -o $(THRIFT_GEN_RELEASE_LINUX)/thrift-gen ./thrift/thrift-gen

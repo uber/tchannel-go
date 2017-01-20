@@ -44,8 +44,8 @@ import (
 )
 
 // Generate the service mocks using go generate.
-//go:generate mockery -name TChanSimpleService
-//go:generate mockery -name TChanSecondService
+//go:generate mockery -dir ./gen-go/test -name TChanSimpleService
+//go:generate mockery -dir ./gen-go/test -name TChanSecondService
 
 type testArgs struct {
 	server *Server
@@ -53,6 +53,9 @@ type testArgs struct {
 	s2     *mocks.TChanSecondService
 	c1     gen.TChanSimpleService
 	c2     gen.TChanSecondService
+
+	serverCh *tchannel.Channel
+	clientCh *tchannel.Channel
 }
 
 func ctxArg() mock.AnythingOfTypeArgument {
@@ -154,6 +157,26 @@ func TestThriftError(t *testing.T) {
 	})
 }
 
+func TestThriftUnknownError(t *testing.T) {
+	thriftErr := &gen.NewErr_{
+		Message: "new error",
+	}
+
+	withSetup(t, func(ctx Context, args testArgs) {
+		// When "Simple" is called, actually call a separate similar looking method
+		// SimpleFuture which has a new exception that the client side of Simple
+		// does not know how to handle.
+		args.s1.On("SimpleFuture", ctxArg()).Return(thriftErr)
+		tClient := NewClient(args.clientCh, args.serverCh.ServiceName(), nil)
+		rewriteMethodClient := rewriteMethodClient{tClient, "SimpleFuture"}
+		simpleClient := gen.NewTChanSimpleServiceClient(rewriteMethodClient)
+
+		got := simpleClient.Simple(ctx)
+		require.Error(t, got)
+		assert.Contains(t, got.Error(), "no result or unknown exception")
+	})
+}
+
 func TestThriftNilErr(t *testing.T) {
 	var thriftErr *gen.SimpleErr
 	withSetup(t, func(ctx Context, args testArgs) {
@@ -162,6 +185,80 @@ func TestThriftNilErr(t *testing.T) {
 		require.Error(t, got)
 		require.Contains(t, got.Error(), "non-nil error type")
 		require.Contains(t, got.Error(), "nil value")
+	})
+}
+
+func TestThriftDecodeEmptyFrameServer(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		args.s1.On("Simple", ctxArg()).Return(nil)
+
+		call, err := args.clientCh.BeginCall(ctx, args.serverCh.PeerInfo().HostPort, args.serverCh.ServiceName(), "SimpleService::Simple", nil)
+		require.NoError(t, err, "Failed to BeginCall")
+
+		withWriter(t, call.Arg2Writer, func(w tchannel.ArgWriter) error {
+			if err := WriteHeaders(w, nil); err != nil {
+				return err
+			}
+
+			return w.Flush()
+		})
+
+		withWriter(t, call.Arg3Writer, func(w tchannel.ArgWriter) error {
+			if err := WriteStruct(w, &gen.SimpleServiceSimpleArgs{}); err != nil {
+				return err
+			}
+
+			return w.Flush()
+		})
+
+		response := call.Response()
+		withReader(t, response.Arg2Reader, func(r tchannel.ArgReader) error {
+			_, err := ReadHeaders(r)
+			return err
+		})
+
+		var res gen.SimpleServiceSimpleResult
+		withReader(t, response.Arg3Reader, func(r tchannel.ArgReader) error {
+			return ReadStruct(r, &res)
+		})
+
+		assert.False(t, res.IsSetSimpleErr(), "Expected no error")
+	})
+}
+
+func TestThriftDecodeEmptyFrameClient(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		handler := func(ctx context.Context, call *tchannel.InboundCall) {
+			withReader(t, call.Arg2Reader, func(r tchannel.ArgReader) error {
+				_, err := ReadHeaders(r)
+				return err
+			})
+
+			withReader(t, call.Arg3Reader, func(r tchannel.ArgReader) error {
+				req := &gen.SimpleServiceSimpleArgs{}
+				return ReadStruct(r, req)
+			})
+
+			response := call.Response()
+			withWriter(t, response.Arg2Writer, func(w tchannel.ArgWriter) error {
+				if err := WriteHeaders(w, nil); err != nil {
+					return err
+				}
+
+				return w.Flush()
+			})
+
+			withWriter(t, response.Arg3Writer, func(w tchannel.ArgWriter) error {
+				if err := WriteStruct(w, &gen.SimpleServiceSimpleResult{}); err != nil {
+					return err
+				}
+
+				return w.Flush()
+			})
+		}
+
+		args.serverCh.Register(tchannel.HandlerFunc(handler), "SimpleService::Simple")
+		require.NoError(t, args.c1.Simple(ctx))
 	})
 }
 
@@ -377,12 +474,10 @@ func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	defer cancel()
 
 	// Start server
-	ch, server := setupServer(t, args.s1, args.s2)
-	defer ch.Close()
-	args.server = server
+	args.serverCh, args.server = setupServer(t, args.s1, args.s2)
+	defer args.serverCh.Close()
 
-	// Get client1
-	args.c1, args.c2 = getClients(t, ch)
+	args.clientCh, args.c1, args.c2 = getClients(t, args.serverCh.PeerInfo(), args.serverCh.ServiceName(), args.clientCh)
 
 	f(ctx, args)
 
@@ -398,14 +493,42 @@ func setupServer(t *testing.T, h *mocks.TChanSimpleService, sh *mocks.TChanSecon
 	return ch, server
 }
 
-func getClients(t *testing.T, serverCh *tchannel.Channel) (gen.TChanSimpleService, gen.TChanSecondService) {
-	serverInfo := serverCh.PeerInfo()
+func getClients(t *testing.T, serverInfo tchannel.LocalPeerInfo, svcName string, clientCh *tchannel.Channel) (*tchannel.Channel, gen.TChanSimpleService, gen.TChanSecondService) {
 	ch := testutils.NewClient(t, nil)
 
 	ch.Peers().Add(serverInfo.HostPort)
-	client := NewClient(ch, serverInfo.ServiceName, nil)
+	client := NewClient(ch, svcName, nil)
 
 	simpleClient := gen.NewTChanSimpleServiceClient(client)
 	secondClient := gen.NewTChanSecondServiceClient(client)
-	return simpleClient, secondClient
+	return ch, simpleClient, secondClient
+}
+
+func withReader(t *testing.T, readerFn func() (tchannel.ArgReader, error), f func(r tchannel.ArgReader) error) {
+	reader, err := readerFn()
+	require.NoError(t, err, "Failed to get reader")
+
+	err = f(reader)
+	require.NoError(t, err, "Failed to read contents")
+
+	require.NoError(t, reader.Close(), "Failed to close reader")
+}
+
+func withWriter(t *testing.T, writerFn func() (tchannel.ArgWriter, error), f func(w tchannel.ArgWriter) error) {
+	writer, err := writerFn()
+	require.NoError(t, err, "Failed to get writer")
+
+	f(writer)
+	require.NoError(t, err, "Failed to write contents")
+
+	require.NoError(t, writer.Close(), "Failed to close Writer")
+}
+
+type rewriteMethodClient struct {
+	client    TChanClient
+	rewriteTo string
+}
+
+func (c rewriteMethodClient) Call(ctx Context, serviceName, methodName string, req, resp thrift.TStruct) (success bool, err error) {
+	return c.client.Call(ctx, serviceName, c.rewriteTo, req, resp)
 }

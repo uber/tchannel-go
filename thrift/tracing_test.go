@@ -14,7 +14,9 @@ import (
 
 // ThriftHandler tests tracing over Thrift encoding
 type ThriftHandler struct {
+	gen.TChanSimpleService // leave nil so calls to unimplemented methods panic.
 	TraceHandler
+
 	thriftClient gen.TChanSimpleService
 	t            *testing.T
 }
@@ -60,10 +62,6 @@ func (h *ThriftHandler) Call(ctx thrift.Context, arg *gen.Data) (*gen.Data, erro
 		return nil, err
 	}
 	return responseToThrift(h.t, res)
-}
-
-func (h *ThriftHandler) Simple(ctx thrift.Context) error {
-	return nil
 }
 
 func (h *ThriftHandler) firstCall(ctx context.Context, req *TracingRequest) (*TracingResponse, error) {

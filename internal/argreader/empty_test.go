@@ -18,32 +18,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package mocks
+package argreader
 
-import "github.com/stretchr/testify/mock"
+import (
+	"bytes"
+	"testing"
 
-import "github.com/uber/tchannel-go/thrift"
+	"github.com/uber/tchannel-go/testutils/testreader"
 
-type TChanSecondService struct {
-	mock.Mock
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestEnsureEmptySuccess(t *testing.T) {
+	reader := bytes.NewReader(nil)
+	err := EnsureEmpty(reader, "success")
+	require.NoError(t, err, "ensureEmpty should succeed with empty reader")
 }
 
-func (_m *TChanSecondService) Echo(_ctx thrift.Context, _arg string) (string, error) {
-	ret := _m.Called(_ctx, _arg)
+func TestEnsureEmptyHasBytes(t *testing.T) {
+	reader := bytes.NewReader([]byte{1, 2, 3})
+	err := EnsureEmpty(reader, "T")
+	require.Error(t, err, "ensureEmpty should fail when there's bytes")
+	assert.Equal(t, err.Error(), "found unexpected bytes after T, found (upto 128 bytes): 010203")
+}
 
-	var r0 string
-	if rf, ok := ret.Get(0).(func(thrift.Context, string) string); ok {
-		r0 = rf(_ctx, _arg)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
+func TestEnsureEmptyError(t *testing.T) {
+	control, reader := testreader.ChunkReader()
+	control <- nil
+	close(control)
 
-	var r1 error
-	if rf, ok := ret.Get(1).(func(thrift.Context, string) error); ok {
-		r1 = rf(_ctx, _arg)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	err := EnsureEmpty(reader, "has bytes")
+	require.Error(t, err, "ensureEmpty should fail when there's an error")
+	assert.Equal(t, testreader.ErrUser, err, "Unexpected error")
 }

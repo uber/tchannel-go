@@ -22,6 +22,7 @@ package thrift
 
 import (
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/internal/argreader"
 
 	"github.com/apache/thrift/lib/go/thrift"
 	"golang.org/x/net/context"
@@ -99,6 +100,10 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 		return nil, false, err
 	}
 
+	if err := argreader.EnsureEmpty(reader, "reading response headers"); err != nil {
+		return nil, false, err
+	}
+
 	if err := reader.Close(); err != nil {
 		return nil, false, err
 	}
@@ -111,6 +116,10 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 
 	if err := ReadStruct(reader, resp); err != nil {
 		return headers, success, err
+	}
+
+	if err := argreader.EnsureEmpty(reader, "reading response body"); err != nil {
+		return nil, false, err
 	}
 
 	return headers, success, reader.Close()

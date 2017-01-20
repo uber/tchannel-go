@@ -51,17 +51,13 @@ func scoreAddr(iface net.Interface, addr net.Addr) (int, net.IP) {
 			score += 100
 		}
 	}
+	if isLocalMacAddr(iface.HardwareAddr) {
+		score -= 50
+	}
 	return score, ip
 }
 
-// ListenIP returns the IP to bind to in Listen. It tries to find an IP that can be used
-// by other machines to reach this machine.
-func ListenIP() (net.IP, error) {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
+func listenIP(interfaces []net.Interface) (net.IP, error) {
 	bestScore := -1
 	var bestIP net.IP
 	// Select the highest scoring IP as the best IP.
@@ -86,4 +82,31 @@ func ListenIP() (net.IP, error) {
 	}
 
 	return bestIP, nil
+}
+
+// ListenIP returns the IP to bind to in Listen. It tries to find an IP that can be used
+// by other machines to reach this machine.
+func ListenIP() (net.IP, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	return listenIP(interfaces)
+}
+
+func mustParseMAC(s string) net.HardwareAddr {
+	addr, err := net.ParseMAC(s)
+	if err != nil {
+		panic(err)
+	}
+	return addr
+}
+
+// If the first octet's second least-significant-bit is set, then it's local.
+// https://en.wikipedia.org/wiki/MAC_address#Universal_vs._local
+func isLocalMacAddr(addr net.HardwareAddr) bool {
+	if len(addr) == 0 {
+		return false
+	}
+	return addr[0]&2 == 2
 }

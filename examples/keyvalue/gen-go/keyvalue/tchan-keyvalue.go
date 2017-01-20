@@ -59,8 +59,11 @@ func (c *tchanAdminClient) ClearAll(ctx thrift.Context) error {
 	args := AdminClearAllArgs{}
 	success, err := c.client.Call(ctx, c.thriftService, "clearAll", &args, &resp)
 	if err == nil && !success {
-		if e := resp.NotAuthorized; e != nil {
-			err = e
+		switch {
+		case resp.NotAuthorized != nil:
+			err = resp.NotAuthorized
+		default:
+			err = fmt.Errorf("received no result or unknown exception for clearAll")
 		}
 	}
 
@@ -160,11 +163,13 @@ func (c *tchanKeyValueClient) Get(ctx thrift.Context, key string) (string, error
 	}
 	success, err := c.client.Call(ctx, c.thriftService, "Get", &args, &resp)
 	if err == nil && !success {
-		if e := resp.NotFound; e != nil {
-			err = e
-		}
-		if e := resp.InvalidKey; e != nil {
-			err = e
+		switch {
+		case resp.NotFound != nil:
+			err = resp.NotFound
+		case resp.InvalidKey != nil:
+			err = resp.InvalidKey
+		default:
+			err = fmt.Errorf("received no result or unknown exception for Get")
 		}
 	}
 
@@ -179,8 +184,11 @@ func (c *tchanKeyValueClient) Set(ctx thrift.Context, key string, value string) 
 	}
 	success, err := c.client.Call(ctx, c.thriftService, "Set", &args, &resp)
 	if err == nil && !success {
-		if e := resp.InvalidKey; e != nil {
-			err = e
+		switch {
+		case resp.InvalidKey != nil:
+			err = resp.InvalidKey
+		default:
+			err = fmt.Errorf("received no result or unknown exception for Set")
 		}
 	}
 
@@ -311,6 +319,10 @@ func (c *tchanBaseServiceClient) HealthCheck(ctx thrift.Context) (string, error)
 	args := BaseServiceHealthCheckArgs{}
 	success, err := c.client.Call(ctx, c.thriftService, "HealthCheck", &args, &resp)
 	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for HealthCheck")
+		}
 	}
 
 	return resp.GetSuccess(), err

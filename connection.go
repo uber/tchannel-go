@@ -39,6 +39,28 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	// CurrentProtocolVersion is the current version of the TChannel protocol
+	// supported by this stack
+	CurrentProtocolVersion = 0x02
+
+	// DefaultConnectTimeout is the default timeout used by net.Dial, if no timeout
+	// is specified in the context.
+	DefaultConnectTimeout = 5 * time.Second
+
+	// defaultConnectionBufferSize is the default size for the connection's
+	// read and write channels.
+	defaultConnectionBufferSize = 512
+)
+
+// PeerVersion contains version related information for a specific peer.
+// These values are extracted from the init headers.
+type PeerVersion struct {
+	Language        string `json:"language"`
+	LanguageVersion string `json:"languageVersion"`
+	TChannelVersion string `json:"tchannelVersion"`
+}
+
 // PeerInfo contains information about a TChannel peer
 type PeerInfo struct {
 	// The host and port that can be used to contact the peer, as encoded by net.JoinHostPort
@@ -49,6 +71,9 @@ type PeerInfo struct {
 
 	// IsEphemeral returns whether the remote host:port is ephemeral (e.g. not listening).
 	IsEphemeral bool `json:"isEphemeral"`
+
+	// Version returns the version information for the remote peer.
+	Version PeerVersion `json:"version"`
 }
 
 func (p PeerInfo) String() string {
@@ -71,14 +96,6 @@ type LocalPeerInfo struct {
 func (p LocalPeerInfo) String() string {
 	return fmt.Sprintf("%v: %v", p.ServiceName, p.PeerInfo)
 }
-
-// CurrentProtocolVersion is the current version of the TChannel protocol
-// supported by this stack
-const CurrentProtocolVersion = 0x02
-
-// DefaultConnectTimeout is the default timeout used by net.Dial, if no timeout
-// is specified in the context.
-const DefaultConnectTimeout = 5 * time.Second
 
 var (
 	// ErrConnectionClosed is returned when a caller performs an method
@@ -115,7 +132,7 @@ type ConnectionOptions struct {
 	// The frame pool, allowing better management of frame buffers. Defaults to using raw heap.
 	FramePool FramePool
 
-	// The size of receive channel buffers. Defaults to 512.
+	// NOTE: This is deprecated and not used for anything.
 	RecvBufferSize int
 
 	// The size of send channel buffers. Defaults to 512.
@@ -142,8 +159,7 @@ type Connection struct {
 	channelConnectionCommon
 
 	connID          uint32
-	checksumType    ChecksumType
-	framePool       FramePool
+	opts            ConnectionOptions
 	conn            net.Conn
 	localPeerInfo   LocalPeerInfo
 	remotePeerInfo  PeerInfo
@@ -227,6 +243,19 @@ func getTimeout(ctx context.Context) time.Duration {
 	return deadline.Sub(time.Now())
 }
 
+func (co ConnectionOptions) withDefaults() ConnectionOptions {
+	if co.ChecksumType == ChecksumTypeNone {
+		co.ChecksumType = ChecksumTypeCrc32
+	}
+	if co.FramePool == nil {
+		co.FramePool = DefaultFramePool
+	}
+	if co.SendBufferSize <= 0 {
+		co.SendBufferSize = defaultConnectionBufferSize
+	}
+	return co
+}
+
 // Creates a new Connection around an outbound connection initiated to a peer
 func (ch *Channel) newOutboundConnection(ctx context.Context, hostPort string, events connectionEvents) (*Connection, error) {
 	timeout := getTimeout(ctx)
@@ -262,27 +291,7 @@ func (ch *Channel) newInboundConnection(conn net.Conn, events connectionEvents) 
 
 // Creates a new connection in a given initial state
 func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState connectionState, events connectionEvents) *Connection {
-	opts := &ch.connectionOptions
-
-	checksumType := opts.ChecksumType
-	if checksumType == ChecksumTypeNone {
-		checksumType = ChecksumTypeCrc32C
-	}
-
-	sendBufferSize := opts.SendBufferSize
-	if sendBufferSize <= 0 {
-		sendBufferSize = 512
-	}
-
-	recvBufferSize := opts.RecvBufferSize
-	if recvBufferSize <= 0 {
-		recvBufferSize = 512
-	}
-
-	framePool := opts.FramePool
-	if framePool == nil {
-		framePool = DefaultFramePool
-	}
+	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
 	log := ch.log.WithFields(LogFields{
@@ -298,13 +307,12 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 
 		connID:          connID,
 		conn:            conn,
-		framePool:       framePool,
+		opts:            opts,
 		state:           initialState,
-		sendCh:          make(chan *Frame, sendBufferSize),
+		sendCh:          make(chan *Frame, opts.SendBufferSize),
 		stopCh:          make(chan struct{}),
 		localPeerInfo:   peerInfo,
 		outboundHP:      outboundHP,
-		checksumType:    checksumType,
 		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
 		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
 		handler:         channelHandler{ch},
@@ -404,7 +412,7 @@ func (c *Connection) sendInit(ctx context.Context) error {
 	}
 	defer c.pendingExchangeMethodDone()
 
-	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
+	mex, err := c.outbound.newExchange(ctx, c.opts.FramePool, req.messageType(), req.ID(), 1)
 	if err != nil {
 		return c.connectionError("create init req", err)
 	}
@@ -441,17 +449,10 @@ func (c *Connection) handleInitReq(frame *Frame) {
 		return
 	}
 
-	var ok bool
-	if c.remotePeerInfo.HostPort, ok = req.initParams[InitParamHostPort]; !ok {
-		c.protocolError(id, fmt.Errorf("header %v is required", InitParamHostPort))
+	if err := c.parseRemotePeer(req.initParams); err != nil {
+		c.protocolError(id, err)
 		return
 	}
-	if c.remotePeerInfo.ProcessName, ok = req.initParams[InitParamProcessName]; !ok {
-		c.protocolError(id, fmt.Errorf("header %v is required", InitParamProcessName))
-		return
-	}
-
-	c.parseRemotePeerAddress()
 
 	res := initRes{initMessage{id: frame.Header.ID}}
 	res.initParams = c.getInitParams()
@@ -469,7 +470,6 @@ func (c *Connection) handleInitReq(frame *Frame) {
 
 		return nil
 	})
-
 	c.callOnActive()
 }
 
@@ -482,7 +482,7 @@ func (c *Connection) ping(ctx context.Context) error {
 	defer c.pendingExchangeMethodDone()
 
 	req := &pingReq{id: c.NextMessageID()}
-	mex, err := c.outbound.newExchange(ctx, c.framePool, req.messageType(), req.ID(), 1)
+	mex, err := c.outbound.newExchange(ctx, c.opts.FramePool, req.messageType(), req.ID(), 1)
 	if err != nil {
 		return c.connectionError("create ping exchange", err)
 	}
@@ -563,12 +563,9 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 		c.protocolError(frame.Header.ID, fmt.Errorf("unsupported protocol version %d from peer", res.Version))
 		return true
 	}
-	if _, ok := res.initParams[InitParamHostPort]; !ok {
-		c.protocolError(frame.Header.ID, fmt.Errorf("header %v is required", InitParamHostPort))
-		return true
-	}
-	if _, ok := res.initParams[InitParamProcessName]; !ok {
-		c.protocolError(frame.Header.ID, fmt.Errorf("header %v is required", InitParamProcessName))
+
+	if err := c.parseRemotePeer(res.initParams); err != nil {
+		c.protocolError(frame.Header.ID, err)
 		return true
 	}
 
@@ -607,9 +604,9 @@ func (c *Connection) handleInitRes(frame *Frame) bool {
 
 // sendMessage sends a standalone message (typically a control message)
 func (c *Connection) sendMessage(msg message) error {
-	frame := c.framePool.Get()
+	frame := c.opts.FramePool.Get()
 	if err := frame.write(msg); err != nil {
-		c.framePool.Release(frame)
+		c.opts.FramePool.Release(frame)
 		return err
 	}
 
@@ -633,7 +630,7 @@ func (c *Connection) recvMessage(ctx context.Context, msg message, mex *messageE
 	}
 
 	err = frame.read(msg)
-	c.framePool.Release(frame)
+	c.opts.FramePool.Release(frame)
 	return err
 }
 
@@ -649,7 +646,7 @@ func (c *Connection) NextMessageID() uint32 {
 
 // SendSystemError sends an error frame for the given system error.
 func (c *Connection) SendSystemError(id uint32, span Span, err error) error {
-	frame := c.framePool.Get()
+	frame := c.opts.FramePool.Get()
 
 	if err := frame.write(&errorMessage{
 		id:      id,
@@ -706,7 +703,7 @@ func (c *Connection) logConnectionError(site string, err error) error {
 			errCode = se.Code()
 			logger.Error("Connection error.")
 		} else {
-			logger.Warn("Connection error.")
+			logger.Info("Connection error.")
 		}
 	}
 	return NewWrappedSystemError(errCode, err)
@@ -778,14 +775,14 @@ func (c *Connection) readState() connectionState {
 // since we cannot process new frames until the initialization is complete.
 func (c *Connection) readFrames(_ uint32) {
 	for {
-		frame := c.framePool.Get()
+		frame := c.opts.FramePool.Get()
 		if err := frame.ReadIn(c.conn); err != nil {
 			if c.closeNetworkCalled.Load() == 0 {
 				c.connectionError("read frames", err)
 			} else {
 				c.log.Debugf("Ignoring error after connection was closed: %v", err)
 			}
-			c.framePool.Release(frame)
+			c.opts.FramePool.Release(frame)
 			return
 		}
 
@@ -796,7 +793,7 @@ func (c *Connection) readFrames(_ uint32) {
 			releaseFrame = c.handleFrameRelay(frame)
 		}
 		if releaseFrame {
-			c.framePool.Release(frame)
+			c.opts.FramePool.Release(frame)
 		}
 	}
 }
@@ -862,7 +859,7 @@ func (c *Connection) writeFrames(_ uint32) {
 			}
 
 			err := f.WriteOut(c.conn)
-			c.framePool.Release(f)
+			c.opts.FramePool.Release(f)
 			if err != nil {
 				c.connectionError("write frames", err)
 				return
@@ -1008,6 +1005,22 @@ func (c *Connection) closeNetwork() {
 			ErrField(err),
 		).Warn("Couldn't close connection to peer.")
 	}
+}
+
+func (c *Connection) parseRemotePeer(p initParams) error {
+	var ok bool
+	if c.remotePeerInfo.HostPort, ok = p[InitParamHostPort]; !ok {
+		return fmt.Errorf("header %v is required", InitParamHostPort)
+	}
+	if c.remotePeerInfo.ProcessName, ok = p[InitParamProcessName]; !ok {
+		return fmt.Errorf("header %v is required", InitParamProcessName)
+	}
+
+	c.parseRemotePeerAddress()
+	c.remotePeerInfo.Version.Language = p[InitParamTChannelLanguage]
+	c.remotePeerInfo.Version.LanguageVersion = p[InitParamTChannelLanguageVersion]
+	c.remotePeerInfo.Version.TChannelVersion = p[InitParamTChannelVersion]
+	return nil
 }
 
 // parseRemotePeerAddress parses remote peer info into individual components and
