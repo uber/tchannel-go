@@ -62,6 +62,10 @@ type ChannelOptions struct {
 	// unstable API - breaking changes are likely.
 	RelayHost RelayHost
 
+	// OnPeerStatusChanged receives notifications when a peer has become
+	// available or unavailable.
+	OnPeerStatusChanged func(*Peer)
+
 	// The list of service names that should be handled locally by this channel.
 	// This is an unstable API - breaking changes are likely.
 	RelayLocalHandlers []string
@@ -114,13 +118,14 @@ const (
 type Channel struct {
 	channelConnectionCommon
 
-	chID              uint32
-	createdStack      string
-	commonStatsTags   map[string]string
-	connectionOptions ConnectionOptions
-	peers             *PeerList
-	relayHost         RelayHost
-	relayMaxTimeout   time.Duration
+	chID                uint32
+	createdStack        string
+	commonStatsTags     map[string]string
+	connectionOptions   ConnectionOptions
+	peers               *PeerList
+	relayHost           RelayHost
+	relayMaxTimeout     time.Duration
+	onPeerStatusChanged func(*Peer)
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -210,6 +215,8 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 	}
+
+	ch.onPeerStatusChanged = opts.OnPeerStatusChanged
 	ch.peers = newRootPeerList(ch).newChild()
 
 	ch.mutable.peerInfo = LocalPeerInfo{
@@ -621,6 +628,9 @@ func (ch *Channel) getMinConnectionState() connectionState {
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	ch.removeClosedConn(c)
 	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
+		if ch.onPeerStatusChanged != nil {
+			ch.onPeerStatusChanged(peer)
+		}
 		peer.connectionCloseStateChange(c)
 		ch.updatePeer(peer)
 	}
