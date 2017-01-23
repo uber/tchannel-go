@@ -193,6 +193,12 @@ func (o *ChannelOpts) SetRelayMaxTimeout(d time.Duration) *ChannelOpts {
 	return o
 }
 
+// SetRelayTimeoutTick sets the coarseness of relay timeouts.
+func (o *ChannelOpts) SetRelayTimeoutTick(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.RelayTimeoutTick = d
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue

@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uber/tchannel-go/timers"
 	"github.com/uber/tchannel-go/tnet"
 
 	"github.com/opentracing/opentracing-go"
@@ -69,6 +70,10 @@ type ChannelOptions struct {
 	// The maximum allowable timeout for relayed calls (longer timeouts are
 	// clamped to this value). Passing zero uses the default of 2m.
 	RelayMaxTimeout time.Duration
+
+	// RelayTimeoutTick is the granularity of the timer wheel used to manage
+	// timeouts.
+	RelayTimeoutTick time.Duration
 
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
@@ -121,6 +126,8 @@ type Channel struct {
 	peers             *PeerList
 	relayHost         RelayHost
 	relayMaxTimeout   time.Duration
+	relayTimeoutTick  time.Duration
+	relayTimeoutWheel *timers.Wheel
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -209,6 +216,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		connectionOptions: opts.DefaultConnectionOptions,
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
+		relayTimeoutTick:  validateRelayTimeoutTick(opts.RelayTimeoutTick, logger),
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
@@ -230,6 +238,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 	if opts.RelayHost != nil {
 		opts.RelayHost.SetChannel(ch)
+		ch.startWheel()
 	}
 	return ch, nil
 }
@@ -665,13 +674,17 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 		chState, minState)
 
 	if updatedToState == ChannelClosed {
-		ch.onClosed()
+		go ch.onClosed()
 	}
 }
 
 func (ch *Channel) onClosed() {
 	removeClosedChannel(ch)
-	ch.log.Infof("Channel closed.")
+	if ch.relayTimeoutWheel != nil {
+		ch.relayTimeoutWheel.Stop()
+		ch.log.Info("Timer wheel stopped.")
+	}
+	ch.log.Info("Channel closed.")
 }
 
 // Closed returns whether this channel has been closed with .Close()
@@ -717,13 +730,17 @@ func (ch *Channel) Close() {
 	}
 
 	if channelClosed {
-		ch.onClosed()
+		go ch.onClosed()
 	}
 }
 
 // RelayHost returns the channel's RelayHost, if any.
 func (ch *Channel) RelayHost() RelayHost {
 	return ch.relayHost
+}
+
+func (ch *Channel) startWheel() {
+	ch.relayTimeoutWheel = timers.NewWheel(ch.relayTimeoutTick, ch.relayMaxTimeout)
 }
 
 func toStringSet(ss []string) map[string]struct{} {

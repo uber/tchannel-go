@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -121,6 +122,7 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 			withServer(t, chanOpts.Copy(), f)
 		}
 	}
+	forceReleaseUnusedMemory()
 }
 
 // SetVerifyOpts specifies the options we'll use during teardown to verify that
@@ -445,4 +447,16 @@ func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 	f(ts)
 	ts.Server().Logger().Debugf("TEST: Test function complete")
 	ts.CloseAndVerify()
+}
+
+// The timer wheels we allocate on relay channels are large enough that the Go
+// runtime doesn't release their memory back to the OS immediately.  Since we
+// create and destroy them so quickly during tests, we quickly exceed the
+// memory Travis allows each container to consume, which leads to mysterious
+// test errors.
+//
+// Work around this issue by forcing a GC and free.
+func forceReleaseUnusedMemory() {
+	runtime.GC()
+	debug.FreeOSMemory()
 }
