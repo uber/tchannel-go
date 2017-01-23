@@ -165,8 +165,12 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		client := testutils.NewClient(t, nil)
+	opts := &testutils.ChannelOpts{}
+	serverPeerClosed := withPeerStatusChangedChannel(opts)
+	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+		opts := &testutils.ChannelOpts{}
+		clientPeerClosed := withPeerStatusChangedChannel(opts)
+		client := testutils.NewClient(t, opts)
 		defer client.Close()
 
 		p := client.Peers().Add(hostPort)
@@ -183,20 +187,26 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 		_, outConns := p.NumConnections()
 		assert.Equal(t, 1, outConns, "Expected 1 remaining outgoing connection")
 
+		select {
+		case <-serverPeerClosed:
+		case <-time.After(time.Second):
+			t.Errorf("Timeout out waiting for server peer closed notification")
+		}
+
 		c, err := p.GetConnection(ctx)
 		require.NoError(t, err, "GetConnection failed")
 		assert.Equal(t, c2, c, "Expected second active connection")
-	})
-}
 
-func TestPeerConnectCancelled(t *testing.T) {
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ctx, cancel := NewContext(109 * time.Millisecond)
-		cancel()
+		require.NoError(t, c2.Close(), "Failed to close second connection")
+		_, outConns = p.NumConnections()
+		assert.Equal(t, 0, outConns, "Expected 0 remaining outgoing connections")
 
-		_, err := ch.Connect(ctx, "10.255.255.1:1")
-		require.Error(t, err, "Connect should fail")
-		assert.EqualError(t, ErrRequestCancelled, err.Error(), "Unknown error")
+		select {
+		case peer := <-clientPeerClosed:
+			assert.Equal(t, peer, hostPort, "Expected client closed notification")
+		case <-time.After(time.Second):
+			t.Errorf("Timed out waiting for client peer closed notification")
+		}
 	})
 }
 
@@ -240,6 +250,17 @@ func TestPeerGetConnectionWithNoActiveConnections(t *testing.T) {
 		_, outbound := p.NumConnections()
 		assert.Equal(t, 1, outbound, "Expected 1 active outbound connetion")
 	})
+}
+
+func withPeerStatusChangedChannel(opts *testutils.ChannelOpts) <-chan string {
+	changed := make(chan string, 1)
+	opts.ChannelOptions.OnPeerStatusChanged = func(p *Peer) {
+		select {
+		case changed <- p.HostPort():
+		default:
+		}
+	}
+	return changed
 }
 
 func TestInboundEphemeralPeerRemoved(t *testing.T) {

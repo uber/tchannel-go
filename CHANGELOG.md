@@ -1,6 +1,13 @@
 Changelog
 =========
 
+# (unreleased)
+
+* Add OnPeerStatusChanged option to NewChannel to receive notifications when
+  TChannel drops a connection and potentially other state change notifications.
+  Accepts a function and sends the affected peer.  The event handler function
+  must then call methods of the peer to inspect the new state.
+
 # v1.2.3
 
 * Improve error messages when an argument reader is closed without
