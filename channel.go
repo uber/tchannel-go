@@ -55,6 +55,9 @@ type ChannelOptions struct {
 	// The name of the process, for logging and reporting to peers
 	ProcessName string
 
+	// OnPeerStatusChanged
+	OnPeerStatusChanged func(*Peer)
+
 	// The logger to use for this channel
 	Logger Logger
 
@@ -363,18 +366,18 @@ func (ch *Channel) Peers() *PeerList {
 	return ch.peers
 }
 
-// rootPeers returns the root PeerList for the channel, which is the sole place
+// RootPeers returns the root PeerList for the channel, which is the sole place
 // new Peers are created. All children of the root list (including ch.Peers())
 // automatically re-use peers from the root list and create new peers in the
 // root list.
-func (ch *Channel) rootPeers() *RootPeerList {
+func (ch *Channel) RootPeers() *RootPeerList {
 	return ch.peers.parent
 }
 
 // BeginCall starts a new call to a remote peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
 func (ch *Channel) BeginCall(ctx context.Context, hostPort, serviceName, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
-	p := ch.rootPeers().GetOrAdd(hostPort)
+	p := ch.RootPeers().GetOrAdd(hostPort)
 	return p.BeginCall(ctx, serviceName, methodName, callOptions)
 }
 
@@ -431,7 +434,7 @@ func (ch *Channel) serve() {
 
 // Ping sends a ping message to the given hostPort and waits for a response.
 func (ch *Channel) Ping(ctx context.Context, hostPort string) error {
-	peer := ch.rootPeers().GetOrAdd(hostPort)
+	peer := ch.RootPeers().GetOrAdd(hostPort)
 	conn, err := peer.GetConnection(ctx)
 	if err != nil {
 		return err
@@ -524,7 +527,7 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 		return
 	}
 
-	p, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort)
+	p, ok := ch.RootPeers().Get(c.remotePeerInfo.HostPort)
 	if !ok {
 		return
 	}
@@ -575,7 +578,7 @@ func (ch *Channel) connectionActive(c *Connection, direction connectionDirection
 }
 
 func (ch *Channel) addConnectionToPeer(hostPort string, c *Connection, direction connectionDirection) {
-	p := ch.rootPeers().GetOrAdd(hostPort)
+	p := ch.RootPeers().GetOrAdd(hostPort)
 	if err := p.addConnection(c, direction); err != nil {
 		c.log.WithFields(
 			LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
@@ -620,13 +623,13 @@ func (ch *Channel) getMinConnectionState() connectionState {
 // connectionCloseStateChange is called when a connection's close state changes.
 func (ch *Channel) connectionCloseStateChange(c *Connection) {
 	ch.removeClosedConn(c)
-	if peer, ok := ch.rootPeers().Get(c.remotePeerInfo.HostPort); ok {
+	if peer, ok := ch.RootPeers().Get(c.remotePeerInfo.HostPort); ok {
 		peer.connectionCloseStateChange(c)
 		ch.updatePeer(peer)
 	}
 	if c.outboundHP != "" && c.outboundHP != c.remotePeerInfo.HostPort {
 		// Outbound connections may be in multiple peers.
-		if peer, ok := ch.rootPeers().Get(c.outboundHP); ok {
+		if peer, ok := ch.RootPeers().Get(c.outboundHP); ok {
 			peer.connectionCloseStateChange(c)
 			ch.updatePeer(peer)
 		}

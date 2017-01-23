@@ -196,7 +196,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		localHandler: ch.relayLocal,
 		outbound:     newRelayItems(ch.Logger().WithFields(LogField{"relay", "outbound"})),
 		inbound:      newRelayItems(ch.Logger().WithFields(LogField{"relay", "inbound"})),
-		peers:        ch.rootPeers(),
+		peers:        ch.RootPeers(),
 		conn:         conn,
 		logger:       conn.log,
 	}

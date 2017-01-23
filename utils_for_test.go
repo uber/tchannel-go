@@ -33,11 +33,6 @@ import (
 // MexChannelBufferSize is the size of the message exchange channel buffer.
 const MexChannelBufferSize = mexChannelBufferSize
 
-// RootPeers returns the root peer list from the Channel.
-func (ch *Channel) RootPeers() *RootPeerList {
-	return ch.rootPeers()
-}
-
 // SetOnUpdate sets onUpdate for a peer, which is called when the peer's score is
 // updated in all peer lists.
 func (p *Peer) SetOnUpdate(f func(*Peer)) {
