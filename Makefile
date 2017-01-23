@@ -66,7 +66,9 @@ else
 endif
 
 install_glide:
-	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
+	# all we want is: GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
+	# but have to pin to 0.12.3 due to https://github.com/Masterminds/glide/issues/745
+	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide && cd $(OLD_GOPATH)/src/github.com/Masterminds/glide && git checkout v0.12.3 && go install
 
 install_ci: install_glide install_lint get_thrift install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
