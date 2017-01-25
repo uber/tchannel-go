@@ -50,8 +50,8 @@ var (
 func TestMain(m *testing.M) {
 	exitCode := m.Run()
 
-	// If we created a fake GOPATH, we should clean it up.
-	if _testGoPath != "" {
+	// If we created a fake GOPATH, we should clean it up on success.
+	if _testGoPath != "" && exitCode == 0 {
 		os.RemoveAll(_testGoPath)
 	}
 
@@ -193,7 +193,7 @@ func TestExternalTemplate(t *testing.T) {
 		}
 
 		// Verify the contents of the extra file.
-		outFile := filepath.Join(dir, packageName(templateFile)+"-service_extend.go")
+		outFile := filepath.Join(dir, defaultPackageName(templateFile)+"-service_extend.go")
 		return verifyFileContents(outFile, expected)
 	}
 	if err := runTest(t, opts, checks); err != nil {
@@ -301,7 +301,7 @@ func checkDirectoryFiles(dir string, n int) error {
 
 func runBuildTest(t *testing.T, thriftFile string) error {
 	extraChecks := func(dir string) error {
-		return checkDirectoryFiles(filepath.Join(dir, packageName(thriftFile)), 4)
+		return checkDirectoryFiles(filepath.Join(dir, defaultPackageName(thriftFile)), 4)
 	}
 
 	opts := processOptions{InputFile: thriftFile}

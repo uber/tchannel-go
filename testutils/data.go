@@ -37,8 +37,8 @@ var (
 
 func checkCacheSize(n int) {
 	// Start with a reasonably large cache.
-	if n < 8 {
-		n = 8
+	if n < 1024 {
+		n = 1024
 	}
 
 	randMut.RLock()
