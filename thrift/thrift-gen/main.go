@@ -181,7 +181,7 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 }
 
 func defaultPackageName(fullPath string) string {
-	_, filename := filepath.Split(fullPath)
+	filename := filepath.Base(fullPath)
 	file := strings.TrimSuffix(filename, filepath.Ext(filename))
 	return strings.ToLower(file)
 }
