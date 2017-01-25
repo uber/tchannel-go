@@ -37,8 +37,9 @@ type Service struct {
 	*parser.Service
 	state *State
 
-	// ExtendsService is not set in wrap, but in setExtends.
+	// ExtendsService and ExtendsPrefix are set in `setExtends`.
 	ExtendsService *Service
+	ExtendsPrefix  string
 
 	// methods is a cache of all methods.
 	methods []*Method
@@ -91,7 +92,7 @@ func (s *Service) HasExtends() bool {
 // ExtendsServicePrefix returns a package selector (if any) for the extended service.
 func (s *Service) ExtendsServicePrefix() string {
 	if dotIndex := strings.Index(s.Extends, "."); dotIndex > 0 {
-		return s.Extends[:dotIndex+1]
+		return s.ExtendsPrefix
 	}
 	return ""
 }

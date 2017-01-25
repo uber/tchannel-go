@@ -71,7 +71,7 @@ func parseTemplateFile(file string) (*Template, error) {
 		return nil, fmt.Errorf("failed to parse template in file %q: %v", file, err)
 	}
 
-	return &Template{packageName(file), t}, nil
+	return &Template{defaultPackageName(file), t}, nil
 }
 
 func contextType() string {
