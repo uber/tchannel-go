@@ -5,14 +5,13 @@ We'd love your help making tchannel-go great!
 
 ## Getting Started
 
-TChannel uses [godep](https://github.com/tools/godep) to manage dependencies.
+TChannel uses [glide](https://github.com/Masterminds/glide) to manage
+dependencies.
 To get started:
 
 ```bash
 go get github.com/uber/tchannel-go
-go get github.com/tools/godep
-cd $GOPATH/src/github.com/uber/tchannel-go
-godep restore
+make install_glide
 make  # tests should pass
 ```
 
@@ -32,3 +31,14 @@ pull request is most likely to be accepted if it:
   review comments](https://github.com/golang/go/wiki/CodeReviewComments).
 * Has a [good commit
   message](http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html).
+
+## Cutting a Release
+
+* Send a pull request against dev including:
+  * update CHANGELOG.md (`scripts/changelog_halp.sh`)
+  * update version.go
+* Send a pull request for dev into master
+* `git tag -m v0.0.0 -a v0.0.0`
+* `git push origin --tags`
+* Copy CHANGELOG.md fragment into release notes on
+  https://github.com/uber/tchannel-go/releases 

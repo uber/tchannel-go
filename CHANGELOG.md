@@ -1,9 +1,10 @@
 Changelog
 =========
 
-# v1.3.0 (unreleased)
+# v1.3.0
 
 * Exposes the channel's RootPeerList with `channel.RootPeers()`.
+* Support Thrift namespaces for thrift-gen.
 
 # v1.2.3
 
