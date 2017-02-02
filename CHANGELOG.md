@@ -1,6 +1,11 @@
 Changelog
 =========
 
+# v1.3.0
+
+* Exposes the channel's RootPeerList with `channel.RootPeers()`.
+* Support Thrift namespaces for thrift-gen.
+
 # v1.2.3
 
 * Improve error messages when an argument reader is closed without
@@ -9,7 +14,7 @@ Changelog
   but none was found (e.g., exception is from the future). (#566)
 * Fix ListenIP selecting docker interfaces over physical networks. (#565)
 * Fix for error when a Thrift payload has completed decoding and attempts
-  to close the argument reader without waiting till EOF.  (#564)
+  to close the argument reader without waiting until EOF.  (#564)
 * thrift-gen: Fix "namespace go" being ignored even though the Apache thrift
   generated code was respecting it. (#559)
 

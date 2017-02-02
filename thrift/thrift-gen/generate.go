@@ -71,7 +71,7 @@ func runThrift(inFile string, outDir string) error {
 	}
 
 	// Delete any existing generated code for this Thrift file.
-	genDir := filepath.Join(outDir, packageName(inFile))
+	genDir := filepath.Join(outDir, defaultPackageName(inFile))
 	if err := execCmd("rm", "-rf", genDir); err != nil {
 		return fmt.Errorf("failed to delete directory %s: %v", genDir, err)
 	}

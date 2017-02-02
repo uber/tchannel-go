@@ -45,6 +45,7 @@ func setExtends(state map[string]parseState) error {
 				searchFor = s.Extends
 			} else {
 				include := v.global.includes[parts[0]]
+				s.ExtendsPrefix = include.pkg + "."
 				searchServices = state[include.file].services
 				searchFor = parts[1]
 			}

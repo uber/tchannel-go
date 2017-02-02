@@ -115,7 +115,7 @@ func processFile(opts processOptions) error {
 	}
 
 	for filename, v := range allParsed {
-		pkg := packageName(filename)
+		pkg := getNamespace(filename, v.ast)
 
 		for _, template := range allTemplates {
 			outputFile := filepath.Join(opts.OutputDir, pkg, template.outputFile(pkg))
@@ -180,14 +180,19 @@ func parseFile(inputFile string) (map[string]parseState, error) {
 	return allParsed, setExtends(allParsed)
 }
 
+func defaultPackageName(fullPath string) string {
+	filename := filepath.Base(fullPath)
+	file := strings.TrimSuffix(filename, filepath.Ext(filename))
+	return strings.ToLower(file)
+}
+
 func getNamespace(filename string, v *parser.Thrift) string {
 	if ns, ok := v.Namespaces["go"]; ok {
 		return ns
 	}
 
-	base := filepath.Base(filename)
-	base = strings.TrimSuffix(base, filepath.Ext(base))
-	return strings.ToLower(base)
+	// TODO(prashant): Remove any characters that are not valid in Go package names.
+	return defaultPackageName(filename)
 }
 
 func generateCode(outputFile string, template *Template, pkg string, state parseState) error {
@@ -210,13 +215,6 @@ func generateCode(outputFile string, template *Template, pkg string, state parse
 		},
 	}
 	return template.execute(outputFile, td)
-}
-
-func packageName(fullPath string) string {
-	// TODO(prashant): Remove any characters that are not valid in Go package names.
-	_, filename := filepath.Split(fullPath)
-	file := strings.TrimSuffix(filename, filepath.Ext(filename))
-	return strings.ToLower(file)
 }
 
 type stringSliceFlag []string
