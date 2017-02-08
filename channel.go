@@ -26,6 +26,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -220,6 +222,11 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 			ProcessName: processName,
 			HostPort:    ephemeralHostPort,
 			IsEphemeral: true,
+			Version: PeerVersion{
+				Language:        "go",
+				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+				TChannelVersion: VersionInfo,
+			},
 		},
 		ServiceName: serviceName,
 	}

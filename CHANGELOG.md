@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# v1.4.0 (unreleased)
+
+* Add version information to the channel's LocalPeerInfo.
+
 # v1.3.0
 
 * Exposes the channel's RootPeerList with `channel.RootPeers()`.
