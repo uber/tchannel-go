@@ -27,9 +27,7 @@ import (
 	"io"
 	"math"
 	"net"
-	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -364,9 +362,9 @@ func (c *Connection) getInitParams() initParams {
 	return initParams{
 		InitParamHostPort:                c.localPeerInfo.HostPort,
 		InitParamProcessName:             c.localPeerInfo.ProcessName,
-		InitParamTChannelLanguage:        "go",
-		InitParamTChannelLanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
-		InitParamTChannelVersion:         VersionInfo,
+		InitParamTChannelLanguage:        c.localPeerInfo.Version.Language,
+		InitParamTChannelLanguageVersion: c.localPeerInfo.Version.LanguageVersion,
+		InitParamTChannelVersion:         c.localPeerInfo.Version.TChannelVersion,
 	}
 }
 
