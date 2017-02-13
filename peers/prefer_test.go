@@ -131,6 +131,9 @@ func TestHRWScorerIntegration(t *testing.T) {
 	// Stop s1, and ensure the client notices S1 has failed.
 	s1.Close()
 	testutils.WaitFor(time.Second, func() bool {
+		if !s1.Closed() {
+			return false
+		}
 		ctx, cancel := tchannel.NewContext(time.Second)
 		defer cancel()
 		return client.Ping(ctx, s1.PeerInfo().HostPort) != nil
