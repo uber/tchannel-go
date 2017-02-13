@@ -80,15 +80,10 @@ func newPeerList(root *RootPeerList) *PeerList {
 func (l *PeerList) SetStrategy(sc ScoreCalculator) {
 	l.Lock()
 	defer l.Unlock()
+
 	l.scoreCalculator = sc
 	for _, ps := range l.peersByHostPort {
-		newScore := l.scoreCalculator.GetScore(ps.Peer)
-		if newScore == ps.score {
-			continue
-		}
-
-		ps.score = newScore
-		l.peerHeap.updatePeer(ps)
+		l.updatePeerScore(ps, ps.score)
 	}
 }
 
@@ -240,15 +235,21 @@ func (l *PeerList) updatePeer(p *Peer) {
 		return
 	}
 
-	newScore := l.scoreCalculator.GetScore(p)
+	l.Lock()
+	l.updatePeerScore(ps, psScore)
+	l.Unlock()
+}
+
+// Try to update the score of the peer given the existing score.
+// Note that a Write lock must be held to call this function.
+func (l *PeerList) updatePeerScore(ps *peerScore, psScore uint64) {
+	newScore := l.scoreCalculator.GetScore(ps.Peer)
 	if newScore == psScore {
 		return
 	}
 
-	l.Lock()
 	ps.score = newScore
 	l.peerHeap.updatePeer(ps)
-	l.Unlock()
 }
 
 // peerScore represents a peer and scoring for the peer heap.
