@@ -26,7 +26,7 @@ type hrwScoreCalc struct {
 	clientID uint32
 }
 
-// NewHRWScorer returns a ScoreCalculator based on Rendezvouz or Highest Random Weight
+// NewHRWScorer returns a ScoreCalculator based on Rendezvous or Highest Random Weight
 // hashing.
 // It is useful for distributing load in peer-to-peer situations where we have
 // many clients picking from a set of servers with "sticky" semantics that will
@@ -40,7 +40,7 @@ func NewHRWScorer(clientID uint32) tchannel.ScoreCalculator {
 func (s *hrwScoreCalc) GetScore(p *tchannel.Peer) uint64 {
 	server := mod2_31(fnv32a(p.HostPort()))
 
-	// These constants are taken from W_rand2 in the Rendezvouz paper:
+	// These constants are taken from W_rand2 in the Rendezvous paper:
 	// http://www.eecs.umich.edu/techreports/cse/96/CSE-TR-316-96.pdf
 	v := 1103515245*((1103515245*s.clientID+12345)^server) + 12345
 	return uint64(mod2_31(v))
