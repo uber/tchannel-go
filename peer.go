@@ -76,9 +76,20 @@ func newPeerList(root *RootPeerList) *PeerList {
 	}
 }
 
-// SetStrategy sets customized peer selection stratedgy.
+// SetStrategy sets customized peer selection strategy.
 func (l *PeerList) SetStrategy(sc ScoreCalculator) {
+	l.Lock()
+	defer l.Unlock()
 	l.scoreCalculator = sc
+	for _, ps := range l.peersByHostPort {
+		newScore := l.scoreCalculator.GetScore(ps.Peer)
+		if newScore == ps.score {
+			continue
+		}
+
+		ps.score = newScore
+		l.peerHeap.updatePeer(ps)
+	}
 }
 
 // Siblings don't share peer lists (though they take care not to double-connect
