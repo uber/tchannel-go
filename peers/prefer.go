@@ -34,15 +34,20 @@ type hrwScoreCalc struct {
 // The clientID is used to score the servers, so each client should pass in
 // a unique client ID.
 func NewHRWScorer(clientID uint32) tchannel.ScoreCalculator {
-	return &hrwScoreCalc{clientID}
+	return &hrwScoreCalc{mod2_31(clientID)}
 }
 
 func (s *hrwScoreCalc) GetScore(p *tchannel.Peer) uint64 {
-	server := fnv32a(p.HostPort())
+	server := mod2_31(fnv32a(p.HostPort()))
 
 	// These constants are taken from W_rand2 in the Rendezvouz paper:
 	// http://www.eecs.umich.edu/techreports/cse/96/CSE-TR-316-96.pdf
-	return uint64(110315245*((1103515245*s.clientID+12345)^server) + 12345)
+	v := 1103515245*((1103515245*s.clientID+12345)^server) + 12345
+	return uint64(mod2_31(v))
+}
+
+func mod2_31(v uint32) uint32 {
+	return v & ((1 << 31) - 1)
 }
 
 // This is based on the standard library's fnv32a implementation.
