@@ -49,7 +49,7 @@ func TestHRWScorerGetScore(t *testing.T) {
 func TestHRWScorerDistribution(t *testing.T) {
 	const (
 		numClients = 1000
-		numServers = 20
+		numServers = 10
 	)
 
 	ch := testutils.NewClient(t, nil)
@@ -73,12 +73,13 @@ func TestHRWScorerDistribution(t *testing.T) {
 		serverSelected[highestServer]++
 	}
 
-	// Validate that we have a reasonable distribution. We expect 50 +- 20.
+	// We can't get a perfect distribution, but should be within 20%.
+	const (
+		expectCalls = numClients / numServers
+		delta       = expectCalls * 0.2
+	)
 	for serverIdx, count := range serverSelected {
-		if count >= 30 && count <= 70 {
-			continue
-		}
-		t.Fatalf("Server %v was selected %v times, out of range [30, 70]", serverIdx, count)
+		assert.InDelta(t, expectCalls, count, delta, "Server %v out of range", serverIdx)
 	}
 }
 
@@ -155,6 +156,7 @@ func TestHRWScorerIntegration(t *testing.T) {
 		require.NoError(t, callEcho(), "Failed to call echo after s1 restarted")
 	}
 	assert.EqualValues(t, 20, s1Count.Load(), "Once s1 is up, calls should resume to s1")
+	assert.EqualValues(t, 1, s2Count.Load(), "s2 should not receive calls after s1 restarted")
 }
 
 func stdFnv32a(s string) uint32 {
