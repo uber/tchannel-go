@@ -544,7 +544,7 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 
 // updatePeer updates the score of the peer and update it's position in heap as well.
 func (ch *Channel) updatePeer(p *Peer) {
-	ch.peers.updatePeer(p)
+	ch.peers.onPeerChange(p)
 	ch.subChannels.updatePeer(p)
 	p.callOnUpdateComplete()
 }

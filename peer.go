@@ -83,7 +83,7 @@ func (l *PeerList) SetStrategy(sc ScoreCalculator) {
 
 	l.scoreCalculator = sc
 	for _, ps := range l.peersByHostPort {
-		l.updatePeerScore(ps, ps.score)
+		l.updatePeer(ps, ps.score)
 	}
 }
 
@@ -227,22 +227,22 @@ func (l *PeerList) exists(hostPort string) (*peerScore, uint64, bool) {
 	return ps, score, ok
 }
 
-// updatePeer is called when there is a change that may cause the peer's score to change.
+// onPeerChange is called when there is a change that may cause the peer's score to change.
 // The new score is calculated, and the peer heap is updated with the new score if the score changes.
-func (l *PeerList) updatePeer(p *Peer) {
+func (l *PeerList) onPeerChange(p *Peer) {
 	ps, psScore, ok := l.exists(p.hostPort)
 	if !ok {
 		return
 	}
 
 	l.Lock()
-	l.updatePeerScore(ps, psScore)
+	l.updatePeer(ps, psScore)
 	l.Unlock()
 }
 
-// Try to update the score of the peer given the existing score.
+// updatePeer is called to update the score of the peer given the existing score.
 // Note that a Write lock must be held to call this function.
-func (l *PeerList) updatePeerScore(ps *peerScore, psScore uint64) {
+func (l *PeerList) updatePeer(ps *peerScore, psScore uint64) {
 	newScore := l.scoreCalculator.GetScore(ps.Peer)
 	if newScore == psScore {
 		return
