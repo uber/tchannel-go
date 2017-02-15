@@ -1148,3 +1148,27 @@ func BenchmarkAddPeers(b *testing.B) {
 		}
 	}
 }
+
+func TestPeerSelectionStrategyChange(t *testing.T) {
+	const numPeers = 2
+
+	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+
+	for i := 0; i < numPeers; i++ {
+		ch.Peers().Add(fmt.Sprintf("127.0.0.1:60%v", i))
+	}
+
+	for _, score := range []uint64{1000, 2000} {
+		ch.Peers().SetStrategy(createConstScoreStrategy(score))
+		for _, v := range ch.Peers().IntrospectList(nil) {
+			assert.Equal(t, v.Score, score)
+		}
+	}
+}
+
+func createConstScoreStrategy(score uint64) (calc ScoreCalculator) {
+	return ScoreCalculatorFunc(func(p *Peer) uint64 {
+		return score
+	})
+}
