@@ -4,6 +4,9 @@ Changelog
 # v1.4.0 (unreleased)
 
 * Add version information to the channel's LocalPeerInfo.
+* Add peers package for peer management utilities such as
+  consistent peer selection.
+* Fix SetScoreStrategy not rescoring existing peers. (#583).
 
 # v1.3.0
 
