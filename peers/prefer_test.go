@@ -55,7 +55,7 @@ func TestHRWScorerDistribution(t *testing.T) {
 	ch := testutils.NewClient(t, nil)
 	servers := make([]*tchannel.Peer, numServers)
 	for i := range servers {
-		servers[i] = ch.Peers().GetOrAdd(fmt.Sprintf("10.1.1.%v", i))
+		servers[i] = ch.Peers().GetOrAdd(fmt.Sprintf("192.0.2.%v", i))
 	}
 
 	serverSelected := make([]int, numServers)
