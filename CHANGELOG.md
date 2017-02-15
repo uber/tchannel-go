@@ -1,7 +1,7 @@
 Changelog
 =========
 
-# v1.4.0 (unreleased)
+# v1.4.0
 
 * Add version information to the channel's LocalPeerInfo.
 * Add peers package for peer management utilities such as
