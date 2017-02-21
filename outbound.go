@@ -43,8 +43,6 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		break
 	case connectionStartClose, connectionInboundClosed, connectionClosed:
 		return nil, ErrConnectionClosed
-	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
-		return nil, ErrConnectionNotReady
 	default:
 		return nil, errConnectionUnknownState{"beginCall", state}
 	}

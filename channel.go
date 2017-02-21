@@ -216,7 +216,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 			tracer:        opts.Tracer,
 		},
 		chID:              chID,
-		connectionOptions: opts.DefaultConnectionOptions,
+		connectionOptions: opts.DefaultConnectionOptions.withDefaults(),
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 	}
@@ -451,7 +451,7 @@ func (ch *Channel) serve() {
 			OnCloseStateChange: ch.connectionCloseStateChange,
 			OnExchangeUpdated:  ch.exchangeUpdated,
 		}
-		if _, err := ch.newInboundConnection(netConn, events); err != nil {
+		if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {
 			// Server is getting overloaded - begin rejecting new connections
 			ch.log.WithFields(ErrField(err)).Error("Couldn't create new TChannelConnection for incoming conn.")
 			netConn.Close()
@@ -524,28 +524,45 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 		return nil, GetContextError(err)
 	}
 
-	c, err := ch.newOutboundConnection(ctx, hostPort, events)
+	timeout := getTimeout(ctx)
+	tcpConn, err := dialContext(ctx, hostPort)
 	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			ch.log.WithFields(
+				LogField{"remoteHostPort", hostPort},
+				LogField{"timeout", timeout},
+			).Info("Outbound net.Dial timed out.")
+			err = ErrTimeout
+		} else if ctx.Err() == context.Canceled {
+			ch.log.WithFields(
+				LogField{"remoteHostPort", hostPort},
+			).Info("Outbound net.Dial was cancelled.")
+			err = GetContextError(ErrRequestCancelled)
+		} else {
+			ch.log.WithFields(
+				ErrField(err),
+				LogField{"remoteHostPort", hostPort},
+			).Info("Outbound net.Dial failed.")
+		}
 		return nil, err
 	}
 
-	if err := c.sendInit(ctx); err != nil {
-		return nil, err
+	conn, err := ch.outboundHandshake(ctx, tcpConn, hostPort, events)
+	if conn != nil {
+		// It's possible that the connection we just created responds with a host:port
+		// that is not what we tried to connect to. E.g., we may have connected to
+		// 127.0.0.1:1234, but the returned host:port may be 10.0.0.1:1234.
+		// In this case, the connection won't be added to 127.0.0.1:1234 peer
+		// and so future calls to that peer may end up creating new connections. To
+		// avoid this issue, and to avoid clients being aware of any TCP relays, we
+		// add the connection to the intended peer.
+		if hostPort != conn.remotePeerInfo.HostPort {
+			conn.log.Debugf("Outbound connection host:port mismatch, adding to peer %v", conn.remotePeerInfo.HostPort)
+			ch.addConnectionToPeer(hostPort, conn, outbound)
+		}
 	}
 
-	// It's possible that the connection we just created responds with a host:port
-	// that is not what we tried to connect to. E.g., we may have connected to
-	// 127.0.0.1:1234, but the returned host:port may be 10.0.0.1:1234.
-	// In this case, the connection won't be added to 127.0.0.1:1234 peer
-	// and so future calls to that peer may end up creating new connections. To
-	// avoid this issue, and to avoid clients being aware of any TCP relays, we
-	// add the connection to the intended peer.
-	if hostPort != c.remotePeerInfo.HostPort {
-		c.log.Debugf("Outbound connection host:port mismatch, adding to peer %v", c.remotePeerInfo.HostPort)
-		ch.addConnectionToPeer(hostPort, c, outbound)
-	}
-
-	return c, nil
+	return conn, err
 }
 
 // exchangeUpdated updates the peer heap.

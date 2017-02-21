@@ -191,12 +191,12 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 
 func TestPeerConnectCancelled(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ctx, cancel := NewContext(109 * time.Millisecond)
+		ctx, cancel := NewContext(100 * time.Millisecond)
 		cancel()
 
 		_, err := ch.Connect(ctx, "10.255.255.1:1")
 		require.Error(t, err, "Connect should fail")
-		assert.EqualError(t, ErrRequestCancelled, err.Error(), "Unknown error")
+		assert.EqualError(t, err, ErrRequestCancelled.Error(), "Unexpected error")
 	})
 }
 
@@ -582,8 +582,8 @@ func TestPeerSelection(t *testing.T) {
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
-		assert.EqualValues(t, 5, count.Load(),
-			"Expect 5 exchange updates: peer add, init mex, new conn, ping, pong")
+		assert.EqualValues(t, 4, count.Load(),
+			"Expect 5 exchange updates: peer add, new conn, ping, pong")
 	})
 }
 

@@ -111,15 +111,19 @@ func TestSetPeerHostPort(t *testing.T) {
 
 	for i, test := range tests {
 		span := tracer.StartSpan("x")
+		peerInfo, peerAddress, err := parseRemotePeer(initParams{
+			InitParamHostPort:    test.hostPort,
+			InitParamProcessName: "test",
+		}, &net.IPAddr{IP: net.ParseIP("1.1.1.1")})
+		require.NoError(t, err, "Failed to parse remote peer info")
+
 		c := &Connection{
 			channelConnectionCommon: channelConnectionCommon{
 				log: NullLogger,
 			},
-			remotePeerInfo: PeerInfo{
-				HostPort: test.hostPort,
-			},
+			remotePeerInfo:    peerInfo,
+			remotePeerAddress: peerAddress,
 		}
-		c.parseRemotePeerAddress()
 		c.setPeerHostPort(span)
 		span.Finish()
 		rawSpan := tracer.FinishedSpans()[i]
@@ -140,14 +144,19 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 		ArgScheme:  string(JSON),
 		CallerName: "caller",
 	}
+	peerInfo, peerAddress, err := parseRemotePeer(initParams{
+		InitParamHostPort:    "host:123",
+		InitParamProcessName: "test",
+	}, &net.IPAddr{IP: net.ParseIP("1.1.1.1")})
+	require.NoError(t, err, "Failed to parse remote peer info")
 	c := Connection{
 		channelConnectionCommon: channelConnectionCommon{
 			log:    NullLogger,
 			tracer: tracer,
 		},
-		remotePeerInfo: PeerInfo{HostPort: "host:123"},
+		remotePeerInfo:    peerInfo,
+		remotePeerAddress: peerAddress,
 	}
-	c.parseRemotePeerAddress()
 
 	// fail to extract with zipkin format, as MockTracer does not support it
 	assert.Nil(t, c.extractInboundSpan(callReq), "zipkin format not available")
@@ -174,7 +183,7 @@ func TestExtractInboundSpanWithZipkinTracer(t *testing.T) {
 	tempSpan.SetBaggageItem("x", "y")
 	headers := make(map[string]string)
 	carrier := tracingHeadersCarrier(headers)
-	err := tracer.Inject(tempSpan.Context(), opentracing.TextMap, carrier)
+	err = tracer.Inject(tempSpan.Context(), opentracing.TextMap, carrier)
 	assert.NoError(t, err)
 
 	// run the public ExtractInboundSpan method with application headers
