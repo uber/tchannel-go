@@ -245,7 +245,11 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
 
-	ch.registerInternal()
+	// Register internal unless the root handler has been overridden, since
+	// Register will panic.
+	if opts.Handler == nil {
+		ch.registerInternal()
+	}
 
 	registerNewChannel(ch)
 
@@ -340,8 +344,11 @@ type Registrar interface {
 // under that. You may also use SetHandler on a SubChannel to set up a
 // catch-all Handler for that service. See the docs for SetHandler for more
 // information.
+//
+// Register panics if the channel was constructed with an alternate root
+// handler.
 func (ch *Channel) Register(h Handler, methodName string) {
-	if ch.handler != nil {
+	if _, ok := ch.handler.(channelHandler); !ok {
 		panic("can't register handler when channel configured with alternate root handler")
 	}
 	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
