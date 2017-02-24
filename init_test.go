@@ -178,7 +178,7 @@ func TestUnexpectedInitRes(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, ErrCodeProtocol, GetSystemErrorCode(err), "Unexpected error code")
+			assert.Equal(t, ErrCodeProtocol, GetSystemErrorCode(err), "Unexpected error code, got error: %v", err)
 			assert.Contains(t, err.Error(), tt.errMsg)
 		}()
 
@@ -316,14 +316,11 @@ func TestInitReqGetsError(t *testing.T) {
 	expectedErr := NewSystemError(ErrCodeBadRequest, "invalid host:port")
 	assert.Equal(t, expectedErr, err, "Error mismatch")
 	assert.Contains(t, logOut.String(),
-		"[E] Connection error.",
+		"[E] Failed during connection handshake.",
 		"Message should be logged")
 	assert.Contains(t, logOut.String(),
 		"tchannel error ErrCodeBadRequest: invalid host:port",
 		"Error should be logged")
-	assert.Contains(t, logOut.String(),
-		"site receive init res",
-		"Site should be logged")
 	close(connectionComplete)
 
 	<-listenerComplete
