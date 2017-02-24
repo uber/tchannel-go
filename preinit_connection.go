@@ -124,7 +124,7 @@ func (ch *Channel) getInitMessage(ctx context.Context, id uint32) initMessage {
 func (ch *Channel) initError(c net.Conn, connDir connectionDirection, id uint32, err error) error {
 	ch.log.WithFields(
 		LogField{"connectionDirection", connDir},
-		LogField{"error", err.Error()},
+		ErrField(err),
 	).Error("Failed during connection handshake.")
 
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {

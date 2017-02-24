@@ -101,6 +101,9 @@ var (
 	// this indicates that the connection is stuck and writes have become
 	// backed up
 	ErrSendBufferFull = errors.New("connection send buffer is full, cannot send frame")
+
+	// ErrConnectionNotReady is no longer used.
+	ErrConnectionNotReady = errors.New("connection is not yet ready")
 )
 
 // errConnectionInvalidState is returned when the connection is in an unknown state.
