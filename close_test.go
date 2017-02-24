@@ -138,6 +138,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 		<-gotCall
 
 		// Start a bunch of clients to trigger races between connecting and close.
+		var closed atomic.Bool
 		for i := 0; i < 100; i++ {
 			wg.Add(1)
 			go func() {
@@ -147,14 +148,24 @@ func TestRaceExchangesWithClose(t *testing.T) {
 				c := testutils.NewClient(t, opts)
 				defer c.Close()
 
-				c.Ping(ctx, ts.HostPort())
+				if closed.Load() {
+					return
+				}
+				if err := c.Ping(ctx, ts.HostPort()); err != nil {
+					return
+				}
+				if closed.Load() {
+					return
+				}
 				raw.Call(ctx, c, ts.HostPort(), server.ServiceName(), "dummy", nil, nil)
 			}()
 		}
 
 		// Now try to close the channel, it should block since there's active exchanges.
 		server.Close()
+		closed.Store(true)
 		assert.Equal(t, ChannelStartClose, ts.Server().State(), "Server should be in StartClose")
+		closed.Store(true)
 
 		close(completeCall)
 		<-callDone
