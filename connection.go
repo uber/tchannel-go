@@ -313,7 +313,7 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		outboundHP:      outboundHP,
 		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
 		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handler:         channelHandler{ch},
+		handler:         ch.handler,
 		events:          events,
 		commonStatsTags: ch.commonStatsTags,
 	}

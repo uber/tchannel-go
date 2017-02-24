@@ -85,6 +85,10 @@ type ChannelOptions struct {
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
 	Tracer opentracing.Tracer
+
+	// Handler is an alternate handler for all inbound requests, overriding the
+	// default handler that delegates to a subchannel.
+	Handler Handler
 }
 
 // ChannelState is the state of a channel.
@@ -126,6 +130,7 @@ type Channel struct {
 	peers             *PeerList
 	relayHost         RelayHost
 	relayMaxTimeout   time.Duration
+	handler           Handler
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -217,6 +222,12 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 	ch.peers = newRootPeerList(ch).newChild()
 
+	if opts.Handler != nil {
+		ch.handler = opts.Handler
+	} else {
+		ch.handler = channelHandler{ch}
+	}
+
 	ch.mutable.peerInfo = LocalPeerInfo{
 		PeerInfo: PeerInfo{
 			ProcessName: processName,
@@ -234,7 +245,11 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
 
-	ch.registerInternal()
+	// Register internal unless the root handler has been overridden, since
+	// Register will panic.
+	if opts.Handler == nil {
+		ch.registerInternal()
+	}
 
 	registerNewChannel(ch)
 
@@ -329,7 +344,13 @@ type Registrar interface {
 // under that. You may also use SetHandler on a SubChannel to set up a
 // catch-all Handler for that service. See the docs for SetHandler for more
 // information.
+//
+// Register panics if the channel was constructed with an alternate root
+// handler.
 func (ch *Channel) Register(h Handler, methodName string) {
+	if _, ok := ch.handler.(channelHandler); !ok {
+		panic("can't register handler when channel configured with alternate root handler")
+	}
 	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
 }
 
