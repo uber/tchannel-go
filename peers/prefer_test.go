@@ -91,11 +91,12 @@ func countingServer(t *testing.T, opts *testutils.ChannelOpts) (*tchannel.Channe
 }
 
 func TestHRWScorerIntegration(t *testing.T) {
-	sOpts := testutils.NewOpts().SetServiceName("svc")
+	// Client pings to the server may cause errors during Close.
+	sOpts := testutils.NewOpts().SetServiceName("svc").DisableLogVerification()
 	s1, s1Count := countingServer(t, sOpts)
 	s2, s2Count := countingServer(t, sOpts)
 
-	client := testutils.NewClient(t, nil)
+	client := testutils.NewClient(t, testutils.NewOpts().DisableLogVerification())
 	client.Peers().SetStrategy(NewHRWScorer(1))
 	client.Peers().Add(s1.PeerInfo().HostPort)
 	client.Peers().Add(s2.PeerInfo().HostPort)
