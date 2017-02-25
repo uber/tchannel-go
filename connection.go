@@ -281,10 +281,11 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, remotePeer Pe
 		c.relay = NewRelayer(ch, c)
 	}
 
-	go c.readFrames(connID)
-	go c.writeFrames(connID)
 	// Connections are activated as soon as they are created.
 	c.callOnActive()
+
+	go c.readFrames(connID)
+	go c.writeFrames(connID)
 	return c
 }
 
