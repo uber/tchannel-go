@@ -535,7 +535,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 			assert.NoError(t, err, "Arg3Writer failed")
 
 			for {
-				if _, err := writer.Write(testutils.RandBytes(4096)); err != nil {
+				if _, err := writer.Write(testutils.RandBytes(4)); err != nil {
 					assert.Equal(t, err, ErrTimeout, "Handler should timeout")
 					close(timedOut)
 					return
