@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -772,5 +773,23 @@ func TestConnectTimeout(t *testing.T) {
 		// we call shutdown since shutdown waits for the relay to close, which
 		// is stuck waiting inside of our custom relay function.
 		close(testComplete)
+	})
+}
+
+func TestParallelConnectionAccepts(t *testing.T) {
+	opts := testutils.NewOpts().AddLogFilter("Couldn't create new TChannelConnection", 1)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		// Start a connection attempt that should timeout.
+		conn, err := net.Dial("tcp", ts.HostPort())
+		defer conn.Close()
+		require.NoError(t, err, "Dial failed")
+
+		// When we try to make a call using a new client, it will require a
+		// new connection, and this verifies that the previous connection attempt
+		// and handshake do not impact the call.
+		client := ts.NewClient(nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
 	})
 }

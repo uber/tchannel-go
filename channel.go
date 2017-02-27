@@ -445,18 +445,20 @@ func (ch *Channel) serve() {
 
 		acceptBackoff = 0
 
-		// Register the connection in the peer once the channel is set up.
-		events := connectionEvents{
-			OnActive:           ch.inboundConnectionActive,
-			OnCloseStateChange: ch.connectionCloseStateChange,
-			OnExchangeUpdated:  ch.exchangeUpdated,
-		}
-		if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {
-			// Server is getting overloaded - begin rejecting new connections
-			ch.log.WithFields(ErrField(err)).Error("Couldn't create new TChannelConnection for incoming conn.")
-			netConn.Close()
-			continue
-		}
+		// Perform the connection handshake in a background goroutine.
+		go func() {
+			// Register the connection in the peer once the channel is set up.
+			events := connectionEvents{
+				OnActive:           ch.inboundConnectionActive,
+				OnCloseStateChange: ch.connectionCloseStateChange,
+				OnExchangeUpdated:  ch.exchangeUpdated,
+			}
+			if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {
+				// Server is getting overloaded - begin rejecting new connections
+				ch.log.WithFields(ErrField(err)).Error("Couldn't create new TChannelConnection for incoming conn.")
+				netConn.Close()
+			}
+		}()
 	}
 }
 
