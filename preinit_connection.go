@@ -63,7 +63,7 @@ func (ch *Channel) outboundHandshake(ctx context.Context, c net.Conn, outboundHP
 		return nil, NewWrappedSystemError(ErrCodeProtocol, err)
 	}
 
-	return ch.newConnection(c, outboundHP, remotePeer, remotePeerAddress, events), nil
+	return ch.newConnection(c, 1 /* initialID */, outboundHP, remotePeer, remotePeerAddress, events), nil
 }
 
 func (ch *Channel) inboundHandshake(ctx context.Context, c net.Conn, events connectionEvents) (_ *Connection, err error) {
@@ -94,7 +94,7 @@ func (ch *Channel) inboundHandshake(ctx context.Context, c net.Conn, events conn
 		return nil, err
 	}
 
-	return ch.newConnection(c, "" /* outboundHP */, remotePeer, remotePeerAddress, events), nil
+	return ch.newConnection(c, 0 /* initialID */, "" /* outboundHP */, remotePeer, remotePeerAddress, events), nil
 }
 
 func (ch *Channel) getInitParams() initParams {
