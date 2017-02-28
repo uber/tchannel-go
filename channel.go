@@ -616,8 +616,7 @@ func (ch *Channel) connectionActive(c *Connection, direction connectionDirection
 
 	if added := ch.addConnection(c, direction); !added {
 		// The channel isn't in a valid state to accept this connection, close the connection.
-		c.log.Debugf("Closing connection due to closing channel state")
-		c.Close()
+		c.close(LogField{"reason", "new active connection on closing channel"})
 		return
 	}
 
@@ -763,7 +762,7 @@ func (ch *Channel) Close() {
 	ch.mutable.Unlock()
 
 	for _, c := range connections {
-		c.Close()
+		c.close(LogField{"reason", "channel closing"})
 	}
 
 	if channelClosed {
