@@ -237,13 +237,14 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	return co
 }
 
-func (ch *Channel) newConnection(conn net.Conn, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
+func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
 		{"localAddr", conn.LocalAddr()},
+		{"outboundHP", outboundHP},
 		{"remoteAddr", conn.RemoteAddr()},
 		{"remoteHostPort", remotePeer.HostPort},
 		{"remoteIsEphemeral", remotePeer.IsEphemeral},
@@ -271,6 +272,8 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, remotePeer Pe
 		events:            events,
 		commonStatsTags:   ch.commonStatsTags,
 	}
+
+	c.nextMessageID.Store(initialID)
 	c.log = log
 	c.inbound.onRemoved = c.checkExchanges
 	c.outbound.onRemoved = c.checkExchanges
