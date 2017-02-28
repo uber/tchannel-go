@@ -255,9 +255,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 			{"connectionDirection", outbound},
 		}...)
 	} else {
-		log = log.WithFields(LogFields{
-			{"connectionDirection", inbound},
-		}...)
+		log = log.WithFields(LogField{"connectionDirection", inbound})
 	}
 	peerInfo := ch.PeerInfo()
 
@@ -534,10 +532,10 @@ func (c *Connection) protocolError(id uint32, err error) error {
 	sysErr := NewWrappedSystemError(ErrCodeProtocol, err)
 	c.SendSystemError(id, Span{}, sysErr)
 	// Don't close the connection until the error has been sent.
-	c.close(LogFields{
-		{"reason", "protocol error"},
+	c.close(
+		LogField{"reason", "protocol error"},
 		ErrField(err),
-	}...)
+	)
 
 	// On any connection error, notify the exchanges of this error.
 	if c.stoppedExchanges.CAS(0, 1) {
