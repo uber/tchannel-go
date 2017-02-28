@@ -244,15 +244,21 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
 		{"localAddr", conn.LocalAddr()},
-		{"outboundHP", outboundHP},
 		{"remoteAddr", conn.RemoteAddr()},
 		{"remoteHostPort", remotePeer.HostPort},
 		{"remoteIsEphemeral", remotePeer.IsEphemeral},
 		{"remoteProcess", remotePeer.ProcessName},
 	}...)
+	if outboundHP != "" {
+		log = log.WithFields(LogFields{
+			{"outboundHP", outboundHP},
+			{"connectionDirection", outbound},
+		}...)
+	} else {
+		log = log.WithFields(LogField{"connectionDirection", inbound})
+	}
 	peerInfo := ch.PeerInfo()
-	log.Debugf("Connection created for %v (%v) local: %v remote: %v",
-		peerInfo.ServiceName, peerInfo.ProcessName, conn.LocalAddr(), conn.RemoteAddr())
+
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
@@ -302,11 +308,16 @@ func (c *Connection) IsActive() bool {
 }
 
 func (c *Connection) callOnActive() {
-	msg := "Inbound connection is active."
-	if c.outboundHP != "" {
-		msg = "Outbound connection is active."
+	log := c.log
+	if remoteVersion := c.remotePeerInfo.Version; remoteVersion != (PeerVersion{}) {
+		log = log.WithFields(LogFields{
+			{"remotePeerLanguage", remoteVersion.Language},
+			{"remotePeerLanguageVersion", remoteVersion.LanguageVersion},
+			{"remotePeerTChannelVersion", remoteVersion.TChannelVersion},
+		}...)
 	}
-	c.log.Info(msg)
+	log.Info("Created new active connection.")
+
 	if f := c.events.OnActive; f != nil {
 		f(c)
 	}
@@ -496,8 +507,17 @@ func (c *Connection) connectionError(site string, err error) error {
 		return nil
 	})
 
+	var closeLogFields LogFields
+	if err == io.EOF {
+		closeLogFields = LogFields{{"reason", "network connection EOF"}}
+	} else {
+		closeLogFields = LogFields{
+			{"reason", "connection error"},
+			ErrField(err),
+		}
+	}
 	err = c.logConnectionError(site, err)
-	c.Close()
+	c.close(closeLogFields...)
 
 	// On any connection error, notify the exchanges of this error.
 	if c.stoppedExchanges.CAS(0, 1) {
@@ -512,7 +532,10 @@ func (c *Connection) protocolError(id uint32, err error) error {
 	sysErr := NewWrappedSystemError(ErrCodeProtocol, err)
 	c.SendSystemError(id, Span{}, sysErr)
 	// Don't close the connection until the error has been sent.
-	c.Close()
+	c.close(
+		LogField{"reason", "protocol error"},
+		ErrField(err),
+	)
 
 	// On any connection error, notify the exchanges of this error.
 	if c.stoppedExchanges.CAS(0, 1) {
@@ -728,15 +751,13 @@ func (c *Connection) checkExchanges() {
 
 		c.log.WithFields(
 			LogField{"newState", updated},
-		).Info("Connection state updated during shutdown.")
+		).Debug("Connection state updated during shutdown.")
 		c.callOnCloseStateChange()
 	}
 }
 
-// Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
-// before finally marking the connection state as closed.
-func (c *Connection) Close() error {
-	c.log.Info("Connection.Close called.")
+func (c *Connection) close(fields ...LogField) error {
+	c.log.WithFields(fields...).Info("Connection closing.")
 
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
@@ -753,13 +774,19 @@ func (c *Connection) Close() error {
 
 	c.log.WithFields(
 		LogField{"newState", c.readState()},
-	).Info("Connection state updated in Close.")
+	).Debug("Connection state updated in Close.")
 	c.callOnCloseStateChange()
 
 	// Check all in-flight requests to see whether we can transition the Close state.
 	c.checkExchanges()
 
 	return nil
+}
+
+// Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
+// before finally marking the connection state as closed.
+func (c *Connection) Close() error {
+	return c.close(LogField{"reason", "user initiated"})
 }
 
 // closeNetwork closes the network connection and all network-related channels.
