@@ -777,7 +777,7 @@ func TestConnectTimeout(t *testing.T) {
 }
 
 func TestParallelConnectionAccepts(t *testing.T) {
-	opts := testutils.NewOpts().AddLogFilter("Couldn't create new TChannelConnection", 1)
+	opts := testutils.NewOpts().AddLogFilter("Failed during connection handshake", 1)
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 
