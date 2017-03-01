@@ -76,9 +76,16 @@ func newPeerList(root *RootPeerList) *PeerList {
 	}
 }
 
-// SetStrategy sets customized peer selection stratedgy.
+// SetStrategy sets customized peer selection strategy.
 func (l *PeerList) SetStrategy(sc ScoreCalculator) {
+	l.Lock()
+	defer l.Unlock()
+
 	l.scoreCalculator = sc
+	for _, ps := range l.peersByHostPort {
+		newScore := l.scoreCalculator.GetScore(ps.Peer)
+		l.updatePeer(ps, newScore)
+	}
 }
 
 // Siblings don't share peer lists (though they take care not to double-connect
@@ -90,7 +97,7 @@ func (l *PeerList) newSibling() *PeerList {
 
 // Add adds a peer to the list if it does not exist, or returns any existing peer.
 func (l *PeerList) Add(hostPort string) *Peer {
-	if ps, _, ok := l.exists(hostPort); ok {
+	if ps, ok := l.exists(hostPort); ok {
 		return ps.Peer
 	}
 	l.Lock()
@@ -189,7 +196,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
 func (l *PeerList) GetOrAdd(hostPort string) *Peer {
-	if ps, _, ok := l.exists(hostPort); ok {
+	if ps, ok := l.exists(hostPort); ok {
 		return ps.Peer
 	}
 	return l.Add(hostPort)
@@ -208,36 +215,54 @@ func (l *PeerList) Copy() map[string]*Peer {
 }
 
 // exists checks if a hostport exists in the peer list.
-func (l *PeerList) exists(hostPort string) (*peerScore, uint64, bool) {
-	var score uint64
-
+func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
 	l.RLock()
 	ps, ok := l.peersByHostPort[hostPort]
-	if ok {
-		score = ps.score
-	}
 	l.RUnlock()
 
-	return ps, score, ok
+	return ps, ok
 }
 
-// updatePeer is called when there is a change that may cause the peer's score to change.
+// getPeerScore is called to find the peer and its score from a host port key.
+// Note that at least a Read lock must be held to call this function.
+func (l *PeerList) getPeerScore(hostPort string) (*peerScore, uint64, bool) {
+	ps, ok := l.peersByHostPort[hostPort]
+	if !ok {
+		return nil, 0, false
+	}
+	return ps, ps.score, ok
+}
+
+// onPeerChange is called when there is a change that may cause the peer's score to change.
 // The new score is calculated, and the peer heap is updated with the new score if the score changes.
-func (l *PeerList) updatePeer(p *Peer) {
-	ps, psScore, ok := l.exists(p.hostPort)
+func (l *PeerList) onPeerChange(p *Peer) {
+	l.RLock()
+	ps, psScore, ok := l.getPeerScore(p.hostPort)
+	sc := l.scoreCalculator
+	l.RUnlock()
 	if !ok {
 		return
 	}
 
-	newScore := l.scoreCalculator.GetScore(p)
+	newScore := sc.GetScore(ps.Peer)
 	if newScore == psScore {
 		return
 	}
 
 	l.Lock()
+	l.updatePeer(ps, newScore)
+	l.Unlock()
+}
+
+// updatePeer is called to update the score of the peer given the existing score.
+// Note that a Write lock must be held to call this function.
+func (l *PeerList) updatePeer(ps *peerScore, newScore uint64) {
+	if ps.score == newScore {
+		return
+	}
+
 	ps.score = newScore
 	l.peerHeap.updatePeer(ps)
-	l.Unlock()
 }
 
 // peerScore represents a peer and scoring for the peer heap.

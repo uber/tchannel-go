@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -535,7 +536,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 			assert.NoError(t, err, "Arg3Writer failed")
 
 			for {
-				if _, err := writer.Write(testutils.RandBytes(4096)); err != nil {
+				if _, err := writer.Write(testutils.RandBytes(4)); err != nil {
 					assert.Equal(t, err, ErrTimeout, "Handler should timeout")
 					close(timedOut)
 					return
@@ -772,5 +773,61 @@ func TestConnectTimeout(t *testing.T) {
 		// we call shutdown since shutdown waits for the relay to close, which
 		// is stuck waiting inside of our custom relay function.
 		close(testComplete)
+	})
+}
+
+func TestParallelConnectionAccepts(t *testing.T) {
+	opts := testutils.NewOpts().AddLogFilter("Failed during connection handshake", 1)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		// Start a connection attempt that should timeout.
+		conn, err := net.Dial("tcp", ts.HostPort())
+		defer conn.Close()
+		require.NoError(t, err, "Dial failed")
+
+		// When we try to make a call using a new client, it will require a
+		// new connection, and this verifies that the previous connection attempt
+		// and handshake do not impact the call.
+		client := ts.NewClient(nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+	})
+}
+
+func TestConnectionIDs(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		var inbound, outbound []uint32
+		relayFunc := func(outgoing bool, f *Frame) *Frame {
+			if outgoing {
+				outbound = append(outbound, f.Header.ID)
+			} else {
+				inbound = append(inbound, f.Header.ID)
+			}
+			return f
+		}
+		relay, shutdown := testutils.FrameRelay(t, ts.HostPort(), relayFunc)
+		defer shutdown()
+
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		s2 := ts.NewServer(nil)
+		require.NoError(t, s2.Ping(ctx, relay), "Ping failed")
+		assert.Equal(t, []uint32{1, 2}, outbound, "Unexpected outbound IDs")
+		assert.Equal(t, []uint32{1, 2}, inbound, "Unexpected outbound IDs")
+
+		// We want to reuse the same connection for the rest of the test which
+		// only makes sense when the relay is not used.
+		if ts.Relay() != nil {
+			return
+		}
+
+		inbound = nil
+		outbound = nil
+		// We will reuse the inbound connection, but since the inbound connection
+		// hasn't originated any outbound requests, we'll use id 1.
+		require.NoError(t, ts.Server().Ping(ctx, s2.PeerInfo().HostPort), "Ping failed")
+		assert.Equal(t, []uint32{1}, outbound, "Unexpected outbound IDs")
+		assert.Equal(t, []uint32{1}, inbound, "Unexpected outbound IDs")
 	})
 }

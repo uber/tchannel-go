@@ -191,12 +191,12 @@ func TestPeerRemoveClosedConnection(t *testing.T) {
 
 func TestPeerConnectCancelled(t *testing.T) {
 	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		ctx, cancel := NewContext(109 * time.Millisecond)
+		ctx, cancel := NewContext(100 * time.Millisecond)
 		cancel()
 
 		_, err := ch.Connect(ctx, "10.255.255.1:1")
 		require.Error(t, err, "Connect should fail")
-		assert.EqualError(t, ErrRequestCancelled, err.Error(), "Unknown error")
+		assert.EqualError(t, err, ErrRequestCancelled.Error(), "Unexpected error")
 	})
 }
 
@@ -582,8 +582,8 @@ func TestPeerSelection(t *testing.T) {
 		s2.GetSubChannel("S1").Peers().SetStrategy(strategy)
 		s2.GetSubChannel("S1").Peers().Add(hostPort)
 		doPing(s2)
-		assert.EqualValues(t, 5, count.Load(),
-			"Expect 5 exchange updates: peer add, init mex, new conn, ping, pong")
+		assert.EqualValues(t, 4, count.Load(),
+			"Expect 4 exchange updates: peer add, new conn, ping, pong")
 	})
 }
 
@@ -1147,4 +1147,28 @@ func BenchmarkAddPeers(b *testing.B) {
 			ch.Peers().Add(hp)
 		}
 	}
+}
+
+func TestPeerSelectionStrategyChange(t *testing.T) {
+	const numPeers = 2
+
+	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+
+	for i := 0; i < numPeers; i++ {
+		ch.Peers().Add(fmt.Sprintf("127.0.0.1:60%v", i))
+	}
+
+	for _, score := range []uint64{1000, 2000} {
+		ch.Peers().SetStrategy(createConstScoreStrategy(score))
+		for _, v := range ch.Peers().IntrospectList(nil) {
+			assert.Equal(t, v.Score, score)
+		}
+	}
+}
+
+func createConstScoreStrategy(score uint64) (calc ScoreCalculator) {
+	return ScoreCalculatorFunc(func(p *Peer) uint64 {
+		return score
+	})
 }

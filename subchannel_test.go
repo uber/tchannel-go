@@ -252,3 +252,19 @@ func TestGetSubchannelOptionsOnNew(t *testing.T) {
 	require.NoError(t, err, "Should get peer")
 	assert.Equal(t, want, peer, "Unexpected peer")
 }
+
+func TestHandlerWithoutSubChannel(t *testing.T) {
+	opts := testutils.NewOpts().NoRelay()
+	opts.Handler = raw.Wrap(newTestHandler(t))
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		client := ts.NewClient(nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		testutils.AssertEcho(t, client, ts.HostPort(), "larry")
+		testutils.AssertEcho(t, client, ts.HostPort(), "curly")
+		testutils.AssertEcho(t, client, ts.HostPort(), "moe")
+
+		assert.Panics(t, func() {
+			ts.Server().Register(raw.Wrap(newTestHandler(t)), "nyuck")
+		})
+	})
+}

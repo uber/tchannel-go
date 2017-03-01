@@ -26,6 +26,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,6 +85,10 @@ type ChannelOptions struct {
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
 	Tracer opentracing.Tracer
+
+	// Handler is an alternate handler for all inbound requests, overriding the
+	// default handler that delegates to a subchannel.
+	Handler Handler
 }
 
 // ChannelState is the state of a channel.
@@ -124,6 +130,7 @@ type Channel struct {
 	peers             *PeerList
 	relayHost         RelayHost
 	relayMaxTimeout   time.Duration
+	handler           Handler
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -209,17 +216,28 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 			tracer:        opts.Tracer,
 		},
 		chID:              chID,
-		connectionOptions: opts.DefaultConnectionOptions,
+		connectionOptions: opts.DefaultConnectionOptions.withDefaults(),
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 	}
 	ch.peers = newRootPeerList(ch).newChild()
+
+	if opts.Handler != nil {
+		ch.handler = opts.Handler
+	} else {
+		ch.handler = channelHandler{ch}
+	}
 
 	ch.mutable.peerInfo = LocalPeerInfo{
 		PeerInfo: PeerInfo{
 			ProcessName: processName,
 			HostPort:    ephemeralHostPort,
 			IsEphemeral: true,
+			Version: PeerVersion{
+				Language:        "go",
+				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+				TChannelVersion: VersionInfo,
+			},
 		},
 		ServiceName: serviceName,
 	}
@@ -227,7 +245,11 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
 
-	ch.registerInternal()
+	// Register internal unless the root handler has been overridden, since
+	// Register will panic.
+	if opts.Handler == nil {
+		ch.registerInternal()
+	}
 
 	registerNewChannel(ch)
 
@@ -322,7 +344,13 @@ type Registrar interface {
 // under that. You may also use SetHandler on a SubChannel to set up a
 // catch-all Handler for that service. See the docs for SetHandler for more
 // information.
+//
+// Register panics if the channel was constructed with an alternate root
+// handler.
 func (ch *Channel) Register(h Handler, methodName string) {
+	if _, ok := ch.handler.(channelHandler); !ok {
+		panic("can't register handler when channel configured with alternate root handler")
+	}
 	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
 }
 
@@ -417,18 +445,18 @@ func (ch *Channel) serve() {
 
 		acceptBackoff = 0
 
-		// Register the connection in the peer once the channel is set up.
-		events := connectionEvents{
-			OnActive:           ch.inboundConnectionActive,
-			OnCloseStateChange: ch.connectionCloseStateChange,
-			OnExchangeUpdated:  ch.exchangeUpdated,
-		}
-		if _, err := ch.newInboundConnection(netConn, events); err != nil {
-			// Server is getting overloaded - begin rejecting new connections
-			ch.log.WithFields(ErrField(err)).Error("Couldn't create new TChannelConnection for incoming conn.")
-			netConn.Close()
-			continue
-		}
+		// Perform the connection handshake in a background goroutine.
+		go func() {
+			// Register the connection in the peer once the channel is set up.
+			events := connectionEvents{
+				OnActive:           ch.inboundConnectionActive,
+				OnCloseStateChange: ch.connectionCloseStateChange,
+				OnExchangeUpdated:  ch.exchangeUpdated,
+			}
+			if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {
+				netConn.Close()
+			}
+		}()
 	}
 }
 
@@ -496,28 +524,45 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 		return nil, GetContextError(err)
 	}
 
-	c, err := ch.newOutboundConnection(ctx, hostPort, events)
+	timeout := getTimeout(ctx)
+	tcpConn, err := dialContext(ctx, hostPort)
 	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			ch.log.WithFields(
+				LogField{"remoteHostPort", hostPort},
+				LogField{"timeout", timeout},
+			).Info("Outbound net.Dial timed out.")
+			err = ErrTimeout
+		} else if ctx.Err() == context.Canceled {
+			ch.log.WithFields(
+				LogField{"remoteHostPort", hostPort},
+			).Info("Outbound net.Dial was cancelled.")
+			err = GetContextError(ErrRequestCancelled)
+		} else {
+			ch.log.WithFields(
+				ErrField(err),
+				LogField{"remoteHostPort", hostPort},
+			).Info("Outbound net.Dial failed.")
+		}
 		return nil, err
 	}
 
-	if err := c.sendInit(ctx); err != nil {
-		return nil, err
+	conn, err := ch.outboundHandshake(ctx, tcpConn, hostPort, events)
+	if conn != nil {
+		// It's possible that the connection we just created responds with a host:port
+		// that is not what we tried to connect to. E.g., we may have connected to
+		// 127.0.0.1:1234, but the returned host:port may be 10.0.0.1:1234.
+		// In this case, the connection won't be added to 127.0.0.1:1234 peer
+		// and so future calls to that peer may end up creating new connections. To
+		// avoid this issue, and to avoid clients being aware of any TCP relays, we
+		// add the connection to the intended peer.
+		if hostPort != conn.remotePeerInfo.HostPort {
+			conn.log.Debugf("Outbound connection host:port mismatch, adding to peer %v", conn.remotePeerInfo.HostPort)
+			ch.addConnectionToPeer(hostPort, conn, outbound)
+		}
 	}
 
-	// It's possible that the connection we just created responds with a host:port
-	// that is not what we tried to connect to. E.g., we may have connected to
-	// 127.0.0.1:1234, but the returned host:port may be 10.0.0.1:1234.
-	// In this case, the connection won't be added to 127.0.0.1:1234 peer
-	// and so future calls to that peer may end up creating new connections. To
-	// avoid this issue, and to avoid clients being aware of any TCP relays, we
-	// add the connection to the intended peer.
-	if hostPort != c.remotePeerInfo.HostPort {
-		c.log.Debugf("Outbound connection host:port mismatch, adding to peer %v", c.remotePeerInfo.HostPort)
-		ch.addConnectionToPeer(hostPort, c, outbound)
-	}
-
-	return c, nil
+	return conn, err
 }
 
 // exchangeUpdated updates the peer heap.
@@ -537,7 +582,7 @@ func (ch *Channel) exchangeUpdated(c *Connection) {
 
 // updatePeer updates the score of the peer and update it's position in heap as well.
 func (ch *Channel) updatePeer(p *Peer) {
-	ch.peers.updatePeer(p)
+	ch.peers.onPeerChange(p)
 	ch.subChannels.updatePeer(p)
 	p.callOnUpdateComplete()
 }
@@ -569,8 +614,7 @@ func (ch *Channel) connectionActive(c *Connection, direction connectionDirection
 
 	if added := ch.addConnection(c, direction); !added {
 		// The channel isn't in a valid state to accept this connection, close the connection.
-		c.log.Debugf("Closing connection due to closing channel state")
-		c.Close()
+		c.close(LogField{"reason", "new active connection on closing channel"})
 		return
 	}
 
@@ -716,7 +760,7 @@ func (ch *Channel) Close() {
 	ch.mutable.Unlock()
 
 	for _, c := range connections {
-		c.Close()
+		c.close(LogField{"reason", "channel closing"})
 	}
 
 	if channelClosed {

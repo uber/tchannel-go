@@ -43,10 +43,6 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	case connectionStartClose, connectionInboundClosed, connectionClosed:
 		c.SendSystemError(frame.Header.ID, callReqSpan(frame), ErrChannelClosed)
 		return true
-	case connectionWaitingToRecvInitReq, connectionWaitingToSendInitReq, connectionWaitingToRecvInitRes:
-		err := NewSystemError(ErrCodeDeclined, "connection not ready")
-		c.SendSystemError(frame.Header.ID, callReqSpan(frame), err)
-		return true
 	default:
 		panic(fmt.Errorf("unknown connection state for call req: %v", state))
 	}

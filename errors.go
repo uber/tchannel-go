@@ -95,8 +95,6 @@ var (
 
 	// ErrMethodTooLarge is a SystemError indicating that the method is too large.
 	ErrMethodTooLarge = NewSystemError(ErrCodeProtocol, "method too large")
-
-	errDialCancelled = NewSystemError(ErrCodeCancelled, "dial cancelled")
 )
 
 // MetricsKey is a string representation of the error code that's suitable for

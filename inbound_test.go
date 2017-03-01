@@ -90,14 +90,18 @@ func TestInboundConnection(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
-		testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	// Disable relay since relays hide host:port on outbound calls.
+	opts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		s2 := ts.NewServer(nil)
+
+		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			c, _ := InboundConnection(CurrentCall(ctx))
-			assert.Equal(t, hostPort, c.RemotePeerInfo().HostPort, "Unexpected host port")
+			assert.Equal(t, s2.PeerInfo().HostPort, c.RemotePeerInfo().HostPort, "Unexpected host port")
 			return &raw.Res{}, nil
 		})
 
-		_, _, _, err := raw.Call(ctx, ch, hostPort, ch.PeerInfo().ServiceName, "test", nil, nil)
+		_, _, _, err := raw.Call(ctx, s2, ts.HostPort(), ts.ServiceName(), "test", nil, nil)
 		require.NoError(t, err, "Call failed")
 	})
 }

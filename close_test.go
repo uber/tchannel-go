@@ -138,6 +138,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 		<-gotCall
 
 		// Start a bunch of clients to trigger races between connecting and close.
+		var closed atomic.Bool
 		for i := 0; i < 100; i++ {
 			wg.Add(1)
 			go func() {
@@ -147,14 +148,24 @@ func TestRaceExchangesWithClose(t *testing.T) {
 				c := testutils.NewClient(t, opts)
 				defer c.Close()
 
-				c.Ping(ctx, ts.HostPort())
+				if closed.Load() {
+					return
+				}
+				if err := c.Ping(ctx, ts.HostPort()); err != nil {
+					return
+				}
+				if closed.Load() {
+					return
+				}
 				raw.Call(ctx, c, ts.HostPort(), server.ServiceName(), "dummy", nil, nil)
 			}()
 		}
 
 		// Now try to close the channel, it should block since there's active exchanges.
 		server.Close()
+		closed.Store(true)
 		assert.Equal(t, ChannelStartClose, ts.Server().State(), "Server should be in StartClose")
+		closed.Store(true)
 
 		close(completeCall)
 		<-callDone
@@ -264,8 +275,6 @@ func TestCloseStress(t *testing.T) {
 
 type closeSemanticsTest struct {
 	*testing.T
-
-	ctx      context.Context
 	isolated bool
 }
 
@@ -290,15 +299,16 @@ func (t *closeSemanticsTest) withNewClient(f func(ch *Channel)) {
 }
 
 func (t *closeSemanticsTest) startCall(from *Channel, to *Channel, method string) (*OutboundCall, error) {
+	ctx, _ := NewContext(time.Second)
 	var call *OutboundCall
 	var err error
 	toPeer := to.PeerInfo()
 	if t.isolated {
 		sc := from.GetSubChannel(toPeer.ServiceName, Isolated)
 		sc.Peers().Add(toPeer.HostPort)
-		call, err = sc.BeginCall(t.ctx, method, nil)
+		call, err = sc.BeginCall(ctx, method, nil)
 	} else {
-		call, err = from.BeginCall(t.ctx, toPeer.HostPort, toPeer.ServiceName, method, nil)
+		call, err = from.BeginCall(ctx, toPeer.HostPort, toPeer.ServiceName, method, nil)
 	}
 	return call, err
 }
@@ -329,7 +339,7 @@ func (t *closeSemanticsTest) callStream(from *Channel, to *Channel) <-chan struc
 	return c
 }
 
-func (t *closeSemanticsTest) runTest(ctx context.Context) {
+func (t *closeSemanticsTest) runTest() {
 	s1, s1C := t.makeServer("s1")
 	s2, s2C := t.makeServer("s2")
 
@@ -348,6 +358,7 @@ func (t *closeSemanticsTest) runTest(ctx context.Context) {
 	// Close s1, should no longer be able to call it.
 	s1.Close()
 	assert.Equal(t, ChannelStartClose, s1.State())
+
 	t.withNewClient(func(ch *Channel) {
 		assert.Error(t, t.call(ch, s1), "closed channel should not accept incoming calls")
 		require.NoError(t, t.call(ch, s2),
@@ -385,11 +396,8 @@ func TestCloseSemantics(t *testing.T) {
 	defer goroutines.VerifyNoLeaks(t, nil)
 	defer testutils.SetTimeout(t, 2*time.Second)()
 
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
-	ct := &closeSemanticsTest{t, ctx, false /* isolated */}
-	ct.runTest(ctx)
+	ct := &closeSemanticsTest{t, false /* isolated */}
+	ct.runTest()
 }
 
 func TestCloseSemanticsIsolated(t *testing.T) {
@@ -397,16 +405,11 @@ func TestCloseSemanticsIsolated(t *testing.T) {
 	defer goroutines.VerifyNoLeaks(t, nil)
 	defer testutils.SetTimeout(t, 2*time.Second)()
 
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
-	ct := &closeSemanticsTest{t, ctx, true /* isolated */}
-	ct.runTest(ctx)
+	ct := &closeSemanticsTest{t, true /* isolated */}
+	ct.runTest()
 }
 
 func TestCloseSingleChannel(t *testing.T) {
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
 	ch := testutils.NewServer(t, nil)
 
 	var connected sync.WaitGroup
@@ -426,6 +429,9 @@ func TestCloseSingleChannel(t *testing.T) {
 		connected.Add(1)
 		completed.Add(1)
 		go func() {
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+
 			peerInfo := ch.PeerInfo()
 			_, _, _, err := raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "echo", nil, nil)
 			assert.NoError(t, err, "Call failed")
@@ -447,9 +453,6 @@ func TestCloseSingleChannel(t *testing.T) {
 }
 
 func TestCloseOneSide(t *testing.T) {
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
 	ch1 := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: "client"})
 	ch2 := testutils.NewServer(t, &testutils.ChannelOpts{ServiceName: "server"})
 
@@ -466,6 +469,8 @@ func TestCloseOneSide(t *testing.T) {
 	})
 
 	go func() {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
 		ch2Peer := ch2.PeerInfo()
 		_, _, _, err := raw.Call(ctx, ch1, ch2Peer.HostPort, ch2Peer.ServiceName, "echo", nil, nil)
 		assert.NoError(t, err, "Call failed")

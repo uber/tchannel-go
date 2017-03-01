@@ -21,19 +21,13 @@
 package tchannel
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
-	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/uber/tchannel-go/typed"
 
 	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
@@ -102,19 +96,14 @@ var (
 	// on a closed connection
 	ErrConnectionClosed = errors.New("connection is closed")
 
-	// ErrConnectionNotReady is returned when a caller attempts to send a
-	// request through a connection which has not yet been initialized
-	ErrConnectionNotReady = errors.New("connection is not yet ready")
-
 	// ErrSendBufferFull is returned when a message cannot be sent to the
 	// peer because the frame sending buffer has become full.  Typically
 	// this indicates that the connection is stuck and writes have become
 	// backed up
 	ErrSendBufferFull = errors.New("connection send buffer is full, cannot send frame")
 
-	errConnectionAlreadyActive     = errors.New("connection is already active")
-	errConnectionWaitingOnPeerInit = errors.New("connection is waiting for the peer to sent init")
-	errCannotHandleInitRes         = errors.New("could not return init-res to handshake thread")
+	// ErrConnectionNotReady is no longer used.
+	ErrConnectionNotReady = errors.New("connection is not yet ready")
 )
 
 // errConnectionInvalidState is returned when the connection is in an unknown state.
@@ -193,12 +182,14 @@ type Connection struct {
 
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
 	// components that can be used to set peer tags on OpenTracing Span.
-	remotePeerAddress struct {
-		port     uint16
-		ipv4     uint32
-		ipv6     string
-		hostname string
-	}
+	remotePeerAddress peerAddressComponents
+}
+
+type peerAddressComponents struct {
+	port     uint16
+	ipv4     uint32
+	ipv6     string
+	hostname string
 }
 
 // _nextConnID is used to allocate unique IDs to every connection for debugging purposes.
@@ -207,18 +198,8 @@ var _nextConnID atomic.Uint32
 type connectionState int
 
 const (
-	// Connection initiated by peer is waiting to recv init-req from peer
-	connectionWaitingToRecvInitReq connectionState = iota + 1
-
-	// Connection initated by current process is waiting to send init-req to peer
-	connectionWaitingToSendInitReq
-
-	// Connection initiated by current process has sent init-req, and is
-	// waiting for init-req
-	connectionWaitingToRecvInitRes
-
 	// Connection is fully active
-	connectionActive
+	connectionActive connectionState = iota + 1
 
 	// Connection is starting to close; new incoming requests are rejected, outbound
 	// requests are allowed to proceed
@@ -256,41 +237,7 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	return co
 }
 
-// Creates a new Connection around an outbound connection initiated to a peer
-func (ch *Channel) newOutboundConnection(ctx context.Context, hostPort string, events connectionEvents) (*Connection, error) {
-	timeout := getTimeout(ctx)
-	conn, err := dialContext(ctx, hostPort)
-	if err != nil {
-		if ne, ok := err.(net.Error); ok && ne.Timeout() {
-			ch.log.WithFields(
-				LogField{"remoteHostPort", hostPort},
-				LogField{"timeout", timeout},
-			).Info("Outbound net.Dial timed out.")
-			err = ErrTimeout
-		} else if ctx.Err() == context.Canceled {
-			ch.log.WithFields(
-				LogField{"remoteHostPort", hostPort},
-			).Info("Outbound net.Dial was cancelled.")
-			err = errDialCancelled
-		} else {
-			ch.log.WithFields(
-				ErrField(err),
-				LogField{"remoteHostPort", hostPort},
-			).Info("Outbound net.Dial failed.")
-		}
-		return nil, err
-	}
-
-	return ch.newConnection(conn, hostPort, connectionWaitingToSendInitReq, events), nil
-}
-
-// Creates a new Connection based on an incoming connection from a peer
-func (ch *Channel) newInboundConnection(conn net.Conn, events connectionEvents) (*Connection, error) {
-	return ch.newConnection(conn, "" /* outboundHP */, connectionWaitingToRecvInitReq, events), nil
-}
-
-// Creates a new connection in a given initial state
-func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState connectionState, events connectionEvents) *Connection {
+func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
@@ -298,27 +245,41 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 		{"connID", connID},
 		{"localAddr", conn.LocalAddr()},
 		{"remoteAddr", conn.RemoteAddr()},
+		{"remoteHostPort", remotePeer.HostPort},
+		{"remoteIsEphemeral", remotePeer.IsEphemeral},
+		{"remoteProcess", remotePeer.ProcessName},
 	}...)
+	if outboundHP != "" {
+		log = log.WithFields(LogFields{
+			{"outboundHP", outboundHP},
+			{"connectionDirection", outbound},
+		}...)
+	} else {
+		log = log.WithFields(LogField{"connectionDirection", inbound})
+	}
 	peerInfo := ch.PeerInfo()
-	log.Debugf("Connection created for %v (%v) local: %v remote: %v",
-		peerInfo.ServiceName, peerInfo.ProcessName, conn.LocalAddr(), conn.RemoteAddr())
+
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
-		connID:          connID,
-		conn:            conn,
-		opts:            opts,
-		state:           initialState,
-		sendCh:          make(chan *Frame, opts.SendBufferSize),
-		stopCh:          make(chan struct{}),
-		localPeerInfo:   peerInfo,
-		outboundHP:      outboundHP,
-		inbound:         newMessageExchangeSet(log, messageExchangeSetInbound),
-		outbound:        newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handler:         channelHandler{ch},
-		events:          events,
-		commonStatsTags: ch.commonStatsTags,
+		connID:            connID,
+		conn:              conn,
+		opts:              opts,
+		state:             connectionActive,
+		sendCh:            make(chan *Frame, opts.SendBufferSize),
+		stopCh:            make(chan struct{}),
+		localPeerInfo:     peerInfo,
+		remotePeerInfo:    remotePeer,
+		remotePeerAddress: remotePeerAddress,
+		outboundHP:        outboundHP,
+		inbound:           newMessageExchangeSet(log, messageExchangeSetInbound),
+		outbound:          newMessageExchangeSet(log, messageExchangeSetOutbound),
+		handler:           ch.handler,
+		events:            events,
+		commonStatsTags:   ch.commonStatsTags,
 	}
+
+	c.nextMessageID.Store(initialID)
 	c.log = log
 	c.inbound.onRemoved = c.checkExchanges
 	c.outbound.onRemoved = c.checkExchanges
@@ -328,6 +289,9 @@ func (ch *Channel) newConnection(conn net.Conn, outboundHP string, initialState 
 	if ch.RelayHost() != nil {
 		c.relay = NewRelayer(ch, c)
 	}
+
+	// Connections are activated as soon as they are created.
+	c.callOnActive()
 
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
@@ -344,11 +308,16 @@ func (c *Connection) IsActive() bool {
 }
 
 func (c *Connection) callOnActive() {
-	msg := "Inbound connection is active."
-	if c.outboundHP != "" {
-		msg = "Outbound connection is active."
+	log := c.log
+	if remoteVersion := c.remotePeerInfo.Version; remoteVersion != (PeerVersion{}) {
+		log = log.WithFields(LogFields{
+			{"remotePeerLanguage", remoteVersion.Language},
+			{"remotePeerLanguageVersion", remoteVersion.LanguageVersion},
+			{"remotePeerTChannelVersion", remoteVersion.TChannelVersion},
+		}...)
 	}
-	c.log.Info(msg)
+	log.Info("Created new active connection.")
+
 	if f := c.events.OnActive; f != nil {
 		f(c)
 	}
@@ -360,117 +329,10 @@ func (c *Connection) callOnCloseStateChange() {
 	}
 }
 
-func (c *Connection) getInitParams() initParams {
-	return initParams{
-		InitParamHostPort:                c.localPeerInfo.HostPort,
-		InitParamProcessName:             c.localPeerInfo.ProcessName,
-		InitParamTChannelLanguage:        "go",
-		InitParamTChannelLanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
-		InitParamTChannelVersion:         VersionInfo,
-	}
-}
-
 func (c *Connection) callOnExchangeChange() {
 	if f := c.events.OnExchangeUpdated; f != nil {
 		f(c)
 	}
-}
-
-// Initiates a handshake with a peer.
-func (c *Connection) sendInit(ctx context.Context) error {
-	err := c.withStateLock(func() error {
-		switch c.state {
-		case connectionWaitingToSendInitReq:
-			c.state = connectionWaitingToRecvInitRes
-			return nil
-		case connectionWaitingToRecvInitReq:
-			return errConnectionWaitingOnPeerInit
-		case connectionClosed, connectionStartClose, connectionInboundClosed:
-			return ErrConnectionClosed
-		case connectionActive, connectionWaitingToRecvInitRes:
-			return errConnectionAlreadyActive
-		default:
-			return errConnectionUnknownState{"sendInit", c.state}
-		}
-	})
-	if err != nil {
-		return err
-	}
-
-	initMsgID := c.NextMessageID()
-	req := initReq{initMessage{id: initMsgID}}
-	req.Version = CurrentProtocolVersion
-
-	req.initParams = c.getInitParams()
-	if params := getTChannelParams(ctx); params != nil && params.hideListeningOnOutbound {
-		req.initParams[InitParamHostPort] = ephemeralHostPort
-	}
-
-	if !c.pendingExchangeMethodAdd() {
-		// Connection is closed, no need to do anything.
-		return ErrInvalidConnectionState
-	}
-	defer c.pendingExchangeMethodDone()
-
-	mex, err := c.outbound.newExchange(ctx, c.opts.FramePool, req.messageType(), req.ID(), 1)
-	if err != nil {
-		return c.connectionError("create init req", err)
-	}
-
-	defer c.outbound.removeExchange(req.ID())
-
-	if err := c.sendMessage(&req); err != nil {
-		return c.connectionError("send init req", err)
-	}
-
-	res := initRes{}
-	if err := c.recvMessage(ctx, &res, mex); err != nil {
-		return c.connectionError("receive init res", err)
-	}
-
-	return nil
-}
-
-// Handles an incoming InitReq.  If we are waiting for the peer to send us an
-// InitReq, and the InitReq is valid, send a corresponding InitRes and mark
-// ourselves as active
-func (c *Connection) handleInitReq(frame *Frame) {
-	id := frame.Header.ID
-	var req initReq
-	rbuf := typed.NewReadBuffer(frame.SizedPayload())
-	if err := req.read(rbuf); err != nil {
-		// TODO(mmihic): Technically probably a protocol error
-		c.connectionError("parse init req", err)
-		return
-	}
-
-	if req.Version < CurrentProtocolVersion {
-		c.protocolError(id, fmt.Errorf("Unsupported protocol version %d from peer", req.Version))
-		return
-	}
-
-	if err := c.parseRemotePeer(req.initParams); err != nil {
-		c.protocolError(id, err)
-		return
-	}
-
-	res := initRes{initMessage{id: frame.Header.ID}}
-	res.initParams = c.getInitParams()
-	res.Version = CurrentProtocolVersion
-	if err := c.sendMessage(&res); err != nil {
-		c.connectionError("send init res", err)
-		return
-	}
-
-	c.withStateLock(func() error {
-		switch c.state {
-		case connectionWaitingToRecvInitReq:
-			c.state = connectionActive
-		}
-
-		return nil
-	})
-	c.callOnActive()
 }
 
 // ping sends a ping message and waits for a ping response.
@@ -528,78 +390,6 @@ func (c *Connection) handlePingReq(frame *Frame) {
 	if err := c.sendMessage(pingRes); err != nil {
 		c.connectionError("send pong", err)
 	}
-}
-
-// Handles an incoming InitRes.  If we are waiting for the peer to send us an
-// InitRes, forward the InitRes to the waiting goroutine
-func (c *Connection) handleInitRes(frame *Frame) bool {
-	var err error
-	switch state := c.readState(); state {
-	case connectionWaitingToRecvInitRes:
-		err = nil
-	case connectionClosed, connectionStartClose, connectionInboundClosed:
-		err = ErrConnectionClosed
-	case connectionActive:
-		err = errConnectionAlreadyActive
-	case connectionWaitingToSendInitReq:
-		err = ErrConnectionNotReady
-	case connectionWaitingToRecvInitReq:
-		err = errConnectionWaitingOnPeerInit
-	default:
-		err = errConnectionUnknownState{"handleInitRes", state}
-	}
-	if err != nil {
-		c.connectionError("handle init res", err)
-		return true
-	}
-
-	res := initRes{initMessage{id: frame.Header.ID}}
-	if err := frame.read(&res); err != nil {
-		c.connectionError("parse init res", fmt.Errorf("failed to read initRes from frame"))
-		return true
-	}
-
-	if res.Version != CurrentProtocolVersion {
-		c.protocolError(frame.Header.ID, fmt.Errorf("unsupported protocol version %d from peer", res.Version))
-		return true
-	}
-
-	if err := c.parseRemotePeer(res.initParams); err != nil {
-		c.protocolError(frame.Header.ID, err)
-		return true
-	}
-
-	if err := c.withStateLock(func() error {
-		if c.state != connectionWaitingToRecvInitRes {
-			return errConnectionUnknownState{"handleInitRes expecting waitingToRecvInitRes", c.state}
-		}
-		if c.ignoreRemotePeer {
-			return errConnectionUnknownState{"handleInitRes asked to ignore remote peer", c.state}
-		}
-
-		c.remotePeerInfo.HostPort = res.initParams[InitParamHostPort]
-		c.remotePeerInfo.ProcessName = res.initParams[InitParamProcessName]
-		c.parseRemotePeerAddress()
-
-		c.state = connectionActive
-		return nil
-	}); err != nil {
-		// The connection was no longer in a state to handle the init res.
-		// Fail the connection.
-		c.connectionError("handleInitRes", err)
-		return true
-	}
-	c.callOnActive()
-
-	// We forward the peer frame, as the other side is blocked waiting on this frame.
-	// Rather than add another mechanism, we use the mex to block the sender till we get initRes.
-	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.connectionError("forward init res", errCannotHandleInitRes)
-		return true
-	}
-
-	// init req waits for this message and will release it when done.
-	return false
 }
 
 // sendMessage sends a standalone message (typically a control message)
@@ -717,8 +507,17 @@ func (c *Connection) connectionError(site string, err error) error {
 		return nil
 	})
 
+	var closeLogFields LogFields
+	if err == io.EOF {
+		closeLogFields = LogFields{{"reason", "network connection EOF"}}
+	} else {
+		closeLogFields = LogFields{
+			{"reason", "connection error"},
+			ErrField(err),
+		}
+	}
 	err = c.logConnectionError(site, err)
-	c.Close()
+	c.close(closeLogFields...)
 
 	// On any connection error, notify the exchanges of this error.
 	if c.stoppedExchanges.CAS(0, 1) {
@@ -733,7 +532,10 @@ func (c *Connection) protocolError(id uint32, err error) error {
 	sysErr := NewWrappedSystemError(ErrCodeProtocol, err)
 	c.SendSystemError(id, Span{}, sysErr)
 	// Don't close the connection until the error has been sent.
-	c.Close()
+	c.close(
+		LogField{"reason", "protocol error"},
+		ErrField(err),
+	)
 
 	// On any connection error, notify the exchanges of this error.
 	if c.stoppedExchanges.CAS(0, 1) {
@@ -827,10 +629,6 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 		releaseFrame = c.handleCallRes(frame)
 	case messageTypeCallResContinue:
 		releaseFrame = c.handleCallResContinue(frame)
-	case messageTypeInitReq:
-		c.handleInitReq(frame)
-	case messageTypeInitRes:
-		releaseFrame = c.handleInitRes(frame)
 	case messageTypePingReq:
 		c.handlePingReq(frame)
 	case messageTypePingRes:
@@ -953,24 +751,19 @@ func (c *Connection) checkExchanges() {
 
 		c.log.WithFields(
 			LogField{"newState", updated},
-		).Info("Connection state updated during shutdown.")
+		).Debug("Connection state updated during shutdown.")
 		c.callOnCloseStateChange()
 	}
 }
 
-// Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
-// before finally marking the connection state as closed.
-func (c *Connection) Close() error {
-	c.log.Info("Connection.Close called.")
+func (c *Connection) close(fields ...LogField) error {
+	c.log.WithFields(fields...).Info("Connection closing.")
 
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
 		switch c.state {
 		case connectionActive:
 			c.state = connectionStartClose
-		case connectionWaitingToRecvInitReq, connectionWaitingToRecvInitRes:
-			// If the connection isn't active yet, it can be closed once sendCh is empty.
-			c.state = connectionInboundClosed
 		default:
 			return fmt.Errorf("connection must be Active to Close")
 		}
@@ -981,13 +774,19 @@ func (c *Connection) Close() error {
 
 	c.log.WithFields(
 		LogField{"newState", c.readState()},
-	).Info("Connection state updated in Close.")
+	).Debug("Connection state updated in Close.")
 	c.callOnCloseStateChange()
 
 	// Check all in-flight requests to see whether we can transition the Close state.
 	c.checkExchanges()
 
 	return nil
+}
+
+// Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
+// before finally marking the connection state as closed.
+func (c *Connection) Close() error {
+	return c.close(LogField{"reason", "user initiated"})
 }
 
 // closeNetwork closes the network connection and all network-related channels.
@@ -1004,56 +803,5 @@ func (c *Connection) closeNetwork() {
 			LogField{"remotePeer", c.remotePeerInfo},
 			ErrField(err),
 		).Warn("Couldn't close connection to peer.")
-	}
-}
-
-func (c *Connection) parseRemotePeer(p initParams) error {
-	var ok bool
-	if c.remotePeerInfo.HostPort, ok = p[InitParamHostPort]; !ok {
-		return fmt.Errorf("header %v is required", InitParamHostPort)
-	}
-	if c.remotePeerInfo.ProcessName, ok = p[InitParamProcessName]; !ok {
-		return fmt.Errorf("header %v is required", InitParamProcessName)
-	}
-
-	c.parseRemotePeerAddress()
-	c.remotePeerInfo.Version.Language = p[InitParamTChannelLanguage]
-	c.remotePeerInfo.Version.LanguageVersion = p[InitParamTChannelLanguageVersion]
-	c.remotePeerInfo.Version.TChannelVersion = p[InitParamTChannelVersion]
-	return nil
-}
-
-// parseRemotePeerAddress parses remote peer info into individual components and
-// caches them on the Connection to be used to set peer tags on OpenTracing Span.
-func (c *Connection) parseRemotePeerAddress() {
-	// If the remote host:port is ephemeral, use the socket address as the
-	// host:port and set IsEphemeral to true.
-	if isEphemeralHostPort(c.remotePeerInfo.HostPort) {
-		c.remotePeerInfo.HostPort = c.conn.RemoteAddr().String()
-		c.remotePeerInfo.IsEphemeral = true
-	}
-	c.log = c.log.WithFields(
-		LogField{"remoteHostPort", c.remotePeerInfo.HostPort},
-		LogField{"remoteIsEphemeral", c.remotePeerInfo.IsEphemeral},
-		LogField{"remoteProcess", c.remotePeerInfo.ProcessName},
-	)
-
-	address := c.remotePeerInfo.HostPort
-	if sHost, sPort, err := net.SplitHostPort(address); err == nil {
-		address = sHost
-		if p, err := strconv.ParseUint(sPort, 10, 16); err == nil {
-			c.remotePeerAddress.port = uint16(p)
-		}
-	}
-	if address == "localhost" {
-		c.remotePeerAddress.ipv4 = 127<<24 | 1
-	} else if ip := net.ParseIP(address); ip != nil {
-		if ip4 := ip.To4(); ip4 != nil {
-			c.remotePeerAddress.ipv4 = binary.BigEndian.Uint32(ip4)
-		} else {
-			c.remotePeerAddress.ipv6 = address
-		}
-	} else {
-		c.remotePeerAddress.hostname = address
 	}
 }
