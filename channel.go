@@ -454,8 +454,6 @@ func (ch *Channel) serve() {
 				OnExchangeUpdated:  ch.exchangeUpdated,
 			}
 			if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {
-				// Server is getting overloaded - begin rejecting new connections
-				ch.log.WithFields(ErrField(err)).Error("Couldn't create new TChannelConnection for incoming conn.")
 				netConn.Close()
 			}
 		}()

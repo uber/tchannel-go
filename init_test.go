@@ -83,6 +83,16 @@ func TestUnexpectedInitReq(t *testing.T) {
 				errCode: ErrCodeProtocol,
 			},
 		},
+		{
+			name: "unexpected message type",
+			initMsg: &pingReq{
+				id: 1,
+			},
+			expectedError: errorMessage{
+				id:      1,
+				errCode: ErrCodeProtocol,
+			},
+		},
 	}
 
 	for _, tt := range tests {

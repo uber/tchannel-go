@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"strconv"
 	"time"
@@ -34,9 +35,7 @@ import (
 func (ch *Channel) outboundHandshake(ctx context.Context, c net.Conn, outboundHP string, events connectionEvents) (_ *Connection, err error) {
 	defer setInitDeadline(ctx, c)()
 	defer func() {
-		if err != nil {
-			err = ch.initError(c, outbound, 1, err)
-		}
+		err = ch.initError(c, outbound, 1, err)
 	}()
 
 	msg := &initReq{initMessage: ch.getInitMessage(ctx, 1)}
@@ -67,19 +66,19 @@ func (ch *Channel) outboundHandshake(ctx context.Context, c net.Conn, outboundHP
 }
 
 func (ch *Channel) inboundHandshake(ctx context.Context, c net.Conn, events connectionEvents) (_ *Connection, err error) {
+	id := uint32(math.MaxUint32)
+
 	defer setInitDeadline(ctx, c)()
+	defer func() {
+		err = ch.initError(c, inbound, id, err)
+	}()
 
 	req := &initReq{}
-	id, err := ch.readMessage(c, req)
+	id, err = ch.readMessage(c, req)
 	if err != nil {
 		return nil, err
 	}
 
-	defer func() {
-		if err != nil {
-			err = ch.initError(c, inbound, id, err)
-		}
-	}()
 	if req.Version < CurrentProtocolVersion {
 		return nil, unsupportedProtocolVersion(req.Version)
 	}
@@ -122,10 +121,16 @@ func (ch *Channel) getInitMessage(ctx context.Context, id uint32) initMessage {
 }
 
 func (ch *Channel) initError(c net.Conn, connDir connectionDirection, id uint32, err error) error {
-	ch.log.WithFields(
-		LogField{"connectionDirection", connDir},
+	if err == nil {
+		return nil
+	}
+
+	ch.log.WithFields(LogFields{
+		{"connectionDirection", connDir},
+		{"localAddr", c.LocalAddr()},
+		{"remoteAddr", c.RemoteAddr()},
 		ErrField(err),
-	).Error("Failed during connection handshake.")
+	}...).Error("Failed during connection handshake.")
 
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
 		err = ErrTimeout
@@ -162,9 +167,9 @@ func (ch *Channel) readMessage(c net.Conn, msg message) (uint32, error) {
 
 	if frame.Header.messageType != msg.messageType() {
 		if frame.Header.messageType == messageTypeError {
-			return 0, readError(frame)
+			return frame.Header.ID, readError(frame)
 		}
-		return 0, NewSystemError(ErrCodeProtocol, "expected message type %v, got %v", msg.messageType(), frame.Header.messageType)
+		return frame.Header.ID, NewSystemError(ErrCodeProtocol, "expected message type %v, got %v", msg.messageType(), frame.Header.messageType)
 	}
 
 	return frame.Header.ID, frame.read(msg)
