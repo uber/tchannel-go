@@ -24,13 +24,6 @@
 // backwards-compatibility guarantee.
 package relay
 
-// Conn is an interface that exposes a bit of information about the underlying
-// connection.
-type Conn interface {
-	// RemoteHostPort returns the host:port of the remote peer.
-	RemoteHostPort() string
-}
-
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
 	// Caller is the name of the originating service.

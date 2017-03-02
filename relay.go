@@ -49,9 +49,6 @@ var (
 	errUnknownID             = errors.New("non-callReq for inactive ID")
 )
 
-// relayConn implements the relay.Connection interface.
-type relayConn Connection
-
 type relayItem struct {
 	*time.Timer
 
@@ -334,7 +331,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return nil
 	}
 
-	call, err := r.relayHost.Start(f, (*relayConn)(r.conn))
+	call, err := r.relayHost.Start(f, r.conn)
 	if err != nil {
 		// If we have a RateLimitDropError we record the statistic, but
 		// we *don't* send an error frame back to the client.
@@ -550,10 +547,6 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 		r.conn.opts.FramePool.Release(f)
 	}
 	return true
-}
-
-func (r *relayConn) RemoteHostPort() string {
-	return (*Connection)(r).RemotePeerInfo().HostPort
 }
 
 func frameTypeFor(f *Frame) frameType {

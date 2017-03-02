@@ -57,7 +57,7 @@ func (rh *StubRelayHost) SetChannel(ch *tchannel.Channel) {
 }
 
 // Start starts a new RelayCall for the given call on a specific connection.
-func (rh *StubRelayHost) Start(cf relay.CallFrame, conn relay.Conn) (tchannel.RelayCall, error) {
+func (rh *StubRelayHost) Start(cf relay.CallFrame, _ *tchannel.Connection) (tchannel.RelayCall, error) {
 	// Get a peer from the subchannel.
 	peer, err := rh.ch.GetSubChannel(string(cf.Service())).Peers().Get(nil)
 	return &stubCall{rh.stats.Begin(cf), peer}, err

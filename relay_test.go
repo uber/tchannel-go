@@ -199,7 +199,7 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		f := func(relay.CallFrame, relay.Conn) (string, error) {
+		f := func(relay.CallFrame, *Connection) (string, error) {
 			return tt.returnPeer, tt.returnErr
 		}
 
@@ -502,8 +502,8 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 func TestRelayConnection(t *testing.T) {
 	var errTest = errors.New("test")
 	var wantHostPort string
-	getHost := func(call relay.CallFrame, conn relay.Conn) (string, error) {
-		assert.Equal(t, wantHostPort, conn.RemoteHostPort(), "Unexpected RemoteHostPort")
+	getHost := func(call relay.CallFrame, conn *Connection) (string, error) {
+		assert.Equal(t, wantHostPort, conn.RemotePeerInfo().HostPort, "Unexpected RemoteHostPort")
 		return "", errTest
 	}
 
@@ -577,7 +577,7 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 }
 
 func TestRelayRateLimitDrop(t *testing.T) {
-	getHost := func(call relay.CallFrame, conn relay.Conn) (string, error) {
+	getHost := func(call relay.CallFrame, _ *Connection) (string, error) {
 		return "", relay.RateLimitDropError{}
 	}
 
@@ -691,7 +691,7 @@ func TestRelayThroughSeparateRelay(t *testing.T) {
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		serverHP := ts.Server().PeerInfo().HostPort
-		dummyFactory := func(relay.CallFrame, relay.Conn) (string, error) {
+		dummyFactory := func(relay.CallFrame, *Connection) (string, error) {
 			panic("should not get invoked")
 		}
 		relay2Opts := testutils.NewOpts().SetRelayHost(relaytest.HostFunc(dummyFactory))
