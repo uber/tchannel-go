@@ -519,6 +519,35 @@ func TestRelayConnection(t *testing.T) {
 		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
 		require.Error(t, err, "Expected CallEcho to fail")
 		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+
+		// Verify that the relay has not closed any connections.
+		assert.Equal(t, 1, ts.Relay().IntrospectNumConnections(), "Relay should maintain client connection")
+	})
+}
+
+func TestRelayConnectionClosed(t *testing.T) {
+	protocolErr := NewSystemError(ErrCodeProtocol, "invalid service name")
+	getHost := func(call relay.CallFrame, conn *Connection) (string, error) {
+		return "", protocolErr
+	}
+
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHost(relaytest.HostFunc(getHost))
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		// The client receives a protocol error which causes the following logs.
+		opts := testutils.NewOpts().
+			AddLogFilter("Peer reported protocol error", 1).
+			AddLogFilter("Connection error", 1)
+		client := ts.NewClient(opts)
+
+		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
+		assert.Equal(t, protocolErr, err, "Unexpected error on call")
+
+		closedAll := testutils.WaitFor(time.Second, func() bool {
+			return ts.Relay().IntrospectNumConnections() == 0
+		})
+		assert.True(t, closedAll, "Relay should close client connection")
 	})
 }
 
