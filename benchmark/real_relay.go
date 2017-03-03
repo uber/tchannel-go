@@ -36,7 +36,7 @@ type fixedHosts struct {
 	pickI atomic.Int32
 }
 
-func (fh *fixedHosts) Get(cf relay.CallFrame, _ relay.Conn) (string, error) {
+func (fh *fixedHosts) Get(cf relay.CallFrame, _ *tchannel.Connection) (string, error) {
 	peers := fh.hosts[string(cf.Service())]
 	if len(peers) == 0 {
 		return "", errors.New("no peers")
