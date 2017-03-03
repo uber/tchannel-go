@@ -350,6 +350,11 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 			call.End()
 		}
 		r.conn.SendSystemError(f.Header.ID, f.Span(), err)
+
+		// If the RelayHost returns a protocol error, close the connection.
+		if GetSystemErrorCode(err) == ErrCodeProtocol {
+			return r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
+		}
 		return nil
 	}
 
