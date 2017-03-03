@@ -18,7 +18,7 @@ type hostFuncPeer struct {
 }
 
 // HostFunc wraps a given function to implement tchannel.RelayHost.
-func HostFunc(fn func(cf relay.CallFrame, _ *tchannel.Connection) (string, error)) tchannel.RelayHost {
+func HostFunc(fn func(relay.CallFrame, *tchannel.Connection) (string, error)) tchannel.RelayHost {
 	return &hostFunc{nil, NewMockStats(), fn}
 }
 
