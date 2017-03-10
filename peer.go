@@ -116,11 +116,12 @@ func (l *PeerList) Add(hostPort string) *Peer {
 	return p
 }
 
-// Get returns a peer from the peer list, or nil if none can be found.
-func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
+// GetNew returns a new, previously un-selected peer from the peer list, or nil,
+// if no new un-selected peer can be found.
+func (l *PeerList) GetNew(prevSelected map[string]struct{}) (*Peer, error) {
 	l.Lock()
+	defer l.Unlock()
 	if l.peerHeap.Len() == 0 {
-		l.Unlock()
 		return nil, ErrNoPeers
 	}
 
@@ -130,10 +131,21 @@ func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 	if peer == nil {
 		peer = l.choosePeer(prevSelected, false /* avoidHost */)
 	}
-	if peer == nil {
-		peer = l.choosePeer(nil, false /* avoidHost */)
+	return peer, nil
+}
+
+// Get returns a peer from the peer list, or nil if none can be found,
+// will avoid previously selected peers if possible.
+func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
+	peer, err := l.GetNew(prevSelected)
+	if err != nil {
+		return nil, err
 	}
-	l.Unlock()
+	if peer == nil {
+		l.Lock()
+		peer = l.choosePeer(nil, false /* avoidHost */)
+		l.Unlock()
+	}
 	return peer, nil
 }
 
