@@ -76,6 +76,21 @@ func TestGetPeerSinglePeer(t *testing.T) {
 	assert.Equal(t, "1.1.1.1:1234", peer.HostPort(), "returned peer mismatch")
 }
 
+func TestPeerUpdatesLen(t *testing.T) {
+	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+	assert.Zero(t, ch.Peers().Len())
+	for i := 1; i < 5; i++ {
+		ch.Peers().Add(fmt.Sprintf("1.1.1.1:%d", i))
+		assert.Equal(t, ch.Peers().Len(), i)
+	}
+	for i := 4; i > 0; i-- {
+		assert.Equal(t, ch.Peers().Len(), i)
+		ch.Peers().Remove(fmt.Sprintf("1.1.1.1:%d", i))
+	}
+	assert.Zero(t, ch.Peers().Len())
+}
+
 func TestGetPeerAvoidPrevSelected(t *testing.T) {
 	const (
 		peer1 = "1.1.1.1:1"
