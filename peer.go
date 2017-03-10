@@ -214,6 +214,13 @@ func (l *PeerList) Copy() map[string]*Peer {
 	return listCopy
 }
 
+// Len returns the length of the PeerList.
+func (l *PeerList) Len() int {
+	l.RLock()
+	defer l.RUnlock()
+	return l.peerHeap.Len()
+}
+
 // exists checks if a hostport exists in the peer list.
 func (l *PeerList) exists(hostPort string) (*peerScore, bool) {
 	l.RLock()
