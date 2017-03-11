@@ -169,19 +169,14 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 		}
 
 		newPeer, err := peers.GetNew(rs.PrevSelectedPeers())
-		if err != nil {
-			t.Errorf("Got unexpected error selecting new peer: %v", err)
-			continue
-		}
-
 		if len(tt.peers) == len(tt.prevSelected) {
-			if newPeer != nil {
-				t.Errorf("%s: newPeer should not have been found %v\n", tt.msg, newPeer)
+			if newPeer != nil || err != ErrNoNewPeers {
+				t.Errorf("%s: newPeer should not have been found %v: %v\n", tt.msg, newPeer, err)
 			}
 		} else {
-			if gotPeer != newPeer {
-				t.Errorf("%s: expected equal peers, got %v new %v\n",
-					tt.msg, gotPeer, newPeer)
+			if gotPeer != newPeer || err != nil {
+				t.Errorf("%s: expected equal peers, got %v new %v: %v\n",
+					tt.msg, gotPeer, newPeer, err)
 			}
 		}
 
