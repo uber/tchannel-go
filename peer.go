@@ -144,13 +144,15 @@ func (l *PeerList) GetNew(prevSelected map[string]struct{}) (*Peer, error) {
 // will avoid previously selected peers if possible.
 func (l *PeerList) Get(prevSelected map[string]struct{}) (*Peer, error) {
 	peer, err := l.GetNew(prevSelected)
-	if err != nil && err != ErrNoNewPeers {
-		return nil, err
-	}
-	if peer == nil {
+	if err == ErrNoNewPeers {
 		l.Lock()
 		peer = l.choosePeer(nil, false /* avoidHost */)
 		l.Unlock()
+	} else if err != nil {
+		return nil, err
+	}
+	if peer == nil {
+		return nil, ErrNoPeers
 	}
 	return peer, nil
 }
