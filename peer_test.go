@@ -168,6 +168,18 @@ func TestGetPeerAvoidPrevSelected(t *testing.T) {
 			continue
 		}
 
+		newPeer, err := peers.GetNew(rs.PrevSelectedPeers())
+		if len(tt.peers) == len(tt.prevSelected) {
+			if newPeer != nil || err != ErrNoNewPeers {
+				t.Errorf("%s: newPeer should not have been found %v: %v\n", tt.msg, newPeer, err)
+			}
+		} else {
+			if gotPeer != newPeer || err != nil {
+				t.Errorf("%s: expected equal peers, got %v new %v: %v\n",
+					tt.msg, gotPeer, newPeer, err)
+			}
+		}
+
 		got := gotPeer.HostPort()
 		if _, ok := tt.expected[got]; !ok {
 			t.Errorf("%s: got unexpected peer, expected one of %v got %v\n  Peers = %v PrevSelected = %v",
