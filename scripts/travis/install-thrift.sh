@@ -14,8 +14,8 @@ tar xfz "thrift-${THRIFT_VERSION}.tar.gz"
 cd "thrift-${THRIFT_VERSION}"
 ./configure \
   --without-c_glib \
-  --without-csharp \
   --without-cpp \
+  --without-csharp \
   --without-d \
   --without-erlang \
   --without-gnu-ld \
@@ -27,6 +27,6 @@ cd "thrift-${THRIFT_VERSION}"
   --without-php \
   --without-php_extension \
   --without-python \
-  --without-ruby \
-  --without-qt4
+  --without-qt4 \
+  --without-ruby
 sudo make install

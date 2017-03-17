@@ -1,5 +1,5 @@
-hash: 89f0a370013571c16088b0141b2ab6b24a521d20ee9fa8a8fbe0b5f6054419f6
-updated: 2017-03-17T12:03:35.090604649+01:00
+hash: a9a734fc7b461a2873ff671c605cad0d44929fb1f4d10812b67c6a18333d63a3
+updated: 2017-03-17T14:17:08.372020851+01:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -13,8 +13,6 @@ imports:
   version: d8eabe07bc70ff9ba6a56836cde99d1ea3d005f7
   subpackages:
   - statsd
-- name: github.com/codahale/hdrhistogram
-  version: 3a0bb77429bd3a61596f5e8a3172445844342120
 - name: github.com/crossdock/crossdock-go
   version: 049aabb0122b03bc9bd30cab8f3f91fb60166361
   subpackages:
@@ -55,19 +53,14 @@ imports:
 - name: github.com/uber-go/atomic
   version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
 - name: github.com/uber/jaeger-client-go
-  version: 42d26acb018f6af5d9e352503a3b0008666dfad7
+  version: e39d0f1b622558cae3d9db0062a739cc6ffa700f
   subpackages:
   - internal/spanlog
-  - log
   - thrift-gen/agent
   - thrift-gen/sampling
   - thrift-gen/zipkincore
   - transport
   - utils
-- name: github.com/uber/jaeger-lib
-  version: 9dd8526f119f8cd8379427bfefdc406e81bc3b2f
-  subpackages:
-  - metrics
 - name: golang.org/x/net
   version: a6577fac2d73be281a500b310739095313165611
   subpackages:
