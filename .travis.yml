@@ -46,7 +46,7 @@ env:
 before_install:
   - wget http://www-us.apache.org/dist/thrift/0.10.0/thrift-0.10.0.tar.gz
   - tar xfz thrift-0.10.0.tar.gz
-  - cd thrift-0.10.0 && ./configure --without-gnu-ld --without-cpp --without-qt4 --without-c_glib --without-csharp --without-java --without-nodejs --without-erlang --without-python --without-perl --without-php --without-php_extension --without-ruby --without-haskell --without-d --without-lua && sudo make install && cd ..
+  - cd thrift-0.10.0 && ./configure --without-gnu-ld --without-cpp --without-qt4 --without-c_glib --without-csharp --without-java --without-nodejs --without-erlang --without-python --without-perl --without-php --without-php_extension --without-ruby --without-haskell --without-d --without-lua && sudo make install && cd -
 
 install:
 - make install_ci
