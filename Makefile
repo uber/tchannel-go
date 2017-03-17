@@ -46,6 +46,9 @@ setup:
 	mkdir -p $(THRIFT_GEN_RELEASE_LINUX)
 	mkdir -p $(THRIFT_GEN_RELEASE_DARWIN)
 
+install_thrift:
+	scripts/travis/install-thrift.sh
+
 # We want to remove `vendor` dir because thrift-gen tests don't work with it.
 # However, glide install even with --cache-gopath option leaves GOPATH at HEAD,
 # not at the desired versions from glide.lock, which are only applied to `vendor`
@@ -67,7 +70,7 @@ install_glide:
 	# but have to pin to 0.12.3 due to https://github.com/Masterminds/glide/issues/745
 	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide && cd $(OLD_GOPATH)/src/github.com/Masterminds/glide && git checkout v0.12.3 && go install
 
-install_ci: install_glide install_lint install
+install_ci: install_glide install_lint install_thrift install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 ifdef CROSSDOCK
 	$(MAKE) install_docker_ci
@@ -177,5 +180,5 @@ release_thrift_gen: clean setup
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 
-.PHONY: all help clean fmt format install install_ci install_lint install_glide release_thrift_gen packages_test check_no_test_deps test test_ci lint
+.PHONY: all help clean fmt format install_thrift install install_ci install_lint install_glide release_thrift_gen packages_test check_no_test_deps test test_ci lint
 .SILENT: all help clean fmt format test lint
