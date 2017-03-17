@@ -46,5 +46,5 @@ import:
 - package: github.com/prashantv/protectmem
 - package: github.com/opentracing/opentracing-go
 - package: github.com/uber/jaeger-client-go
-  version: ^1
+  version: ">=1, <3"
 - package: github.com/crossdock/crossdock-go
