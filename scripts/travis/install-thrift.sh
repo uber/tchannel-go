@@ -9,7 +9,7 @@ cd "${TMP}"
 THRIFT_VERSION=0.10.0
 
 wget "http://www-us.apache.org/dist/thrift/${THRIFT_VERSION}/thrift-${THRIFT_VERSION}.tar.gz"
-tar -xfz "thrift-${THRIFT_VERSION}.tar.gz"
+tar xfz "thrift-${THRIFT_VERSION}.tar.gz"
 cd "thrift-${THRIFT_VERSION}"
 ./configure \
   --without-c_glib \
