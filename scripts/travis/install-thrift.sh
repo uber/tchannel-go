@@ -3,7 +3,8 @@
 set -euo pipefail
 
 TMP="$(mktemp -d)"
-trap "rm -rf ${TMP}" EXIT
+# travis does not give permissions to do this and sudo rm -rf is not the best
+#trap "rm -rf ${TMP}" EXIT
 cd "${TMP}"
 
 THRIFT_VERSION=0.10.0
