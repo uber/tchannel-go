@@ -5,6 +5,16 @@ cache:
   directories:
   - $HOME/.glide/cache
 
+addons:
+  apt:
+    packages:
+      - automake
+      - libtool
+      - flex
+      - bison
+      - pkg-config
+      - g++
+
 go:
 - 1.5
 - 1.6
@@ -32,6 +42,11 @@ env:
   - secure: D6KY81H0sxRPvXjE2VeYz1c3vkpEUg/UoV0pRIrVlWD7HOKG6a92ZGUbwz8Ex+PRcTPPlEP1rwE/rJ/0uhrueynkXNBqQsDWT9ECsK7l92b931JY3sEM3eBJCL0whtorCLtXQ2l/g5PJS3AcNGDxP1zP07J2pcsgk2SBcZqnAq0h8U3M7/rLX8JroudG3JxmSvH6HqXkGDdOJXTCeyG9EVdrsUCVb0JY7Q0oMGMzIcZTkJ0Yts7mtjNS/VXDeSYnHxELuRgioLTJThjwBa31StZNTqnnzWh5kR2u/WZvjYf7eaHZfzZJa85CS8yIAAaMc//tu/13qxgAsdiT9TjEhx8hS0J2Wu/JXpCmbKkoHp42sX9aZDWJIR4ZQHaPEIdcTnAbPROhS0XGHqAvpcDAjWuwbtwpnB4Quz67GVpoZNQV4uHiu6fuRqY5kvkzv28K1jGeStUyNDwBtNGCvggB5OZlLYyo+2G7vu//LxV6FXsioqqKePn7xxQBtxgf2LGQEhmeO7iNUyXTy3EoaFrpl7ScQbi9XoCKN28Fi5Da9J5IOn0KQ4niRg126Xgk+vwNytj3qoP4xIZps3WavtTqXvbbGkGCIbIEDNzDFtqrdo2ZAA6YhtlwuB2/2Jbmva7zmma7VDMPapHVqe4tTsQoAl3IEeokV9wRFr/28vGDrKE=
   # DOCKER_PASS
   - secure: xzdXvoLEQRRz7x9YLdjyagn83lYgLX9hHlNJy0AnHUfbMpdjbnAzEDBnhorNfqoK/E2Vw4sx13+2M2ZbVQ0qfdjqUne/oBiNxzm+lTUyeZv5lhWeX5ZiJkfmecDmimK/mQBw+eah7ClzPmj3dsL2Oq4E8fd6LVCwO7ZyJUKyaeQ8/cLbJsfOSaBF40T1EFpvX8jim/dz3dtmW5ksHmjPMF3yGKTvSKuz4T2ZCe8CafvLI/Vlei/oNcJuZrIYMXsfSgjAtCW2VNeIgWetezr1KySZXe8rKVre4lyyT48t5OKXqNemxtRXE21pB7td0okpgpYTLfpwP1qP5x/87f3xFEzwBU0iJiTTXaeVifIK0irJwSm8IC63uURg7R0NYjj+183rhQkH37bfKIivj5xBbu/YID8LMTanBNRFkImlHogoSRBRt4ZdcJ7GY2gvN+2+XGWoRmRGwbp5sSHUZtntJoqMDQlu61uU2CX4CuXMy6G6I7um8CX63J0xywqDCbgB2XrQvcyiWRc4PCfnKKBtFKZRBU4aZwf/6r4BckU3NKXE8Sji98OEm2nNpyQmyKR7lfvulPTSWfwfTWUg5SAnzTcBshIsH8rFm8qU8f26WR7YoykgO3PKP/nHVItOkYs/i9roi7az9FX4nEPkgYkgwWV8d/4sJt8Uz+ll1WNIKOE=
+
+before_install:
+  - wget http://www-us.apache.org/dist/thrift/0.10.0/thrift-0.10.0.tar.gz
+  - tar xfz thrift-0.10.0.tar.gz
+  - cd thrift-0.10.0 && ./configure --without-gnu-ld --without-cpp --without-qt4 --without-c_glib --without-csharp --without-java --without-nodejs --without-erlang --without-python --without-perl --without-php --without-php_extension --without-ruby --without-haskell --without-d --without-lua && sudo make install && cd ..
 
 install:
 - make install_ci
