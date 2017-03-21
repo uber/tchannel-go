@@ -1,6 +1,11 @@
 Changelog
 =========
 
+# v1.5.0
+
+* Add `PeerList.Len` to expose the number of peers in the peer list.
+* Add `PeerList.GetNew` to only return previously unselected peers.
+
 # v1.4.0
 
 * Add version information to the channel's LocalPeerInfo.

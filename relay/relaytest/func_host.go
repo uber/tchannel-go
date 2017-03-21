@@ -1,14 +1,14 @@
 package relaytest
 
 import (
-	tchannel "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 )
 
 type hostFunc struct {
 	ch    *tchannel.Channel
 	stats *MockStats
-	fn    func(cf relay.CallFrame, conn relay.Conn) (string, error)
+	fn    func(relay.CallFrame, *tchannel.Connection) (string, error)
 }
 
 type hostFuncPeer struct {
@@ -18,7 +18,7 @@ type hostFuncPeer struct {
 }
 
 // HostFunc wraps a given function to implement tchannel.RelayHost.
-func HostFunc(fn func(cf relay.CallFrame, conn relay.Conn) (string, error)) tchannel.RelayHost {
+func HostFunc(fn func(relay.CallFrame, *tchannel.Connection) (string, error)) tchannel.RelayHost {
 	return &hostFunc{nil, NewMockStats(), fn}
 }
 
@@ -26,7 +26,7 @@ func (hf *hostFunc) SetChannel(ch *tchannel.Channel) {
 	hf.ch = ch
 }
 
-func (hf *hostFunc) Start(cf relay.CallFrame, conn relay.Conn) (tchannel.RelayCall, error) {
+func (hf *hostFunc) Start(cf relay.CallFrame, conn *tchannel.Connection) (tchannel.RelayCall, error) {
 	var peer *tchannel.Peer
 
 	peerHP, err := hf.fn(cf, conn)
