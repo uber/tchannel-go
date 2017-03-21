@@ -1,9 +1,20 @@
-sudo: false
+sudo: required
 language: go
 
 cache:
   directories:
   - $HOME/.glide/cache
+
+# for scripts/travis/install-thrift.sh
+addons:
+  apt:
+    packages:
+      - automake
+      - libtool
+      - flex
+      - bison
+      - pkg-config
+      - g++
 
 go:
 - 1.5
