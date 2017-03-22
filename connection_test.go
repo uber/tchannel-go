@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -852,23 +851,4 @@ func TestTosPriority(t *testing.T) {
 		_, _, _, err = raw.WriteArgs(outbound, []byte("arg2"), []byte("arg3"))
 		require.NoError(t, err, "Failed to write to outbound conn")
 	})
-}
-
-func TestUnmarshalTosPriority(t *testing.T) {
-	expected := tos.Lowdelay
-
-	var TosBit tos.ToS
-	err := TosBit.UnmarshalText([]byte("Lowdelay"))
-	if assert.NoError(t, err, "JSON unmarshal failed") {
-		assert.Equal(t, expected, TosBit, "JSON config mismatch")
-	}
-}
-
-func TestMarshalTosPriority(t *testing.T) {
-	expected := "\"Lowdelay\""
-
-	v, err := json.Marshal(tos.Lowdelay)
-	if assert.NoError(t, err, "Marshal failed") {
-		assert.Equal(t, expected, string(v), "Marshal mis match")
-	}
 }
