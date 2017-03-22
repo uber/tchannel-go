@@ -134,10 +134,7 @@ type ConnectionOptions struct {
 	// The type of checksum to use when sending messages.
 	ChecksumType ChecksumType
 
-	// ToS class name marked on outbound connection. Supply a DiffServ
-	// compliant name, tos.AF11 tos.CS1 .. etc,
-	// tos.Lowdelay, tos.Throughput, tos.Reliabiltiy or tos.Lowcost
-	// from the tchannel tos package
+	// ToS class name marked on outbound packets.
 	TosPriority tos.ToS
 }
 
