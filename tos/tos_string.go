@@ -44,10 +44,10 @@ func (r ToS) MarshalText() ([]byte, error) {
 
 // UnmarshalText implements TextUnMarshaler from encoding
 func (r *ToS) UnmarshalText(data []byte) error {
-	v, ok := _tosNameToValue[string(data)]
-	if !ok {
-		return fmt.Errorf("invalid ToS %q", string(data))
+	if v, ok := _tosNameToValue[string(data)]; ok {
+		*r = v
+		return nil
 	}
-	*r = v
-	return nil
+
+	return fmt.Errorf("invalid ToS %q", string(data))
 }

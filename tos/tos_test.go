@@ -35,7 +35,7 @@ func TestMarshal(t *testing.T) {
 
 		var got ToS
 		err = got.UnmarshalText(marshalled)
-		require.NoError(t, err, "Failed to unmarhsal %v", string(marshalled))
+		require.NoError(t, err, "Failed to unmarshal %v", string(marshalled))
 		assert.Equal(t, tos, got)
 	}
 }
