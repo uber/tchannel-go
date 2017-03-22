@@ -261,7 +261,7 @@ func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) err
 	return err
 }
 
-func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) (*Connection, error) {
+func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
@@ -305,7 +305,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
 		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
-			return nil, err
+			log.WithFields(ErrField(err)).Error("Failed to set ToS priority.")
 		}
 	}
 
@@ -325,7 +325,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
-	return c, nil
+	return c
 }
 
 func (c *Connection) onExchangeAdded() {
