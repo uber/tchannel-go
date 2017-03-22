@@ -245,17 +245,19 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 }
 
 func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) error {
-	// Verify we are using a TCP socket
-	if tcpAddr, ok := c.RemoteAddr().(*net.TCPAddr); ok {
-		// Handle dual stack listeners and set Traffic Class
-		if tcpAddr.IP.To16() != nil && tcpAddr.IP.To4() == nil {
-			if err := ipv6.NewConn(c).SetTrafficClass(int(tosPriority)); err != nil {
-				return err
-			}
-		} else if tcpAddr.IP.To4() != nil {
-			if err := ipv4.NewConn(c).SetTOS(int(tosPriority)); err != nil {
-				return err
-			}
+	tcpAddr, isTCP := c.RemoteAddr().(*net.TCPAddr)
+	if !isTCP {
+		return nil
+	}
+
+	// Handle dual stack listeners and set Traffic Class.
+	if tcpAddr.IP.To16() != nil && tcpAddr.IP.To4() == nil {
+		if err := ipv6.NewConn(c).SetTrafficClass(int(tosPriority)); err != nil {
+			return err
+		}
+	} else if tcpAddr.IP.To4() != nil {
+		if err := ipv4.NewConn(c).SetTOS(int(tosPriority)); err != nil {
+			return err
 		}
 	}
 	return nil
