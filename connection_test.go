@@ -36,10 +36,13 @@ import (
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
+	"github.com/uber/tchannel-go/tos"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 // Values used in tests
@@ -104,6 +107,20 @@ func writeFlushStr(w ArgWriter, d string) error {
 		return err
 	}
 	return w.Flush()
+}
+
+func isTosPriority(c net.Conn, tosPriority tos.ToS) (bool, error) {
+	var connTosPriority int
+	var err error
+
+	switch ip := c.RemoteAddr().(*net.TCPAddr).IP; {
+	case ip.To16() != nil && ip.To4() == nil:
+		connTosPriority, err = ipv6.NewConn(c).TrafficClass()
+	case ip.To4() != nil:
+		connTosPriority, err = ipv4.NewConn(c).TOS()
+	}
+
+	return connTosPriority == int(tosPriority), err
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -829,5 +846,25 @@ func TestConnectionIDs(t *testing.T) {
 		require.NoError(t, ts.Server().Ping(ctx, s2.PeerInfo().HostPort), "Ping failed")
 		assert.Equal(t, []uint32{1}, outbound, "Unexpected outbound IDs")
 		assert.Equal(t, []uint32{1}, inbound, "Unexpected outbound IDs")
+	})
+}
+
+func TestTosPriority(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	opts := testutils.NewOpts().SetServiceName("s1").SetTosPriority(tos.Lowdelay)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
+
+		outbound, err := ts.Server().BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
+		require.NoError(t, err, "BeginCall failed")
+
+		_, outboundNetConn := OutboundConnection(outbound)
+		connTosPriority, err := isTosPriority(outboundNetConn, tos.Lowdelay)
+		require.NoError(t, err, "Checking TOS priority failed")
+		assert.Equal(t, connTosPriority, true)
+		_, _, _, err = raw.WriteArgs(outbound, []byte("arg2"), []byte("arg3"))
+		require.NoError(t, err, "Failed to write to outbound conn")
 	})
 }

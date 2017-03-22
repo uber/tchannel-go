@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/tos"
 
 	"github.com/uber-go/atomic"
 )
@@ -121,6 +122,12 @@ func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 // SetSendBufferSize sets the SendBufferSize in DefaultConnectionOptions.
 func (o *ChannelOpts) SetSendBufferSize(bufSize int) *ChannelOpts {
 	o.DefaultConnectionOptions.SendBufferSize = bufSize
+	return o
+}
+
+// SetTosPriority set TosPriority in DefaultConnectionOptions.
+func (o *ChannelOpts) SetTosPriority(tosPriority tos.ToS) *ChannelOpts {
+	o.DefaultConnectionOptions.TosPriority = tosPriority
 	return o
 }
 

@@ -29,8 +29,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uber/tchannel-go/tos"
+
 	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 const (
@@ -129,6 +133,9 @@ type ConnectionOptions struct {
 
 	// The type of checksum to use when sending messages.
 	ChecksumType ChecksumType
+
+	// ToS class name marked on outbound packets.
+	TosPriority tos.ToS
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -237,6 +244,23 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	return co
 }
 
+func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) error {
+	tcpAddr, isTCP := c.RemoteAddr().(*net.TCPAddr)
+	if !isTCP {
+		return nil
+	}
+
+	// Handle dual stack listeners and set Traffic Class.
+	var err error
+	switch ip := tcpAddr.IP; {
+	case ip.To16() != nil && ip.To4() == nil:
+		err = ipv6.NewConn(c).SetTrafficClass(int(tosPriority))
+	case ip.To4() != nil:
+		err = ipv4.NewConn(c).SetTOS(int(tosPriority))
+	}
+	return err
+}
+
 func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
@@ -277,6 +301,12 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		handler:           ch.handler,
 		events:            events,
 		commonStatsTags:   ch.commonStatsTags,
+	}
+
+	if tosPriority := opts.TosPriority; tosPriority > 0 {
+		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
+			log.WithFields(ErrField(err)).Error("Failed to set ToS priority.")
+		}
 	}
 
 	c.nextMessageID.Store(initialID)
