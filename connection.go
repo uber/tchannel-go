@@ -251,16 +251,14 @@ func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) err
 	}
 
 	// Handle dual stack listeners and set Traffic Class.
-	if tcpAddr.IP.To16() != nil && tcpAddr.IP.To4() == nil {
-		if err := ipv6.NewConn(c).SetTrafficClass(int(tosPriority)); err != nil {
-			return err
-		}
-	} else if tcpAddr.IP.To4() != nil {
-		if err := ipv4.NewConn(c).SetTOS(int(tosPriority)); err != nil {
-			return err
-		}
+	var err error
+	switch ip := tcpAddr.IP; {
+	case ip.To16() != nil && ip.To4() == nil:
+		err = ipv6.NewConn(c).SetTrafficClass(int(tosPriority))
+	case ip.To4() != nil:
+		err = ipv4.NewConn(c).SetTOS(int(tosPriority))
 	}
-	return nil
+	return err
 }
 
 func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) (*Connection, error) {
