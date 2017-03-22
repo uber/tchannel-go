@@ -29,8 +29,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uber-go/atomic"
 	"github.com/uber/tchannel-go/tos"
+
+	"github.com/uber-go/atomic"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
