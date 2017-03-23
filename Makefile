@@ -27,8 +27,6 @@ ARCH := $(shell uname -m)
 OLD_GOPATH := $(GOPATH)
 
 BIN := $(shell pwd)/.bin
-$(BIN):
-	mkdir -p $(BIN)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -39,6 +37,7 @@ TEST_PORT=0
 all: test examples
 
 $(BIN)/thrift:
+	mkdir -p $(BIN)
 	scripts/install-thrift.sh $(BIN)
 
 packages_test:
@@ -101,23 +100,23 @@ else
 	$(MAKE) test
 endif
 
-test: clean setup install_test check_no_test_deps
+test: clean setup install_test check_no_test_deps $(BIN)/thrift
 	@echo Testing packages:
-	go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
+	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
 	@echo Running frame pool tests
-	go test -run TestFramesReleased -stressTest $(TEST_ARG)
+	PATH=$(BIN):$$PATH go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
 check_no_test_deps:
 	! go list -json $(PROD_PKGS) | jq -r .Deps[] | grep -e test -e mock
 
-benchmark: clean setup
+benchmark: clean setup $(BIN)/thrift
 	echo Running benchmarks:
-	go test $(ALL_PKGS) -bench=. -cpu=1 -benchmem -run NONE
+	PATH=$(BIN)::$$PATH go test $(ALL_PKGS) -bench=. -cpu=1 -benchmem -run NONE
 
-cover_profile: clean setup
+cover_profile: clean setup $(BIN)/thrift
 	@echo Testing packages:
 	mkdir -p $(BUILD)
-	go test ./ $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
+	PATH=$(BIN)::$$PATH go test ./ $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
 
 cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
