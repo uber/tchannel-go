@@ -23,11 +23,12 @@ SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 
 PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
-THRIFT_REL := ./scripts/travis/thrift-release/$(PLATFORM)-$(ARCH)
 
 OLD_GOPATH := $(GOPATH)
 
-export PATH := $(realpath $(THRIFT_REL)):$(PATH)
+BIN := $(shell pwd)/.bin
+$(BIN):
+	mkdir -p $(BIN)
 
 # Cross language test args
 TEST_HOST=127.0.0.1
@@ -37,6 +38,9 @@ TEST_PORT=0
 
 all: test examples
 
+$(BIN)/thrift:
+	scripts/install-thrift.sh $(BIN)
+
 packages_test:
 	go list -json ./... | jq -r '. | select ((.TestGoFiles | length) > 0)  | .ImportPath'
 
@@ -45,9 +49,6 @@ setup:
 	mkdir -p $(BUILD)/examples
 	mkdir -p $(THRIFT_GEN_RELEASE_LINUX)
 	mkdir -p $(THRIFT_GEN_RELEASE_DARWIN)
-
-get_thrift:
-	scripts/travis/get-thrift.sh
 
 # We want to remove `vendor` dir because thrift-gen tests don't work with it.
 # However, glide install even with --cache-gopath option leaves GOPATH at HEAD,
@@ -70,7 +71,7 @@ install_glide:
 	# but have to pin to 0.12.3 due to https://github.com/Masterminds/glide/issues/745
 	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide && cd $(OLD_GOPATH)/src/github.com/Masterminds/glide && git checkout v0.12.3 && go install
 
-install_ci: install_glide install_lint get_thrift install
+install_ci: $(BIN)/thrift install_glide install_lint install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 ifdef CROSSDOCK
 	$(MAKE) install_docker_ci
@@ -167,12 +168,12 @@ examples: clean setup thrift_example
 	go build -o $(BUILD)/examples/bench/runner ./examples/bench/runner.go
 	go build -o $(BUILD)/examples/test_server ./examples/test_server
 
-thrift_gen:
+thrift_gen: $(BIN)/thrift
 	go build -o $(BUILD)/thrift-gen ./thrift/thrift-gen
-	$(BUILD)/thrift-gen --generateThrift --inputFile thrift/test.thrift --outputDir thrift/gen-go/
-	$(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift --outputDir examples/keyvalue/gen-go
-	$(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/example.thrift --outputDir examples/thrift/gen-go
-	$(BUILD)/thrift-gen --generateThrift --inputFile hyperbahn/hyperbahn.thrift --outputDir hyperbahn/gen-go
+	PATH=$(BIN):$$PATH $(BUILD)/thrift-gen --generateThrift --inputFile thrift/test.thrift --outputDir thrift/gen-go/
+	PATH=$(BIN):$$PATH $(BUILD)/thrift-gen --generateThrift --inputFile examples/keyvalue/keyvalue.thrift --outputDir examples/keyvalue/gen-go
+	PATH=$(BIN):$$PATH $(BUILD)/thrift-gen --generateThrift --inputFile examples/thrift/example.thrift --outputDir examples/thrift/gen-go
+	PATH=$(BIN):$$PATH $(BUILD)/thrift-gen --generateThrift --inputFile hyperbahn/hyperbahn.thrift --outputDir hyperbahn/gen-go
 
 release_thrift_gen: clean setup
 	GOOS=linux GOARCH=amd64 go build -o $(THRIFT_GEN_RELEASE_LINUX)/thrift-gen ./thrift/thrift-gen
@@ -180,5 +181,5 @@ release_thrift_gen: clean setup
 	tar -czf thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)
 	mv thrift-gen-release.tar.gz $(THRIFT_GEN_RELEASE)/
 
-.PHONY: all help clean fmt format get_thrift install install_ci install_lint install_glide release_thrift_gen packages_test check_no_test_deps test test_ci lint
+.PHONY: all help clean fmt format install install_ci install_lint install_glide release_thrift_gen packages_test check_no_test_deps test test_ci lint
 .SILENT: all help clean fmt format test lint
