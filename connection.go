@@ -183,10 +183,6 @@ type Connection struct {
 	stoppedExchanges atomic.Uint32
 	// pendingMethods is the number of methods running that may block closing of sendCh.
 	pendingMethods atomic.Int64
-	// ignoreRemotePeer is used to avoid a data race between setting the RemotePeerInfo
-	// and the connection failing, causing a read of the RemotePeerInfo at the same time.
-	ignoreRemotePeer bool
-
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
 	// components that can be used to set peer tags on OpenTracing Span.
 	remotePeerAddress peerAddressComponents
@@ -531,12 +527,6 @@ func (c *Connection) logConnectionError(site string, err error) error {
 
 // connectionError handles a connection level error
 func (c *Connection) connectionError(site string, err error) error {
-	// Avoid racing with setting the peer info.
-	c.withStateLock(func() error {
-		c.ignoreRemotePeer = true
-		return nil
-	})
-
 	var closeLogFields LogFields
 	if err == io.EOF {
 		closeLogFields = LogFields{{"reason", "network connection EOF"}}
