@@ -22,6 +22,7 @@ package raw
 
 import (
 	"errors"
+	"io/ioutil"
 
 	"golang.org/x/net/context"
 
@@ -31,16 +32,45 @@ import (
 // ErrAppError is returned if the application sets an error response.
 var ErrAppError = errors.New("application error")
 
-// ReadArgsV2 reads arg2 and arg3 from a reader.
-func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
-	var arg2, arg3 []byte
-
-	if err := tchannel.NewArgReader(r.Arg2Reader()).Read(&arg2); err != nil {
+// ReadJustArg2 reads all of arg2 into a byte buffer, and returns the arg3
+// reader (as a convenience so that caller can decide how to read it).
+func ReadJustArg2(r tchannel.ArgReadable) ([]byte, tchannel.ArgReader, error) {
+	arg2Reader, err := r.Arg2Reader()
+	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := tchannel.NewArgReader(r.Arg3Reader()).Read(&arg3); err != nil {
-		return nil, nil, err
+	arg2, err := ioutil.ReadAll(arg2Reader)
+	if err != nil {
+		return arg2, nil, err
+	}
+
+	if err := arg2Reader.Close(); err != nil {
+		return arg2, nil, err
+	}
+
+	arg3Reader, err := r.Arg3Reader()
+	if err != nil {
+		return arg2, nil, err
+	}
+
+	return arg2, arg3Reader, nil
+}
+
+// ReadArgsV2 reads arg2 and arg3 from an ArgReadable.
+func ReadArgsV2(r tchannel.ArgReadable) ([]byte, []byte, error) {
+	arg2, arg3Reader, err := ReadJustArg2(r)
+	if err != nil {
+		return arg2, nil, err
+	}
+
+	arg3, err := ioutil.ReadAll(arg3Reader)
+	if err != nil {
+		return arg2, arg3, err
+	}
+
+	if err := arg3Reader.Close(); err != nil {
+		return arg2, arg3, err
 	}
 
 	return arg2, arg3, nil
@@ -57,17 +87,8 @@ func WriteArgs(call *tchannel.OutboundCall, arg2, arg3 []byte) ([]byte, []byte, 
 	}
 
 	resp := call.Response()
-	var respArg2 []byte
-	if err := tchannel.NewArgReader(resp.Arg2Reader()).Read(&respArg2); err != nil {
-		return nil, nil, nil, err
-	}
-
-	var respArg3 []byte
-	if err := tchannel.NewArgReader(resp.Arg3Reader()).Read(&respArg3); err != nil {
-		return nil, nil, nil, err
-	}
-
-	return respArg2, respArg3, resp, nil
+	respArg2, respArg3, err := ReadArgsV2(resp)
+	return respArg2, respArg3, resp, err
 }
 
 // Call makes a call to the given hostPort with the given arguments and returns the response args.
