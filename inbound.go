@@ -294,14 +294,27 @@ func (call *InboundCall) Arg3Reader() (ArgReader, error) {
 	return call.arg3Reader()
 }
 
+// WithArg2 calls the provided function with all of arg2 as a byte buffer and
+// an arg3 reader.
+func (call *InboundCall) WithArg2(f func(arg2 []byte, arg3 io.ReadCloser) error) error {
+	return call.withArg2(f)
+}
+
+// WithArg23 calls the provided function with all of arg2 and arg3 as byte
+// buffers.
+func (call *InboundCall) WithArg23(f func(arg2, arg3 []byte) error) error {
+	return call.withArg23(f)
+}
+
 // Response provides access to the InboundCallResponse object which can be used
 // to write back to the calling peer
 func (call *InboundCall) Response() *InboundCallResponse {
 	if call.err != nil {
-		// While reading Thrift, we cannot distinguish between malformed Thrift and other errors,
-		// and so we may try to respond with a bad request. We should ensure that the response
-		// is marked as failed if the request has failed so that we don't try to shutdown the exchange
-		// a second time.
+		// While reading Thrift, we cannot distinguish between malformed Thrift
+		// and other errors, and so we may try to respond with a bad request.
+		// We should ensure that the response is marked as failed if the
+		// request has failed so that we don't try to shutdown the exchange a
+		// second time.
 		call.response.err = call.err
 	}
 	return call.response
