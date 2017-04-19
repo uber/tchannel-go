@@ -287,7 +287,9 @@ func (ch *Channel) Serve(l net.Listener) error {
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
 
 	peerInfo := mutable.peerInfo
-	ch.log.Debugf("%v (%v) listening on %v", peerInfo.ProcessName, peerInfo.ServiceName, peerInfo.HostPort)
+	ch.log.WithFields(
+		LogField{"hostPort", peerInfo.HostPort},
+	).Info("Channel is listening.")
 	go ch.serve()
 	return nil
 }
