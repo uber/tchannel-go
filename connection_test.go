@@ -885,7 +885,7 @@ func TestPeerStatusChangeClient(t *testing.T) {
 		// Induce the creation of a connection from client to server.
 		client := ts.NewClient(copts)
 		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
-		assert.Equal(t, 1, <-changes, "first connection")
+		assert.Equal(t, 1, <-changes, "event for first connection")
 
 		// Re-use
 		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
@@ -897,15 +897,15 @@ func TestPeerStatusChangeClient(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer cancel()
 		p.Connect(ctx)
-		assert.Equal(t, 2, <-changes, "second connection")
+		assert.Equal(t, 2, <-changes, "event for second connection")
 
 		// Induce the destruction of a connection from the server to the client.
 		server.Close()
-		assert.Equal(t, 1, <-changes, "first disconnection")
-		assert.Equal(t, 0, <-changes, "second disconnection")
+		assert.Equal(t, 1, <-changes, "event for first disconnection")
+		assert.Equal(t, 0, <-changes, "event for second disconnection")
 
 		client.Close()
-		assert.Equal(t, 0, len(changes), "unexpected peer status changes")
+		assert.Len(t, changes, 0, "unexpected peer status changes")
 	})
 }
 
@@ -926,16 +926,16 @@ func TestPeerStatusChangeServer(t *testing.T) {
 
 			// Open
 			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
-			assert.Equal(t, 1, <-changes, "opened")
+			assert.Equal(t, 1, <-changes, "one event on new connection")
 
 			// Re-use
 			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
-			assert.Equal(t, 0, len(changes), "re-used")
+			assert.Len(t, changes, 0, "no new events on re-used connection")
 
 			// Close
 			client.Close()
-			assert.Equal(t, 0, <-changes, "closed")
+			assert.Equal(t, 0, <-changes, "one event on lost connection")
 		}
 	})
-	assert.Equal(t, 0, len(changes), "unexpected peer status changes")
+	assert.Len(t, changes, 0, "unexpected peer status changes")
 }
