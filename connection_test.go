@@ -869,6 +869,36 @@ func TestTosPriority(t *testing.T) {
 	})
 }
 
+func TestPeerStatusChangeClientReduction(t *testing.T) {
+	sopts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		changes := make(chan int, 2)
+
+		copts := testutils.NewOpts().SetOnPeerStatusChanged(func(p *Peer) {
+			i, o := p.NumConnections()
+			assert.Equal(t, 0, i, "no inbound connections to client")
+			changes <- o
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+		assert.Equal(t, 1, <-changes, "event for first connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		// Induce the destruction of a connection from the server to the client.
+		server.Close()
+		assert.Equal(t, 0, <-changes, "event for second disconnection")
+
+		client.Close()
+		assert.Len(t, changes, 0, "unexpected peer status changes")
+	})
+}
+
 func TestPeerStatusChangeClient(t *testing.T) {
 	sopts := testutils.NewOpts().NoRelay()
 	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
@@ -884,7 +914,7 @@ func TestPeerStatusChangeClient(t *testing.T) {
 
 		// Induce the creation of a connection from client to server.
 		client := ts.NewClient(copts)
-		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
 		assert.Equal(t, 1, <-changes, "event for first connection")
 
 		// Re-use
@@ -894,14 +924,15 @@ func TestPeerStatusChangeClient(t *testing.T) {
 		pl := client.RootPeers()
 		p := pl.GetOrAdd(ts.HostPort())
 		ctx := context.Background()
-		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(ctx, testutils.Timeout(100*time.Millisecond))
 		defer cancel()
-		p.Connect(ctx)
+		_, err := p.Connect(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, 2, <-changes, "event for second connection")
 
 		// Induce the destruction of a connection from the server to the client.
 		server.Close()
-		assert.Equal(t, 1, <-changes, "event for first disconnection")
+		<-changes // May be 1 or 0 depending on timing.
 		assert.Equal(t, 0, <-changes, "event for second disconnection")
 
 		client.Close()
