@@ -885,14 +885,24 @@ func TestPeerStatusChangeClient(t *testing.T) {
 		// Induce the creation of a connection from client to server.
 		client := ts.NewClient(copts)
 		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
-		assert.Equal(t, 1, <-changes, "connected")
+		assert.Equal(t, 1, <-changes, "first connection")
 
 		// Re-use
 		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
 
+		// Induce the creation of a second connection from client to server.
+		pl := client.RootPeers()
+		p := pl.GetOrAdd(ts.HostPort())
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+		p.Connect(ctx)
+		assert.Equal(t, 2, <-changes, "second connection")
+
 		// Induce the destruction of a connection from the server to the client.
 		server.Close()
-		assert.Equal(t, 0, <-changes, "disconnected")
+		assert.Equal(t, 1, <-changes, "first disconnection")
+		assert.Equal(t, 0, <-changes, "second disconnection")
 
 		client.Close()
 		assert.Equal(t, 0, len(changes), "unexpected peer status changes")
