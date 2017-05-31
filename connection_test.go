@@ -868,3 +868,105 @@ func TestTosPriority(t *testing.T) {
 		require.NoError(t, err, "Failed to write to outbound conn")
 	})
 }
+
+func TestPeerStatusChangeClientReduction(t *testing.T) {
+	sopts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		changes := make(chan int, 2)
+
+		copts := testutils.NewOpts().SetOnPeerStatusChanged(func(p *Peer) {
+			i, o := p.NumConnections()
+			assert.Equal(t, 0, i, "no inbound connections to client")
+			changes <- o
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+		assert.Equal(t, 1, <-changes, "event for first connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		// Induce the destruction of a connection from the server to the client.
+		server.Close()
+		assert.Equal(t, 0, <-changes, "event for second disconnection")
+
+		client.Close()
+		assert.Len(t, changes, 0, "unexpected peer status changes")
+	})
+}
+
+func TestPeerStatusChangeClient(t *testing.T) {
+	sopts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		changes := make(chan int, 2)
+
+		copts := testutils.NewOpts().SetOnPeerStatusChanged(func(p *Peer) {
+			i, o := p.NumConnections()
+			assert.Equal(t, 0, i, "no inbound connections to client")
+			changes <- o
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+		assert.Equal(t, 1, <-changes, "event for first connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		// Induce the creation of a second connection from client to server.
+		pl := client.RootPeers()
+		p := pl.GetOrAdd(ts.HostPort())
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, testutils.Timeout(100*time.Millisecond))
+		defer cancel()
+		_, err := p.Connect(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 2, <-changes, "event for second connection")
+
+		// Induce the destruction of a connection from the server to the client.
+		server.Close()
+		<-changes // May be 1 or 0 depending on timing.
+		assert.Equal(t, 0, <-changes, "event for second disconnection")
+
+		client.Close()
+		assert.Len(t, changes, 0, "unexpected peer status changes")
+	})
+}
+
+func TestPeerStatusChangeServer(t *testing.T) {
+	changes := make(chan int, 10)
+	sopts := testutils.NewOpts().NoRelay().SetOnPeerStatusChanged(func(p *Peer) {
+		i, o := p.NumConnections()
+		assert.Equal(t, 0, o, "no outbound connections from server")
+		changes <- i
+	})
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+
+		copts := testutils.NewOpts()
+		for i := 0; i < 5; i++ {
+			client := ts.NewClient(copts)
+
+			// Open
+			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+			assert.Equal(t, 1, <-changes, "one event on new connection")
+
+			// Re-use
+			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+			assert.Len(t, changes, 0, "no new events on re-used connection")
+
+			// Close
+			client.Close()
+			assert.Equal(t, 0, <-changes, "one event on lost connection")
+		}
+	})
+	assert.Len(t, changes, 0, "unexpected peer status changes")
+}
