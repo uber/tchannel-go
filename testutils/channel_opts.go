@@ -200,6 +200,13 @@ func (o *ChannelOpts) SetRelayMaxTimeout(d time.Duration) *ChannelOpts {
 	return o
 }
 
+// SetOnPeerStatusChanged sets the callback for channel status change
+// noficiations.
+func (o *ChannelOpts) SetOnPeerStatusChanged(f func(*tchannel.Peer)) *ChannelOpts {
+	o.ChannelOptions.OnPeerStatusChanged = f
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue
