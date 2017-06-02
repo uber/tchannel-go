@@ -36,10 +36,13 @@ import (
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
+	"github.com/uber/tchannel-go/tos"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 // Values used in tests
@@ -104,6 +107,20 @@ func writeFlushStr(w ArgWriter, d string) error {
 		return err
 	}
 	return w.Flush()
+}
+
+func isTosPriority(c net.Conn, tosPriority tos.ToS) (bool, error) {
+	var connTosPriority int
+	var err error
+
+	switch ip := c.RemoteAddr().(*net.TCPAddr).IP; {
+	case ip.To16() != nil && ip.To4() == nil:
+		connTosPriority, err = ipv6.NewConn(c).TrafficClass()
+	case ip.To4() != nil:
+		connTosPriority, err = ipv4.NewConn(c).TOS()
+	}
+
+	return connTosPriority == int(tosPriority), err
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -546,15 +563,15 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		}
 		ts.Register(HandlerFunc(handler), "call")
 
-		ctx, cancel := NewContext(testutils.Timeout(50 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "call", nil, nil)
 		assert.Equal(t, err, ErrTimeout, "Call should timeout")
 
-		// Wait for the write to complete, make sure there's no errors.
+		// Wait for the write to complete, make sure there are no errors.
 		select {
-		case <-time.After(testutils.Timeout(30 * time.Millisecond)):
+		case <-time.After(testutils.Timeout(60 * time.Millisecond)):
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
@@ -830,4 +847,126 @@ func TestConnectionIDs(t *testing.T) {
 		assert.Equal(t, []uint32{1}, outbound, "Unexpected outbound IDs")
 		assert.Equal(t, []uint32{1}, inbound, "Unexpected outbound IDs")
 	})
+}
+
+func TestTosPriority(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	opts := testutils.NewOpts().SetServiceName("s1").SetTosPriority(tos.Lowdelay)
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
+
+		outbound, err := ts.Server().BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
+		require.NoError(t, err, "BeginCall failed")
+
+		_, outboundNetConn := OutboundConnection(outbound)
+		connTosPriority, err := isTosPriority(outboundNetConn, tos.Lowdelay)
+		require.NoError(t, err, "Checking TOS priority failed")
+		assert.Equal(t, connTosPriority, true)
+		_, _, _, err = raw.WriteArgs(outbound, []byte("arg2"), []byte("arg3"))
+		require.NoError(t, err, "Failed to write to outbound conn")
+	})
+}
+
+func TestPeerStatusChangeClientReduction(t *testing.T) {
+	sopts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		changes := make(chan int, 2)
+
+		copts := testutils.NewOpts().SetOnPeerStatusChanged(func(p *Peer) {
+			i, o := p.NumConnections()
+			assert.Equal(t, 0, i, "no inbound connections to client")
+			changes <- o
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+		assert.Equal(t, 1, <-changes, "event for first connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		// Induce the destruction of a connection from the server to the client.
+		server.Close()
+		assert.Equal(t, 0, <-changes, "event for second disconnection")
+
+		client.Close()
+		assert.Len(t, changes, 0, "unexpected peer status changes")
+	})
+}
+
+func TestPeerStatusChangeClient(t *testing.T) {
+	sopts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		changes := make(chan int, 2)
+
+		copts := testutils.NewOpts().SetOnPeerStatusChanged(func(p *Peer) {
+			i, o := p.NumConnections()
+			assert.Equal(t, 0, i, "no inbound connections to client")
+			changes <- o
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+		assert.Equal(t, 1, <-changes, "event for first connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		// Induce the creation of a second connection from client to server.
+		pl := client.RootPeers()
+		p := pl.GetOrAdd(ts.HostPort())
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, testutils.Timeout(100*time.Millisecond))
+		defer cancel()
+		_, err := p.Connect(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 2, <-changes, "event for second connection")
+
+		// Induce the destruction of a connection from the server to the client.
+		server.Close()
+		<-changes // May be 1 or 0 depending on timing.
+		assert.Equal(t, 0, <-changes, "event for second disconnection")
+
+		client.Close()
+		assert.Len(t, changes, 0, "unexpected peer status changes")
+	})
+}
+
+func TestPeerStatusChangeServer(t *testing.T) {
+	changes := make(chan int, 10)
+	sopts := testutils.NewOpts().NoRelay().SetOnPeerStatusChanged(func(p *Peer) {
+		i, o := p.NumConnections()
+		assert.Equal(t, 0, o, "no outbound connections from server")
+		changes <- i
+	})
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+
+		copts := testutils.NewOpts()
+		for i := 0; i < 5; i++ {
+			client := ts.NewClient(copts)
+
+			// Open
+			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+			assert.Equal(t, 1, <-changes, "one event on new connection")
+
+			// Re-use
+			testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+			assert.Len(t, changes, 0, "no new events on re-used connection")
+
+			// Close
+			client.Close()
+			assert.Equal(t, 0, <-changes, "one event on lost connection")
+		}
+	})
+	assert.Len(t, changes, 0, "unexpected peer status changes")
 }

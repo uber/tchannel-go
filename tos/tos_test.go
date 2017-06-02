@@ -18,52 +18,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel
+package tos
 
 import (
-	"fmt"
-	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// channelMap is used to ensure that applications don't create multiple channels with
-// the same service name in a single process.
-var channelMap = struct {
-	sync.Mutex
-	existing map[string][]*Channel
-}{
-	existing: make(map[string][]*Channel),
-}
+func TestMarshal(t *testing.T) {
+	for tos, wantMarshalled := range _tosValueToName {
+		marshalled, err := tos.MarshalText()
+		require.NoError(t, err, "Failed to marshal %v", tos)
+		assert.Equal(t, wantMarshalled, string(marshalled))
 
-func registerNewChannel(ch *Channel) {
-	serviceName := ch.ServiceName()
-	ch.createdStack = string(getStacks(false /* all */))
-	ch.log.WithFields(
-		LogField{"channelPtr", fmt.Sprintf("%p", ch)},
-		LogField{"createdStack", ch.createdStack},
-	).Info("Created new channel.")
-
-	channelMap.Lock()
-	defer channelMap.Unlock()
-
-	existing := channelMap.existing[serviceName]
-	channelMap.existing[serviceName] = append(existing, ch)
-}
-
-func removeClosedChannel(ch *Channel) {
-	channelMap.Lock()
-	defer channelMap.Unlock()
-
-	channels := channelMap.existing[ch.ServiceName()]
-	for i, v := range channels {
-		if v != ch {
-			continue
-		}
-
-		// Replace current index with the last element, and truncate channels.
-		channels[i] = channels[len(channels)-1]
-		channels = channels[:len(channels)-1]
-		break
+		var got ToS
+		err = got.UnmarshalText(marshalled)
+		require.NoError(t, err, "Failed to unmarshal %v", string(marshalled))
+		assert.Equal(t, tos, got)
 	}
+}
 
-	channelMap.existing[ch.ServiceName()] = channels
+func TestUnmarshalUnknown(t *testing.T) {
+	var tos ToS
+	err := tos.UnmarshalText([]byte("unknown"))
+	require.Error(t, err, "Should fail to unmarshal unknown value")
 }
