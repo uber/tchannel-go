@@ -1,8 +1,8 @@
-hash: 111bdf9797d23d4b9f8833a9780e382dd53153af70ad286f99815cea4c2fdf4b
-updated: 2016-08-05T18:02:17.171302481-04:00
+hash: d31ec6ead6d7ef0b272aa06e3fb8dd9658f4f122716ae6c78048c02a9a652b8c
+updated: 2017-06-12T21:54:41.215202046-07:00
 imports:
 - name: github.com/apache/thrift
-  version: 0e9fed1e12ed066865e46c6903782b2ef95f4650
+  version: b8ee72de5bf9318d50846852082325d0f932682b
   subpackages:
   - lib/go/thrift
 - name: github.com/bmizerany/perks
@@ -10,24 +10,27 @@ imports:
   subpackages:
   - quantile
 - name: github.com/cactus/go-statsd-client
-  version: 91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d
+  version: 1139cdac1a56e404b5382e3a3503a2c587d2c0c3
   subpackages:
   - statsd
+- name: github.com/codahale/hdrhistogram
+  version: f8ad88b59a584afeee9d334eff879b104439117b
 - name: github.com/crossdock/crossdock-go
-  version: 228792ab861c86f8900b2db0439577feef9ec9d8
+  version: 049aabb0122b03bc9bd30cab8f3f91fb60166361
   subpackages:
   - assert
   - require
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 346938d642f2ec3594ed81d874461961cd0faa76
   subpackages:
   - spew
 - name: github.com/jessevdk/go-flags
-  version: f2785f5820ec967043de79c8be97edfc464ca745
+  version: 5695738f733662da3e9afc2283bba6f3c879002d
 - name: github.com/opentracing/opentracing-go
-  version: 855519783f479520497c6b3445611b05fc42f009
+  version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
   subpackages:
   - ext
+  - log
   - mocktracer
 - name: github.com/pmezard/go-difflib
   version: 792786c7400a136282c1664665ae0a8db921c6c2
@@ -44,26 +47,37 @@ imports:
 - name: github.com/stretchr/objx
   version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
 - name: github.com/stretchr/testify
-  version: d77da356e56a7428ad25149ca77381849a6a5232
+  version: f6abca593680b2315d2075e0f5e2a9751e3f431a
   subpackages:
   - assert
   - mock
   - require
 - name: github.com/uber-go/atomic
-  version: e682c1008ac17bf26d2e4b5ad6cdd08520ed0b22
+  version: 0c9e689d64f004564b79d9a663634756df322902
 - name: github.com/uber/jaeger-client-go
-  version: 9342cec8070f1d9bbf56f8df1d7a885ed8cb015d
+  version: d109b2b5e39041472cd9f187b50f575e9c49b1da
   subpackages:
+  - internal/spanlog
+  - log
+  - thrift-gen/agent
+  - thrift-gen/jaeger
   - thrift-gen/sampling
   - thrift-gen/zipkincore
-  - transport
   - utils
-  - thrift-gen/agent
-- name: golang.org/x/net
-  version: b400c2eff1badec7022a8c8f5bea058b6315eed7
+- name: github.com/uber/jaeger-lib
+  version: b9a0fa4923ad750facbd5a4b93fc6d450bc45ccc
   subpackages:
+  - metrics
+- name: golang.org/x/net
+  version: 9c9a3f3e9f9c5c5b124354c89f615e418c7d3537
+  subpackages:
+  - bpf
   - context
   - context/ctxhttp
+  - internal/iana
+  - internal/socket
+  - ipv4
+  - ipv6
 - name: gopkg.in/yaml.v2
-  version: a83829b6f1293c91addabc89d0571c246397bbf4
-devImports: []
+  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+testImports: []
