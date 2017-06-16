@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"container/heap"
 	"errors"
 	"strings"
 	"sync"
@@ -63,19 +62,21 @@ type Connectable interface {
 type PeerList struct {
 	sync.RWMutex
 
-	parent          *RootPeerList
-	peersByHostPort map[string]*peerScore
-	peerHeap        *peerHeap
-	scoreCalculator ScoreCalculator
-	lastSelected    uint64
+	parent              *RootPeerList
+	peersByHostPort     map[string]*peerScore
+	peerHeap            *peerHeap
+	scoreCalculator     ScoreCalculator
+	peerConnectionCount uint32
+	lastSelected        uint64
 }
 
 func newPeerList(root *RootPeerList) *PeerList {
 	return &PeerList{
-		parent:          root,
-		peersByHostPort: make(map[string]*peerScore),
-		scoreCalculator: newPreferIncomingCalculator(),
-		peerHeap:        newPeerHeap(),
+		parent:              root,
+		peersByHostPort:     make(map[string]*peerScore),
+		scoreCalculator:     newPreferIncomingCalculator(),
+		peerHeap:            newPeerHeap(),
+		peerConnectionCount: 1,
 	}
 }
 
@@ -89,6 +90,16 @@ func (l *PeerList) SetStrategy(sc ScoreCalculator) {
 		newScore := l.scoreCalculator.GetScore(ps.Peer)
 		l.updatePeer(ps, newScore)
 	}
+}
+
+// SetPeerConnectionCount sets the number of peer connections to be used in
+// combination with the ScoreCalculator to achieve a random load balancing
+// of a single client node to `peerConnectionCount` number of server nodes
+func (l *PeerList) SetPeerConnectionCount(peerConnectionCount uint32) {
+	l.Lock()
+	defer l.Unlock()
+
+	l.peerConnectionCount = peerConnectionCount
 }
 
 // Siblings don't share peer lists (though they take care not to double-connect
@@ -175,8 +186,8 @@ func (l *PeerList) Remove(hostPort string) error {
 	return nil
 }
 func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) *Peer {
-	var psPopList []*peerScore
-	var ps *peerScore
+	var chosenPSList []*peerScore
+	var poppedList []*peerScore
 
 	canChoosePeer := func(hostPort string) bool {
 		if _, ok := prevSelected[hostPort]; ok {
@@ -191,27 +202,41 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	}
 
 	size := l.peerHeap.Len()
+
+	var connectionCount uint32
 	for i := 0; i < size; i++ {
 		popped := l.peerHeap.popPeer()
+		poppedList = append(poppedList, popped)
 
 		if canChoosePeer(popped.HostPort()) {
-			ps = popped
-			break
+			chosenPSList = append(chosenPSList, popped)
+			connectionCount++
+			if connectionCount >= l.peerConnectionCount {
+				break
+			}
 		}
-		psPopList = append(psPopList, popped)
+
 	}
 
-	for _, p := range psPopList {
-		heap.Push(l.peerHeap, p)
+	for _, p := range poppedList {
+		l.peerHeap.pushPeer(p)
 	}
-
-	if ps == nil {
+	if len(chosenPSList) == 0 {
 		return nil
 	}
 
-	l.peerHeap.pushPeer(ps)
+	ps := randomSampling(chosenPSList)
+	if ps == nil {
+		return nil
+	}
 	ps.chosenCount.Inc()
 	return ps.Peer
+}
+
+func randomSampling(psList []*peerScore) *peerScore {
+	peerRand := trand.NewSeeded()
+	r := peerRand.Intn(len(psList))
+	return psList[r]
 }
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.

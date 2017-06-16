@@ -697,6 +697,49 @@ func TestPeerSelectionRanking(t *testing.T) {
 	}
 }
 
+func TestPeerRandomSampling(t *testing.T) {
+	const numPeers = 10
+	const numIterations = 1000
+	// Using `numPeers + 1` should just do a random load balancing among `numPeers`
+	// as we only have `numPeers` of server nodes
+	const peerConnectionCount = numPeers + 1
+
+	// Selected is a map from rank -> [peer, count]
+	// It tracks how often a peer gets selected at a specific rank.
+	selected := make([]map[string]int, numPeers)
+	for i := 0; i < numPeers; i++ {
+		selected[i] = make(map[string]int)
+	}
+
+	for i := 0; i < numIterations; i++ {
+		ch := testutils.NewClient(t, nil)
+		defer ch.Close()
+		ch.SetRandomSeed(int64(i * 100))
+		// Using a strategy that has uneven scores
+		strategy, _ := createScoreStrategy(0, 1)
+		ch.Peers().SetStrategy(strategy)
+		// `peerConnectionCount > 1` load balances among the top candidates
+		// so with `peerConnectionCount` == `numPeers`, the score strategy
+		// shouldn't have any effect
+		ch.Peers().SetPeerConnectionCount(peerConnectionCount)
+
+		for i := 0; i < numPeers; i++ {
+			hp := fmt.Sprintf("127.0.0.1:60%v", i)
+			ch.Peers().Add(hp)
+		}
+
+		for i := 0; i < numPeers; i++ {
+			peer, err := ch.Peers().Get(nil)
+			require.NoError(t, err, "Peers.Get failed")
+			selected[i][peer.HostPort()]++
+		}
+	}
+
+	for _, m := range selected {
+		testDistribution(t, m, 50, 150)
+	}
+}
+
 func createScoreStrategy(initial, delta int64) (calc ScoreCalculator, retCount *atomic.Uint64) {
 	var (
 		count atomic.Uint64
