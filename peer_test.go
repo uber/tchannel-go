@@ -697,46 +697,115 @@ func TestPeerSelectionRanking(t *testing.T) {
 	}
 }
 
+func TestZeroPeerConnectionCount(t *testing.T) {
+	ch := testutils.NewClient(t, nil)
+	defer ch.Close()
+	err := ch.Peers().SetPeerConnectionCount(0)
+	require.Error(t, err, "peerConnectionCount should not accept 0")
+}
+
 func TestPeerRandomSampling(t *testing.T) {
-	const numPeers = 10
 	const numIterations = 1000
-	// Using `numPeers + 1` should just do a random load balancing among `numPeers`
-	// as we only have `numPeers` of server nodes
-	const peerConnectionCount = numPeers + 1
 
-	// Selected is a map from rank -> [peer, count]
-	// It tracks how often a peer gets selected at a specific rank.
-	selected := make([]map[string]int, numPeers)
+	testCases := []struct {
+		numPeers            int
+		peerConnectionCount uint32
+		distMin             float64
+		distMax             float64
+	}{
+		// the higher `peerConnectionCount` is, the smoother the impact of uneven scores
+		// become as we are random sampling among `peerConnectionCount` peers
+		{numPeers: 10, peerConnectionCount: 1, distMin: 1000, distMax: 1000},
+		{numPeers: 10, peerConnectionCount: 5, distMin: 160, distMax: 240},
+		{numPeers: 10, peerConnectionCount: 10, distMin: 50, distMax: 150},
+		{numPeers: 10, peerConnectionCount: 15, distMin: 50, distMax: 150},
+	}
+
+	for _, tc := range testCases {
+		// Selected is a map from rank -> [peer, count]
+		// It tracks how often a peer gets selected at a specific rank.
+		selected := make([]map[string]int, tc.numPeers)
+		for i := 0; i < tc.numPeers; i++ {
+			selected[i] = make(map[string]int)
+		}
+
+		for i := 0; i < numIterations; i++ {
+			ch := testutils.NewClient(t, nil)
+			defer ch.Close()
+			ch.SetRandomSeed(int64(i * 100))
+			// Using a strategy that has uneven scores
+			strategy, _ := createScoreStrategy(0, 1)
+			ch.Peers().SetStrategy(strategy)
+			ch.Peers().SetPeerConnectionCount(tc.peerConnectionCount)
+
+			for i := 0; i < tc.numPeers; i++ {
+				hp := fmt.Sprintf("127.0.0.1:60%v", i)
+				ch.Peers().Add(hp)
+			}
+
+			for i := 0; i < tc.numPeers; i++ {
+				peer, err := ch.Peers().Get(nil)
+				require.NoError(t, err, "Peers.Get failed")
+				selected[i][peer.HostPort()]++
+			}
+		}
+
+		for _, m := range selected {
+			testDistribution(t, m, tc.distMin, tc.distMax)
+		}
+	}
+
+}
+
+func BenchmarkGetPeerWithPeerConnectionCount1(b *testing.B) {
+	numPeers := 10
+	peerConnectionCount := uint32(1)
+
+	ch := testutils.NewClient(b, nil)
+	defer ch.Close()
+	ch.SetRandomSeed(int64(100))
+	// Using a strategy that has uneven scores
+	strategy, _ := createScoreStrategy(0, 1)
+	ch.Peers().SetStrategy(strategy)
+	ch.Peers().SetPeerConnectionCount(peerConnectionCount)
+
 	for i := 0; i < numPeers; i++ {
-		selected[i] = make(map[string]int)
+		hp := fmt.Sprintf("127.0.0.1:60%v", i)
+		ch.Peers().Add(hp)
 	}
+	b.ResetTimer()
 
-	for i := 0; i < numIterations; i++ {
-		ch := testutils.NewClient(t, nil)
-		defer ch.Close()
-		ch.SetRandomSeed(int64(i * 100))
-		// Using a strategy that has uneven scores
-		strategy, _ := createScoreStrategy(0, 1)
-		ch.Peers().SetStrategy(strategy)
-		// `peerConnectionCount > 1` load balances among the top candidates
-		// so with `peerConnectionCount` == `numPeers`, the score strategy
-		// shouldn't have any effect
-		ch.Peers().SetPeerConnectionCount(peerConnectionCount)
-
-		for i := 0; i < numPeers; i++ {
-			hp := fmt.Sprintf("127.0.0.1:60%v", i)
-			ch.Peers().Add(hp)
-		}
-
-		for i := 0; i < numPeers; i++ {
-			peer, err := ch.Peers().Get(nil)
-			require.NoError(t, err, "Peers.Get failed")
-			selected[i][peer.HostPort()]++
+	for i := 0; i < b.N; i++ {
+		peer, _ := ch.Peers().Get(nil)
+		if peer == nil {
+			fmt.Println("Just a dummy check to guard against compiler optimization")
 		}
 	}
+}
 
-	for _, m := range selected {
-		testDistribution(t, m, 50, 150)
+func BenchmarkGetPeerWithPeerConnectionCount10(b *testing.B) {
+	numPeers := 10
+	peerConnectionCount := uint32(10)
+
+	ch := testutils.NewClient(b, nil)
+	defer ch.Close()
+	ch.SetRandomSeed(int64(100))
+	// Using a strategy that has uneven scores
+	strategy, _ := createScoreStrategy(0, 1)
+	ch.Peers().SetStrategy(strategy)
+	ch.Peers().SetPeerConnectionCount(peerConnectionCount)
+
+	for i := 0; i < numPeers; i++ {
+		hp := fmt.Sprintf("127.0.0.1:60%v", i)
+		ch.Peers().Add(hp)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		peer, _ := ch.Peers().Get(nil)
+		if peer == nil {
+			fmt.Println("Just a dummy check to guard against compiler optimization")
+		}
 	}
 }
 

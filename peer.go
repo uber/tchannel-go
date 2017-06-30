@@ -47,6 +47,9 @@ var (
 	// ErrNoNewPeers indicates that no previously unselected peer is available.
 	ErrNoNewPeers = errors.New("no new peer available")
 
+	// ErrZeroPeerConnectionCount indicates that the peer connection count is set to zero.
+	ErrZeroPeerConnectionCount = errors.New("peer connection count must be greater than 0")
+
 	peerRng = trand.NewSeeded()
 )
 
@@ -95,11 +98,15 @@ func (l *PeerList) SetStrategy(sc ScoreCalculator) {
 // SetPeerConnectionCount sets the number of peer connections to be used in
 // combination with the ScoreCalculator to achieve a random load balancing
 // of a single client node to `peerConnectionCount` number of server nodes
-func (l *PeerList) SetPeerConnectionCount(peerConnectionCount uint32) {
+func (l *PeerList) SetPeerConnectionCount(peerConnectionCount uint32) error {
 	l.Lock()
 	defer l.Unlock()
 
+	if peerConnectionCount == 0 {
+		return ErrZeroPeerConnectionCount
+	}
 	l.peerConnectionCount = peerConnectionCount
+	return nil
 }
 
 // Siblings don't share peer lists (though they take care not to double-connect
@@ -186,8 +193,8 @@ func (l *PeerList) Remove(hostPort string) error {
 	return nil
 }
 func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) *Peer {
-	var chosenPSList []*peerScore
-	var poppedList []*peerScore
+	var chosenPSList = make([]*peerScore, 0, l.peerConnectionCount)
+	var poppedList = make([]*peerScore, 0, l.peerConnectionCount)
 
 	canChoosePeer := func(hostPort string) bool {
 		if _, ok := prevSelected[hostPort]; ok {
@@ -226,16 +233,12 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	}
 
 	ps := randomSampling(chosenPSList)
-	if ps == nil {
-		return nil
-	}
 	ps.chosenCount.Inc()
 	return ps.Peer
 }
 
 func randomSampling(psList []*peerScore) *peerScore {
-	peerRand := trand.NewSeeded()
-	r := peerRand.Intn(len(psList))
+	r := peerRng.Intn(len(psList))
 	return psList[r]
 }
 
