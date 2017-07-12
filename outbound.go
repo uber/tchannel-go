@@ -57,10 +57,10 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	// If the timeToLive is less than a millisecond, it will be encoded as 0 on
-	// the wire, hence we return a timeout immediately.
+	// the wire, hence we return an invalid deadline error.
 	timeToLive := deadline.Sub(now)
 	if timeToLive < time.Millisecond {
-		return nil, ErrTimeout
+		return nil, ErrInvalidDeadline
 	}
 
 	if !c.pendingExchangeMethodAdd() {
