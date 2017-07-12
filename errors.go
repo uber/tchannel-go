@@ -72,6 +72,9 @@ const (
 	// Callers can retry the request if the request is safe to retry
 	ErrCodeNetwork SystemErrCode = 0x07
 
+	// ErrCodeInvalidDeadline indicates that a request was made with a Deadline that is either too small or 0.
+	ErrCodeInvalidDeadline SystemErrCode = 0x08
+
 	// ErrCodeProtocol indincates a fatal protocol error communicating with the peer.  The connection
 	// will be terminated.
 	ErrCodeProtocol SystemErrCode = 0xFF
@@ -95,6 +98,9 @@ var (
 
 	// ErrMethodTooLarge is a SystemError indicating that the method is too large.
 	ErrMethodTooLarge = NewSystemError(ErrCodeProtocol, "method too large")
+
+	// ErrInvalidDeadline is a SystemError indicating a deadline is too small.
+	ErrInvalidDeadline = NewSystemError(ErrCodeInvalidDeadline, "deadline too small")
 )
 
 // MetricsKey is a string representation of the error code that's suitable for
@@ -120,6 +126,8 @@ func (c SystemErrCode) MetricsKey() string {
 		return "network-error"
 	case ErrCodeProtocol:
 		return "protocol-error"
+	case ErrCodeInvalidDeadline:
+		return "invalid-deadline"
 	default:
 		return c.String()
 	}
