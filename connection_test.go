@@ -1006,7 +1006,6 @@ func TestContextCanceledOnClientTCPClose(t *testing.T) {
 		tcpConn := conn.(*net.TCPConn)
 		tcpConn.CloseWrite() // half-close the tcp conn
 
-		fmt.Println(server.HostPort())
 		succ = AwaitWaitGroup(&callDoneWG, time.Second*10) // wait for the server call to return
 		assert.True(t, succ, "timed out waiting for server context to be closed")
 
