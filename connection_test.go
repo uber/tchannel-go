@@ -970,3 +970,46 @@ func TestPeerStatusChangeServer(t *testing.T) {
 	})
 	assert.Len(t, changes, 0, "unexpected peer status changes")
 }
+
+func TestContextCanceledOnClientTCPClose(t *testing.T) {
+
+	opts := testutils.NewOpts().DisableLogVerification().NoRelay()
+
+	testutils.WithTestServer(t, opts, func(server *testutils.TestServer) {
+
+		var callDoneWG sync.WaitGroup
+		callDoneWG.Add(1)
+
+		var dispatchWG sync.WaitGroup
+		dispatchWG.Add(1)
+
+		server.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			defer callDoneWG.Done()
+			dispatchWG.Done()
+			<-ctx.Done()
+			assert.Equal(t, "test-client", CurrentCall(ctx).CallerName(), "expected caller name to be passed through")
+			return &raw.Res{}, nil
+		})
+
+		conn, err := net.Dial("tcp", server.HostPort())
+		assert.NoError(t, err, "tcp connect to server failed")
+
+		err = DoInitHandshake(conn, 1, conn.LocalAddr().String())
+		assert.NoError(t, err, "init handshake failed")
+
+		err = SendCallReq(conn, 2, time.Minute, server.ServiceName(), "test", "", "")
+		assert.NoError(t, err, "call request failed")
+
+		succ := AwaitWaitGroup(&dispatchWG, time.Second*10) // wait for the server to receive the call
+		assert.True(t, succ, "call dispatch to server timed out")
+
+		tcpConn := conn.(*net.TCPConn)
+		tcpConn.CloseWrite() // half-close the tcp conn
+
+		fmt.Println(server.HostPort())
+		succ = AwaitWaitGroup(&callDoneWG, time.Second*10) // wait for the server call to return
+		assert.True(t, succ, "timed out waiting for server context to be closed")
+
+		conn.Close()
+	})
+}
