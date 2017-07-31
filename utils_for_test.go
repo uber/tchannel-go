@@ -30,7 +30,6 @@ import (
 	"github.com/uber/tchannel-go/typed"
 	"golang.org/x/net/context"
 	"io"
-	"sync"
 )
 
 // MexChannelBufferSize is the size of the message exchange channel buffer.
@@ -149,24 +148,4 @@ func SendCallReq(writer io.Writer, msgID int, ttl time.Duration, service string,
 	frame.Header.SetPayloadSize(uint16(wbuf.BytesWritten()))
 
 	return frame.WriteOut(writer)
-}
-
-// AwaitWaitGroup calls Wait on the given wait
-// Returns true if the Wait() call succeeded before the timeout
-// Returns false if the Wait() did not return before the timeout
-func AwaitWaitGroup(wg *sync.WaitGroup, timeout time.Duration) bool {
-
-	doneC := make(chan struct{})
-
-	go func() {
-		wg.Wait()
-		close(doneC)
-	}()
-
-	select {
-	case <-doneC:
-		return true
-	case <-time.After(timeout):
-		return false
-	}
 }

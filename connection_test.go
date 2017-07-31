@@ -977,15 +977,12 @@ func TestContextCanceledOnClientTCPClose(t *testing.T) {
 
 	testutils.WithTestServer(t, opts, func(server *testutils.TestServer) {
 
-		var callDoneWG sync.WaitGroup
-		callDoneWG.Add(1)
-
-		var dispatchWG sync.WaitGroup
-		dispatchWG.Add(1)
+		dispatchC := make(chan struct{})
+		callDoneC := make(chan struct{})
 
 		server.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			defer callDoneWG.Done()
-			dispatchWG.Done()
+			defer close(callDoneC)
+			close(dispatchC)
 			<-ctx.Done()
 			assert.Equal(t, "test-client", CurrentCall(ctx).CallerName(), "expected caller name to be passed through")
 			return &raw.Res{}, nil
@@ -1000,14 +997,21 @@ func TestContextCanceledOnClientTCPClose(t *testing.T) {
 		err = SendCallReq(conn, 2, time.Minute, server.ServiceName(), "test", "", "")
 		assert.NoError(t, err, "call request failed")
 
-		succ := AwaitWaitGroup(&dispatchWG, time.Second*10) // wait for the server to receive the call
-		assert.True(t, succ, "call dispatch to server timed out")
+		select {
+		case <-dispatchC:
+		case <-time.After(time.Second * 10):
+			assert.Fail(t, "call dispatch to server timed out")
+		}
 
 		tcpConn := conn.(*net.TCPConn)
 		tcpConn.CloseWrite() // half-close the tcp conn
 
-		succ = AwaitWaitGroup(&callDoneWG, time.Second*10) // wait for the server call to return
-		assert.True(t, succ, "timed out waiting for server context to be closed")
+		// wait for the server call to return
+		select {
+		case <-callDoneC:
+		case <-time.After(time.Second * 10):
+			assert.Fail(t, "timed out waiting for server context to be closed")
+		}
 
 		conn.Close()
 	})
