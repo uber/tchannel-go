@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	goctx "context"
 	"errors"
 	"fmt"
 	"io"
@@ -988,7 +987,7 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 			assert.Equal(t, "client", CurrentCall(ctx).CallerName(), "wrong caller name")
 			close(callForwarded)
 			<-ctx.Done()
-			assert.Equal(t, goctx.Canceled, ctx.Err(), "ctx.Err() returned unexpected error")
+			assert.Equal(t, "context canceled", ctx.Err().Error(), "ctx.Err() returned unexpected error")
 			return &raw.Res{}, nil
 		})
 
