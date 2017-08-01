@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	goctx "context"
 	"errors"
 	"fmt"
 	"io"
@@ -971,48 +972,75 @@ func TestPeerStatusChangeServer(t *testing.T) {
 	assert.Len(t, changes, 0, "unexpected peer status changes")
 }
 
-func TestContextCanceledOnClientTCPClose(t *testing.T) {
+func TestContextCanceledOnTCPClose(t *testing.T) {
+	// 1. Context canceled warning is expected as part of this test
+	// add log filter to ignore this error
+	// 2. We use our own relay in this test, so disable the relay
+	// that comes with the test server
+	opts := testutils.NewOpts().NoRelay().AddLogFilter("simpleHandler OnError", 1)
 
-	opts := testutils.NewOpts().DisableLogVerification().NoRelay()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		serverDoneC := make(chan struct{})
+		callForwarded := make(chan struct{})
 
-	testutils.WithTestServer(t, opts, func(server *testutils.TestServer) {
-
-		dispatchC := make(chan struct{})
-		callDoneC := make(chan struct{})
-
-		server.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			defer close(callDoneC)
-			close(dispatchC)
+		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			defer close(serverDoneC)
+			assert.Equal(t, "client", CurrentCall(ctx).CallerName(), "wrong caller name")
+			close(callForwarded)
 			<-ctx.Done()
-			assert.Equal(t, "test-client", CurrentCall(ctx).CallerName(), "expected caller name to be passed through")
+			assert.Equal(t, goctx.Canceled, ctx.Err(), "ctx.Err() returned unexpected error")
 			return &raw.Res{}, nil
 		})
 
-		conn, err := net.Dial("tcp", server.HostPort())
-		assert.NoError(t, err, "tcp connect to server failed")
+		// Set up a relay that can be used to terminate conns
+		// on both sides i.e. client and server
+		relayFunc := func(outgoing bool, f *Frame) *Frame {
+			return f
+		}
+		relayHostPort, shutdown := testutils.FrameRelay(t, ts.HostPort(), relayFunc)
 
-		err = DoInitHandshake(conn, 1, conn.LocalAddr().String())
-		assert.NoError(t, err, "init handshake failed")
+		// Make a call with a long timeout. We shutdown the relay
+		// immediately after the server receives the call. Expected
+		// behavior is for both client/server to be done with the call
+		// immediately after relay shutsdown
+		ctx, cancel := NewContext(20 * time.Second)
+		defer cancel()
 
-		err = SendCallReq(conn, 2, time.Minute, server.ServiceName(), "test", "", "")
-		assert.NoError(t, err, "call request failed")
+		clientCh := ts.NewClient(&testutils.ChannelOpts{
+			ServiceName: "client",
+		})
+		// initiate the call in a background routine and
+		// make it wait for the response
+		clientDoneC := make(chan struct{})
+		go func() {
+			raw.Call(ctx, clientCh, relayHostPort, ts.ServiceName(), "test", nil, nil)
+			close(clientDoneC)
+		}()
 
+		// wait for server to receive the call
 		select {
-		case <-dispatchC:
-		case <-time.After(time.Second * 10):
-			assert.Fail(t, "call dispatch to server timed out")
+		case <-callForwarded:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timed waiting for call to be forwarded")
 		}
 
-		tcpConn := conn.(*net.TCPConn)
-		tcpConn.CloseWrite() // half-close the tcp conn
+		// now shutdown the relay to close conns
+		// on both sides
+		shutdown()
 
-		// wait for the server call to return
+		// wait for both the client & server to be done
 		select {
-		case <-callDoneC:
-		case <-time.After(time.Second * 10):
-			assert.Fail(t, "timed out waiting for server context to be closed")
+		case <-serverDoneC:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timed out waiting for server handler to exit")
 		}
 
-		conn.Close()
+		select {
+		case <-clientDoneC:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timed out waiting for client to exit")
+		}
+
+		clientCh.Close()
 	})
 }

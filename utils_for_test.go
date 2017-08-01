@@ -27,9 +27,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/uber/tchannel-go/typed"
 	"golang.org/x/net/context"
-	"io"
 )
 
 // MexChannelBufferSize is the size of the message exchange channel buffer.
@@ -78,74 +76,4 @@ func InboundConnection(call IncomingCall) (*Connection, net.Conn) {
 
 	conn := inboundCall.conn
 	return conn, conn.conn
-}
-
-// DoInitHandshake performs the initReq/initResp handshake
-// using the given reader/writer stream
-func DoInitHandshake(rw io.ReadWriter, msgID int, clientHostPort string) error {
-
-	req := &initReq{
-		initMessage{
-			id:      uint32(msgID),
-			Version: CurrentProtocolVersion,
-			initParams: initParams{
-				InitParamHostPort:         clientHostPort,
-				InitParamProcessName:      "test",
-				InitParamTChannelLanguage: "go",
-			},
-		},
-	}
-
-	reqFrame := NewFrame(MaxFramePayloadSize)
-	if err := reqFrame.write(req); err != nil {
-		return err
-	}
-	if err := reqFrame.WriteOut(rw); err != nil {
-		return err
-	}
-
-	respFrame := NewFrame(MaxFramePayloadSize)
-	if err := respFrame.ReadIn(rw); err != nil {
-		return err
-	}
-
-	var resp initRes
-	if err := respFrame.read(&resp); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// SendCallReq sends a call request to the remote server
-// Use this method when you are managing your own tcp
-// conn instead of using a client channel
-func SendCallReq(writer io.Writer, msgID int, ttl time.Duration, service string, arg1, arg2, arg3 string) error {
-
-	callReq := &callReq{
-		id:         uint32(msgID),
-		TimeToLive: ttl,
-		Headers: transportHeaders{
-			CallerName: "test-client",
-		},
-		Service: service,
-	}
-
-	var wbuf typed.WriteBuffer
-
-	frame := NewFrame(MaxFramePayloadSize)
-	wbuf.Wrap(frame.Payload[:])
-	wbuf.WriteSingleByte(0x00) // flags: 0, last fragment
-	callReq.write(&wbuf)       // write the payload
-	wbuf.WriteSingleByte(0x00) // no checksum option
-	wbuf.WriteLen16String(arg1)
-	wbuf.WriteLen16String(arg2)
-	wbuf.WriteLen16String(arg3)
-
-	frame.Header.ID = uint32(msgID)
-	frame.Header.reserved1 = 0
-	frame.Header.messageType = messageTypeCallReq
-	frame.Header.SetPayloadSize(uint16(wbuf.BytesWritten()))
-
-	return frame.WriteOut(writer)
 }
