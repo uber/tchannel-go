@@ -970,3 +970,73 @@ func TestPeerStatusChangeServer(t *testing.T) {
 	})
 	assert.Len(t, changes, 0, "unexpected peer status changes")
 }
+
+func TestContextCanceledOnTCPClose(t *testing.T) {
+	// 1. Context canceled warning is expected as part of this test
+	// add log filter to ignore this error
+	// 2. We use our own relay in this test, so disable the relay
+	// that comes with the test server
+	opts := testutils.NewOpts().NoRelay().AddLogFilter("simpleHandler OnError", 1)
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		serverDoneC := make(chan struct{})
+		callForwarded := make(chan struct{})
+
+		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			defer close(serverDoneC)
+			close(callForwarded)
+			<-ctx.Done()
+			assert.EqualError(t, ctx.Err(), "context canceled")
+			return &raw.Res{}, nil
+		})
+
+		// Set up a relay that can be used to terminate conns
+		// on both sides i.e. client and server
+		relayFunc := func(outgoing bool, f *Frame) *Frame {
+			return f
+		}
+		relayHostPort, shutdown := testutils.FrameRelay(t, ts.HostPort(), relayFunc)
+
+		// Make a call with a long timeout. We shutdown the relay
+		// immediately after the server receives the call. Expected
+		// behavior is for both client/server to be done with the call
+		// immediately after relay shutsdown
+		ctx, cancel := NewContext(20 * time.Second)
+		defer cancel()
+
+		clientCh := ts.NewClient(nil)
+		// initiate the call in a background routine and
+		// make it wait for the response
+		clientDoneC := make(chan struct{})
+		go func() {
+			raw.Call(ctx, clientCh, relayHostPort, ts.ServiceName(), "test", nil, nil)
+			close(clientDoneC)
+		}()
+
+		// wait for server to receive the call
+		select {
+		case <-callForwarded:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timed waiting for call to be forwarded")
+		}
+
+		// now shutdown the relay to close conns
+		// on both sides
+		shutdown()
+
+		// wait for both the client & server to be done
+		select {
+		case <-serverDoneC:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timed out waiting for server handler to exit")
+		}
+
+		select {
+		case <-clientDoneC:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timed out waiting for client to exit")
+		}
+
+		clientCh.Close()
+	})
+}
