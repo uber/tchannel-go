@@ -984,10 +984,9 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 
 		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			defer close(serverDoneC)
-			assert.Equal(t, "client", CurrentCall(ctx).CallerName(), "wrong caller name")
 			close(callForwarded)
 			<-ctx.Done()
-			assert.Equal(t, "context canceled", ctx.Err().Error(), "ctx.Err() returned unexpected error")
+			assert.EqualError(t, ctx.Err(), "context canceled")
 			return &raw.Res{}, nil
 		})
 
@@ -1005,9 +1004,7 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 		ctx, cancel := NewContext(20 * time.Second)
 		defer cancel()
 
-		clientCh := ts.NewClient(&testutils.ChannelOpts{
-			ServiceName: "client",
-		})
+		clientCh := ts.NewClient(nil)
 		// initiate the call in a background routine and
 		// make it wait for the response
 		clientDoneC := make(chan struct{})

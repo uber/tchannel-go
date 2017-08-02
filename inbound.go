@@ -189,10 +189,9 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 			if c.log.Enabled(LogLevelDebug) {
 				call.log.Debugf("Wait for timeout/cancellation interrupted by error: %v", call.mex.errCh.err)
 			}
-			// conn error, cancel the inbound call
-			// and mark the exchg as expired in mex
-			// TODO: move the cancel to the parent
-			// context at connnection level
+			// when an exchange errors out, mark the exchange as expired
+			// and call cancel so the server handler's context is canceled
+			// TODO: move the cancel to the parent context at connnection level
 			call.response.cancel()
 			call.mex.inboundExpired()
 		}
