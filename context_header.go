@@ -114,3 +114,19 @@ func WrapWithHeaders(ctx context.Context, headers map[string]string) ContextWith
 	newCtx := context.WithValue(ctx, contextKeyHeaders, h)
 	return headerCtx{Context: newCtx}
 }
+
+// WithoutHeaders removes any TChannel headers from the given context.
+func WithoutHeaders(ctx context.Context) context.Context {
+	return withoutHeaders{ctx}
+}
+
+type withoutHeaders struct {
+	context.Context
+}
+
+func (ctx withoutHeaders) Value(key interface{}) interface{} {
+	if key == contextKeyHeaders || key == contextKeyTChannel {
+		return nil
+	}
+	return ctx.Context.Value(key)
+}
