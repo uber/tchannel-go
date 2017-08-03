@@ -55,3 +55,20 @@ func TestCurrentSpan(t *testing.T) {
 	require.NotNil(t, span, "CurrentSpan() should always return something")
 	assert.NotEqual(t, uint64(0), span.TraceID(), "mock tracer is now Zipkin-compatible")
 }
+
+func TestContextWithoutHeadersKeyHeaders(t *testing.T) {
+	ctx := WrapWithHeaders(context.Background(), map[string]string{"k1": "v1"})
+	assert.Equal(t, map[string]string{"k1": "v1"}, ctx.Headers())
+	ctx2 := WithoutHeaders(ctx)
+	assert.Nil(t, ctx2.Value(contextKeyHeaders))
+	_, ok := ctx2.(ContextWithHeaders)
+	assert.False(t, ok)
+}
+
+func TestContextWithoutHeadersKeyTChannel(t *testing.T) {
+	ctx, _ := NewContextBuilder(time.Second).SetShardKey("s1").Build()
+	ctx2 := WithoutHeaders(ctx)
+	assert.Nil(t, ctx2.Value(contextKeyTChannel))
+	_, ok := ctx2.(ContextWithHeaders)
+	assert.False(t, ok)
+}
