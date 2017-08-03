@@ -117,16 +117,5 @@ func WrapWithHeaders(ctx context.Context, headers map[string]string) ContextWith
 
 // WithoutHeaders hides any TChannel headers from the given context.
 func WithoutHeaders(ctx context.Context) context.Context {
-	return withoutHeaders{ctx}
-}
-
-type withoutHeaders struct {
-	context.Context
-}
-
-func (ctx withoutHeaders) Value(key interface{}) interface{} {
-	if key == contextKeyHeaders || key == contextKeyTChannel {
-		return nil
-	}
-	return ctx.Context.Value(key)
+	return context.WithValue(context.WithValue(ctx, contextKeyTChannel, nil), contextKeyHeaders, nil)
 }
