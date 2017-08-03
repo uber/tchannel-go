@@ -115,7 +115,7 @@ func WrapWithHeaders(ctx context.Context, headers map[string]string) ContextWith
 	return headerCtx{Context: newCtx}
 }
 
-// WithoutHeaders removes any TChannel headers from the given context.
+// WithoutHeaders hides any TChannel headers from the given context.
 func WithoutHeaders(ctx context.Context) context.Context {
 	return withoutHeaders{ctx}
 }
