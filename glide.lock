@@ -1,8 +1,8 @@
-hash: 111bdf9797d23d4b9f8833a9780e382dd53153af70ad286f99815cea4c2fdf4b
-updated: 2016-08-05T18:02:17.171302481-04:00
+hash: 43b7af12b6726c5165735c28a8df0e526968afe92e99a99dc5958b16b0467fde
+updated: 2017-08-03T18:30:51.640403792-07:00
 imports:
 - name: github.com/apache/thrift
-  version: b2a4d4ae21c789b689dd162deb819665567f481c
+  version: 53dd39833a08ce33582e5ff31fa18bb4735d6731
   subpackages:
   - lib/go/thrift
 - name: github.com/bmizerany/perks

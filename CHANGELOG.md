@@ -1,6 +1,11 @@
 Changelog
 =========
 
+# next
+
+* Locks Apache Thrift to version ~0.9 to maintain backward-compatibility, this
+  time for real.
+
 # v1.6.0
 
 * Locks Apache Thrift to version 0.9.3 to maintain backward-compatibility.
