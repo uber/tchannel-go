@@ -1,9 +1,14 @@
 Changelog
 =========
 
+# v1.7.0
+
+* Cancel the context on incoming calls if the client connection is closed.
+* Add `WithoutHeaders` to remove TChannel keys from a context.
+
 # v1.6.0
 
-* Locks Apache Thrift to version 0.9.3 to maintain backward-compatibility.
+* Locks Apache Thrift to version 0.9.3, 0.10.0 to maintain backward-compatibility.
 * Add `OnPeerStatusChanged` channel option to receive a notification each time
   the number of available connections changes for any given peer.
 * Set DiffServ (QoS) bit on outbound connections.
