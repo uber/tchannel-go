@@ -1,12 +1,12 @@
 Changelog
 =========
 
-# v1.7.0
+# v1.7.0 (2017-08-04)
 
 * Cancel the context on incoming calls if the client connection is closed.
 * Add `WithoutHeaders` to remove TChannel keys from a context.
 
-# v1.6.0
+# v1.6.0 (2017-06-02)
 
 * Locks Apache Thrift to version 0.9.3, 0.10.0 to maintain backward-compatibility.
 * Add `OnPeerStatusChanged` channel option to receive a notification each time
@@ -14,24 +14,24 @@ Changelog
 * Set DiffServ (QoS) bit on outbound connections.
 * Improve resilience of the frame parser.
 
-# v1.5.0
+# v1.5.0 (2017-03-21)
 
 * Add `PeerList.Len` to expose the number of peers in the peer list.
 * Add `PeerList.GetNew` to only return previously unselected peers.
 
-# v1.4.0
+# v1.4.0 (2017-03-01)
 
 * Add version information to the channel's LocalPeerInfo.
 * Add peers package for peer management utilities such as
   consistent peer selection.
 * Fix SetScoreStrategy not rescoring existing peers. (#583).
 
-# v1.3.0
+# v1.3.0 (2017-02-01)
 
 * Exposes the channel's RootPeerList with `channel.RootPeers()`.
 * Support Thrift namespaces for thrift-gen.
 
-# v1.2.3
+# v1.2.3 (2017-01-19)
 
 * Improve error messages when an argument reader is closed without
   reading the EOF. (#567)
@@ -43,7 +43,7 @@ Changelog
 * thrift-gen: Fix "namespace go" being ignored even though the Apache thrift
   generated code was respecting it. (#559)
 
-# v1.2.2
+# v1.2.2 (2016-12-21)
 
 * Add a unique channel ID for introspection (#548)
 * Don't drop existing headers on a context when using Wrap(ctx) (#547)
@@ -55,15 +55,15 @@ Changelog
 * Add remote peer info to connection logger and introspection (#514)
 * Treat hostPorts ending in ":0" in the init headers as ephemeral (#513)
 
-# v1.2.1
+# v1.2.1 (2016-09-29)
 
 * Fix data race on headers when making concurrent calls using the same context. (#505)
 
-# v1.2.0
+# v1.2.0 (2016-09-15)
 
 * Adds support for routing keys (the TChannel rk transport header).
 
-# v1.1.0
+# v1.1.0 (2016-08-25)
 
 * Integrate OpenTracing for distributed tracing and context propagation.
   As long as a Zipkin-style tracing is configured, TChannel frames still
@@ -77,7 +77,7 @@ Changelog
 * Drop go1.4 support and add support for go1.7.
 * Pass thrift.Context to the thrift.Server's response callback (#465)
 
-# 1.0.9
+# 1.0.9 (2016-07-20)
 
 * Expose meta endpoints on the "tchannel" service name. (#459)
 * Add Go version and tchannel-go library version to introspection. (#457)
@@ -85,11 +85,11 @@ Changelog
   connection's reported host:port. (#452)
 * Expose the number of connections on a channel. (#451)
 
-# 1.0.8
+# 1.0.8 (2016-07-15)
 
 * Remove dependency on "testing" from "tchannel-go" introduced in v1.0.7.
 
-# 1.0.7
+# 1.0.7 (2016-07-15)
 
 * Add CallOptions() to IncomingCall which can be used as the call option
   when making outbound calls to proxy all transport headers.
@@ -101,11 +101,11 @@ Changelog
   streaming calls where the stream timeout may be much longer than the
   connection timeout.
 
-# 1.0.6
+# 1.0.6 (2016-06-16)
 
 * Fix trace span encoding fields in the wrong order
 
-# 1.0.5
+# 1.0.5 (2016-04-04)
 
 * Use `context.Context` storage for headers so `thrift.Context` and
   `tchannel.ContextWithHeaders` can be passed to functions that use
@@ -115,7 +115,7 @@ Changelog
 * Store goroutine stack traces on channel creation that can be accessed
   via introspection.
 
-# 1.0.4
+# 1.0.4 (2016-03-09)
 
 * Improve handling of network failures during pending calls. Previously, calls
   would timeout, but now they fail as soon as the network failure is detected.
@@ -124,7 +124,7 @@ Changelog
 * #228: Add registered methods to the introspection output.
 * Add ability to set a global handler for a SubChannel.
 
-# 1.0.3
+# 1.0.3 (2016-02-15)
 
 * Improved performance when writing Thrift structs
 * Make closing message exchanges less disruptive, changes a panic due to
@@ -132,7 +132,7 @@ Changelog
 * Introspection now includes information about all channels created
   in the current process.
 
-# 1.0.2
+# 1.0.2 (2016-01-29)
 
 * Extend the `ContextBuilder` API to support setting the transport-level
   routing delegate header.
@@ -141,7 +141,7 @@ Changelog
   timeouts.
 * Assorted logging and test improvements.
 
-# 1.0.1
+# 1.0.1 (2016-01-19)
 
 * Bug fix for #181: Shuffle peers on PeerList.Add to avoid biases in peer
   selection.
@@ -157,7 +157,7 @@ Changelog
   thrift.ReadHeaders, thrift.WriteHeaders) so callers can easily send Thrift
   payloads over the streaming interface.
 
-# 1.0.0
+# 1.0.0 (2016-01-11)
 
 * First stable release.
 * Support making calls with JSON, Thrift or raw payloads.
