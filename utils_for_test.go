@@ -61,6 +61,11 @@ func (c *Connection) Ping(ctx context.Context) error {
 	return c.ping(ctx)
 }
 
+// Logger returns the logger for the specific connection.
+func (c *Connection) Logger() Logger {
+	return c.log
+}
+
 // OutboundConnection returns the underlying connection for an outbound call.
 func OutboundConnection(call *OutboundCall) (*Connection, net.Conn) {
 	conn := call.conn
