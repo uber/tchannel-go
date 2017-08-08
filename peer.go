@@ -497,9 +497,9 @@ func (p *Peer) removeConnection(connsPtr *[]*Connection, changed *Connection) bo
 	conns := *connsPtr
 	for i, c := range conns {
 		if c == changed {
-			// Remove the connection by moving to the end and slicing the list.
+			// Remove the connection by moving the last item forward, and slicing the list.
 			last := len(conns) - 1
-			conns[i], conns[last] = conns[last], conns[i]
+			conns[i], conns[last] = conns[last], nil
 			*connsPtr = conns[:last]
 			return true
 		}
