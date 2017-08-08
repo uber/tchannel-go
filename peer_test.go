@@ -716,6 +716,7 @@ func TestPeerRandomSampling(t *testing.T) {
 		// the higher `peerConnectionCount` is, the smoother the impact of uneven scores
 		// become as we are random sampling among `peerConnectionCount` peers
 		{numPeers: 10, peerConnectionCount: 1, distMin: 1000, distMax: 1000},
+		{numPeers: 10, peerConnectionCount: 2, distMin: 470, distMax: 530},
 		{numPeers: 10, peerConnectionCount: 5, distMin: 160, distMax: 240},
 		{numPeers: 10, peerConnectionCount: 10, distMin: 50, distMax: 150},
 		{numPeers: 10, peerConnectionCount: 15, distMin: 50, distMax: 150},
@@ -758,35 +759,14 @@ func TestPeerRandomSampling(t *testing.T) {
 }
 
 func BenchmarkGetPeerWithPeerConnectionCount1(b *testing.B) {
-	numPeers := 10
-	peerConnectionCount := uint32(1)
-
-	ch := testutils.NewClient(b, nil)
-	defer ch.Close()
-	ch.SetRandomSeed(int64(100))
-	// Using a strategy that has uneven scores
-	strategy, _ := createScoreStrategy(0, 1)
-	ch.Peers().SetStrategy(strategy)
-	ch.Peers().SetPeerConnectionCount(peerConnectionCount)
-
-	for i := 0; i < numPeers; i++ {
-		hp := fmt.Sprintf("127.0.0.1:60%v", i)
-		ch.Peers().Add(hp)
-	}
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		peer, _ := ch.Peers().Get(nil)
-		if peer == nil {
-			fmt.Println("Just a dummy check to guard against compiler optimization")
-		}
-	}
+	doBenchmarkGetPeerWithPeerConnectionCount(b, 10, uint32(1))
 }
 
 func BenchmarkGetPeerWithPeerConnectionCount10(b *testing.B) {
-	numPeers := 10
-	peerConnectionCount := uint32(10)
+	doBenchmarkGetPeerWithPeerConnectionCount(b, 10, uint32(10))
+}
 
+func doBenchmarkGetPeerWithPeerConnectionCount(b *testing.B, numPeers int, peerConnectionCount uint32) {
 	ch := testutils.NewClient(b, nil)
 	defer ch.Close()
 	ch.SetRandomSeed(int64(100))
@@ -804,7 +784,7 @@ func BenchmarkGetPeerWithPeerConnectionCount10(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		peer, _ := ch.Peers().Get(nil)
 		if peer == nil {
-			fmt.Println("Just a dummy check to guard against compiler optimization")
+			b.Fatal("Just a dummy check to guard against compiler optimization")
 		}
 	}
 }

@@ -47,9 +47,6 @@ var (
 	// ErrNoNewPeers indicates that no previously unselected peer is available.
 	ErrNoNewPeers = errors.New("no new peer available")
 
-	// ErrZeroPeerConnectionCount indicates that the peer connection count is set to zero.
-	ErrZeroPeerConnectionCount = errors.New("peer connection count must be greater than 0")
-
 	peerRng = trand.NewSeeded()
 )
 
@@ -103,7 +100,7 @@ func (l *PeerList) SetPeerConnectionCount(peerConnectionCount uint32) error {
 	defer l.Unlock()
 
 	if peerConnectionCount == 0 {
-		return ErrZeroPeerConnectionCount
+		return errors.New("peer connection count must be greater than 0")
 	}
 	l.peerConnectionCount = peerConnectionCount
 	return nil
