@@ -23,6 +23,7 @@ package testutils
 import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
+	"github.com/opentracing/opentracing-go"
 )
 
 // FakeIncomingCall implements IncomingCall interface.
@@ -94,6 +95,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
 	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
+	Span tchannel.Span
 }
 
 var _ relay.CallFrame = FakeCallFrame{}
@@ -121,4 +123,11 @@ func (f FakeCallFrame) RoutingKey() []byte {
 // RoutingDelegate returns the routing delegate field.
 func (f FakeCallFrame) RoutingDelegate() []byte {
 	return []byte(f.RoutingDelegateF)
+}
+
+func (f FakeCallFrame) SetRelaySpan(
+	tracer opentracing.Tracer,
+	operationName string,
+)(opentracing.Span, error) {
+	return nil, nil
 }
