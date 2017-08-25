@@ -24,6 +24,10 @@
 // backwards-compatibility guarantee.
 package relay
 
+import (
+	"github.com/opentracing/opentracing-go"
+)
+
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
 	// Caller is the name of the originating service.
@@ -37,6 +41,8 @@ type CallFrame interface {
 	// RoutingKey may refer to an alternate traffic group instead of the
 	// traffic group identified by the service name.
 	RoutingKey() []byte
+	// SetRelaySpan replaces span in frame with a relay span and returns it
+	SetRelaySpan(tracer opentracing.Tracer, operationName string) (opentracing.Span, error)
 }
 
 // RateLimitDropError is the error that should be returned from

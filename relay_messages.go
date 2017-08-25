@@ -24,6 +24,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/opentracing/opentracing-go"
+	"github.com/uber/tchannel-go/typed"
 	"time"
 )
 
@@ -176,6 +178,29 @@ func (f lazyCallReq) SetTTL(d time.Duration) {
 // Span returns the Span
 func (f lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)
+}
+
+// SetRelaySpan replaces span in frame with a relay span and returns it
+func (f lazyCallReq) SetRelaySpan(tracer opentracing.Tracer, operationName string) (opentracing.Span, error) {
+	// Extract original span information from the frame
+	span := f.Span()
+	spanCtx, err := tracer.Extract(zipkinSpanFormat, &span)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start the relay span as child of the original span
+	relaySpan := tracer.StartSpan(operationName, opentracing.ChildOf(spanCtx))
+
+	// Overwrite relay span information back into frame
+	var injectableSpan injectableSpan
+	injectableSpan.initFromOpenTracing(relaySpan)
+	childSpan := Span(injectableSpan)
+	err = childSpan.write(typed.NewWriteBuffer(f.Payload[_spanIndex : _spanIndex+_spanLength]))
+
+	// Caller of this function can edit
+	// and is responsible for finishing the relay span
+	return relaySpan, err
 }
 
 // HasMoreFragments returns whether the callReq has more fragments.
