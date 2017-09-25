@@ -1,5 +1,5 @@
-hash: 1f06420ffd1312e84ab28f96a1116c5cde690a9ccad1c827a63ab800d6a6cefe
-updated: 2017-09-19T12:07:06.402090384-07:00
+hash: 531fa9a917ca777e41cd6b33c1c578a849c290414214f7e28a432af7adf3354c
+updated: 2017-09-25T14:39:38.785523718-07:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -23,6 +23,16 @@ imports:
   version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
   subpackages:
   - utils
+- name: github.com/uber/jaeger-client-go
+  version: 3e3870040def0ebdaf65a003863fa64f5cb26139
+  subpackages:
+  - internal/spanlog
+  - log
+  - thrift-gen/agent
+  - thrift-gen/jaeger
+  - thrift-gen/sampling
+  - thrift-gen/zipkincore
+  - utils
 - name: golang.org/x/net
   version: 8351a756f30f1297fe94bbf4b767ec589c6ea6d0
   subpackages:
@@ -37,6 +47,8 @@ testImports:
   version: d9a9656a3a4b1c2864fdb44db2ef8619772d92aa
   subpackages:
   - quantile
+- name: github.com/codahale/hdrhistogram
+  version: 3a0bb77429bd3a61596f5e8a3172445844342120
 - name: github.com/crossdock/crossdock-go
   version: 049aabb0122b03bc9bd30cab8f3f91fb60166361
 - name: github.com/davecgh/go-spew
@@ -64,7 +76,9 @@ testImports:
   - assert
   - mock
   - require
-- name: github.com/uber/jaeger-client-go
-  version: 3e3870040def0ebdaf65a003863fa64f5cb26139
+- name: github.com/uber/jaeger-lib
+  version: 21a3da6d66fe0e278072676fdc84cd4c9ccb9b67
+  subpackages:
+  - metrics
 - name: gopkg.in/yaml.v2
   version: eb3733d160e74a9c7e442f435eb3bea458e1d19f
