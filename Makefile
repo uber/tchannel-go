@@ -57,7 +57,6 @@ install_glide:
 	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide && cd $(OLD_GOPATH)/src/github.com/Masterminds/glide && git checkout v0.12.3 && go install
 
 install_ci: $(BIN)/thrift install_glide install
-	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 ifdef CROSSDOCK
 	$(MAKE) install_docker_ci
 endif
@@ -108,12 +107,10 @@ cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
 
 cover_ci:
-ifdef CROSSDOCK
-	@echo Skipping coverage
-else
+	@echo "Uploading coverage"
 	$(MAKE) cover_profile
-	goveralls -coverprofile=$(BUILD)/coverage.out -service=travis-ci || echo -e "\x1b[31mCoveralls failed\x1b[m"
-endif
+	curl -s https://codecov.io/bash > $(BUILD)/codecov.bash
+	bash $(BUILD)/codecov.bash -f $(BUILD)/coverage.out
 
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
