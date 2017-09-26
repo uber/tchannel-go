@@ -30,8 +30,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func field(k string, v interface{}) LogField {
+	return LogField{Key: k, Value: v}
+}
+
 func TestErrField(t *testing.T) {
-	assert.Equal(t, LogField{"error", "foo"}, ErrField(errors.New("foo")))
+	assert.Equal(t, field("error", "foo"), ErrField(errors.New("foo")))
 }
 
 func TestWriterLogger(t *testing.T) {
@@ -50,8 +54,8 @@ func TestWriterLogger(t *testing.T) {
 	}
 
 	for _, level := range levels {
-		tagLogger1 := bufLogger.WithFields(LogField{"key1", "value1"})
-		tagLogger2 := bufLogger.WithFields(LogField{"key2", "value2"}, LogField{"key3", "value3"})
+		tagLogger1 := bufLogger.WithFields(field("key1", "value1"))
+		tagLogger2 := bufLogger.WithFields(field("key2", "value2"), field("key3", "value3"))
 
 		verifyMsgAndPrefix := func(logger Logger) {
 			buf.Reset()
@@ -96,8 +100,8 @@ func TestWriterLoggerNoSubstitution(t *testing.T) {
 	}
 
 	for _, level := range levels {
-		tagLogger1 := bufLogger.WithFields(LogField{"key1", "value1"})
-		tagLogger2 := bufLogger.WithFields(LogField{"key2", "value2"}, LogField{"key3", "value3"})
+		tagLogger1 := bufLogger.WithFields(field("key1", "value1"))
+		tagLogger2 := bufLogger.WithFields(field("key2", "value2"), field("key3", "value3"))
 
 		verifyMsgAndPrefix := func(logger Logger) {
 			buf.Reset()
