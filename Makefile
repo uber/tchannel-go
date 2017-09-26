@@ -48,19 +48,15 @@ install:
 	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
 
 install_lint:
-ifeq ($(LINT),no)
-	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
-else
 	@echo "Installing golint, since we expect to lint"
 	GOPATH=$(OLD_GOPATH) go get -u -f github.com/golang/lint/golint
-endif
 
 install_glide:
 	# all we want is: GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
 	# but have to pin to 0.12.3 due to https://github.com/Masterminds/glide/issues/745
 	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide && cd $(OLD_GOPATH)/src/github.com/Masterminds/glide && git checkout v0.12.3 && go install
 
-install_ci: $(BIN)/thrift install_glide install_lint install
+install_ci: $(BIN)/thrift install_glide install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 ifdef CROSSDOCK
 	$(MAKE) install_docker_ci
@@ -122,17 +118,12 @@ endif
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
 lint:
-ifeq ($(LINT),no)
-	@echo "Skipping lint/fmt"
-else
-	@echo "Linting is enabled"
 	@echo "Running golint"
 	-golint $(ALL_PKGS) | $(FILTER) | tee lint.log
 	@echo "Running go vet"
 	-go vet $(PKGS) 2>&1 | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
 	@echo "Verifying files are gofmt'd"
 	-gofmt -l . | $(FILTER) | tee -a lint.log
-endif
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i -n fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
