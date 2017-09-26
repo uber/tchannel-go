@@ -77,9 +77,5 @@ func (c *Client) sendAdvertise() error {
 
 	var resp AdResponse
 	c.opts.Handler.On(SendAdvertise)
-	if err := c.jsonClient.Call(ctx, "ad", c.createRequest(), &resp); err != nil {
-		return err
-	}
-
-	return nil
+	return c.jsonClient.Call(ctx, "ad", c.createRequest(), &resp)
 }

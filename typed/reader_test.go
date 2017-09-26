@@ -65,9 +65,9 @@ func TestReaderErr(t *testing.T) {
 	}{
 		{
 			chunks: [][]byte{
-				[]byte{0, 1},
+				{0, 1},
 				nil,
-				[]byte{2, 3},
+				{2, 3},
 			},
 			validation: func(reader *Reader) {
 				assert.Equal(t, uint16(1), reader.ReadUint16(), "Read unexpected value")
@@ -76,10 +76,10 @@ func TestReaderErr(t *testing.T) {
 		},
 		{
 			chunks: [][]byte{
-				[]byte{0, 4},
+				{0, 4},
 				[]byte("test"),
 				nil,
-				[]byte{'A', 'b'},
+				{'A', 'b'},
 			},
 			validation: func(reader *Reader) {
 				assert.Equal(t, "test", reader.ReadLen16String(), "Read unexpected value")

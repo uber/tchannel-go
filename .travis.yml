@@ -6,20 +6,21 @@ cache:
   - $HOME/.glide/cache
 
 go:
-- 1.5
-- 1.6
 - 1.7
 - 1.8
 - 1.9
 
 matrix:
   include:
-  - go: 1.6
+  - go: 1.9
     env: CROSSDOCK=true
     sudo: required
     dist: trusty
     services:
     - docker
+  include:
+  - go: 1.9
+    env: LINT=yes
 
 env:
   global:
@@ -40,7 +41,7 @@ install:
 script:
 - make test_ci
 - make cover_ci
-- make lint
+- test -z "$LINT" || make install_lint lint
 - make crossdock_logs_ci
 
 after_success:

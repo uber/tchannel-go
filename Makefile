@@ -1,14 +1,4 @@
 export GO15VENDOREXPERIMENT=1
-GO_VERSION := $(shell go version | awk '{ print $$3 }')
-GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
-LINTABLE_MINOR_VERSIONS := 6
-FMTABLE_MINOR_VERSIONS := 7
-ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
-SHOULD_LINT := true
-endif
-ifneq ($(filter $(FMTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
-SHOULD_LINT_FMT := true
-endif
 
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
@@ -58,19 +48,15 @@ install:
 	GOPATH=$(OLD_GOPATH) glide --debug install --cache --cache-gopath
 
 install_lint:
-ifdef SHOULD_LINT
-	@echo "Installing golint, since we expect to lint on" $(GO_VERSION)
+	@echo "Installing golint, since we expect to lint"
 	GOPATH=$(OLD_GOPATH) go get -u -f github.com/golang/lint/golint
-else
-	@echo "Not installing golint, since we don't lint on" $(GO_VERSION)
-endif
 
 install_glide:
 	# all we want is: GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
 	# but have to pin to 0.12.3 due to https://github.com/Masterminds/glide/issues/745
 	GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide && cd $(OLD_GOPATH)/src/github.com/Masterminds/glide && git checkout v0.12.3 && go install
 
-install_ci: $(BIN)/thrift install_glide install_lint install
+install_ci: $(BIN)/thrift install_glide install
 	GOPATH=$(OLD_GOPATH) go get -u github.com/mattn/goveralls
 ifdef CROSSDOCK
 	$(MAKE) install_docker_ci
@@ -132,24 +118,15 @@ endif
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
 lint:
-ifdef SHOULD_LINT
-	@echo "Linters are enabled on" $(GO_VERSION)
 	@echo "Running golint"
-	-golint ./... | $(FILTER) | tee lint.log
+	-golint $(ALL_PKGS) | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go vet $(PKGS) 2>&1 | tee -a lint.log
-ifdef SHOULD_LINT_FMT
-	@echo "Checking gofmt"
+	-go vet $(PKGS) 2>&1 | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
+	@echo "Verifying files are gofmt'd"
 	-gofmt -l . | $(FILTER) | tee -a lint.log
-else
-	@echo "Not checking gofmt on" $(GO_VERSION)
-endif
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i -n fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
-else
-	@echo "Skipping linters on" $(GO_VERSION)
-endif
 
 thrift_example: thrift_gen
 	go build -o $(BUILD)/examples/thrift       ./examples/thrift/main.go
