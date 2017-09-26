@@ -20,7 +20,7 @@ matrix:
     - docker
   include:
   - go: 1.9
-    env: LINT=yes
+    env: NO_TEST=yes COVERAGE=yes LINT=yes
 
 env:
   global:
@@ -39,8 +39,8 @@ install:
 - make install_ci
 
 script:
-- make test_ci
-- make cover_ci
+- test -n "$NO_TEST" || make test_ci
+- test -z "$COVERAGE" || make cover_ci
 - test -z "$LINT" || make install_lint lint
 - make crossdock_logs_ci
 
