@@ -119,6 +119,12 @@ func (o *ChannelOpts) SetFramePool(framePool tchannel.FramePool) *ChannelOpts {
 	return o
 }
 
+// SetHealthChecks sets HealthChecks in DefaultConnectionOptions.
+func (o *ChannelOpts) SetHealthChecks(healthChecks tchannel.HealthCheckOptions) *ChannelOpts {
+	o.DefaultConnectionOptions.HealthChecks = healthChecks
+	return o
+}
+
 // SetSendBufferSize sets the SendBufferSize in DefaultConnectionOptions.
 func (o *ChannelOpts) SetSendBufferSize(bufSize int) *ChannelOpts {
 	o.DefaultConnectionOptions.SendBufferSize = bufSize
@@ -134,6 +140,12 @@ func (o *ChannelOpts) SetTosPriority(tosPriority tos.ToS) *ChannelOpts {
 // SetTimeNow sets TimeNow in ChannelOptions.
 func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	o.TimeNow = timeNow
+	return o
+}
+
+// SetTimeTicker sets TimeTicker in ChannelOptions.
+func (o *ChannelOpts) SetTimeTicker(timeTicker func(d time.Duration) *time.Ticker) *ChannelOpts {
+	o.TimeTicker = timeTicker
 	return o
 }
 

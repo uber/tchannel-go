@@ -84,6 +84,10 @@ type ChannelOptions struct {
 	// Note: This is not a stable part of the API and may change.
 	TimeNow func() time.Time
 
+	// TimeTicker is a variable for overriding time.Ticker in unit tests.
+	// Note: This is not a stable part of the API and may change.
+	TimeTicker func(d time.Duration) *time.Ticker
+
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
 	Tracer opentracing.Tracer
@@ -154,6 +158,7 @@ type channelConnectionCommon struct {
 	tracer        opentracing.Tracer
 	subChannels   *subChannelMap
 	timeNow       func() time.Time
+	timeTicker    func(time.Duration) *time.Ticker
 }
 
 // _nextChID is used to allocate unique IDs to every channel for debugging purposes.
@@ -205,6 +210,11 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeNow = time.Now
 	}
 
+	timeTicker := opts.TimeTicker
+	if timeTicker == nil {
+		timeTicker = time.NewTicker
+	}
+
 	chID := _nextChID.Inc()
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
@@ -216,6 +226,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 			statsReporter: statsReporter,
 			subChannels:   &subChannelMap{},
 			timeNow:       timeNow,
+			timeTicker:    timeTicker,
 			tracer:        opts.Tracer,
 		},
 		chID:              chID,

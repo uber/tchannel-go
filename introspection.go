@@ -148,6 +148,7 @@ type ConnectionRuntimeState struct {
 	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
 	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
 	Relayer          RelayerRuntimeState     `json:"relayer"`
+	HealthChecks     []bool                  `json:"healthChecks,omitempty"`
 }
 
 // RelayerRuntimeState is the runtime state for a single relayer.
@@ -336,6 +337,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 	c.stateMut.RLock()
 	defer c.stateMut.RUnlock()
 
+	// TODO(prashantv): Add total number of health checks, and health check options.
 	state := ConnectionRuntimeState{
 		ID:               c.connID,
 		ConnectionState:  c.state.String(),
@@ -345,6 +347,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		RemotePeer:       c.remotePeerInfo,
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
+		HealthChecks:     c.healthCheckHistory.asBools(),
 	}
 	if c.relay != nil {
 		state.Relayer = c.relay.IntrospectState(opts)

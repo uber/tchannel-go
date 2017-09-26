@@ -56,14 +56,19 @@ func (ch *Channel) SetRandomSeed(seed int64) {
 	}
 }
 
-// Ping sends a ping on the specific connection.
+// Ping exports ping for tests.
 func (c *Connection) Ping(ctx context.Context) error {
 	return c.ping(ctx)
 }
 
-// Logger returns the logger for the specific connection.
+// Logger returns the logger for the specific connection for tests.
 func (c *Connection) Logger() Logger {
 	return c.log
+}
+
+// StopHealthCheck exports stopHealthCheck for tests.
+func (c *Connection) StopHealthCheck() {
+	c.stopHealthCheck()
 }
 
 // OutboundConnection returns the underlying connection for an outbound call.
