@@ -83,7 +83,7 @@ func TestRelay(t *testing.T) {
 		}
 
 		calls := relaytest.NewMockStats()
-		for _ = range tests {
+		for range tests {
 			calls.Add("client", "test", "echo").Succeeded().End()
 		}
 		ts.AssertRelayStats(calls)
