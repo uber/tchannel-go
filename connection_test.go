@@ -123,6 +123,24 @@ func isTosPriority(c net.Conn, tosPriority tos.ToS) (bool, error) {
 	return connTosPriority == int(tosPriority), err
 }
 
+func getErrorFrame(t *testing.T) *Frame {
+	var errFrame *Frame
+	server := testutils.NewServer(t, testutils.NewOpts().DisableLogVerification())
+	defer server.Close()
+
+	frameRelay, cancel := testutils.FrameRelay(t, server.PeerInfo().HostPort, func(outgoing bool, f *Frame) *Frame {
+		if strings.Contains(f.Header.String(), "Error") {
+			errFrame = f
+		}
+		return f
+	})
+	defer cancel()
+
+	testutils.CallEcho(server, frameRelay, "unknown", nil)
+	require.NotNil(t, errFrame, "Failed to get error frame")
+	return errFrame
+}
+
 func TestRoundTrip(t *testing.T) {
 	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
 		handler := newTestHandler(t)
@@ -293,9 +311,30 @@ func TestPing(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
+		errFrame := getErrorFrame(t)
+		var returnErr bool
+		frameRelay, close := testutils.FrameRelay(t, ts.HostPort(), func(outgoing bool, f *Frame) *Frame {
+			if !outgoing && returnErr {
+				errFrame.Header.ID = f.Header.ID
+				f = errFrame
+			}
+			return f
+		})
+		defer close()
+
 		clientCh := ts.NewClient(nil)
 		defer clientCh.Close()
-		require.NoError(t, clientCh.Ping(ctx, ts.HostPort()))
+		require.NoError(t, clientCh.Ping(ctx, frameRelay))
+
+		conn, err := clientCh.RootPeers().GetOrAdd(frameRelay).GetConnection(ctx)
+		require.NoError(t, err, "Failed to get connection")
+
+		returnErr = true
+		require.Error(t, conn.Ping(ctx), "Expect error from error frame")
+
+		require.True(t, conn.IsActive(), "Connection should still be active after error frame")
+		returnErr = false
+		require.NoError(t, conn.Ping(ctx), "Ping should succeed")
 	})
 }
 

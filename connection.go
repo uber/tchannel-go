@@ -380,13 +380,7 @@ func (c *Connection) ping(ctx context.Context) error {
 		return c.connectionError("send ping", err)
 	}
 
-	res := &pingRes{}
-	err = c.recvMessage(ctx, res, mex)
-	if err != nil {
-		return c.connectionError("receive pong", err)
-	}
-
-	return nil
+	return c.recvMessage(ctx, &pingRes{}, mex)
 }
 
 // handlePingRes calls registered ping handlers.
