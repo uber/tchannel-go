@@ -136,6 +136,10 @@ type ConnectionOptions struct {
 
 	// ToS class name marked on outbound packets.
 	TosPriority tos.ToS
+
+	// HealthChecks configures active connection health checking for this channel.
+	// By default, health checks are not enabled.
+	HealthChecks HealthCheckOptions
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -186,6 +190,11 @@ type Connection struct {
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
 	// components that can be used to set peer tags on OpenTracing Span.
 	remotePeerAddress peerAddressComponents
+
+	// healthCheckCtx/Quit are used to stop health checks.
+	healthCheckCtx     context.Context
+	healthCheckQuit    context.CancelFunc
+	healthCheckHistory *healthHistory
 }
 
 type peerAddressComponents struct {
@@ -237,6 +246,7 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	if co.SendBufferSize <= 0 {
 		co.SendBufferSize = defaultConnectionBufferSize
 	}
+	co.HealthChecks = co.HealthChecks.withDefaults()
 	return co
 }
 
@@ -282,22 +292,24 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
-		connID:            connID,
-		conn:              conn,
-		opts:              opts,
-		state:             connectionActive,
-		sendCh:            make(chan *Frame, opts.SendBufferSize),
-		stopCh:            make(chan struct{}),
-		localPeerInfo:     peerInfo,
-		remotePeerInfo:    remotePeer,
-		remotePeerAddress: remotePeerAddress,
-		outboundHP:        outboundHP,
-		inbound:           newMessageExchangeSet(log, messageExchangeSetInbound),
-		outbound:          newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handler:           ch.handler,
-		events:            events,
-		commonStatsTags:   ch.commonStatsTags,
+		connID:             connID,
+		conn:               conn,
+		opts:               opts,
+		state:              connectionActive,
+		sendCh:             make(chan *Frame, opts.SendBufferSize),
+		stopCh:             make(chan struct{}),
+		localPeerInfo:      peerInfo,
+		remotePeerInfo:     remotePeer,
+		remotePeerAddress:  remotePeerAddress,
+		outboundHP:         outboundHP,
+		inbound:            newMessageExchangeSet(log, messageExchangeSetInbound),
+		outbound:           newMessageExchangeSet(log, messageExchangeSetOutbound),
+		handler:            ch.handler,
+		events:             events,
+		commonStatsTags:    ch.commonStatsTags,
+		healthCheckHistory: newHealthHistory(),
 	}
+	c.healthCheckCtx, c.healthCheckQuit = context.WithCancel(context.Background())
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
 		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
@@ -346,6 +358,10 @@ func (c *Connection) callOnActive() {
 
 	if f := c.events.OnActive; f != nil {
 		f(c)
+	}
+
+	if c.opts.HealthChecks.enabled() {
+		go c.healthCheck(c.connID)
 	}
 }
 
@@ -530,6 +546,8 @@ func (c *Connection) connectionError(site string, err error) error {
 			ErrField(err),
 		}
 	}
+
+	c.stopHealthCheck()
 	err = c.logConnectionError(site, err)
 	c.close(closeLogFields...)
 
@@ -811,7 +829,7 @@ func (c *Connection) closeNetwork() {
 	// closed; no need to close the send channel (and closing the send
 	// channel would be dangerous since other goroutine might be sending)
 	c.log.Debugf("Closing underlying network connection")
-	c.closeNetworkCalled.Inc()
+	c.stopHealthCheck()
 	if err := c.conn.Close(); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
