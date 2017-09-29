@@ -123,9 +123,8 @@ func (c *Connection) healthCheck(connID uint32) {
 		}
 
 		ctx, cancel := context.WithTimeout(c.healthCheckCtx, opts.Timeout)
-		defer cancel()
-
 		err := c.ping(ctx)
+		cancel()
 		c.healthCheckHistory.add(err == nil)
 		if err == nil {
 			if c.log.Enabled(LogLevelDebug) {
