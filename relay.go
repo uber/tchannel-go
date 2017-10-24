@@ -457,8 +457,8 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	if isOriginator {
 		items = r.outbound
 	}
-	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
 	items.Add(id, item)
+	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
 	return item
 }
 
