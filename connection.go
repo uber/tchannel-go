@@ -830,6 +830,7 @@ func (c *Connection) closeNetwork() {
 	// channel would be dangerous since other goroutine might be sending)
 	c.log.Debugf("Closing underlying network connection")
 	c.stopHealthCheck()
+	c.closeNetworkCalled.Inc()
 	if err := c.conn.Close(); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
