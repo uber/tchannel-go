@@ -124,28 +124,41 @@ func NewFrame(payloadCapacity int) *Frame {
 	return f
 }
 
-// ReadIn reads the frame from the given io.Reader
-func (f *Frame) ReadIn(r io.Reader) error {
-	var rbuf typed.ReadBuffer
-	rbuf.Wrap(f.headerBuffer)
+// ReadBody takes in a previously read frame header, and only reads in the body
+// based on the size specified in the header. This allows callers to defer
+// the frame allocation till the body needs to be read.
+func (f *Frame) ReadBody(header []byte, r io.Reader) error {
+	// Copy the header into the underlying buffer so we have an assembled frame
+	// that can be directly forwarded.
+	copy(f.buffer, header)
 
-	if _, err := rbuf.FillFrom(r, FrameHeaderSize); err != nil {
+	// Parse the header into our typed struct.
+	if err := f.Header.read(typed.NewReadBuffer(header)); err != nil {
 		return err
 	}
 
-	if err := f.Header.read(&rbuf); err != nil {
-		return err
-	}
 	switch payloadSize := f.Header.PayloadSize(); {
 	case payloadSize > MaxFramePayloadSize:
 		return fmt.Errorf("invalid frame size %v", f.Header.size)
 	case payloadSize > 0:
-		if _, err := io.ReadFull(r, f.SizedPayload()); err != nil {
-			return err
-		}
+		_, err := io.ReadFull(r, f.SizedPayload())
+		return err
+	default:
+		// No payload to read
+		return nil
+	}
+}
+
+// ReadIn reads the frame from the given io.Reader.
+// Deprecated: Only maintained for backwards compatibility. Callers should
+// use ReadBody instead.
+func (f *Frame) ReadIn(r io.Reader) error {
+	header := make([]byte, FrameHeaderSize)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return err
 	}
 
-	return nil
+	return f.ReadBody(header, r)
 }
 
 // WriteOut writes the frame to the given io.Writer

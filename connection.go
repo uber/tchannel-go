@@ -608,14 +608,27 @@ func (c *Connection) readState() connectionState {
 // incoming frame to a channel; the init handlers are a notable exception,
 // since we cannot process new frames until the initialization is complete.
 func (c *Connection) readFrames(_ uint32) {
+	headerBuf := make([]byte, FrameHeaderSize)
+
+	handleErr := func(err error) {
+		if c.closeNetworkCalled.Load() == 0 {
+			c.connectionError("read frames", err)
+		} else {
+			c.log.Debugf("Ignoring error after connection was closed: %v", err)
+		}
+	}
+
 	for {
+		// Read the header, avoid allocating the frame till we know the size
+		// we need to allocate.
+		if _, err := io.ReadFull(c.conn, headerBuf); err != nil {
+			handleErr(err)
+			return
+		}
+
 		frame := c.opts.FramePool.Get()
-		if err := frame.ReadIn(c.conn); err != nil {
-			if c.closeNetworkCalled.Load() == 0 {
-				c.connectionError("read frames", err)
-			} else {
-				c.log.Debugf("Ignoring error after connection was closed: %v", err)
-			}
+		if err := frame.ReadBody(headerBuf, c.conn); err != nil {
+			handleErr(err)
 			c.opts.FramePool.Release(frame)
 			return
 		}
