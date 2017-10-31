@@ -157,7 +157,7 @@ func TestHealthCheckIntegration(t *testing.T) {
 		{
 			msg:                 "single failure with failuresToClose=1",
 			failuresToClose:     1,
-			pingResponses:       []bool{true, false, true, true},
+			pingResponses:       []bool{true, false},
 			wantActive:          false,
 			wantHealthCheckLogs: 1,
 		},
@@ -222,11 +222,6 @@ func TestHealthCheckIntegration(t *testing.T) {
 
 					waitForNHealthChecks(t, conn, i+1)
 					assert.Equal(t, tt.pingResponses[:i+1], introspectConn(conn).HealthChecks, "Unexpectd health check history")
-
-					// No point performing more pings if the connection has been closed.
-					if !conn.IsActive() {
-						break
-					}
 				}
 
 				// Once the health check is done, we trigger a Close, it's possible we are still
