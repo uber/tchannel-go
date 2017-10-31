@@ -50,22 +50,22 @@ var (
 )
 
 type relayItem struct {
-	*time.Timer
-
 	remapID     uint32
 	tomb        bool
 	local       bool
 	call        RelayCall
 	destination *Relayer
 	span        Span
+	timeout     *relayTimer
 }
 
 type relayItems struct {
 	sync.RWMutex
 
-	logger Logger
-	tombs  uint64
-	items  map[uint32]relayItem
+	logger   Logger
+	timeouts *relayTimerPool
+	tombs    uint64
+	items    map[uint32]relayItem
 }
 
 func newRelayItems(logger Logger) *relayItems {
@@ -117,7 +117,8 @@ func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 	}
 	r.Unlock()
 
-	item.Stop()
+	item.timeout.Stop()
+	item.timeout.Release()
 	return item, !item.tomb
 }
 
@@ -179,6 +180,9 @@ type Relayer struct {
 	// It stores remappings for all response frames read on this connection.
 	inbound *relayItems
 
+	// TODO
+	timeouts *relayTimerPool
+
 	peers   *RootPeerList
 	conn    *Connection
 	logger  Logger
@@ -187,7 +191,7 @@ type Relayer struct {
 
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
-	return &Relayer{
+	r := &Relayer{
 		relayHost:    ch.RelayHost(),
 		maxTimeout:   ch.relayMaxTimeout,
 		localHandler: ch.relayLocal,
@@ -197,6 +201,8 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		conn:         conn,
 		logger:       conn.log,
 	}
+	r.timeouts = newRelayTimerPool(r.timeoutRelayItem)
+	return r
 }
 
 // Relay is called for each frame that is read on the connection.
@@ -457,12 +463,13 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	if isOriginator {
 		items = r.outbound
 	}
+	item.timeout = r.timeouts.Get()
 	items.Add(id, item)
-	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
+	item.timeout.Start(ttl, items, id, isOriginator)
 	return item
 }
 
-func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint32) {
+func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bool) {
 	item, ok := items.Entomb(id, _relayTombTTL)
 	if !ok {
 		return
