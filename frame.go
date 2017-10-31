@@ -150,8 +150,8 @@ func (f *Frame) ReadBody(header []byte, r io.Reader) error {
 }
 
 // ReadIn reads the frame from the given io.Reader.
-// This method is deprecated: callers should prefer to read the frame header
-// separately, and using ReadBody.
+// Deprecated: Only maintained for backwards compatibility. Callers should
+// use ReadBody instead.
 func (f *Frame) ReadIn(r io.Reader) error {
 	header := make([]byte, FrameHeaderSize)
 	if _, err := io.ReadFull(r, header); err != nil {
