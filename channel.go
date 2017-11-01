@@ -800,7 +800,10 @@ func (ch *Channel) Close() {
 	}
 
 	if channelClosed {
-		ch.onClosed()
+		// Dummy change to check coverage
+		if 1 == 1 {
+			ch.onClosed()
+		}
 	}
 }
 
