@@ -94,13 +94,33 @@ func (s *Server) SetContextFn(f func(ctx context.Context, method string, headers
 	s.ctxFn = f
 }
 
-func (s *Server) onError(err error) {
+func (s *Server) onError(ctx context.Context, method string, err error) {
 	// TODO(prashant): Expose incoming call errors through options for NewServer.
-	// Timeouts should not be reported as errors.
+	logger := s.log.WithFields(
+		tchannel.ErrField(err),
+	)
+
+	// Add additional context about the remote peer if available.
+	if call := tchannel.CurrentCall(ctx); call != nil {
+		remotePeer := call.RemotePeer()
+		logger = logger.WithFields(
+			tchannel.LogField{Key: "method", Value: method},
+			tchannel.LogField{Key: "callerName", Value: call.CallerName()},
+
+			// TODO: These are very similar to the connection fields, but we don't
+			// have access to the connection's logger. Consider exposing the
+			// connection through CurrentCall.
+			tchannel.LogField{Key: "localAddr", Value: call.LocalPeer().HostPort},
+			tchannel.LogField{Key: "remoteHostPort", Value: remotePeer.HostPort},
+			tchannel.LogField{Key: "remoteIsEphemeral", Value: remotePeer.IsEphemeral},
+			tchannel.LogField{Key: "remoteProcess", Value: remotePeer.ProcessName},
+		)
+	}
+
 	if tchannel.GetSystemErrorCode(err) == tchannel.ErrCodeTimeout {
-		s.log.Debugf("thrift Server timeout: %v", err)
+		logger.Debug("Thrift server timeout.")
 	} else {
-		s.log.WithFields(tchannel.ErrField(err)).Error("Thrift server error.")
+		logger.Error("Thrift server error.")
 	}
 }
 
@@ -211,6 +231,6 @@ func (s *Server) Handle(ctx context.Context, call *tchannel.InboundCall) {
 	}
 
 	if err := s.handle(ctx, handler, method, call); err != nil {
-		s.onError(err)
+		s.onError(ctx, call.MethodString(), err)
 	}
 }
