@@ -194,6 +194,7 @@ type Connection struct {
 	// healthCheckCtx/Quit are used to stop health checks.
 	healthCheckCtx     context.Context
 	healthCheckQuit    context.CancelFunc
+	healthCheckDone    chan struct{}
 	healthCheckHistory *healthHistory
 }
 
@@ -309,7 +310,6 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
 	}
-	c.healthCheckCtx, c.healthCheckQuit = context.WithCancel(context.Background())
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
 		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
@@ -361,6 +361,8 @@ func (c *Connection) callOnActive() {
 	}
 
 	if c.opts.HealthChecks.enabled() {
+		c.healthCheckCtx, c.healthCheckQuit = context.WithCancel(context.Background())
+		c.healthCheckDone = make(chan struct{})
 		go c.healthCheck(c.connID)
 	}
 }
