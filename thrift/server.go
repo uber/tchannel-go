@@ -98,13 +98,13 @@ func (s *Server) onError(ctx context.Context, method string, err error) {
 	// TODO(prashant): Expose incoming call errors through options for NewServer.
 	logger := s.log.WithFields(
 		tchannel.ErrField(err),
+		tchannel.LogField{Key: "method", Value: method},
 	)
 
 	// Add additional context about the remote peer if available.
 	if call := tchannel.CurrentCall(ctx); call != nil {
 		remotePeer := call.RemotePeer()
 		logger = logger.WithFields(
-			tchannel.LogField{Key: "method", Value: method},
 			tchannel.LogField{Key: "callerName", Value: call.CallerName()},
 
 			// TODO: These are very similar to the connection fields, but we don't
