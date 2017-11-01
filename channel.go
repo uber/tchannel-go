@@ -195,10 +195,6 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	if logger == nil {
 		logger = NullLogger
 	}
-	logger = logger.WithFields(
-		LogField{"service", serviceName},
-		LogField{"process", processName},
-	)
 
 	statsReporter := opts.StatsReporter
 	if statsReporter == nil {
@@ -216,12 +212,15 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 
 	chID := _nextChID.Inc()
+	logger = logger.WithFields(
+		LogField{"serviceName", serviceName},
+		LogField{"process", processName},
+		LogField{"chID", chID},
+	)
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
-			log: logger.WithFields(
-				LogField{"chID", chID},
-				LogField{"service", serviceName},
-				LogField{"process", processName}),
+			log:           logger,
 			relayLocal:    toStringSet(opts.RelayLocalHandlers),
 			statsReporter: statsReporter,
 			subChannels:   &subChannelMap{},
