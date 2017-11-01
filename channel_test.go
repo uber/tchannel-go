@@ -73,11 +73,11 @@ func TestLoggers(t *testing.T) {
 
 	peerInfo := ch.PeerInfo()
 	fields := toMap(ch.Logger().Fields())
-	assert.Equal(t, peerInfo.ServiceName, fields["service"])
+	assert.Equal(t, peerInfo.ServiceName, fields["serviceName"])
 
 	sc := ch.GetSubChannel("subch")
 	fields = toMap(sc.Logger().Fields())
-	assert.Equal(t, peerInfo.ServiceName, fields["service"])
+	assert.Equal(t, peerInfo.ServiceName, fields["serviceName"])
 	assert.Equal(t, "subch", fields["subchannel"])
 }
 
