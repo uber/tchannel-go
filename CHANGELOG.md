@@ -1,6 +1,15 @@
 Changelog
 =========
 
+# v1.8.0 (2017-11-06)
+
+ * Improve error logging on `thrift.Server` errors. (#663)
+ * Reduce memory usage for idle connections. (#658)
+ * Add opt-in active connection health checks. (#318)
+ * Don't close connections on ping errors.(#655)
+ * Unpin and reduce dependencies in `glide.yaml` by using `testImports`. (#649)
+ * Avoid holding on to closed connections' memory in peers. (#644)
+
 # v1.7.0 (2017-08-04)
 
 * Cancel the context on incoming calls if the client connection is closed.
