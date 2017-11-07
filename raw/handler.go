@@ -80,10 +80,7 @@ func WriteResponse(response *tchannel.InboundCallResponse, resp *Res) error {
 	if err := tchannel.NewArgWriter(response.Arg2Writer()).Write(resp.Arg2); err != nil {
 		return err
 	}
-	if err := tchannel.NewArgWriter(response.Arg3Writer()).Write(resp.Arg3); err != nil {
-		return err
-	}
-	return nil
+	return tchannel.NewArgWriter(response.Arg3Writer()).Write(resp.Arg3)
 }
 
 // Wrap wraps a Handler as a tchannel.Handler that can be passed to tchannel.Register.

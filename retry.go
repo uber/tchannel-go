@@ -190,8 +190,8 @@ func (rs *RequestState) AddSelectedPeer(hostPort string) {
 	host := getHost(hostPort)
 	if rs.SelectedPeers == nil {
 		rs.SelectedPeers = map[string]struct{}{
-			hostPort: struct{}{},
-			host:     struct{}{},
+			hostPort: {},
+			host:     {},
 		}
 	} else {
 		rs.SelectedPeers[hostPort] = struct{}{}

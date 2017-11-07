@@ -32,7 +32,7 @@ import (
 func filterStacks(stacks []Stack, skipID int, opts *VerifyOpts) []Stack {
 	filtered := stacks[:0]
 	for _, stack := range stacks {
-		if stack.ID() == skipID || isTestStack(stack) {
+		if stack.ID() == skipID || shouldIgnore(stack) {
 			continue
 		}
 		if opts.ShouldSkip(stack) {
@@ -43,12 +43,15 @@ func filterStacks(stacks []Stack, skipID int, opts *VerifyOpts) []Stack {
 	return filtered
 }
 
-func isTestStack(s Stack) bool {
+func shouldIgnore(s Stack) bool {
 	switch funcName := s.firstFunction; funcName {
 	case "testing.RunTests", "testing.(*T).Run":
 		return strings.HasPrefix(s.State(), "chan receive")
 	case "runtime.goexit":
 		return strings.HasPrefix(s.State(), "syscall")
+	case "os/signal.signal_recv":
+		// The signal package automatically starts a goroutine when it's imported.
+		return true
 	default:
 		return false
 	}

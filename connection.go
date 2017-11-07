@@ -136,6 +136,10 @@ type ConnectionOptions struct {
 
 	// ToS class name marked on outbound packets.
 	TosPriority tos.ToS
+
+	// HealthChecks configures active connection health checking for this channel.
+	// By default, health checks are not enabled.
+	HealthChecks HealthCheckOptions
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -186,6 +190,12 @@ type Connection struct {
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
 	// components that can be used to set peer tags on OpenTracing Span.
 	remotePeerAddress peerAddressComponents
+
+	// healthCheckCtx/Quit are used to stop health checks.
+	healthCheckCtx     context.Context
+	healthCheckQuit    context.CancelFunc
+	healthCheckDone    chan struct{}
+	healthCheckHistory *healthHistory
 }
 
 type peerAddressComponents struct {
@@ -237,6 +247,7 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 	if co.SendBufferSize <= 0 {
 		co.SendBufferSize = defaultConnectionBufferSize
 	}
+	co.HealthChecks = co.HealthChecks.withDefaults()
 	return co
 }
 
@@ -282,21 +293,22 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
-		connID:            connID,
-		conn:              conn,
-		opts:              opts,
-		state:             connectionActive,
-		sendCh:            make(chan *Frame, opts.SendBufferSize),
-		stopCh:            make(chan struct{}),
-		localPeerInfo:     peerInfo,
-		remotePeerInfo:    remotePeer,
-		remotePeerAddress: remotePeerAddress,
-		outboundHP:        outboundHP,
-		inbound:           newMessageExchangeSet(log, messageExchangeSetInbound),
-		outbound:          newMessageExchangeSet(log, messageExchangeSetOutbound),
-		handler:           ch.handler,
-		events:            events,
-		commonStatsTags:   ch.commonStatsTags,
+		connID:             connID,
+		conn:               conn,
+		opts:               opts,
+		state:              connectionActive,
+		sendCh:             make(chan *Frame, opts.SendBufferSize),
+		stopCh:             make(chan struct{}),
+		localPeerInfo:      peerInfo,
+		remotePeerInfo:     remotePeer,
+		remotePeerAddress:  remotePeerAddress,
+		outboundHP:         outboundHP,
+		inbound:            newMessageExchangeSet(log, messageExchangeSetInbound),
+		outbound:           newMessageExchangeSet(log, messageExchangeSetOutbound),
+		handler:            ch.handler,
+		events:             events,
+		commonStatsTags:    ch.commonStatsTags,
+		healthCheckHistory: newHealthHistory(),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
@@ -347,6 +359,12 @@ func (c *Connection) callOnActive() {
 	if f := c.events.OnActive; f != nil {
 		f(c)
 	}
+
+	if c.opts.HealthChecks.enabled() {
+		c.healthCheckCtx, c.healthCheckQuit = context.WithCancel(context.Background())
+		c.healthCheckDone = make(chan struct{})
+		go c.healthCheck(c.connID)
+	}
 }
 
 func (c *Connection) callOnCloseStateChange() {
@@ -380,13 +398,7 @@ func (c *Connection) ping(ctx context.Context) error {
 		return c.connectionError("send ping", err)
 	}
 
-	res := &pingRes{}
-	err = c.recvMessage(ctx, res, mex)
-	if err != nil {
-		return c.connectionError("receive pong", err)
-	}
-
-	return nil
+	return c.recvMessage(ctx, &pingRes{}, mex)
 }
 
 // handlePingRes calls registered ping handlers.
@@ -536,6 +548,8 @@ func (c *Connection) connectionError(site string, err error) error {
 			ErrField(err),
 		}
 	}
+
+	c.stopHealthCheck()
 	err = c.logConnectionError(site, err)
 	c.close(closeLogFields...)
 
@@ -596,14 +610,27 @@ func (c *Connection) readState() connectionState {
 // incoming frame to a channel; the init handlers are a notable exception,
 // since we cannot process new frames until the initialization is complete.
 func (c *Connection) readFrames(_ uint32) {
+	headerBuf := make([]byte, FrameHeaderSize)
+
+	handleErr := func(err error) {
+		if c.closeNetworkCalled.Load() == 0 {
+			c.connectionError("read frames", err)
+		} else {
+			c.log.Debugf("Ignoring error after connection was closed: %v", err)
+		}
+	}
+
 	for {
+		// Read the header, avoid allocating the frame till we know the size
+		// we need to allocate.
+		if _, err := io.ReadFull(c.conn, headerBuf); err != nil {
+			handleErr(err)
+			return
+		}
+
 		frame := c.opts.FramePool.Get()
-		if err := frame.ReadIn(c.conn); err != nil {
-			if c.closeNetworkCalled.Load() == 0 {
-				c.connectionError("read frames", err)
-			} else {
-				c.log.Debugf("Ignoring error after connection was closed: %v", err)
-			}
+		if err := frame.ReadBody(headerBuf, c.conn); err != nil {
+			handleErr(err)
 			c.opts.FramePool.Release(frame)
 			return
 		}
@@ -817,6 +844,7 @@ func (c *Connection) closeNetwork() {
 	// closed; no need to close the send channel (and closing the send
 	// channel would be dangerous since other goroutine might be sending)
 	c.log.Debugf("Closing underlying network connection")
+	c.stopHealthCheck()
 	c.closeNetworkCalled.Inc()
 	if err := c.conn.Close(); err != nil {
 		c.log.WithFields(

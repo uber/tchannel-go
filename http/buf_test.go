@@ -31,8 +31,8 @@ import (
 
 func TestHeaders(t *testing.T) {
 	tests := []http.Header{
-		http.Header{},
-		http.Header{
+		{},
+		{
 			"K1": []string{"K1V1", "K1V2", "K1V3"},
 			"K2": []string{"K2V2", "K2V2"},
 		},

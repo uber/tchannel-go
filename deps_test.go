@@ -1,4 +1,4 @@
-// Copyright (c) 2015 Uber Technologies, Inc.
+// Copyright (c) 2017 Uber Technologies, Inc.
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,9 +18,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package tchannel
+// Our glide.yaml lists a set of directories in excludeDirs to avoid packages
+// only used in testing from pulling in dependencies that should not affect
+// package resolution for clients.
+// However, we really want these directories to be part of test imports. Since
+// glide does not provide a "testDirs" option, we add dependencies required
+// for tests in this _test.go file.
 
-// VersionInfo identifies the version of the TChannel library.
-// Due to lack of proper package management, this version string will
-// be maintained manually.
-const VersionInfo = "1.8.0"
+package tchannel_test
+
+import (
+	"fmt"
+	"testing"
+
+	jcg "github.com/uber/jaeger-client-go"
+	// why is this not automatically included from jaeger-client-go?
+	// _ "github.com/uber/jaeger-lib/metrics"
+)
+
+func TestJaegerDeps(t *testing.T) {
+	m := jcg.Metrics{}
+	_ = m.SamplerUpdateFailure
+	fmt.Println("m", m)
+}

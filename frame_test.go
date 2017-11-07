@@ -99,6 +99,24 @@ func TestPartialRead(t *testing.T) {
 	require.Equal(t, f.SizedPayload(), f2.SizedPayload(), "payload does not match")
 }
 
+func TestFrameReadShortFrame(t *testing.T) {
+	headerFull := make([]byte, FrameHeaderSize)
+	headerFull[1] = FrameHeaderSize + 1 // give the frame a non-zero size.
+	body := []byte{1}
+
+	f := NewFrame(MaxFramePayloadSize)
+	err := f.ReadBody(headerFull, bytes.NewReader(body))
+	require.NoError(t, err, "Should not fail to read full frame header")
+
+	for i := 0; i < FrameHeaderSize; i++ {
+		partialHeader := headerFull[:i]
+
+		f := NewFrame(MaxFramePayloadSize)
+		err := f.ReadBody(partialHeader, bytes.NewReader(body))
+		assert.Equal(t, typed.ErrEOF, err, "Expected short header to fail")
+	}
+}
+
 func TestEmptyPayload(t *testing.T) {
 	f := NewFrame(MaxFramePayloadSize)
 	m := &pingRes{id: 1}
