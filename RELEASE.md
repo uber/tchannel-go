@@ -15,7 +15,7 @@ This document outlines how to create a release of tchannel-go
     ```
     $ git checkout dev
     $ git pull
-	$ git checkout release
+	  $ git checkout release
     ```
 
 3.  Update the `CHANGELOG.md` and `version.go` files.
