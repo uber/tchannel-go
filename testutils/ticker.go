@@ -20,10 +20,11 @@
 
 package testutils
 
-import "time"
+import (
+	"time"
+)
 
-// FakeTicker is a ticker for unit tests that can be controlled
-// deterministically.
+// FakeTicker is a test-controlled time.Ticker
 type FakeTicker struct {
 	c chan time.Time
 }

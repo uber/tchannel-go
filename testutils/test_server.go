@@ -233,6 +233,11 @@ func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
 	opts.ServiceName = "relay"
 	opts.ChannelOptions.RelayHost = relayHost
 
+	if parentOpts.relayOptsFn != nil {
+		parentOpts.relayOptsFn(opts)
+		opts.relayOptsFn = nil
+	}
+
 	ts.addChannel(newServer, opts)
 	if ts.relayHost != nil {
 		ts.relayHost.Add(ts.Server().ServiceName(), ts.Server().PeerInfo().HostPort)

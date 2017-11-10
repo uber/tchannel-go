@@ -88,6 +88,15 @@ type ChannelOptions struct {
 	// Note: This is not a stable part of the API and may change.
 	TimeTicker func(d time.Duration) *time.Ticker
 
+	// MaxIdleTime controls how long we allow an idle connection to exist
+	// before tearing it down.
+	MaxIdleTime *time.Duration
+
+	// IdleCheckInterval controls how often the channel runs the sweep over
+	// all active connections to see if they can be dropped. If this is set to
+	// zero, the idle check is disabled.
+	IdleCheckInterval *time.Duration
+
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
 	Tracer opentracing.Tracer
@@ -145,6 +154,7 @@ type Channel struct {
 		state        ChannelState
 		peerInfo     LocalPeerInfo // May be ephemeral if this is a client only channel
 		l            net.Listener  // May be nil if this is a client only channel
+		idleSweep    *IdleSweep
 		conns        map[uint32]*Connection
 	}
 }
@@ -269,6 +279,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	if opts.RelayHost != nil {
 		opts.RelayHost.SetChannel(ch)
 	}
+
+	// Configure the idle connection timer.
+	ch.mutable.idleSweep = newIdleSweep(ch, opts)
+
 	return ch, nil
 }
 
@@ -298,6 +312,9 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.peerInfo.HostPort = l.Addr().String()
 	mutable.peerInfo.IsEphemeral = false
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
+
+	// Start the idle connection timer.
+	ch.mutable.idleSweep.Start()
 
 	peerInfo := mutable.peerInfo
 	ch.log.WithFields(
@@ -620,6 +637,8 @@ func (ch *Channel) addConnection(c *Connection, direction connectionDirection) b
 		return false
 	}
 
+	// Start the idle connection timer.
+	ch.mutable.idleSweep.Start()
 	ch.mutable.conns[c.connID] = c
 	return true
 }
@@ -758,11 +777,15 @@ func (ch *Channel) Close() {
 	ch.Logger().Info("Channel.Close called.")
 	var connections []*Connection
 	var channelClosed bool
+
 	ch.mutable.Lock()
 
 	if ch.mutable.l != nil {
 		ch.mutable.l.Close()
 	}
+
+	// Stop the idle connections timer.
+	ch.mutable.idleSweep.Stop()
 
 	ch.mutable.state = ChannelStartClose
 	if len(ch.mutable.conns) == 0 {
