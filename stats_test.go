@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -58,6 +59,33 @@ func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map
 	}
 }
 
+// statsHandler increments the server and client timers when handling requests.
+type statsHandler struct {
+	clientClock *testutils.StubClock
+	serverClock *testutils.StubClock
+}
+
+func (h *statsHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	h.clientClock.Elapse(100 * time.Millisecond)
+	h.serverClock.Elapse(50 * time.Millisecond)
+
+	switch args.Method {
+	case "echo":
+		return &raw.Res{
+			Arg2: args.Arg2,
+			Arg3: args.Arg3,
+		}, nil
+	case "app-error":
+		return &raw.Res{
+			IsErr: true,
+		}, nil
+	}
+	return nil, errors.New("unknown method")
+}
+
+func (h *statsHandler) OnError(ctx context.Context, err error) {
+}
+
 func TestStatsCalls(t *testing.T) {
 	defer testutils.SetTimeout(t, 2*time.Second)()
 
@@ -76,24 +104,26 @@ func TestStatsCalls(t *testing.T) {
 
 	for _, tt := range tests {
 		initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-		clientNow, clientNowFn := testutils.NowStub(initialTime)
-		serverNow, serverNowFn := testutils.NowStub(initialTime)
-		clientNowFn(100 * time.Millisecond)
-		serverNowFn(50 * time.Millisecond)
+		clientClock := testutils.NewStubClock(initialTime)
+		serverClock := testutils.NewStubClock(initialTime)
+		handler := &statsHandler{
+			clientClock: clientClock,
+			serverClock: serverClock,
+		}
 
 		clientStats := newRecordingStatsReporter()
 		serverStats := newRecordingStatsReporter()
 		serverOpts := testutils.NewOpts().
 			SetStatsReporter(serverStats).
-			SetTimeNow(serverNow)
+			SetTimeNow(serverClock.Now)
 		WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
-			handler := raw.Wrap(newTestHandler(t))
+			handler := raw.Wrap(handler)
 			serverCh.Register(handler, "echo")
 			serverCh.Register(handler, "app-error")
 
 			ch := testutils.NewClient(t, testutils.NewOpts().
 				SetStatsReporter(clientStats).
-				SetTimeNow(clientNow))
+				SetTimeNow(clientClock.Now))
 			defer ch.Close()
 
 			ctx, cancel := NewContext(time.Second * 5)
@@ -132,15 +162,14 @@ func TestStatsWithRetries(t *testing.T) {
 	a := testutils.DurationArray
 
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-	nowStub, nowFn := testutils.NowStub(initialTime)
+	clientClock := testutils.NewStubClock(initialTime)
 
 	clientStats := newRecordingStatsReporter()
 	ch := testutils.NewClient(t, testutils.NewOpts().
 		SetStatsReporter(clientStats).
-		SetTimeNow(nowStub))
+		SetTimeNow(clientClock.Now))
 	defer ch.Close()
 
-	nowFn(10 * time.Millisecond)
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -149,13 +178,12 @@ func TestStatsWithRetries(t *testing.T) {
 	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
 		respErr := make(chan error, 1)
 		testutils.RegisterFunc(serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			clientClock.Elapse(10 * time.Millisecond)
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
 		})
 		ch.Peers().Add(serverCh.PeerInfo().HostPort)
 
-		// timeNow is called at:
-		// RunWithRetry start, per-attempt start, per-attempt end.
-		// Each attempt takes 2 * step.
+		// Each attempt takes 20ms
 		tests := []struct {
 			expectErr           error
 			numFailures         int
@@ -193,6 +221,7 @@ func TestStatsWithRetries(t *testing.T) {
 		for _, tt := range tests {
 			clientStats.Reset()
 			err := ch.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
+				clientClock.Elapse(10 * time.Millisecond)
 				if rs.Attempt > tt.numFailures {
 					respErr <- nil
 				} else {
