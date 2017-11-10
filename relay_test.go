@@ -559,6 +559,8 @@ func TestRelayUsesRootPeers(t *testing.T) {
 		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
 		assert.NoError(t, err, "Echo failed")
 		assert.Len(t, ts.Relay().Peers().Copy(), 0, "Peers should not be modified by relay")
+
+		client.Close()
 	})
 }
 
