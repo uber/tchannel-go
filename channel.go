@@ -86,15 +86,16 @@ type ChannelOptions struct {
 
 	// TimeTicker is a variable for overriding time.Ticker in unit tests.
 	// Note: This is not a stable part of the API and may change.
-	TimeTicker func(d time.Duration) *time.Ticker
+	TimeTicker func(d time.Duration, name string) *time.Ticker
 
 	// MaxIdleTime controls how long we allow an idle connection to exist
 	// before tearing it down.
-	MaxIdleTime time.Duration
+	MaxIdleTime *time.Duration
 
 	// IdleCheckInterval controls how often the channel runs the sweep over
-	// all active connections to see if they can be dropped.
-	IdleCheckInterval time.Duration
+	// all active connections to see if they can be dropped. If this is set to
+	// zero, the idle check is disabled.
+	IdleCheckInterval *time.Duration
 
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
@@ -146,7 +147,6 @@ type Channel struct {
 	relayMaxTimeout     time.Duration
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
-	idleSweep           *IdleSweep
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -154,6 +154,7 @@ type Channel struct {
 		state        ChannelState
 		peerInfo     LocalPeerInfo // May be ephemeral if this is a client only channel
 		l            net.Listener  // May be nil if this is a client only channel
+		idleSweep    *IdleSweep
 		conns        map[uint32]*Connection
 	}
 }
@@ -167,7 +168,7 @@ type channelConnectionCommon struct {
 	tracer        opentracing.Tracer
 	subChannels   *subChannelMap
 	timeNow       func() time.Time
-	timeTicker    func(time.Duration) *time.Ticker
+	timeTicker    func(time.Duration, string) *time.Ticker
 }
 
 // _nextChID is used to allocate unique IDs to every channel for debugging purposes.
@@ -217,7 +218,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 	timeTicker := opts.TimeTicker
 	if timeTicker == nil {
-		timeTicker = time.NewTicker
+		// Use the real time.Ticker (name is ignored)
+		timeTicker = func(d time.Duration, name string) *time.Ticker {
+			return time.NewTicker(d)
+		}
 	}
 
 	chID := _nextChID.Inc()
@@ -279,10 +283,8 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		opts.RelayHost.SetChannel(ch)
 	}
 
-	// Start the idle connection timer.
-	if opts.IdleCheckInterval > 0 {
-		ch.idleSweep = startPeriodicIdleSweep(ch, opts.IdleCheckInterval, opts.MaxIdleTime)
-	}
+	// Configure the idle connection timer.
+	ch.mutable.idleSweep = newIdleSweep(ch, opts)
 
 	return ch, nil
 }
@@ -313,6 +315,9 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.peerInfo.HostPort = l.Addr().String()
 	mutable.peerInfo.IsEphemeral = false
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
+
+	// Start the idle connection timer.
+	ch.mutable.idleSweep.Start()
 
 	peerInfo := mutable.peerInfo
 	ch.log.WithFields(
@@ -635,6 +640,8 @@ func (ch *Channel) addConnection(c *Connection, direction connectionDirection) b
 		return false
 	}
 
+	// Start the idle connection timer.
+	ch.mutable.idleSweep.Start()
 	ch.mutable.conns[c.connID] = c
 	return true
 }
@@ -774,16 +781,14 @@ func (ch *Channel) Close() {
 	var connections []*Connection
 	var channelClosed bool
 
-	// Stop the idle connections timer.
-	if ch.idleSweep != nil {
-		ch.idleSweep.Stop()
-	}
-
 	ch.mutable.Lock()
 
 	if ch.mutable.l != nil {
 		ch.mutable.l.Close()
 	}
+
+	// Stop the idle connections timer.
+	ch.mutable.idleSweep.Stop()
 
 	ch.mutable.state = ChannelStartClose
 	if len(ch.mutable.conns) == 0 {

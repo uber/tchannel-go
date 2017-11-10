@@ -168,7 +168,6 @@ func TestStatsWithRetries(t *testing.T) {
 	ch := testutils.NewClient(t, testutils.NewOpts().
 		SetStatsReporter(clientStats).
 		SetTimeNow(clientClock.Now))
-	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -182,6 +181,7 @@ func TestStatsWithRetries(t *testing.T) {
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
 		})
 		ch.Peers().Add(serverCh.PeerInfo().HostPort)
+		defer ch.Close()
 
 		// Each attempt takes 20ms
 		tests := []struct {

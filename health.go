@@ -113,7 +113,7 @@ func (c *Connection) healthCheck(connID uint32) {
 
 	opts := c.opts.HealthChecks
 
-	ticker := c.timeTicker(opts.Interval)
+	ticker := c.timeTicker(opts.Interval, "health")
 	defer ticker.Stop()
 
 	consecutiveFailures := 0

@@ -33,35 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeTicker struct {
-	c chan time.Time
-}
-
-func newFakeTicker() *fakeTicker {
-	return &fakeTicker{
-		c: make(chan time.Time, 1),
-	}
-}
-
-func (ft *fakeTicker) tick() {
-	ft.c <- time.Now()
-}
-
-func (ft *fakeTicker) tryTick() bool {
-	select {
-	case ft.c <- time.Time{}:
-		return true
-	default:
-		return false
-	}
-}
-
-func (ft *fakeTicker) New(d time.Duration) *time.Ticker {
-	t := time.NewTicker(time.Hour)
-	t.C = ft.c
-	return t
-}
-
 func TestHealthCheckStopBeforeStart(t *testing.T) {
 	opts := testutils.NewOpts().NoRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
@@ -75,9 +46,10 @@ func TestHealthCheckStopBeforeStart(t *testing.T) {
 		})
 		defer cancel()
 
-		ft := newFakeTicker()
+		tickers := testutils.Tickers()
+		ft := tickers.Fake("health")
 		opts := testutils.NewOpts().
-			SetTimeTicker(ft.New).
+			SetTimeTicker(tickers.Get).
 			SetHealthChecks(HealthCheckOptions{Interval: time.Second})
 		client := ts.NewClient(opts)
 
@@ -91,7 +63,7 @@ func TestHealthCheckStopBeforeStart(t *testing.T) {
 
 		// Should be no ping messages sent.
 		for i := 0; i < 10; i++ {
-			ft.tryTick()
+			ft.TryTick()
 		}
 		assert.Equal(t, 0, pingCount, "No pings when health check is stopped")
 	})
@@ -110,9 +82,10 @@ func TestHealthCheckStopNoError(t *testing.T) {
 		})
 		defer cancel()
 
-		ft := newFakeTicker()
+		tickers := testutils.Tickers()
+		ft := tickers.Fake("health")
 		opts := testutils.NewOpts().
-			SetTimeTicker(ft.New).
+			SetTimeTicker(tickers.Get).
 			SetHealthChecks(HealthCheckOptions{Interval: time.Second}).
 			AddLogFilter("Unexpected ping response.", 1)
 		client := ts.NewClient(opts)
@@ -124,7 +97,7 @@ func TestHealthCheckStopNoError(t *testing.T) {
 		require.NoError(t, err, "Failed to get connection")
 
 		for i := 0; i < 10; i++ {
-			ft.tick()
+			ft.Tick()
 			waitForNHealthChecks(t, conn, i+1)
 		}
 		conn.StopHealthCheck()
@@ -132,7 +105,7 @@ func TestHealthCheckStopNoError(t *testing.T) {
 		// We stop the health check, so the ticks channel is no longer read, so
 		// we can't use the synchronous tick here.
 		for i := 0; i < 10; i++ {
-			ft.tryTick()
+			ft.TryTick()
 		}
 
 		assert.Equal(t, 10, pingCount, "Pings should stop after health check is stopped")
@@ -203,9 +176,10 @@ func TestHealthCheckIntegration(t *testing.T) {
 				})
 				defer cancel()
 
-				ft := newFakeTicker()
+				tickers := testutils.Tickers()
+				ft := tickers.Buffered("health", 1)
 				opts := testutils.NewOpts().
-					SetTimeTicker(ft.New).
+					SetTimeTicker(tickers.Get).
 					SetHealthChecks(HealthCheckOptions{Interval: time.Second, FailuresToClose: tt.failuresToClose}).
 					AddLogFilter("Failed active health check.", uint(tt.wantHealthCheckLogs)).
 					AddLogFilter("Unexpected ping response.", 1)
@@ -218,7 +192,7 @@ func TestHealthCheckIntegration(t *testing.T) {
 				require.NoError(t, err, "Failed to get connection")
 
 				for i := 0; i < len(tt.pingResponses); i++ {
-					ft.tryTick()
+					ft.TryTick()
 
 					waitForNHealthChecks(t, conn, i+1)
 					assert.Equal(t, tt.pingResponses[:i+1], introspectConn(conn).HealthChecks, "Unexpectd health check history")

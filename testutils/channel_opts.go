@@ -144,7 +144,7 @@ func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 }
 
 // SetTimeTicker sets TimeTicker in ChannelOptions.
-func (o *ChannelOpts) SetTimeTicker(timeTicker func(d time.Duration) *time.Ticker) *ChannelOpts {
+func (o *ChannelOpts) SetTimeTicker(timeTicker func(d time.Duration, name string) *time.Ticker) *ChannelOpts {
 	o.TimeTicker = timeTicker
 	return o
 }
