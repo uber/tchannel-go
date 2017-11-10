@@ -88,6 +88,14 @@ type ChannelOptions struct {
 	// Note: This is not a stable part of the API and may change.
 	TimeTicker func(d time.Duration) *time.Ticker
 
+	// MaxIdleTime controls how long we allow an idle connection to exist
+	// before tearing it down.
+	MaxIdleTime time.Duration
+
+	// IdleCheckInterval controls how often the channel runs the sweep over
+	// all active connections to see if they can be dropped.
+	IdleCheckInterval time.Duration
+
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
 	Tracer opentracing.Tracer
@@ -138,6 +146,7 @@ type Channel struct {
 	relayMaxTimeout     time.Duration
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
+	idleSweep           *IdleSweep
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -269,6 +278,12 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	if opts.RelayHost != nil {
 		opts.RelayHost.SetChannel(ch)
 	}
+
+	// Start the idle connection timer.
+	if opts.IdleCheckInterval > 0 {
+		ch.idleSweep = startPeriodicIdleSweep(ch, opts.IdleCheckInterval, opts.MaxIdleTime)
+	}
+
 	return ch, nil
 }
 
@@ -758,6 +773,12 @@ func (ch *Channel) Close() {
 	ch.Logger().Info("Channel.Close called.")
 	var connections []*Connection
 	var channelClosed bool
+
+	// Stop the idle connections timer.
+	if ch.idleSweep != nil {
+		ch.idleSweep.Stop()
+	}
+
 	ch.mutable.Lock()
 
 	if ch.mutable.l != nil {

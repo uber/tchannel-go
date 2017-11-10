@@ -196,6 +196,9 @@ type Connection struct {
 	healthCheckQuit    context.CancelFunc
 	healthCheckDone    chan struct{}
 	healthCheckHistory *healthHistory
+
+	// lastActivity is used to track how long the connection has been idle.
+	lastActivity time.Time
 }
 
 type peerAddressComponents struct {
@@ -309,6 +312,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
+		lastActivity:       ch.timeNow(),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
@@ -635,6 +639,8 @@ func (c *Connection) readFrames(_ uint32) {
 			return
 		}
 
+		c.updateLastActivity(frame)
+
 		var releaseFrame bool
 		if c.relay == nil {
 			releaseFrame = c.handleFrameNoRelay(frame)
@@ -703,6 +709,7 @@ func (c *Connection) writeFrames(_ uint32) {
 				c.log.Debugf("Writing frame %s", f.Header)
 			}
 
+			c.updateLastActivity(f)
 			err := f.WriteOut(c.conn)
 			c.opts.FramePool.Release(f)
 			if err != nil {
@@ -718,6 +725,16 @@ func (c *Connection) writeFrames(_ uint32) {
 			c.closeNetwork()
 			return
 		}
+	}
+}
+
+// updateLastActivity marks when the last message was received/sent on the channel.
+// This is used for monitoring idle connections and timing them out.
+func (c *Connection) updateLastActivity(frame *Frame) {
+	// Pings are ignored for last activity.
+	switch frame.Header.messageType {
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
+		c.lastActivity = c.timeNow()
 	}
 }
 
