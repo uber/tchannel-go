@@ -25,23 +25,24 @@ import (
 	"time"
 )
 
-// StubClock is a fake wall-clock, exposing a frozen Now()
+// StubClock is a fake wall-clock, exposing a Now() method that returns a
+// test-controlled time.
 type StubClock struct {
 	cur time.Time
-	mut sync.Mutex
+	mu  sync.Mutex
 }
 
 // Now returns the current time stored in StubClock
 func (c *StubClock) Now() time.Time {
-	c.mut.Lock()
-	defer c.mut.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.cur
 }
 
 // Elapse increments the time returned by Now()
 func (c *StubClock) Elapse(addAmt time.Duration) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.cur = c.cur.Add(addAmt)
 }
 
