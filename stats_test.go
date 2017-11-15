@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -61,6 +60,7 @@ func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map
 
 // statsHandler increments the server and client timers when handling requests.
 type statsHandler struct {
+	*testHandler
 	clientClock *testutils.StubClock
 	serverClock *testutils.StubClock
 }
@@ -68,22 +68,7 @@ type statsHandler struct {
 func (h *statsHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 	h.clientClock.Elapse(100 * time.Millisecond)
 	h.serverClock.Elapse(50 * time.Millisecond)
-
-	switch args.Method {
-	case "echo":
-		return &raw.Res{
-			Arg2: args.Arg2,
-			Arg3: args.Arg3,
-		}, nil
-	case "app-error":
-		return &raw.Res{
-			IsErr: true,
-		}, nil
-	}
-	return nil, errors.New("unknown method")
-}
-
-func (h *statsHandler) OnError(ctx context.Context, err error) {
+	return h.testHandler.Handle(ctx, args)
 }
 
 func TestStatsCalls(t *testing.T) {
@@ -107,6 +92,7 @@ func TestStatsCalls(t *testing.T) {
 		clientClock := testutils.NewStubClock(initialTime)
 		serverClock := testutils.NewStubClock(initialTime)
 		handler := &statsHandler{
+			testHandler: newTestHandler(t),
 			clientClock: clientClock,
 			serverClock: serverClock,
 		}
