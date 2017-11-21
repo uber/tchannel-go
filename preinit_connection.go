@@ -127,8 +127,8 @@ func (ch *Channel) initError(c net.Conn, connDir connectionDirection, id uint32,
 
 	ch.log.WithFields(LogFields{
 		{"connectionDirection", connDir},
-		{"localAddr", c.LocalAddr()},
-		{"remoteAddr", c.RemoteAddr()},
+		{"localAddr", c.LocalAddr().String()},
+		{"remoteAddr", c.RemoteAddr().String()},
 		ErrField(err),
 	}...).Error("Failed during connection handshake.")
 
