@@ -58,6 +58,19 @@ func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map
 	}
 }
 
+// statsHandler increments the server and client timers when handling requests.
+type statsHandler struct {
+	*testHandler
+	clientClock *testutils.StubClock
+	serverClock *testutils.StubClock
+}
+
+func (h *statsHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	h.clientClock.Elapse(100 * time.Millisecond)
+	h.serverClock.Elapse(70 * time.Millisecond)
+	return h.testHandler.Handle(ctx, args)
+}
+
 func TestStatsCalls(t *testing.T) {
 	defer testutils.SetTimeout(t, 2*time.Second)()
 
@@ -76,24 +89,27 @@ func TestStatsCalls(t *testing.T) {
 
 	for _, tt := range tests {
 		initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-		clientNow, clientNowFn := testutils.NowStub(initialTime)
-		serverNow, serverNowFn := testutils.NowStub(initialTime)
-		clientNowFn(100 * time.Millisecond)
-		serverNowFn(50 * time.Millisecond)
+		clientClock := testutils.NewStubClock(initialTime)
+		serverClock := testutils.NewStubClock(initialTime)
+		handler := &statsHandler{
+			testHandler: newTestHandler(t),
+			clientClock: clientClock,
+			serverClock: serverClock,
+		}
 
 		clientStats := newRecordingStatsReporter()
 		serverStats := newRecordingStatsReporter()
 		serverOpts := testutils.NewOpts().
 			SetStatsReporter(serverStats).
-			SetTimeNow(serverNow)
+			SetTimeNow(serverClock.Now)
 		WithVerifiedServer(t, serverOpts, func(serverCh *Channel, hostPort string) {
-			handler := raw.Wrap(newTestHandler(t))
+			handler := raw.Wrap(handler)
 			serverCh.Register(handler, "echo")
 			serverCh.Register(handler, "app-error")
 
 			ch := testutils.NewClient(t, testutils.NewOpts().
 				SetStatsReporter(clientStats).
-				SetTimeNow(clientNow))
+				SetTimeNow(clientClock.Now))
 			defer ch.Close()
 
 			ctx, cancel := NewContext(time.Second * 5)
@@ -110,7 +126,7 @@ func TestStatsCalls(t *testing.T) {
 			clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
 			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
 			serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
-			serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
+			serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 70*time.Millisecond)
 
 			if tt.wantErr {
 				clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
@@ -132,30 +148,33 @@ func TestStatsWithRetries(t *testing.T) {
 	a := testutils.DurationArray
 
 	initialTime := time.Date(2015, 2, 1, 10, 10, 0, 0, time.UTC)
-	nowStub, nowFn := testutils.NowStub(initialTime)
+	clientClock := testutils.NewStubClock(initialTime)
 
 	clientStats := newRecordingStatsReporter()
 	ch := testutils.NewClient(t, testutils.NewOpts().
 		SetStatsReporter(clientStats).
-		SetTimeNow(nowStub))
+		SetTimeNow(clientClock.Now))
 	defer ch.Close()
 
-	nowFn(10 * time.Millisecond)
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
 	// TODO why do we need this??
 	opts := testutils.NewOpts().NoRelay()
 	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
+		const (
+			perAttemptServer = 10 * time.Millisecond
+			perAttemptClient = time.Millisecond
+			perAttemptTotal  = perAttemptServer + perAttemptClient
+		)
+
 		respErr := make(chan error, 1)
 		testutils.RegisterFunc(serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			clientClock.Elapse(perAttemptServer)
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
 		})
 		ch.Peers().Add(serverCh.PeerInfo().HostPort)
 
-		// timeNow is called at:
-		// RunWithRetry start, per-attempt start, per-attempt end.
-		// Each attempt takes 2 * step.
 		tests := []struct {
 			expectErr           error
 			numFailures         int
@@ -166,33 +185,34 @@ func TestStatsWithRetries(t *testing.T) {
 			{
 				numFailures:         0,
 				numAttempts:         1,
-				perAttemptLatencies: a(10 * time.Millisecond),
-				overallLatency:      20 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer),
+				overallLatency:      perAttemptTotal,
 			},
 			{
 				numFailures:         1,
 				numAttempts:         2,
-				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond),
-				overallLatency:      40 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer, perAttemptServer),
+				overallLatency:      2 * perAttemptTotal,
 			},
 			{
 				numFailures:         4,
 				numAttempts:         5,
-				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond),
-				overallLatency:      100 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer),
+				overallLatency:      5 * perAttemptTotal,
 			},
 			{
 				numFailures:         5,
 				numAttempts:         5,
 				expectErr:           ErrServerBusy,
-				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond),
-				overallLatency:      100 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer),
+				overallLatency:      5 * perAttemptTotal,
 			},
 		}
 
 		for _, tt := range tests {
 			clientStats.Reset()
 			err := ch.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
+				clientClock.Elapse(perAttemptClient)
 				if rs.Attempt > tt.numFailures {
 					respErr <- nil
 				} else {

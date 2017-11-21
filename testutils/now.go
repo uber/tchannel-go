@@ -25,22 +25,32 @@ import (
 	"time"
 )
 
-// NowStub returns a stub time.Now function that allows the return values to
-// to be controller by the caller. It returns two functions:
-// stub: The stub time.Now function.
-// increment: Used to control the increment amount between calls.
-func NowStub(initial time.Time) (stub func() time.Time, increment func(time.Duration)) {
-	var mut sync.Mutex
-	cur := initial
-	var addAmt time.Duration
-	stub = func() time.Time {
-		mut.Lock()
-		defer mut.Unlock()
-		cur = cur.Add(addAmt)
-		return cur
+// StubClock is a fake wall-clock, exposing a Now() method that returns a
+// test-controlled time.
+type StubClock struct {
+	mu  sync.Mutex
+	cur time.Time
+}
+
+// NewStubClock returns a fake wall-clock object
+func NewStubClock(initial time.Time) *StubClock {
+	return &StubClock{
+		cur: initial,
 	}
-	increment = func(d time.Duration) {
-		addAmt = d
-	}
-	return stub, increment
+}
+
+// Now returns the current time stored in StubClock
+func (c *StubClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.cur
+}
+
+// Elapse increments the time returned by Now()
+func (c *StubClock) Elapse(addAmt time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.cur = c.cur.Add(addAmt)
 }
