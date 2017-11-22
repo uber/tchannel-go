@@ -274,8 +274,8 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 	connID := _nextConnID.Inc()
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
-		{"localAddr", conn.LocalAddr()},
-		{"remoteAddr", conn.RemoteAddr()},
+		{"localAddr", conn.LocalAddr().String()},
+		{"remoteAddr", conn.RemoteAddr().String()},
 		{"remoteHostPort", remotePeer.HostPort},
 		{"remoteIsEphemeral", remotePeer.IsEphemeral},
 		{"remoteProcess", remotePeer.ProcessName},
