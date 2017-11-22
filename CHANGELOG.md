@@ -1,6 +1,10 @@
 Changelog
 =========
 
+# v1.8.1 (2017-11-21)
+
+ * Always log addresses as strings. (#669)
+
 # v1.8.0 (2017-11-06)
 
  * Improve error logging on `thrift.Server` errors. (#663)
