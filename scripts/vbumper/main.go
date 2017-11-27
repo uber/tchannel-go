@@ -23,6 +23,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"html/template"
 	"io/ioutil"
@@ -50,7 +51,7 @@ func main() {
 	}
 	*_version = strings.TrimPrefix(*_version, "v")
 
-	prevVersion, err := updateChanges()
+	prevVersion, err := updateChangelog()
 	if err != nil {
 		log.Fatal("failed to update changelog", err)
 	}
@@ -78,7 +79,7 @@ func insertNewVersion(contents, prevVersion, newVersion string) string {
 	return contents[:versionStart] + newVersion + contents[versionEnd:]
 }
 
-func updateChanges() (oldVersion string, _ error) {
+func updateChangelog() (oldVersion string, _ error) {
 	changelogBytes, err := ioutil.ReadFile(*_changelogFile)
 	if err != nil {
 		return "", err
@@ -97,10 +98,16 @@ func updateChanges() (oldVersion string, _ error) {
 }
 
 func insertNewChangelog(contents string) (string, string, error) {
-	prevVersionHeader := strings.Index(contents, "# ")
+	prevVersionHeader := strings.Index(contents, "\n# ")
+	if prevVersionHeader < 0 {
+		return "", "", errors.New("failed to find version header in changelog")
+	}
+
+	// Skip the newline
+	prevVersionHeader++
 	versionLine := contents[prevVersionHeader:]
-	lastVersionEnd := strings.Index(versionLine, "(")
-	prevVersionTag := strings.TrimSpace(versionLine[1 : lastVersionEnd-1])
+	prevVersionEnd := strings.Index(versionLine, "(")
+	prevVersionTag := strings.TrimSpace(versionLine[1 : prevVersionEnd-1])
 
 	newChanges, err := getNewChangelog(prevVersionTag)
 	if err != nil {
@@ -145,7 +152,7 @@ var _changeTmpl = template.Must(template.New("changelog").Parse(
 `))
 
 func getChanges(prevVersion string) ([]string, error) {
-	cmd := exec.Command("git", "log", "--oneline", "--no-decorate", prevVersion+"..HEAD")
+	cmd := exec.Command("git", "log", "--format=%s", "--no-merges", prevVersion+"..HEAD")
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -154,13 +161,12 @@ func getChanges(prevVersion string) ([]string, error) {
 
 	lines := strings.Split(string(out), "\n")
 	newLines := make([]string, 0, len(lines))
-	// Each line is "[commit] [desc]", so ignore everything before the first space.
 	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		descStart := strings.Index(line, " ")
-		newLines = append(newLines, line[descStart+1:])
+		newLines = append(newLines, line)
 	}
 	return newLines, nil
 }
