@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"sync"
 	"time"
 )
 
@@ -31,8 +30,8 @@ const (
 	defaultMaxIdleTime = 3 * time.Minute
 
 	// defaultIdleCheckInterval is the frequency in which the channel checks for
-	// idle connections.
-	defaultIdleCheckInterval = 30 * time.Second
+	// idle connections. (Default: check is disabled)
+	defaultIdleCheckInterval = time.Duration(0)
 )
 
 // IdleSweep controls a periodic task that looks for idle connections and clears
@@ -44,11 +43,10 @@ type IdleSweep struct {
 	maxIdleTime       time.Duration
 	idleCheckInterval time.Duration
 	stopCh            chan struct{}
-	wg                sync.WaitGroup
 	started           bool
 }
 
-// newIdleSweep starts a timer that checks for idle connections at given
+// newIdleSweep starts a poller that checks for idle connections at given
 // intervals.
 func newIdleSweep(ch *Channel, opts *ChannelOptions) *IdleSweep {
 	maxIdleTime := defaultMaxIdleTime
@@ -74,34 +72,31 @@ func newIdleSweep(ch *Channel, opts *ChannelOptions) *IdleSweep {
 
 // Start runs the goroutine responsible for checking idle connections.
 func (is *IdleSweep) Start() {
-	if is.started {
+	if is.started || is.idleCheckInterval <= time.Duration(0) {
 		return
 	}
 
-	is.ch.log.Info("Starting idle connections timer")
+	is.ch.log.Info("Starting idle connections poller")
 
 	is.started = true
-	is.wg.Add(1)
-	go is.timerLoop()
+	go is.pollerLoop()
 }
 
-// Stop kills the timer checking for idle connections.
+// Stop kills the poller checking for idle connections.
 func (is *IdleSweep) Stop() {
 	if !is.started {
 		return
 	}
 
-	is.ch.log.Info("Stopping idle connections timer")
+	is.ch.log.Info("Stopping idle connections poller")
 
 	is.started = false
 	is.stopCh <- struct{}{}
-	//is.wg.Wait()
-	is.ch.log.Info("Idle connections timer stopped")
+	is.ch.log.Info("Idle connections poller stopped")
 }
 
-func (is *IdleSweep) timerLoop() {
-	defer is.wg.Done()
-	ticker := is.ch.timeTicker(is.idleCheckInterval, "idle sweep")
+func (is *IdleSweep) pollerLoop() {
+	ticker := is.ch.timeTicker(is.idleCheckInterval)
 
 	for {
 		select {

@@ -48,103 +48,192 @@ func numConnections(ch *Channel) int {
 	return count
 }
 
-func doubleTick(t1, t2 *testutils.FakeTicker) {
-	// By calling Tick() twice we ensure that the first one completed, since the
-	// send channel will not allow another message in before the first was
-	// processed.
-	t1.Tick()
-	t2.Tick()
-	t1.Tick()
-	t2.Tick()
-}
-
-// Validates that closing connections from the IdleSweep goroutine isn't causing
-// any deadlocks.
-func TestTickerBasedSweep(t *testing.T) {
+// Validates that inbound idle connections are dropped.
+func TestServerBasedSweep(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	serverTickers := testutils.Tickers()
-	serverTicker := serverTickers.Fake("idle sweep")
-	clientTickers := testutils.Tickers()
-	clientTicker := clientTickers.Fake("idle sweep")
+	serverTicker := testutils.NewFakeTicker()
 	clock := testutils.NewStubClock(time.Now())
-	connectionEstablished := make(chan struct{})
 
 	serverOpts := testutils.NewOpts().
-		SetTimeTicker(serverTickers.Get).
+		SetTimeTicker(serverTicker.New).
+		SetIdleCheckInterval(30 * time.Second).
+		SetMaxIdleTime(3 * time.Minute).
 		SetTimeNow(clock.Now).
 		NoRelay()
 
 	clientOpts := testutils.NewOpts().
-		SetTimeTicker(clientTickers.Get).
 		SetTimeNow(clock.Now)
 
 	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
 		ts.RegisterFunc("echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			close(connectionEstablished)
 			return &raw.Res{}, nil
 		})
 
 		client := ts.NewClient(clientOpts)
 		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
-		<-connectionEstablished
 
 		// Both server and client now have an active connection. After 3 minutes they
 		// should be cleared out by the idle sweep.
 		for i := 0; i < 2; i++ {
 			clock.Elapse(1 * time.Minute)
-			ts.Server().Logger().Info("TICK")
-			doubleTick(serverTicker, clientTicker)
+
+			serverTicker.Tick()
+			time.Sleep(testutils.Timeout(10 * time.Millisecond))
 
 			assert.Equal(t, 1, numConnections(ts.Server()))
 			assert.Equal(t, 1, numConnections(client))
 		}
 
 		clock.Elapse(90 * time.Second)
-		doubleTick(serverTicker, clientTicker)
+		serverTicker.Tick()
+
+		// Allow some time for the disconnect to propagate
+		time.Sleep(testutils.Timeout(10 * time.Millisecond))
 
 		assert.Equal(t, 0, numConnections(ts.Server()))
 		assert.Equal(t, 0, numConnections(client))
 	})
 }
 
-/*
+// Validates that outbound idle connections are dropped.
+func TestClientBasedSweep(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	clientTicker := testutils.NewFakeTicker()
+	clock := testutils.NewStubClock(time.Now())
+
+	serverOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now).
+		NoRelay()
+
+	clientOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now).
+		SetTimeTicker(clientTicker.New).
+		SetMaxIdleTime(3 * time.Minute).
+		SetIdleCheckInterval(30 * time.Second)
+
+	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+		ts.RegisterFunc("echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{}, nil
+		})
+
+		client := ts.NewClient(clientOpts)
+		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+
+		// Both server and client now have an active connection. After 3 minutes they
+		// should be cleared out by the idle sweep.
+		clientTicker.Tick()
+		time.Sleep(testutils.Timeout(10 * time.Millisecond))
+
+		assert.Equal(t, 1, numConnections(ts.Server()))
+		assert.Equal(t, 1, numConnections(client))
+
+		clock.Elapse(180 * time.Second)
+		clientTicker.Tick()
+
+		// Allow some time for the disconnect to propagate
+		time.Sleep(testutils.Timeout(10 * time.Millisecond))
+
+		assert.Equal(t, 0, numConnections(ts.Server()))
+		assert.Equal(t, 0, numConnections(client))
+	})
+}
+
+// Validates that a relay also disconnects idle connections - both inbound and
+// outbound.
+func TestRelayBasedSweep(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	relayTicker := testutils.NewFakeTicker()
+	clock := testutils.NewStubClock(time.Now())
+
+	serverOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now).
+		SetRelayOptionsFn(func(relayOpts *testutils.ChannelOpts) {
+			relayOpts.
+				SetTimeTicker(relayTicker.New).
+				SetMaxIdleTime(3 * time.Minute).
+				SetIdleCheckInterval(30 * time.Second)
+		}).
+		SetRelayOnly()
+
+	clientOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now)
+
+	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+		ts.RegisterFunc("echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{}, nil
+		})
+
+		client := ts.NewClient(clientOpts)
+		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+
+		relayTicker.Tick()
+		time.Sleep(testutils.Timeout(10 * time.Millisecond))
+
+		assert.Equal(t, 2, numConnections(ts.Relay()))
+		assert.Equal(t, 1, numConnections(ts.Server()))
+		assert.Equal(t, 1, numConnections(client))
+
+		// The relay will drop both sides of the connection after 3 minutes of inactivity.
+		clock.Elapse(180 * time.Second)
+		relayTicker.Tick()
+		time.Sleep(testutils.Timeout(10 * time.Millisecond))
+
+		assert.Equal(t, 0, numConnections(ts.Relay()))
+		assert.Equal(t, 0, numConnections(ts.Server()))
+		assert.Equal(t, 0, numConnections(client))
+	})
+}
+
 // Validates that pings do not keep the connection alive.
 func TestIdleSweepWithPings(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	tickers := testutils.Tickers()
-	ft := tickers.Fake("idle sweep")
+	clientTicker := testutils.NewFakeTicker()
 	clock := testutils.NewStubClock(time.Now())
 
-	opts := testutils.NewOpts().
-		SetTimeTicker(tickers.Get).
-		SetTimeNow(clock.Now)
+	serverOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now).
+		NoRelay()
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	clientOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now).
+		SetTimeTicker(clientTicker.New).
+		SetMaxIdleTime(3 * time.Minute).
+		SetIdleCheckInterval(30 * time.Second)
+
+	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
 		ts.RegisterFunc("echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			return &raw.Res{}, nil
 		})
 
-		client := ts.NewClient(nil)
+		client := ts.NewClient(clientOpts)
 		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
 
+		// Generate pings every minute.
 		for i := 0; i < 2; i++ {
-			clock.Elapse(1 * time.Minute)
+			clock.Elapse(60 * time.Second)
 			client.Ping(ctx, ts.HostPort())
-			doubleTick(ft)
+
+			clientTicker.Tick()
+			time.Sleep(testutils.Timeout(10 * time.Millisecond))
 
 			assert.Equal(t, 1, numConnections(ts.Server()))
 			assert.Equal(t, 1, numConnections(client))
 		}
 
-		clock.Elapse(90 * time.Second)
-		doubleTick(ft)
+		clock.Elapse(60 * time.Second)
+		clientTicker.Tick()
+		time.Sleep(testutils.Timeout(10 * time.Millisecond))
 
+		// Connections should still drop, regardless of the ping.
 		assert.Equal(t, 0, numConnections(ts.Server()))
 		assert.Equal(t, 0, numConnections(client))
 	})
 }
-*/

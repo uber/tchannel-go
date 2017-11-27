@@ -21,7 +21,6 @@
 package tchannel_test
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -61,29 +60,15 @@ func tagsForInboundCall(serverCh *Channel, clientCh *Channel, method string) map
 
 // statsHandler increments the server and client timers when handling requests.
 type statsHandler struct {
+	*testHandler
 	clientClock *testutils.StubClock
 	serverClock *testutils.StubClock
 }
 
 func (h *statsHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 	h.clientClock.Elapse(100 * time.Millisecond)
-	h.serverClock.Elapse(50 * time.Millisecond)
-
-	switch args.Method {
-	case "echo":
-		return &raw.Res{
-			Arg2: args.Arg2,
-			Arg3: args.Arg3,
-		}, nil
-	case "app-error":
-		return &raw.Res{
-			IsErr: true,
-		}, nil
-	}
-	return nil, errors.New("unknown method")
-}
-
-func (h *statsHandler) OnError(ctx context.Context, err error) {
+	h.serverClock.Elapse(70 * time.Millisecond)
+	return h.testHandler.Handle(ctx, args)
 }
 
 func TestStatsCalls(t *testing.T) {
@@ -107,6 +92,7 @@ func TestStatsCalls(t *testing.T) {
 		clientClock := testutils.NewStubClock(initialTime)
 		serverClock := testutils.NewStubClock(initialTime)
 		handler := &statsHandler{
+			testHandler: newTestHandler(t),
 			clientClock: clientClock,
 			serverClock: serverClock,
 		}
@@ -140,7 +126,7 @@ func TestStatsCalls(t *testing.T) {
 			clientStats.Expected.RecordTimer("outbound.calls.per-attempt.latency", outboundTags, 100*time.Millisecond)
 			clientStats.Expected.RecordTimer("outbound.calls.latency", outboundTags, 100*time.Millisecond)
 			serverStats.Expected.IncCounter("inbound.calls.recvd", inboundTags, 1)
-			serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 50*time.Millisecond)
+			serverStats.Expected.RecordTimer("inbound.calls.latency", inboundTags, 70*time.Millisecond)
 
 			if tt.wantErr {
 				clientStats.Expected.IncCounter("outbound.calls.per-attempt.app-errors", outboundTags, 1)
@@ -168,6 +154,7 @@ func TestStatsWithRetries(t *testing.T) {
 	ch := testutils.NewClient(t, testutils.NewOpts().
 		SetStatsReporter(clientStats).
 		SetTimeNow(clientClock.Now))
+	defer ch.Close()
 
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
@@ -175,15 +162,19 @@ func TestStatsWithRetries(t *testing.T) {
 	// TODO why do we need this??
 	opts := testutils.NewOpts().NoRelay()
 	WithVerifiedServer(t, opts, func(serverCh *Channel, hostPort string) {
+		const (
+			perAttemptServer = 10 * time.Millisecond
+			perAttemptClient = time.Millisecond
+			perAttemptTotal  = perAttemptServer + perAttemptClient
+		)
+
 		respErr := make(chan error, 1)
 		testutils.RegisterFunc(serverCh, "req", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			clientClock.Elapse(10 * time.Millisecond)
+			clientClock.Elapse(perAttemptServer)
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, <-respErr
 		})
 		ch.Peers().Add(serverCh.PeerInfo().HostPort)
-		defer ch.Close()
 
-		// Each attempt takes 20ms
 		tests := []struct {
 			expectErr           error
 			numFailures         int
@@ -194,34 +185,34 @@ func TestStatsWithRetries(t *testing.T) {
 			{
 				numFailures:         0,
 				numAttempts:         1,
-				perAttemptLatencies: a(10 * time.Millisecond),
-				overallLatency:      20 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer),
+				overallLatency:      perAttemptTotal,
 			},
 			{
 				numFailures:         1,
 				numAttempts:         2,
-				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond),
-				overallLatency:      40 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer, perAttemptServer),
+				overallLatency:      2 * perAttemptTotal,
 			},
 			{
 				numFailures:         4,
 				numAttempts:         5,
-				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond),
-				overallLatency:      100 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer),
+				overallLatency:      5 * perAttemptTotal,
 			},
 			{
 				numFailures:         5,
 				numAttempts:         5,
 				expectErr:           ErrServerBusy,
-				perAttemptLatencies: a(10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond),
-				overallLatency:      100 * time.Millisecond,
+				perAttemptLatencies: a(perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer, perAttemptServer),
+				overallLatency:      5 * perAttemptTotal,
 			},
 		}
 
 		for _, tt := range tests {
 			clientStats.Reset()
 			err := ch.RunWithRetry(ctx, func(ctx context.Context, rs *RequestState) error {
-				clientClock.Elapse(10 * time.Millisecond)
+				clientClock.Elapse(perAttemptClient)
 				if rs.Attempt > tt.numFailures {
 					respErr <- nil
 				} else {

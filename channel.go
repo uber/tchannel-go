@@ -86,7 +86,7 @@ type ChannelOptions struct {
 
 	// TimeTicker is a variable for overriding time.Ticker in unit tests.
 	// Note: This is not a stable part of the API and may change.
-	TimeTicker func(d time.Duration, name string) *time.Ticker
+	TimeTicker func(d time.Duration) *time.Ticker
 
 	// MaxIdleTime controls how long we allow an idle connection to exist
 	// before tearing it down.
@@ -168,7 +168,7 @@ type channelConnectionCommon struct {
 	tracer        opentracing.Tracer
 	subChannels   *subChannelMap
 	timeNow       func() time.Time
-	timeTicker    func(time.Duration, string) *time.Ticker
+	timeTicker    func(time.Duration) *time.Ticker
 }
 
 // _nextChID is used to allocate unique IDs to every channel for debugging purposes.
@@ -219,7 +219,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	timeTicker := opts.TimeTicker
 	if timeTicker == nil {
 		// Use the real time.Ticker (name is ignored)
-		timeTicker = func(d time.Duration, name string) *time.Ticker {
+		timeTicker = func(d time.Duration) *time.Ticker {
 			return time.NewTicker(d)
 		}
 	}

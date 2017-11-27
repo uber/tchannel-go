@@ -46,10 +46,9 @@ func TestHealthCheckStopBeforeStart(t *testing.T) {
 		})
 		defer cancel()
 
-		tickers := testutils.Tickers()
-		ft := tickers.Fake("health")
+		ft := testutils.NewFakeTicker()
 		opts := testutils.NewOpts().
-			SetTimeTicker(tickers.Get).
+			SetTimeTicker(ft.New).
 			SetHealthChecks(HealthCheckOptions{Interval: time.Second})
 		client := ts.NewClient(opts)
 
@@ -82,10 +81,9 @@ func TestHealthCheckStopNoError(t *testing.T) {
 		})
 		defer cancel()
 
-		tickers := testutils.Tickers()
-		ft := tickers.Fake("health")
+		ft := testutils.NewFakeTicker()
 		opts := testutils.NewOpts().
-			SetTimeTicker(tickers.Get).
+			SetTimeTicker(ft.New).
 			SetHealthChecks(HealthCheckOptions{Interval: time.Second}).
 			AddLogFilter("Unexpected ping response.", 1)
 		client := ts.NewClient(opts)
@@ -176,10 +174,9 @@ func TestHealthCheckIntegration(t *testing.T) {
 				})
 				defer cancel()
 
-				tickers := testutils.Tickers()
-				ft := tickers.Buffered("health", 1)
+				ft := testutils.NewFakeTicker()
 				opts := testutils.NewOpts().
-					SetTimeTicker(tickers.Get).
+					SetTimeTicker(ft.New).
 					SetHealthChecks(HealthCheckOptions{Interval: time.Second, FailuresToClose: tt.failuresToClose}).
 					AddLogFilter("Failed active health check.", uint(tt.wantHealthCheckLogs)).
 					AddLogFilter("Unexpected ping response.", 1)
