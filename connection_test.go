@@ -46,6 +46,11 @@ import (
 )
 
 // Values used in tests
+const (
+	inbound  = 0
+	outbound = 1
+)
+
 var (
 	testArg2 = []byte("Header in arg2")
 	testArg3 = []byte("Body in arg3")
@@ -1077,5 +1082,106 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 		}
 
 		clientCh.Close()
+	})
+}
+
+// getConnection returns the introspection result for the unique inbound or
+// outbound connection. An assert will be raised if there is more than one
+// connection of the given type.
+func getConnection(t *testing.T, ch *Channel, direction int) *ConnectionRuntimeState {
+	state := ch.IntrospectState(&IntrospectionOptions{
+		IncludeEmptyPeers: false,
+	})
+
+	for _, peer := range state.RootPeers {
+		var connections []ConnectionRuntimeState
+		if direction == inbound {
+			connections = peer.InboundConnections
+		} else {
+			connections = peer.OutboundConnections
+		}
+
+		assert.True(t, len(connections) <= 1, "Too many connections found")
+		if len(connections) == 1 {
+			return &connections[0]
+		}
+	}
+
+	assert.Fail(t, "No connections found")
+	return nil
+}
+
+func TestLastActivityTime(t *testing.T) {
+	initialTime := time.Date(2017, 11, 27, 21, 0, 0, 0, time.UTC)
+	clock := testutils.NewStubClock(initialTime)
+	sopts := testutils.NewOpts().SetTimeNow(clock.Now)
+
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+
+		copts := testutils.NewOpts().SetTimeNow(clock.Now)
+		client := ts.NewClient(copts)
+
+		for i := 0; i < 2; i++ {
+			require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+
+			// Verify last activity time.
+			clientConn := getConnection(t, client, outbound)
+			serverConn := getConnection(t, server, inbound)
+
+			assert.Equal(t, clock.Now(), clientConn.LastActivity)
+			assert.Equal(t, clock.Now(), serverConn.LastActivity)
+
+			// Relays should act like clients and servers.
+			if ts.HasRelay() {
+				relayInbound := getConnection(t, ts.Relay(), inbound)
+				relayOutbound := getConnection(t, ts.Relay(), outbound)
+				assert.Equal(t, clock.Now(), relayInbound.LastActivity)
+				assert.Equal(t, clock.Now(), relayOutbound.LastActivity)
+			}
+
+			clock.Elapse(1 * time.Second)
+		}
+	})
+}
+
+func TestLastActivityTimePings(t *testing.T) {
+	initialTime := time.Date(2017, 11, 27, 21, 0, 0, 0, time.UTC)
+	clock := testutils.NewStubClock(initialTime)
+
+	// Pings are not re-transmitted by the relay.
+	sopts := testutils.NewOpts().SetTimeNow(clock.Now)
+	ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
+	defer cancel()
+
+	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+		copts := testutils.NewOpts().SetTimeNow(clock.Now)
+		client := ts.NewClient(copts)
+
+		// Send an 'echo' to establish the connection.
+		testutils.RegisterEcho(ts.Server(), nil)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+
+		timeAtStart := clock.Now()
+
+		for i := 0; i < 2; i++ {
+			require.NoError(t, client.Ping(ctx, ts.HostPort()))
+
+			// Verify last activity time.
+			clientConn := getConnection(t, client, outbound)
+			assert.Equal(t, timeAtStart, clientConn.LastActivity)
+
+			// Relays do not pass pings on to the server.
+			if ts.HasRelay() {
+				relayInbound := getConnection(t, ts.Relay(), inbound)
+				assert.Equal(t, timeAtStart, relayInbound.LastActivity)
+			} else {
+				serverConn := getConnection(t, ts.Server(), inbound)
+				assert.Equal(t, timeAtStart, serverConn.LastActivity)
+			}
+
+			clock.Elapse(1 * time.Second)
+		}
 	})
 }

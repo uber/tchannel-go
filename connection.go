@@ -734,7 +734,9 @@ func (c *Connection) updateLastActivity(frame *Frame) {
 	// Pings are ignored for last activity.
 	switch frame.Header.messageType {
 	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
+		c.stateMut.Lock()
 		c.lastActivity = c.timeNow()
+		c.stateMut.Unlock()
 	}
 }
 
