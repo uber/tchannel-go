@@ -60,6 +60,11 @@ type ChannelOpts struct {
 	// negative values are treated as a single run.
 	RunCount int
 
+	// relayOptsFn is a function that modifies the relay channel options just
+	// before the relay is created. By default, the relay channel copies its
+	// options from the parent server channel.
+	relayOptsFn func(opts *ChannelOpts)
+
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
@@ -144,7 +149,7 @@ func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 }
 
 // SetTimeTicker sets TimeTicker in ChannelOptions.
-func (o *ChannelOpts) SetTimeTicker(timeTicker func(d time.Duration, name string) *time.Ticker) *ChannelOpts {
+func (o *ChannelOpts) SetTimeTicker(timeTicker func(d time.Duration) *time.Ticker) *ChannelOpts {
 	o.TimeTicker = timeTicker
 	return o
 }
@@ -216,6 +221,27 @@ func (o *ChannelOpts) SetRelayMaxTimeout(d time.Duration) *ChannelOpts {
 // noficiations.
 func (o *ChannelOpts) SetOnPeerStatusChanged(f func(*tchannel.Peer)) *ChannelOpts {
 	o.ChannelOptions.OnPeerStatusChanged = f
+	return o
+}
+
+// SetMaxIdleTime sets a threshold after which idle connections will
+// automatically get dropped. See idle_sweep.go for more details.
+func (o *ChannelOpts) SetMaxIdleTime(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.MaxIdleTime = &d
+	return o
+}
+
+// SetIdleCheckInterval sets the frequency of the periodic poller that removes
+// stale connections from the channel.
+func (o *ChannelOpts) SetIdleCheckInterval(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.IdleCheckInterval = &d
+	return o
+}
+
+// SetRelayOptionsFn assigns a function that modifies the relay channel options
+// just before the relay is created.
+func (o *ChannelOpts) SetRelayOptionsFn(f func(*ChannelOpts)) *ChannelOpts {
+	o.relayOptsFn = f
 	return o
 }
 
