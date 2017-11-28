@@ -1099,13 +1099,13 @@ func getConnection(t *testing.T, ch *Channel, direction int) *ConnectionRuntimeS
 			connections = peer.OutboundConnections
 		}
 
-		assert.True(t, len(connections) <= 1, "Too many connections found")
+		assert.True(t, len(connections) <= 1, "Too many connections found: %+v", connections)
 		if len(connections) == 1 {
 			return &connections[0]
 		}
 	}
 
-	assert.Fail(t, "No connections found")
+	assert.FailNow(t, "No connections found")
 	return nil
 }
 

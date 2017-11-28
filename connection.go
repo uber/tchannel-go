@@ -199,7 +199,7 @@ type Connection struct {
 
 	// lastActivity is used to track how long the connection has been idle.
 	// (unix time, nano)
-	lastActivity *atomic.Int64
+	lastActivity atomic.Int64
 }
 
 type peerAddressComponents struct {
@@ -313,7 +313,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
-		lastActivity:       atomic.NewInt64(ch.timeNow().UnixNano()),
+		lastActivity:       *atomic.NewInt64(ch.timeNow().UnixNano()),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
