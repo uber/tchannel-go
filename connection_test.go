@@ -46,6 +46,11 @@ import (
 )
 
 // Values used in tests
+const (
+	inbound  = 0
+	outbound = 1
+)
+
 var (
 	testArg2 = []byte("Header in arg2")
 	testArg3 = []byte("Body in arg3")
@@ -1077,5 +1082,139 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 		}
 
 		clientCh.Close()
+	})
+}
+
+// getConnection returns the introspection result for the unique inbound or
+// outbound connection. An assert will be raised if there is more than one
+// connection of the given type.
+func getConnection(t *testing.T, ch *Channel, direction int) *ConnectionRuntimeState {
+	state := ch.IntrospectState(nil)
+
+	for _, peer := range state.RootPeers {
+		var connections []ConnectionRuntimeState
+		if direction == inbound {
+			connections = peer.InboundConnections
+		} else {
+			connections = peer.OutboundConnections
+		}
+
+		assert.True(t, len(connections) <= 1, "Too many connections found: %+v", connections)
+		if len(connections) == 1 {
+			return &connections[0]
+		}
+	}
+
+	assert.FailNow(t, "No connections found")
+	return nil
+}
+
+func TestLastActivityTime(t *testing.T) {
+	initialTime := time.Date(2017, 11, 27, 21, 0, 0, 0, time.UTC)
+	clock := testutils.NewStubClock(initialTime)
+	opts := testutils.NewOpts().SetTimeNow(clock.Now)
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		client := ts.NewClient(opts)
+		server := ts.Server()
+
+		// Channels for synchronization.
+		callReceived := make(chan struct{})
+		blockResponse := make(chan struct{})
+		responseReceived := make(chan struct{})
+
+		// Helper function that checks the last activity time on client, server and relay.
+		validateLastActivityTime := func(expected time.Time) {
+			clientConn := getConnection(t, client, outbound)
+			serverConn := getConnection(t, server, inbound)
+			now := expected.UnixNano()
+
+			assert.Equal(t, now, clientConn.LastActivity)
+			assert.Equal(t, now, serverConn.LastActivity)
+
+			// Relays should act like both clients and servers.
+			if ts.HasRelay() {
+				relayInbound := getConnection(t, ts.Relay(), inbound)
+				relayOutbound := getConnection(t, ts.Relay(), outbound)
+				assert.Equal(t, now, relayInbound.LastActivity)
+				assert.Equal(t, now, relayOutbound.LastActivity)
+			}
+		}
+
+		// The 'echo' handler emulates a process that takes 1 second to complete.
+		testutils.RegisterEcho(server, func() {
+			callReceived <- struct{}{}
+			<-blockResponse
+
+			// Increment the time and return a response.
+			clock.Elapse(1 * time.Second)
+		})
+
+		// Run the test twice, because the first call will also establish a connection.
+		for i := 0; i < 2; i++ {
+			beforeCallSent := clock.Now()
+
+			go func() {
+				require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+				responseReceived <- struct{}{}
+			}()
+
+			// Verify that the last activity time was updated before a response is received.
+			<-callReceived
+			validateLastActivityTime(beforeCallSent)
+
+			// Let the server respond.
+			blockResponse <- struct{}{}
+
+			// After a response was received, time should be +1s. Validate again that
+			// the last activity time was updated.
+			<-responseReceived
+			validateLastActivityTime(beforeCallSent.Add(1 * time.Second))
+
+			// Elapse the clock for our next iteration.
+			clock.Elapse(1 * time.Minute)
+		}
+
+		close(responseReceived)
+		close(blockResponse)
+		close(callReceived)
+	})
+}
+
+func TestLastActivityTimePings(t *testing.T) {
+	initialTime := time.Date(2017, 11, 27, 21, 0, 0, 0, time.UTC)
+	clock := testutils.NewStubClock(initialTime)
+
+	opts := testutils.NewOpts().SetTimeNow(clock.Now)
+	ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
+	defer cancel()
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		client := ts.NewClient(opts)
+
+		// Send an 'echo' to establish the connection.
+		testutils.RegisterEcho(ts.Server(), nil)
+		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+
+		timeAtStart := clock.Now().UnixNano()
+
+		for i := 0; i < 2; i++ {
+			require.NoError(t, client.Ping(ctx, ts.HostPort()))
+
+			// Verify last activity time.
+			clientConn := getConnection(t, client, outbound)
+			assert.Equal(t, timeAtStart, clientConn.LastActivity)
+
+			// Relays do not pass pings on to the server.
+			if ts.HasRelay() {
+				relayInbound := getConnection(t, ts.Relay(), inbound)
+				assert.Equal(t, timeAtStart, relayInbound.LastActivity)
+			}
+
+			serverConn := getConnection(t, ts.Server(), inbound)
+			assert.Equal(t, timeAtStart, serverConn.LastActivity)
+
+			clock.Elapse(1 * time.Second)
+		}
 	})
 }
