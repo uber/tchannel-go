@@ -149,7 +149,7 @@ type ConnectionRuntimeState struct {
 	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
 	Relayer          RelayerRuntimeState     `json:"relayer"`
 	HealthChecks     []bool                  `json:"healthChecks,omitempty"`
-	LastActivity     time.Time               `json:"last_activity"`
+	LastActivity     int64                   `json:"lastActivity"`
 }
 
 // RelayerRuntimeState is the runtime state for a single relayer.
@@ -349,7 +349,7 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		InboundExchange:  c.inbound.IntrospectState(opts),
 		OutboundExchange: c.outbound.IntrospectState(opts),
 		HealthChecks:     c.healthCheckHistory.asBools(),
-		LastActivity:     c.lastActivity,
+		LastActivity:     c.lastActivity.Load(),
 	}
 	if c.relay != nil {
 		state.Relayer = c.relay.IntrospectState(opts)

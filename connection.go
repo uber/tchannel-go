@@ -198,7 +198,8 @@ type Connection struct {
 	healthCheckHistory *healthHistory
 
 	// lastActivity is used to track how long the connection has been idle.
-	lastActivity time.Time
+	// (unix time, nano)
+	lastActivity *atomic.Int64
 }
 
 type peerAddressComponents struct {
@@ -312,7 +313,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
-		lastActivity:       ch.timeNow(),
+		lastActivity:       atomic.NewInt64(ch.timeNow().UnixNano()),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
@@ -734,9 +735,7 @@ func (c *Connection) updateLastActivity(frame *Frame) {
 	// Pings are ignored for last activity.
 	switch frame.Header.messageType {
 	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
-		c.stateMut.Lock()
-		c.lastActivity = c.timeNow()
-		c.stateMut.Unlock()
+		c.lastActivity.Store(c.timeNow().UnixNano())
 	}
 }
 
