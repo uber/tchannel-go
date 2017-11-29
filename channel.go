@@ -41,6 +41,7 @@ import (
 var (
 	errAlreadyListening  = errors.New("channel already listening")
 	errInvalidStateForOp = errors.New("channel is in an invalid state for that method")
+	errMaxIdleTimeNotSet = errors.New("IdleCheckInterval is set but MaxIdleTime is zero")
 
 	// ErrNoServiceName is returned when no service name is provided when
 	// creating a new channel.
@@ -229,10 +230,8 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		LogField{"chID", chID},
 	)
 
-	if opts.IdleCheckInterval > 0 && opts.MaxIdleTime <= 0 {
-		logger.Warn("To enable automatically removing idle connections, you must " +
-			"set both IdleCheckInterval and MaxIdleTime.")
-		opts.IdleCheckInterval = 0
+	if err := opts.validateIdleCheck(); err != nil {
+		return nil, err
 	}
 
 	ch := &Channel{
@@ -288,8 +287,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 
 	// Start the idle connection timer.
-	ch.mutable.idleSweep = newIdleSweep(ch, opts)
-	ch.mutable.idleSweep.Start()
+	ch.mutable.idleSweep = startIdleSweep(ch, opts)
 
 	return ch, nil
 }
@@ -812,6 +810,14 @@ func (ch *Channel) Close() {
 // RelayHost returns the channel's RelayHost, if any.
 func (ch *Channel) RelayHost() RelayHost {
 	return ch.relayHost
+}
+
+func (o *ChannelOptions) validateIdleCheck() error {
+	if o.IdleCheckInterval > 0 && o.MaxIdleTime <= 0 {
+		return errMaxIdleTimeNotSet
+	}
+
+	return nil
 }
 
 func toStringSet(ss []string) map[string]struct{} {

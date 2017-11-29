@@ -34,6 +34,46 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// peerStatusListener is a test tool used to wait for connections to drop by
+// listening to status events from a channel.
+type peerStatusListener struct {
+	changes chan struct{}
+}
+
+func newPeerStatusListener() *peerStatusListener {
+	return &peerStatusListener{
+		changes: make(chan struct{}, 10),
+	}
+}
+
+func (pl *peerStatusListener) onStatusChange(p *Peer) {
+	pl.changes <- struct{}{}
+}
+
+func (pl *peerStatusListener) waitForZeroConnections(t *testing.T, channels ...*Channel) bool {
+	for {
+		select {
+		case <-pl.changes:
+			if allConnectionsClosed(channels) {
+				return true
+			}
+
+		case <-time.After(10 * time.Millisecond):
+			return assert.Fail(t, "Some connections are still open: %s", connectionStatus(channels))
+		}
+	}
+}
+
+func allConnectionsClosed(channels []*Channel) bool {
+	for _, ch := range channels {
+		if numConnections(ch) != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
 func numConnections(ch *Channel) int {
 	rootPeers := ch.RootPeers().Copy()
 	count := 0
@@ -57,20 +97,9 @@ func connectionStatus(channels []*Channel) string {
 	return strings.Join(status, ", ")
 }
 
-func waitForZeroConnections(t *testing.T, channels ...*Channel) bool {
-	return assert.True(t, testutils.WaitFor(10*time.Millisecond, func() bool {
-		for _, ch := range channels {
-			if numConnections(ch) != 0 {
-				return false
-			}
-		}
-
-		return true
-	}), "Some connections are still open: %s", connectionStatus(channels))
-}
-
 // Validates that inbound idle connections are dropped.
 func TestServerBasedSweep(t *testing.T) {
+	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -81,11 +110,12 @@ func TestServerBasedSweep(t *testing.T) {
 		SetTimeTicker(serverTicker.New).
 		SetIdleCheckInterval(30 * time.Second).
 		SetMaxIdleTime(3 * time.Minute).
+		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetTimeNow(clock.Now).
 		NoRelay()
 
 	clientOpts := testutils.NewOpts().
-		SetTimeNow(clock.Now)
+		SetOnPeerStatusChanged(listener.onStatusChange)
 
 	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
@@ -107,12 +137,13 @@ func TestServerBasedSweep(t *testing.T) {
 		// Move the clock forward and trigger the idle poller.
 		clock.Elapse(90 * time.Second)
 		serverTicker.Tick()
-		waitForZeroConnections(t, ts.Server(), client)
+		listener.waitForZeroConnections(t, ts.Server(), client)
 	})
 }
 
 // Validates that outbound idle connections are dropped.
 func TestClientBasedSweep(t *testing.T) {
+	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -120,13 +151,14 @@ func TestClientBasedSweep(t *testing.T) {
 	clock := testutils.NewStubClock(time.Now())
 
 	serverOpts := testutils.NewOpts().
-		SetTimeNow(clock.Now).
+		SetOnPeerStatusChanged(listener.onStatusChange).
 		NoRelay()
 
 	clientOpts := testutils.NewOpts().
 		SetTimeNow(clock.Now).
 		SetTimeTicker(clientTicker.New).
 		SetMaxIdleTime(3 * time.Minute).
+		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetIdleCheckInterval(30 * time.Second)
 
 	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
@@ -145,13 +177,14 @@ func TestClientBasedSweep(t *testing.T) {
 		// Move the clock forward and trigger the idle poller.
 		clock.Elapse(180 * time.Second)
 		clientTicker.Tick()
-		waitForZeroConnections(t, ts.Server(), client)
+		listener.waitForZeroConnections(t, ts.Server(), client)
 	})
 }
 
 // Validates that a relay also disconnects idle connections - both inbound and
 // outbound.
 func TestRelayBasedSweep(t *testing.T) {
+	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -159,13 +192,14 @@ func TestRelayBasedSweep(t *testing.T) {
 	clock := testutils.NewStubClock(time.Now())
 
 	opts := testutils.NewOpts().
-		SetTimeNow(clock.Now)
+		SetOnPeerStatusChanged(listener.onStatusChange)
 
 	relayOpts := testutils.NewOpts().
 		SetTimeNow(clock.Now).
 		SetTimeTicker(relayTicker.New).
 		SetMaxIdleTime(3 * time.Minute).
 		SetIdleCheckInterval(30 * time.Second).
+		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetRelayOnly()
 
 	testutils.WithTestServer(t, relayOpts, func(ts *testutils.TestServer) {
@@ -191,12 +225,13 @@ func TestRelayBasedSweep(t *testing.T) {
 		// The relay will drop both sides of the connection after 3 minutes of inactivity.
 		clock.Elapse(180 * time.Second)
 		relayTicker.Tick()
-		waitForZeroConnections(t, ts.Relay(), server, client)
+		listener.waitForZeroConnections(t, ts.Relay(), server, client)
 	})
 }
 
 // Validates that pings do not keep the connection alive.
 func TestIdleSweepWithPings(t *testing.T) {
+	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -204,14 +239,15 @@ func TestIdleSweepWithPings(t *testing.T) {
 	clock := testutils.NewStubClock(time.Now())
 
 	serverOpts := testutils.NewOpts().
-		SetTimeNow(clock.Now).
+		SetOnPeerStatusChanged(listener.onStatusChange).
 		NoRelay()
 
 	clientOpts := testutils.NewOpts().
 		SetTimeNow(clock.Now).
 		SetTimeTicker(clientTicker.New).
 		SetMaxIdleTime(3 * time.Minute).
-		SetIdleCheckInterval(30 * time.Second)
+		SetIdleCheckInterval(30 * time.Second).
+		SetOnPeerStatusChanged(listener.onStatusChange)
 
 	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
@@ -234,40 +270,16 @@ func TestIdleSweepWithPings(t *testing.T) {
 		clientTicker.Tick()
 
 		// Connections should still drop, regardless of the ping.
-		waitForZeroConnections(t, ts.Server(), client)
+		listener.waitForZeroConnections(t, ts.Server(), client)
 	})
 }
 
-// Validates that when MaxIdleTime isn't set, the sweep goroutine doesn't start.
+// Validates that when MaxIdleTime isn't set, NewChannel returns an error.
 func TestIdleSweepMisconfiguration(t *testing.T) {
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
-	serverTicker := testutils.NewFakeTicker()
-	clock := testutils.NewStubClock(time.Now())
-
-	serverOpts := testutils.NewOpts().
-		SetTimeTicker(serverTicker.New).
-		SetIdleCheckInterval(30*time.Second).
-		AddLogFilter("set both IdleCheckInterval and MaxIdleTime", 1).
-		SetTimeNow(clock.Now).
-		NoRelay()
-
-	clientOpts := testutils.NewOpts().
-		SetTimeNow(clock.Now)
-
-	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
-		testutils.RegisterEcho(ts.Server(), nil)
-
-		client := ts.NewClient(clientOpts)
-		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
-
-		// Move the clock forward and trigger the idle poller.
-		clock.Elapse(300 * time.Second)
-		serverTicker.Tick()
-
-		// Connections should still be active.
-		assert.Equal(t, 1, numConnections(ts.Server()))
-		assert.Equal(t, 1, numConnections(client))
+	ch, err := NewChannel("svc", &ChannelOptions{
+		IdleCheckInterval: time.Duration(30 * time.Second),
 	})
+
+	assert.Nil(t, ch, "NewChannel should not return a channel")
+	assert.Error(t, err, "NewChannel should fail")
 }

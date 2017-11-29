@@ -33,25 +33,24 @@ type idleSweep struct {
 	maxIdleTime       time.Duration
 	idleCheckInterval time.Duration
 	stopCh            chan struct{}
-	started           bool
 }
 
-// newIdleSweep starts a poller that checks for idle connections at given
+// startIdleSweep starts a poller that checks for idle connections at given
 // intervals.
-func newIdleSweep(ch *Channel, opts *ChannelOptions) *idleSweep {
+func startIdleSweep(ch *Channel, opts *ChannelOptions) *idleSweep {
 	is := &idleSweep{
 		ch:                ch,
 		maxIdleTime:       opts.MaxIdleTime,
 		idleCheckInterval: opts.IdleCheckInterval,
-		started:           false,
 	}
 
+	is.start()
 	return is
 }
 
 // Start runs the goroutine responsible for checking idle connections.
-func (is *idleSweep) Start() {
-	if is.started || is.idleCheckInterval <= time.Duration(0) {
+func (is *idleSweep) start() {
+	if is.stopCh != nil || is.idleCheckInterval <= 0 {
 		return
 	}
 
@@ -61,20 +60,18 @@ func (is *idleSweep) Start() {
 	).Info("Starting idle connections poller.")
 
 	is.stopCh = make(chan struct{})
-	is.started = true
 	go is.pollerLoop()
 }
 
 // Stop kills the poller checking for idle connections.
 func (is *idleSweep) Stop() {
-	if !is.started {
+	if is.stopCh == nil {
 		return
 	}
 
 	is.ch.log.Info("Stopping idle connections poller.")
-
-	is.started = false
 	close(is.stopCh)
+	is.stopCh = nil
 }
 
 func (is *idleSweep) pollerLoop() {
@@ -96,7 +93,6 @@ func (is *idleSweep) checkIdleConnections() {
 
 	// Acquire the read lock and examine which connections are idle.
 	idleConnections := make([]*Connection, 0, 10)
-
 	is.ch.mutable.RLock()
 	for _, conn := range is.ch.mutable.conns {
 		if idleTime := now.Sub(conn.getLastActivityTime()); idleTime >= is.maxIdleTime {
@@ -113,7 +109,8 @@ func (is *idleSweep) checkIdleConnections() {
 
 		is.ch.log.WithFields(
 			LogField{"remotePeer", conn.remotePeerInfo},
-			LogField{"lastActivityTime", conn.getLastActivityTime()}).Info("Closing idle inbound connection.")
+			LogField{"lastActivityTime", conn.getLastActivityTime()},
+		).Info("Closing idle inbound connection.")
 
 		conn.close(LogField{"reason", "Idle connection closed"})
 	}
