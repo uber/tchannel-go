@@ -89,13 +89,14 @@ type ChannelOptions struct {
 	TimeTicker func(d time.Duration) *time.Ticker
 
 	// MaxIdleTime controls how long we allow an idle connection to exist
-	// before tearing it down.
-	MaxIdleTime *time.Duration
+	// before tearing it down. Must be set to non-zero if IdleCheckInterval
+	// is set.
+	MaxIdleTime time.Duration
 
 	// IdleCheckInterval controls how often the channel runs the sweep over
 	// all active connections to see if they can be dropped. If this is set to
 	// zero, the idle check is disabled.
-	IdleCheckInterval *time.Duration
+	IdleCheckInterval time.Duration
 
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
@@ -154,7 +155,7 @@ type Channel struct {
 		state        ChannelState
 		peerInfo     LocalPeerInfo // May be ephemeral if this is a client only channel
 		l            net.Listener  // May be nil if this is a client only channel
-		idleSweep    *IdleSweep
+		idleSweep    *idleSweep
 		conns        map[uint32]*Connection
 	}
 }

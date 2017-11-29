@@ -24,21 +24,11 @@ import (
 	"time"
 )
 
-const (
-	// defaultMaxIdleTime is the duration a connection is allowed to remain idle
-	// before it is automatically closed.
-	defaultMaxIdleTime = 3 * time.Minute
-
-	// defaultIdleCheckInterval is the frequency in which the channel checks for
-	// idle connections. (Default: check is disabled)
-	defaultIdleCheckInterval = time.Duration(0)
-)
-
-// IdleSweep controls a periodic task that looks for idle connections and clears
+// idleSweep controls a periodic task that looks for idle connections and clears
 // them from the peer list.
 // NOTE: This struct is not thread-safe on its own. Calls to Start() and Stop()
 // should be guarded by locking ch.mutable
-type IdleSweep struct {
+type idleSweep struct {
 	ch                *Channel
 	maxIdleTime       time.Duration
 	idleCheckInterval time.Duration
@@ -48,22 +38,11 @@ type IdleSweep struct {
 
 // newIdleSweep starts a poller that checks for idle connections at given
 // intervals.
-func newIdleSweep(ch *Channel, opts *ChannelOptions) *IdleSweep {
-	maxIdleTime := defaultMaxIdleTime
-	if opts.MaxIdleTime != nil {
-		maxIdleTime = *opts.MaxIdleTime
-	}
-
-	idleCheckInterval := defaultIdleCheckInterval
-	if opts.IdleCheckInterval != nil {
-		idleCheckInterval = *opts.IdleCheckInterval
-	}
-
-	is := &IdleSweep{
+func newIdleSweep(ch *Channel, opts *ChannelOptions) *idleSweep {
+	is := &idleSweep{
 		ch:                ch,
-		maxIdleTime:       maxIdleTime,
-		idleCheckInterval: idleCheckInterval,
-		stopCh:            make(chan struct{}),
+		maxIdleTime:       opts.MaxIdleTime,
+		idleCheckInterval: opts.IdleCheckInterval,
 		started:           false,
 	}
 
@@ -71,31 +50,41 @@ func newIdleSweep(ch *Channel, opts *ChannelOptions) *IdleSweep {
 }
 
 // Start runs the goroutine responsible for checking idle connections.
-func (is *IdleSweep) Start() {
+func (is *idleSweep) Start() {
 	if is.started || is.idleCheckInterval <= time.Duration(0) {
 		return
 	}
 
-	is.ch.log.Info("Starting idle connections poller")
+	if is.maxIdleTime <= time.Duration(0) {
+		is.ch.log.Warn("To enable automatically removing idle connections, you must " +
+			"set both IdleCheckInterval and MaxIdleTime.")
+		return
+	}
 
+	is.ch.log.WithFields(
+		LogField{"idleCheckInterval", is.idleCheckInterval},
+		LogField{"maxIdleTime", is.maxIdleTime},
+	).Info("Starting idle connections poller.")
+
+	is.stopCh = make(chan struct{})
 	is.started = true
 	go is.pollerLoop()
 }
 
 // Stop kills the poller checking for idle connections.
-func (is *IdleSweep) Stop() {
+func (is *idleSweep) Stop() {
 	if !is.started {
 		return
 	}
 
-	is.ch.log.Info("Stopping idle connections poller")
+	is.ch.log.Info("Stopping idle connections poller.")
 
 	is.started = false
-	is.stopCh <- struct{}{}
-	is.ch.log.Info("Idle connections poller stopped")
+	close(is.stopCh)
+	is.ch.log.Info("Idle connections poller stopped.")
 }
 
-func (is *IdleSweep) pollerLoop() {
+func (is *idleSweep) pollerLoop() {
 	ticker := is.ch.timeTicker(is.idleCheckInterval)
 
 	for {
@@ -109,29 +98,25 @@ func (is *IdleSweep) pollerLoop() {
 	}
 }
 
-func (is *IdleSweep) checkIdleConnections() {
-	// Make a copy of the peer list to reduce the time we keep the lock.
-	rootPeers := is.ch.RootPeers().Copy()
+func (is *idleSweep) checkIdleConnections() {
 	now := is.ch.timeNow()
 
-	for hostPort, peer := range rootPeers {
-		// Check idle time on both inbound and outbound connections.
-		for _, conn := range *peer.connectionsFor(inbound) {
-			lastActivity := time.Unix(0, conn.lastActivity.Load())
-			if now.Sub(lastActivity) >= is.maxIdleTime {
-				is.ch.log.WithFields(
-					LogField{"hostPort", hostPort}).Info("Closing idle inbound connection")
-				conn.close(LogField{"reason", "Idle connection closed"})
-			}
-		}
+	// Acquire the read lock and examine which connections are idle.
+	idleConnections := make([]*Connection, 0, 10)
+	is.ch.mutable.RLock()
 
-		for _, conn := range *peer.connectionsFor(outbound) {
-			lastActivity := time.Unix(0, conn.lastActivity.Load())
-			if now.Sub(lastActivity) >= is.maxIdleTime {
-				is.ch.log.WithFields(
-					LogField{"hostPort", hostPort}).Info("Closing idle outbound connection")
-				conn.close(LogField{"reason", "Idle connection closed"})
-			}
+	for _, conn := range is.ch.mutable.conns {
+		idleTime := now.Sub(conn.getLastActivityTime())
+		if idleTime >= is.maxIdleTime {
+			idleConnections = append(idleConnections, conn)
 		}
+	}
+
+	is.ch.mutable.RUnlock()
+
+	for _, conn := range idleConnections {
+		is.ch.log.WithFields(
+			LogField{"remotePeer", conn.remotePeerInfo}).Info("Closing idle inbound connection.")
+		conn.close(LogField{"reason", "Idle connection closed"})
 	}
 }
