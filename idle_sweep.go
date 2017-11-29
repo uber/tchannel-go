@@ -55,12 +55,6 @@ func (is *idleSweep) Start() {
 		return
 	}
 
-	if is.maxIdleTime <= time.Duration(0) {
-		is.ch.log.Warn("To enable automatically removing idle connections, you must " +
-			"set both IdleCheckInterval and MaxIdleTime.")
-		return
-	}
-
 	is.ch.log.WithFields(
 		LogField{"idleCheckInterval", is.idleCheckInterval},
 		LogField{"maxIdleTime", is.maxIdleTime},
@@ -81,7 +75,6 @@ func (is *idleSweep) Stop() {
 
 	is.started = false
 	close(is.stopCh)
-	is.ch.log.Info("Idle connections poller stopped.")
 }
 
 func (is *idleSweep) pollerLoop() {
@@ -103,20 +96,25 @@ func (is *idleSweep) checkIdleConnections() {
 
 	// Acquire the read lock and examine which connections are idle.
 	idleConnections := make([]*Connection, 0, 10)
-	is.ch.mutable.RLock()
 
+	is.ch.mutable.RLock()
 	for _, conn := range is.ch.mutable.conns {
-		idleTime := now.Sub(conn.getLastActivityTime())
-		if idleTime >= is.maxIdleTime {
+		if idleTime := now.Sub(conn.getLastActivityTime()); idleTime >= is.maxIdleTime {
 			idleConnections = append(idleConnections, conn)
 		}
 	}
-
 	is.ch.mutable.RUnlock()
 
 	for _, conn := range idleConnections {
+		// It's possible that the connection is already closed when we get here.
+		if !conn.IsActive() {
+			continue
+		}
+
 		is.ch.log.WithFields(
-			LogField{"remotePeer", conn.remotePeerInfo}).Info("Closing idle inbound connection.")
+			LogField{"remotePeer", conn.remotePeerInfo},
+			LogField{"lastActivityTime", conn.getLastActivityTime()}).Info("Closing idle inbound connection.")
+
 		conn.close(LogField{"reason", "Idle connection closed"})
 	}
 }

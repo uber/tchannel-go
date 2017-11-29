@@ -237,3 +237,37 @@ func TestIdleSweepWithPings(t *testing.T) {
 		waitForZeroConnections(t, ts.Server(), client)
 	})
 }
+
+// Validates that when MaxIdleTime isn't set, the sweep goroutine doesn't start.
+func TestIdleSweepMisconfiguration(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	serverTicker := testutils.NewFakeTicker()
+	clock := testutils.NewStubClock(time.Now())
+
+	serverOpts := testutils.NewOpts().
+		SetTimeTicker(serverTicker.New).
+		SetIdleCheckInterval(30*time.Second).
+		AddLogFilter("set both IdleCheckInterval and MaxIdleTime", 1).
+		SetTimeNow(clock.Now).
+		NoRelay()
+
+	clientOpts := testutils.NewOpts().
+		SetTimeNow(clock.Now)
+
+	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		client := ts.NewClient(clientOpts)
+		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+
+		// Move the clock forward and trigger the idle poller.
+		clock.Elapse(300 * time.Second)
+		serverTicker.Tick()
+
+		// Connections should still be active.
+		assert.Equal(t, 1, numConnections(ts.Server()))
+		assert.Equal(t, 1, numConnections(client))
+	})
+}

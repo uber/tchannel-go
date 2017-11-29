@@ -229,6 +229,12 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		LogField{"chID", chID},
 	)
 
+	if opts.IdleCheckInterval > 0 && opts.MaxIdleTime <= 0 {
+		logger.Warn("To enable automatically removing idle connections, you must " +
+			"set both IdleCheckInterval and MaxIdleTime.")
+		opts.IdleCheckInterval = 0
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger,
@@ -281,8 +287,9 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		opts.RelayHost.SetChannel(ch)
 	}
 
-	// Configure the idle connection timer.
+	// Start the idle connection timer.
 	ch.mutable.idleSweep = newIdleSweep(ch, opts)
+	ch.mutable.idleSweep.Start()
 
 	return ch, nil
 }
@@ -313,9 +320,6 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.peerInfo.HostPort = l.Addr().String()
 	mutable.peerInfo.IsEphemeral = false
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
-
-	// Start the idle connection timer.
-	ch.mutable.idleSweep.Start()
 
 	peerInfo := mutable.peerInfo
 	ch.log.WithFields(
@@ -638,8 +642,6 @@ func (ch *Channel) addConnection(c *Connection, direction connectionDirection) b
 		return false
 	}
 
-	// Start the idle connection timer.
-	ch.mutable.idleSweep.Start()
 	ch.mutable.conns[c.connID] = c
 	return true
 }
