@@ -33,6 +33,7 @@ type idleSweep struct {
 	maxIdleTime       time.Duration
 	idleCheckInterval time.Duration
 	stopCh            chan struct{}
+	started           bool
 }
 
 // startIdleSweep starts a poller that checks for idle connections at given
@@ -50,7 +51,7 @@ func startIdleSweep(ch *Channel, opts *ChannelOptions) *idleSweep {
 
 // Start runs the goroutine responsible for checking idle connections.
 func (is *idleSweep) start() {
-	if is.stopCh != nil || is.idleCheckInterval <= 0 {
+	if is.started || is.idleCheckInterval <= 0 {
 		return
 	}
 
@@ -59,19 +60,20 @@ func (is *idleSweep) start() {
 		LogField{"maxIdleTime", is.maxIdleTime},
 	).Info("Starting idle connections poller.")
 
+	is.started = true
 	is.stopCh = make(chan struct{})
 	go is.pollerLoop()
 }
 
 // Stop kills the poller checking for idle connections.
 func (is *idleSweep) Stop() {
-	if is.stopCh == nil {
+	if !is.started {
 		return
 	}
 
+	is.started = false
 	is.ch.log.Info("Stopping idle connections poller.")
 	close(is.stopCh)
-	is.stopCh = nil
 }
 
 func (is *idleSweep) pollerLoop() {
