@@ -89,11 +89,9 @@ func numConnections(ch *Channel) int {
 func connectionStatus(channels []*Channel) string {
 	status := make([]string, 0)
 	for _, ch := range channels {
-
 		status = append(status,
 			fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, numConnections(ch)))
 	}
-
 	return strings.Join(status, ", ")
 }
 
@@ -127,7 +125,6 @@ func TestServerBasedSweep(t *testing.T) {
 		// should be cleared out by the idle sweep.
 		for i := 0; i < 2; i++ {
 			clock.Elapse(1 * time.Minute)
-
 			serverTicker.Tick()
 
 			assert.Equal(t, 1, numConnections(ts.Server()))

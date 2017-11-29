@@ -111,7 +111,6 @@ func (is *idleSweep) checkIdleConnections() {
 			LogField{"remotePeer", conn.remotePeerInfo},
 			LogField{"lastActivityTime", conn.getLastActivityTime()},
 		).Info("Closing idle inbound connection.")
-
 		conn.close(LogField{"reason", "Idle connection closed"})
 	}
 }
