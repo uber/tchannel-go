@@ -20,9 +20,7 @@
 
 package tchannel
 
-import (
-	"time"
-)
+import "time"
 
 // idleSweep controls a periodic task that looks for idle connections and clears
 // them from the peer list.
