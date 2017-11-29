@@ -94,9 +94,10 @@ type ChannelOptions struct {
 	// is set.
 	MaxIdleTime time.Duration
 
-	// IdleCheckInterval controls how often the channel runs the sweep over
-	// all active connections to see if they can be dropped. If this is set to
-	// zero, the idle check is disabled.
+	// IdleCheckInterval controls how often the channel runs a sweep over
+	// all active connections to see if they can be dropped. Connections that
+	// are idle for longer than MaxIdleTime are disconnected. If this is set to
+	// zero (the default), idle checking is disabled.
 	IdleCheckInterval time.Duration
 
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
