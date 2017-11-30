@@ -41,6 +41,7 @@ import (
 var (
 	errAlreadyListening  = errors.New("channel already listening")
 	errInvalidStateForOp = errors.New("channel is in an invalid state for that method")
+	errMaxIdleTimeNotSet = errors.New("IdleCheckInterval is set but MaxIdleTime is zero")
 
 	// ErrNoServiceName is returned when no service name is provided when
 	// creating a new channel.
@@ -87,6 +88,17 @@ type ChannelOptions struct {
 	// TimeTicker is a variable for overriding time.Ticker in unit tests.
 	// Note: This is not a stable part of the API and may change.
 	TimeTicker func(d time.Duration) *time.Ticker
+
+	// MaxIdleTime controls how long we allow an idle connection to exist
+	// before tearing it down. Must be set to non-zero if IdleCheckInterval
+	// is set.
+	MaxIdleTime time.Duration
+
+	// IdleCheckInterval controls how often the channel runs a sweep over
+	// all active connections to see if they can be dropped. Connections that
+	// are idle for longer than MaxIdleTime are disconnected. If this is set to
+	// zero (the default), idle checking is disabled.
+	IdleCheckInterval time.Duration
 
 	// Tracer is an OpenTracing Tracer used to manage distributed tracing spans.
 	// If not set, opentracing.GlobalTracer() is used.
@@ -145,6 +157,7 @@ type Channel struct {
 		state        ChannelState
 		peerInfo     LocalPeerInfo // May be ephemeral if this is a client only channel
 		l            net.Listener  // May be nil if this is a client only channel
+		idleSweep    *idleSweep
 		conns        map[uint32]*Connection
 	}
 }
@@ -218,6 +231,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		LogField{"chID", chID},
 	)
 
+	if err := opts.validateIdleCheck(); err != nil {
+		return nil, err
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger,
@@ -269,6 +286,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	if opts.RelayHost != nil {
 		opts.RelayHost.SetChannel(ch)
 	}
+
+	// Start the idle connection timer.
+	ch.mutable.idleSweep = startIdleSweep(ch, opts)
+
 	return ch, nil
 }
 
@@ -758,11 +779,15 @@ func (ch *Channel) Close() {
 	ch.Logger().Info("Channel.Close called.")
 	var connections []*Connection
 	var channelClosed bool
+
 	ch.mutable.Lock()
 
 	if ch.mutable.l != nil {
 		ch.mutable.l.Close()
 	}
+
+	// Stop the idle connections timer.
+	ch.mutable.idleSweep.Stop()
 
 	ch.mutable.state = ChannelStartClose
 	if len(ch.mutable.conns) == 0 {
@@ -786,6 +811,14 @@ func (ch *Channel) Close() {
 // RelayHost returns the channel's RelayHost, if any.
 func (ch *Channel) RelayHost() RelayHost {
 	return ch.relayHost
+}
+
+func (o *ChannelOptions) validateIdleCheck() error {
+	if o.IdleCheckInterval > 0 && o.MaxIdleTime <= 0 {
+		return errMaxIdleTimeNotSet
+	}
+
+	return nil
 }
 
 func toStringSet(ss []string) map[string]struct{} {

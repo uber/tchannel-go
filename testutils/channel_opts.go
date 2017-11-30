@@ -219,6 +219,20 @@ func (o *ChannelOpts) SetOnPeerStatusChanged(f func(*tchannel.Peer)) *ChannelOpt
 	return o
 }
 
+// SetMaxIdleTime sets a threshold after which idle connections will
+// automatically get dropped. See idle_sweep.go for more details.
+func (o *ChannelOpts) SetMaxIdleTime(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.MaxIdleTime = d
+	return o
+}
+
+// SetIdleCheckInterval sets the frequency of the periodic poller that removes
+// stale connections from the channel.
+func (o *ChannelOpts) SetIdleCheckInterval(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.IdleCheckInterval = d
+	return o
+}
+
 func defaultString(v string, defaultValue string) string {
 	if v == "" {
 		return defaultValue

@@ -871,3 +871,10 @@ func (c *Connection) closeNetwork() {
 		).Warn("Couldn't close connection to peer.")
 	}
 }
+
+// getLastActivityTime returns the timestamp of the last frame read or written,
+// excluding pings. If no frames were transmitted yet, it will return the time
+// this connection was created.
+func (c *Connection) getLastActivityTime() time.Time {
+	return time.Unix(0, c.lastActivity.Load())
+}
