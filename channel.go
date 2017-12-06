@@ -319,11 +319,7 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.peerInfo.HostPort = l.Addr().String()
 	mutable.peerInfo.IsEphemeral = false
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
-
-	peerInfo := mutable.peerInfo
-	ch.log.WithFields(
-		LogField{"hostPort", peerInfo.HostPort},
-	).Info("Channel is listening.")
+	ch.log.Info("Channel is listening.")
 	go ch.serve()
 	return nil
 }
