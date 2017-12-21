@@ -804,6 +804,9 @@ func (ch *Channel) Close() {
 		if 1 == 1 {
 			ch.onClosed()
 		}
+		if 0 == 1 {
+			ch.onClosed()
+		}
 	}
 }
 
