@@ -1,14 +1,16 @@
-hash: d6093eb1a6d4c1eaa9f2ad996ebf07748b0b3a0413f4ab9b9435df1d255567a5
-updated: 2017-09-25T17:19:51.449837394-07:00
+hash: b75ed7f632cfd185b6a8f8bc037b09d32e292f908af6c1e257e444e17a3a39ef
+updated: 2018-01-30T12:06:17.405736-08:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/cactus/go-statsd-client
-  version: 91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d
+  version: 138b925ccdf617776955904ba7759fce64406cec
   subpackages:
   - statsd
+- name: github.com/facebookgo/clock
+  version: 600d898af40aa09a7a93ecb9265d87b0504b6f03
 - name: github.com/opentracing/opentracing-go
   version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
   subpackages:
@@ -20,12 +22,15 @@ imports:
   subpackages:
   - parser
 - name: github.com/uber-go/atomic
-  version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
+  version: 8474b86a5a6f79c443ce4b2992817ff32cf208b8
   subpackages:
   - utils
+- name: github.com/uber-go/tally
+  version: 6c4631652c6aab57c64f65c2e0aaec2e9aae3a64
 - name: github.com/uber/jaeger-client-go
-  version: 3e3870040def0ebdaf65a003863fa64f5cb26139
+  version: 3ac96c6e679cb60a74589b0d0aa7c70a906183f7
   subpackages:
+  - internal/baggage
   - internal/spanlog
   - log
   - thrift-gen/agent
@@ -34,7 +39,7 @@ imports:
   - thrift-gen/zipkincore
   - utils
 - name: golang.org/x/net
-  version: 8351a756f30f1297fe94bbf4b767ec589c6ea6d0
+  version: 0ed95abb35c445290478a5348a7b38bb154135fd
   subpackages:
   - bpf
   - context
@@ -61,24 +66,24 @@ testImports:
   - ext
   - mocktracer
 - name: github.com/pmezard/go-difflib
-  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
 - name: github.com/prashantv/protectmem
-  version: d0cabd7ce64237b84414449086fa42810ae01a92
+  version: e20412882b3adb9cabd3e9013d68adbfff9ea946
 - name: github.com/streadway/quantile
   version: b0c588724d25ae13f5afb3d90efec0edc636432b
 - name: github.com/stretchr/objx
-  version: cbeaeb16a013161a98496fad62933b1d21786672
+  version: 8a3f7159479fbc75b30357fbc48f380b7320f08e
 - name: github.com/stretchr/testify
-  version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
+  version: b91bfb9ebec76498946beb6af7c0230c7cc7ba6c
   subpackages:
   - assert
   - mock
   - require
 - name: github.com/uber/jaeger-lib
-  version: 21a3da6d66fe0e278072676fdc84cd4c9ccb9b67
+  version: 7f95f4f7e80028096410abddaae2556e4c61b59f
   subpackages:
   - metrics
 - name: gopkg.in/yaml.v2
-  version: eb3733d160e74a9c7e442f435eb3bea458e1d19f
+  version: d670f9405373e636a5a2765eea47fac0c9bc91a4

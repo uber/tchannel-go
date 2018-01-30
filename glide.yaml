@@ -31,6 +31,8 @@ import:
   version: ^1
 - package: github.com/uber/jaeger-client-go
   version: ^2.7
+- package: github.com/uber-go/tally
+  version: ^3
 testImport:
 - package: github.com/jessevdk/go-flags
   version: ^1
