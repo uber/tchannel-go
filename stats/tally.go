@@ -36,7 +36,7 @@ type taggedScope struct {
 // NewTallyReporter takes a tally.Scope and wraps it so it ca be used as a
 // StatsReporter. The list of metrics emitted is documented on:
 // https://tchannel.readthedocs.io/en/latest/metrics/
-// The tags emitted are similar to Muttley/YARPC, the tags emitted are:
+// The metrics emitted are similar to YARPC, the tags emitted are:
 // source, dest, procedure, and retry-count.
 func NewTallyReporter(scope tally.Scope) tchannel.StatsReporter {
 	return &wrapper{
