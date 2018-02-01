@@ -1,6 +1,12 @@
 Changelog
 =========
 
+## [1.9.0] - 2018-01-31
+### Added
+ * stats: Add tally reporter to emit tagged metrics. (#676)
+ * Add optional idle timeout, after which connections will be
+   closed. (#681)
+
 ## [1.8.1] - 2017-11-21
 ### Fixed
  * Always log addresses as strings. (#669)
@@ -216,6 +222,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.9.0]: https://github.com/uber/tchannel-go/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/uber/tchannel-go/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/uber/tchannel-go/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/uber/tchannel-go/compare/v1.6.0...v1.7.0
