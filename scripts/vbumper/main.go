@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"errors"
 	"flag"
+	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -90,6 +91,11 @@ func updateChangelog() (oldVersion string, _ error) {
 		return "", err
 	}
 
+	newLog, err = insertChangesLink(newLog, oldVersion, *_version)
+	if err != nil {
+		return "", err
+	}
+
 	if *_skipChangelog {
 		return oldVersion, nil
 	}
@@ -98,7 +104,7 @@ func updateChangelog() (oldVersion string, _ error) {
 }
 
 func insertNewChangelog(contents string) (string, string, error) {
-	prevVersionHeader := strings.Index(contents, "\n# ")
+	prevVersionHeader := strings.Index(contents, "\n## [")
 	if prevVersionHeader < 0 {
 		return "", "", errors.New("failed to find version header in changelog")
 	}
@@ -106,16 +112,15 @@ func insertNewChangelog(contents string) (string, string, error) {
 	// Skip the newline
 	prevVersionHeader++
 	versionLine := contents[prevVersionHeader:]
-	prevVersionEnd := strings.Index(versionLine, "(")
-	prevVersionTag := strings.TrimSpace(versionLine[1 : prevVersionEnd-1])
+	prevVersionEnd := strings.Index(versionLine, "]")
+	prevVersion := strings.TrimSpace(versionLine[4:prevVersionEnd])
 
-	newChanges, err := getNewChangelog(prevVersionTag)
+	// The version tag has a "v" prefix.
+	newChanges, err := getNewChangelog("v" + prevVersion)
 	if err != nil {
 		return "", "", err
 	}
 
-	// Strip the 'v' prefix.
-	prevVersion := prevVersionTag[1:]
 	newContents := contents[:prevVersionHeader] + newChanges + contents[prevVersionHeader:]
 	return newContents, prevVersion, nil
 }
@@ -144,7 +149,8 @@ func getNewChangelog(prevVersion string) (string, error) {
 }
 
 var _changeTmpl = template.Must(template.New("changelog").Parse(
-	`# v{{ .Version }} ({{ .Date }})
+	`## [{{ .Version }}] - {{ .Date }}
+### Changed
 {{ range .Changes }}
  * {{ . -}}
 {{ end }}
@@ -169,4 +175,28 @@ func getChanges(prevVersion string) ([]string, error) {
 		newLines = append(newLines, line)
 	}
 	return newLines, nil
+}
+
+func insertChangesLink(contents, prevVersion, version string) (string, error) {
+	linksMarker := strings.Index(contents, "(Version Links)")
+	if linksMarker == -1 {
+		return "", errors.New("failed to find marker for version links section")
+	}
+
+	newLine := strings.IndexByte(contents[linksMarker:], '\n')
+	if newLine < 0 {
+		return "", errors.New("failed to find newline after version links section")
+	}
+
+	insertAt := linksMarker + newLine + 1
+
+	linkBlock := fmt.Sprintf("[%v]: %v\n", version, getChangesLink(prevVersion, version))
+	newContents := contents[:insertAt] + linkBlock + contents[insertAt:]
+	return newContents, nil
+}
+
+func getChangesLink(prevVersion, curVersion string) string {
+	// Example link:
+	// https://github.com/uber/tchannel-go/compare/v1.8.0...v1.8.1
+	return fmt.Sprintf("https://github.com/uber/tchannel-go/compare/v%v...v%v", prevVersion, curVersion)
 }
