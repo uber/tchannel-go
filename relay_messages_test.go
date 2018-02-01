@@ -26,6 +26,7 @@ import (
 
 	"github.com/uber/tchannel-go/typed"
 
+	"github.com/opentracing/opentracing-go/mocktracer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,6 +38,7 @@ const (
 	reqHasDelegate
 	reqHasRoutingKey
 	reqHasChecksum
+	reqHasReplacedSpan
 	reqTotalCombinations
 	reqHasAll testCallReq = reqTotalCombinations - 1
 )
@@ -51,10 +53,13 @@ func (cr testCallReq) req() lazyCallReq {
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
 
 	payload := typed.NewWriteBuffer(f.Payload)
-	payload.WriteSingleByte(0)           // flags
-	payload.WriteUint32(42)              // TTL
-	payload.WriteBytes(make([]byte, 25)) // tracing
-	payload.WriteLen8String("bankmoji")  // service
+	payload.WriteSingleByte(0)          // flags
+	payload.WriteUint32(42)             // TTL
+	payload.WriteUint64(4)              // spanID
+	payload.WriteUint64(3)              // parentID
+	payload.WriteUint64(2)              // traceID
+	payload.WriteSingleByte(1)          // traceFlag (sampled=true)
+	payload.WriteLen8String("bankmoji") // service
 
 	headers := make(map[string]string)
 	if cr&reqHasHeaders != 0 {
@@ -79,7 +84,16 @@ func (cr testCallReq) req() lazyCallReq {
 		payload.WriteUint32(0)                            // checksum contents
 	}
 	payload.WriteLen16String("moneys") // method
-	return newLazyCallReq(f)
+	r := newLazyCallReq(f)
+
+	if cr&reqHasReplacedSpan != 0 {
+		tracer := mocktracer.New()
+		tracer.RegisterExtractor(zipkinSpanFormat, new(zipkinExtractor))
+		tracer.RegisterInjector(zipkinSpanFormat, new(zipkinInjector))
+		span, _ := r.SetRelaySpan(tracer, "relay-op")
+		defer span.Finish()
+	}
+	return r
 }
 
 func withLazyCallReqCombinations(f func(cr testCallReq)) {
@@ -303,5 +317,23 @@ func TestLazyErrorCodes(t *testing.T) {
 	withLazyErrorCombinations(func(ec SystemErrCode) {
 		f := ec.fakeErrFrame()
 		assert.Equal(t, ec, f.Code(), "Mismatch between error code and lazy frame's Code() method.")
+	})
+}
+
+func TestSetRelaySpan(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		assert.Equal(t, uint8(1), cr.Span().Flags())
+		if crt&reqHasReplacedSpan == 0 {
+			assert.Equal(t, uint64(4), cr.Span().SpanID())
+			assert.Equal(t, uint64(3), cr.Span().ParentID())
+			assert.Equal(t, uint64(2), cr.Span().TraceID())
+
+		} else {
+			assert.NotEqual(t, uint(4), cr.Span().SpanID())
+			// mockTracker doesn't inject/extract parent IDs
+			assert.Equal(t, uint64(0), cr.Span().ParentID())
+			assert.Equal(t, uint64(2), cr.Span().TraceID())
+		}
 	})
 }
