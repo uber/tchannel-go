@@ -69,12 +69,21 @@ func TestTracingSpanAttributes(t *testing.T) {
 		ctx := opentracing.ContextWithSpan(context.Background(), span)
 		root := new(testtracing.TracingResponse).ObserveSpan(ctx)
 
+		// Pretend that the client propagated tracing headers from upstream call, and test that the outbound call
+		// will override them (https://github.com/uber/tchannel-go/issues/682).
+		headers := make(map[string]string)
+		assert.NoError(t, tracer.Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(headers)))
+		tracingHeaders := make(map[string]string)
+		for k, v := range headers {
+			tracingHeaders["$tracing$"+k] = v
+		}
+
 		ctx, cancel := NewContextBuilder(2 * time.Second).SetParentContext(ctx).Build()
 		defer cancel()
 
 		peer := ch.Peers().GetOrAdd(ch.PeerInfo().HostPort)
 		var response testtracing.TracingResponse
-		require.NoError(t, json.CallPeer(json.Wrap(ctx), peer, ch.PeerInfo().ServiceName,
+		require.NoError(t, json.CallPeer(json.WithHeaders(ctx, tracingHeaders), peer, ch.PeerInfo().ServiceName,
 			"call", &testtracing.TracingRequest{}, &response))
 
 		// Spans are finished in inbound.doneSending() or outbound.doneReading(),

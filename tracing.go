@@ -185,7 +185,11 @@ func InjectOutboundSpan(response *OutboundCallResponse, headers map[string]strin
 		return headers // Tracer did not add any tracing headers, so return the original map
 	}
 	for k, v := range headers {
-		newHeaders[k] = v
+		// Some applications propagate all inbound application headers to outbound calls (issue #682).
+		// If those headers include tracing headers we want to make sure to keep the new tracing headers.
+		if _, ok := newHeaders[k]; !ok {
+			newHeaders[k] = v
+		}
 	}
 	return newHeaders
 }
