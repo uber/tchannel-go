@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,12 +42,16 @@ import (
 // JSONHandler tests tracing over JSON encoding
 type JSONHandler struct {
 	testtracing.TraceHandler
-	t *testing.T
+	t          *testing.T
+	sideEffect func(ctx json.Context)
 }
 
 func (h *JSONHandler) callJSON(ctx json.Context, req *testtracing.TracingRequest) (*testtracing.TracingResponse, error) {
 	resp := new(testtracing.TracingResponse)
 	resp.ObserveSpan(ctx)
+	if h.sideEffect != nil {
+		h.sideEffect(ctx)
+	}
 	return resp, nil
 }
 
@@ -60,8 +65,19 @@ func TestTracingSpanAttributes(t *testing.T) {
 		DisableRelay:   true,
 	}
 	WithVerifiedServer(t, opts, func(ch *Channel, hostPort string) {
+		const (
+			customAppHeaderKey           = "futurama"
+			customAppHeaderExpectedValue = "simpsons"
+		)
+		var customAppHeaderValue atomic.Value
 		// Register JSON handler
-		jsonHandler := &JSONHandler{TraceHandler: testtracing.TraceHandler{Ch: ch}, t: t}
+		jsonHandler := &JSONHandler{
+			TraceHandler: testtracing.TraceHandler{Ch: ch},
+			t:            t,
+			sideEffect: func(ctx json.Context) {
+				customAppHeaderValue.Store(ctx.Headers()[customAppHeaderKey])
+			},
+		}
 		json.Register(ch, json.Handlers{"call": jsonHandler.callJSON}, jsonHandler.onError)
 
 		span := ch.Tracer().StartSpan("client")
@@ -73,7 +89,9 @@ func TestTracingSpanAttributes(t *testing.T) {
 		// will override them (https://github.com/uber/tchannel-go/issues/682).
 		headers := make(map[string]string)
 		assert.NoError(t, tracer.Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(headers)))
-		tracingHeaders := make(map[string]string)
+		tracingHeaders := map[string]string{
+			customAppHeaderKey: customAppHeaderExpectedValue,
+		}
 		for k, v := range headers {
 			tracingHeaders["$tracing$"+k] = v
 		}
@@ -85,6 +103,8 @@ func TestTracingSpanAttributes(t *testing.T) {
 		var response testtracing.TracingResponse
 		require.NoError(t, json.CallPeer(json.WithHeaders(ctx, tracingHeaders), peer, ch.PeerInfo().ServiceName,
 			"call", &testtracing.TracingRequest{}, &response))
+
+		assert.Equal(t, customAppHeaderExpectedValue, customAppHeaderValue.Load(), "custom header was propagated")
 
 		// Spans are finished in inbound.doneSending() or outbound.doneReading(),
 		// which are called on different go-routines and may execute *after* the
