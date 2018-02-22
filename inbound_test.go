@@ -142,3 +142,27 @@ func TestInboundConnection_CallOptions(t *testing.T) {
 		require.NoError(t, err, "Call through proxy failed")
 	})
 }
+
+func TestBlackhole(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(tServer *testutils.TestServer) {
+		serviceName := tServer.ServiceName()
+
+		server := tServer.NewServer(testutils.NewOpts())
+		defer server.Close()
+
+		subCh := server.GetSubChannel(serviceName)
+		subCh.SetHandler(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			// blackhole all requests
+			inbound.Response().Blackhole()
+		}))
+
+		clientCh := tServer.NewClient(testutils.NewOpts())
+		defer clientCh.Close()
+
+		ctx, cancel := NewContext(time.Millisecond * 10)
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, clientCh, server.PeerInfo().HostPort, serviceName, "test", nil, nil)
+		require.Error(t, err, "expected to timeout")
+	})
+}

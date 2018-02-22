@@ -93,7 +93,6 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	if response.span != nil {
 		mex.ctx = opentracing.ContextWithSpan(mex.ctx, response.span)
 	}
-	response.blackhole = make(chan struct{})
 	response.mex = mex
 	response.conn = c
 	response.cancel = cancel
@@ -195,10 +194,6 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 			// TODO: move the cancel to the parent context at connnection level
 			call.response.cancel()
 			call.mex.inboundExpired()
-		case <-call.response.blackhole:
-			// close go routine, release resources
-			call.mex.inboundExpired()
-			return
 		}
 	}()
 
@@ -334,8 +329,6 @@ type InboundCallResponse struct {
 	span             opentracing.Span
 	statsReporter    StatsReporter
 	commonStatsTags  map[string]string
-	// blackhole is a channel that gets closed when the repsonse should be blackholed.
-	blackhole chan struct{}
 }
 
 // SendSystemError returns a system error response to the peer.  The call is considered
@@ -371,7 +364,7 @@ func (response *InboundCallResponse) SetApplicationError() error {
 // Blackhole indicates that there should be no response and provides
 // an opportunity to clean up resources.
 func (response *InboundCallResponse) Blackhole() {
-	close(response.blackhole)
+	response.cancel()
 }
 
 // Arg2Writer returns a WriteCloser that can be used to write the second argument.
