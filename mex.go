@@ -390,7 +390,7 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 // will write to the send channel.
 func (mexset *messageExchangeSet) expireExchange(msgID uint32) {
 	mexset.log.Debugf(
-		"Removing %s message exchange %d due to timeout, cancelation or blackhole",
+		"Removing %s message exchange %d due to timeout, cancellation or blackhole",
 		mexset.name,
 		msgID,
 	)
