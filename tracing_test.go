@@ -22,10 +22,10 @@ package tchannel_test
 
 import (
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/uber-go/atomic"
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
@@ -69,7 +69,7 @@ func TestTracingSpanAttributes(t *testing.T) {
 			customAppHeaderKey           = "futurama"
 			customAppHeaderExpectedValue = "simpsons"
 		)
-		var customAppHeaderValue atomic.Value
+		var customAppHeaderValue atomic.String
 		// Register JSON handler
 		jsonHandler := &JSONHandler{
 			TraceHandler: testtracing.TraceHandler{Ch: ch},
@@ -87,13 +87,13 @@ func TestTracingSpanAttributes(t *testing.T) {
 
 		// Pretend that the client propagated tracing headers from upstream call, and test that the outbound call
 		// will override them (https://github.com/uber/tchannel-go/issues/682).
-		headers := make(map[string]string)
-		assert.NoError(t, tracer.Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(headers)))
-		tracingHeaders := map[string]string{
+		tracingHeaders := make(map[string]string)
+		assert.NoError(t, tracer.Inject(span.Context(), opentracing.TextMap, opentracing.TextMapCarrier(tracingHeaders)))
+		requestHeaders := map[string]string{
 			customAppHeaderKey: customAppHeaderExpectedValue,
 		}
-		for k, v := range headers {
-			tracingHeaders["$tracing$"+k] = v
+		for k := range tracingHeaders {
+			requestHeaders["$tracing$"+k] = "garbage"
 		}
 
 		ctx, cancel := NewContextBuilder(2 * time.Second).SetParentContext(ctx).Build()
@@ -101,7 +101,7 @@ func TestTracingSpanAttributes(t *testing.T) {
 
 		peer := ch.Peers().GetOrAdd(ch.PeerInfo().HostPort)
 		var response testtracing.TracingResponse
-		require.NoError(t, json.CallPeer(json.WithHeaders(ctx, tracingHeaders), peer, ch.PeerInfo().ServiceName,
+		require.NoError(t, json.CallPeer(json.WithHeaders(ctx, requestHeaders), peer, ch.PeerInfo().ServiceName,
 			"call", &testtracing.TracingRequest{}, &response))
 
 		assert.Equal(t, customAppHeaderExpectedValue, customAppHeaderValue.Load(), "custom header was propagated")
