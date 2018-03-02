@@ -144,25 +144,36 @@ func TestInboundConnection_CallOptions(t *testing.T) {
 }
 
 func TestBlackhole(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(tServer *testutils.TestServer) {
-		serviceName := tServer.ServiceName()
+	ctx, cancel := NewContext(testutils.Timeout(time.Hour))
 
-		server := tServer.NewServer(testutils.NewOpts())
-		defer server.Close()
+	testutils.WithTestServer(t, nil, func(server *testutils.TestServer) {
+		serviceName := server.ServiceName()
+		handlerName := "test-handler"
 
-		subCh := server.GetSubChannel(serviceName)
-		subCh.SetHandler(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
-			// blackhole all requests
+		server.Register(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			// cancel client context in handler so the client can return after being blackholed
+			defer cancel()
+
+			c, _ := InboundConnection(inbound)
+			require.NotNil(t, c)
+
+			state := c.IntrospectState(&IntrospectionOptions{})
+			require.Equal(t, 1, state.InboundExchange.Count, "expected exactly one inbound exchange")
+
+			// blackhole request
 			inbound.Response().Blackhole()
-		}))
 
-		clientCh := tServer.NewClient(testutils.NewOpts())
+			// give time for exchange to cleanup
+			time.Sleep(10 * time.Millisecond)
+
+			state = c.IntrospectState(&IntrospectionOptions{})
+			require.Equal(t, 0, state.InboundExchange.Count, "expected no inbound exchanges")
+		}), handlerName)
+
+		clientCh := server.NewClient(nil)
 		defer clientCh.Close()
 
-		ctx, cancel := NewContext(time.Millisecond * 10)
-		defer cancel()
-
-		_, _, _, err := raw.Call(ctx, clientCh, server.PeerInfo().HostPort, serviceName, "test", nil, nil)
+		_, _, _, err := raw.Call(ctx, clientCh, server.HostPort(), serviceName, handlerName, nil, nil)
 		require.Error(t, err, "expected to timeout")
 	})
 }

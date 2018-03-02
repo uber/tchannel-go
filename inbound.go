@@ -361,8 +361,9 @@ func (response *InboundCallResponse) SetApplicationError() error {
 	return nil
 }
 
-// Blackhole indicates that there should be no response and provides
-// an opportunity to clean up resources.
+// Blackhole indicates no response will be sent, and cleans up any resources
+// associated with this request. This allows for services to trigger a timeout in
+// clients without holding on to any goroutines on the server.
 func (response *InboundCallResponse) Blackhole() {
 	response.cancel()
 }
