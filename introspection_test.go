@@ -68,15 +68,43 @@ func TestIntrospection(t *testing.T) {
 	})
 }
 
-func TestIntrospectNumConnections(t *testing.T) {
+func TestIntrospectClosedConn(t *testing.T) {
 	// Disable the relay, since the relay does not maintain a 1:1 mapping betewen
 	// incoming connections vs outgoing connections.
 	opts := testutils.NewOpts().NoRelay()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		blockEcho := make(chan struct{})
+		gotEcho := make(chan struct{})
+		testutils.RegisterEcho(ts.Server(), func() {
+			close(gotEcho)
+			<-blockEcho
+		})
+
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
 		assert.Equal(t, 0, ts.Server().IntrospectNumConnections(), "Expected no connection on new server")
+
+		// Make sure that a closed connection will reduce NumConnections.
+		client := ts.NewClient(nil)
+		require.NoError(t, client.Ping(ctx, ts.HostPort()), "Ping from new client failed")
+		assert.Equal(t, 1, ts.Server().IntrospectNumConnections(), "Number of connections expected to increase")
+
+		go testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+
+		// The state will change to "closeStarted", but be blocked due to the blocked
+		// echo call.
+		<-gotEcho
+		client.Close()
+
+		introspected := client.IntrospectState(nil)
+		assert.Len(t, introspected.Connections, 1, "Expected single connection due to blocked call")
+		assert.Len(t, introspected.InactiveConnections, 1, "Expected inactive connection due to blocked call")
+
+		close(blockEcho)
+		require.True(t, testutils.WaitFor(100*time.Millisecond, func() bool {
+			return ts.Server().IntrospectNumConnections() == 0
+		}), "Closed connection did not get removed, num connections is %v", ts.Server().IntrospectNumConnections())
 
 		for i := 0; i < 10; i++ {
 			client := ts.NewClient(nil)
@@ -86,15 +114,5 @@ func TestIntrospectNumConnections(t *testing.T) {
 			assert.Equal(t, 1, client.IntrospectNumConnections(), "Client should have single connection")
 			assert.Equal(t, i+1, ts.Server().IntrospectNumConnections(), "Incorrect number of server connections")
 		}
-
-		// Make sure that a closed connection will reduce NumConnections.
-		client := ts.NewClient(nil)
-		require.NoError(t, client.Ping(ctx, ts.HostPort()), "Ping from new client failed")
-		assert.Equal(t, 11, ts.Server().IntrospectNumConnections(), "Number of connections expected to increase")
-
-		client.Close()
-		require.True(t, testutils.WaitFor(100*time.Millisecond, func() bool {
-			return ts.Server().IntrospectNumConnections() == 10
-		}), "Closed connection did not get removed, num connections is %v", ts.Server().IntrospectNumConnections())
 	})
 }

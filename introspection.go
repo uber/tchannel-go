@@ -78,6 +78,10 @@ type RuntimeState struct {
 	// Connections is the list of connection IDs in the channel
 	Connections []uint32 ` json:"connections"`
 
+	// InactiveConnections is the connection state for connections that are not active,
+	// and hence are not reported as part of root peers.
+	InactiveConnections []ConnectionRuntimeState `json:"inactiveConnections"`
+
 	// OtherChannels is information about any other channels running in this process.
 	OtherChannels map[string][]ChannelInfo `json:"otherChannels,omitEmpty"`
 
@@ -206,24 +210,29 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 
 	ch.mutable.RLock()
 	numConns := len(ch.mutable.conns)
+	inactiveConns := make([]*Connection, 0, numConns)
 	connIDs := make([]uint32, 0, numConns)
-	for id := range ch.mutable.conns {
+	for id, conn := range ch.mutable.conns {
 		connIDs = append(connIDs, id)
+		if !conn.IsActive() {
+			inactiveConns = append(inactiveConns, conn)
+		}
 	}
 
 	ch.mutable.RUnlock()
 
 	return &RuntimeState{
-		ID:             ch.chID,
-		CreatedStack:   ch.createdStack,
-		LocalPeer:      ch.PeerInfo(),
-		SubChannels:    ch.subChannels.IntrospectState(opts),
-		RootPeers:      ch.RootPeers().IntrospectState(opts),
-		Peers:          ch.Peers().IntrospectList(opts),
-		NumConnections: numConns,
-		Connections:    connIDs,
-		OtherChannels:  ch.IntrospectOthers(opts),
-		RuntimeVersion: introspectRuntimeVersion(),
+		ID:                  ch.chID,
+		CreatedStack:        ch.createdStack,
+		LocalPeer:           ch.PeerInfo(),
+		SubChannels:         ch.subChannels.IntrospectState(opts),
+		RootPeers:           ch.RootPeers().IntrospectState(opts),
+		Peers:               ch.Peers().IntrospectList(opts),
+		NumConnections:      numConns,
+		Connections:         connIDs,
+		InactiveConnections: getConnectionRuntimeState(inactiveConns, opts),
+		OtherChannels:       ch.IntrospectOthers(opts),
+		RuntimeVersion:      introspectRuntimeVersion(),
 	}
 }
 
