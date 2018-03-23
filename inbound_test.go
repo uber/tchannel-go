@@ -180,6 +180,8 @@ func TestBlackhole(t *testing.T) {
 		require.Error(t, err, "expected call error")
 
 		errCode := GetSystemErrorCode(err)
+		// Providing 'got: %q' is necessary since SystemErrCode is a type alias of byte; testify's
+		// failed test ouput would otherwise print out hex codes.
 		assert.Equal(t, ErrCodeCancelled, errCode, "expected cancelled error code, got: %q", errCode)
 	})
 }
