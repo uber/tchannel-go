@@ -164,16 +164,22 @@ func TestBlackhole(t *testing.T) {
 			inbound.Response().Blackhole()
 
 			// give time for exchange to cleanup
-			time.Sleep(10 * time.Millisecond)
+			require.True(t, testutils.WaitFor(10*time.Millisecond, func() bool {
+				state = c.IntrospectState(&IntrospectionOptions{})
+				return state.InboundExchange.Count == 0
+			}),
+				"expected no inbound exchanges",
+			)
 
-			state = c.IntrospectState(&IntrospectionOptions{})
-			require.Equal(t, 0, state.InboundExchange.Count, "expected no inbound exchanges")
 		}), handlerName)
 
 		clientCh := server.NewClient(nil)
 		defer clientCh.Close()
 
 		_, _, _, err := raw.Call(ctx, clientCh, server.HostPort(), serviceName, handlerName, nil, nil)
-		require.Error(t, err, "expected to timeout")
+		require.Error(t, err, "expected call error")
+
+		errCode := GetSystemErrorCode(err)
+		assert.Equal(t, ErrCodeCancelled, errCode, "expected cancelled error code, got: %q", errCode)
 	})
 }
