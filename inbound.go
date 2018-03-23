@@ -361,6 +361,13 @@ func (response *InboundCallResponse) SetApplicationError() error {
 	return nil
 }
 
+// Blackhole indicates no response will be sent, and cleans up any resources
+// associated with this request. This allows for services to trigger a timeout in
+// clients without holding on to any goroutines on the server.
+func (response *InboundCallResponse) Blackhole() {
+	response.cancel()
+}
+
 // Arg2Writer returns a WriteCloser that can be used to write the second argument.
 // The returned writer must be closed once the write is complete.
 func (response *InboundCallResponse) Arg2Writer() (ArgWriter, error) {

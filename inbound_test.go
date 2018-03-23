@@ -142,3 +142,46 @@ func TestInboundConnection_CallOptions(t *testing.T) {
 		require.NoError(t, err, "Call through proxy failed")
 	})
 }
+
+func TestBlackhole(t *testing.T) {
+	ctx, cancel := NewContext(testutils.Timeout(time.Hour))
+
+	testutils.WithTestServer(t, nil, func(server *testutils.TestServer) {
+		serviceName := server.ServiceName()
+		handlerName := "test-handler"
+
+		server.Register(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			// cancel client context in handler so the client can return after being blackholed
+			defer cancel()
+
+			c, _ := InboundConnection(inbound)
+			require.NotNil(t, c)
+
+			state := c.IntrospectState(&IntrospectionOptions{})
+			require.Equal(t, 1, state.InboundExchange.Count, "expected exactly one inbound exchange")
+
+			// blackhole request
+			inbound.Response().Blackhole()
+
+			// give time for exchange to cleanup
+			require.True(t, testutils.WaitFor(10*time.Millisecond, func() bool {
+				state = c.IntrospectState(&IntrospectionOptions{})
+				return state.InboundExchange.Count == 0
+			}),
+				"expected no inbound exchanges",
+			)
+
+		}), handlerName)
+
+		clientCh := server.NewClient(nil)
+		defer clientCh.Close()
+
+		_, _, _, err := raw.Call(ctx, clientCh, server.HostPort(), serviceName, handlerName, nil, nil)
+		require.Error(t, err, "expected call error")
+
+		errCode := GetSystemErrorCode(err)
+		// Providing 'got: %q' is necessary since SystemErrCode is a type alias of byte; testify's
+		// failed test ouput would otherwise print out hex codes.
+		assert.Equal(t, ErrCodeCancelled, errCode, "expected cancelled error code, got: %q", errCode)
+	})
+}
