@@ -17,6 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+
 package tchannel
 
 import (
@@ -33,10 +34,12 @@ type relayTimerPool struct {
 }
 
 type relayTimer struct {
-	pool  *relayTimerPool
-	timer *time.Timer
+	pool  *relayTimerPool // const
+	timer *time.Timer // const
 
-	// Per-timer paramters passed back when the timer is triggered.
+	active bool // mutated on Start/Stop
+
+	// Per-timer parameters passed back when the timer is triggered.
 	items        *relayItems
 	id           uint32
 	isOriginator bool
@@ -44,6 +47,7 @@ type relayTimer struct {
 
 func (rt *relayTimer) OnTimer() {
 	rt.pool.trigger(rt.items, rt.id, rt.isOriginator)
+	rt.markTimerInactive()
 }
 
 func newRelayTimerPool(trigger relayTimerTrigger) *relayTimerPool {
@@ -64,36 +68,55 @@ func (tp *relayTimerPool) Get() *relayTimer {
 		pool: tp,
 	}
 	rt.timer = time.AfterFunc(time.Duration(math.MaxInt64), rt.OnTimer)
+
+	// Go timers are started by default. However, we need to separate creating
+	// the timer and starting the timer for use in the relay code paths.
+	// To make this work without more locks in the relayTimer, we create a Go timer
+	// with a huge timeout so it doesn't run, then stop it so we can start it later.
 	if !rt.timer.Stop() {
-		panic("failed to stop timer set for 1 hour")
+		panic("relayTimer requires timers in stopped state, but failed to stop underlying timer")
 	}
 	return rt
 }
 
-// Stop stops the timer and returns whether the timer was stopped. It returns
-// the same behaviour as https://golang.org/pkg/time/#Timer.Stop.
-func (rt *relayTimer) Stop() bool {
-	return rt.timer.Stop()
-}
-
-// Release releases a timer back to the timer pool. The timer MUST be stopped
-// before being released.
-func (rt *relayTimer) Release() {
-	if rt.Stop() {
-		panic("tried to release unstopped timer")
-	}
-	rt.id = 0
-	rt.pool.pool.Put(rt)
-}
-
 // Start starts a timer with the given duration for the specified ID.
 func (rt *relayTimer) Start(d time.Duration, items *relayItems, id uint32, isOriginator bool) {
-	if rt.id != 0 {
-		panic("ID mismatch")
+	if rt.active {
+		panic("Tried to start an already-active timer")
 	}
 
+	rt.active = true
 	rt.items = items
 	rt.id = id
 	rt.isOriginator = isOriginator
 	rt.timer.Reset(d)
 }
+
+
+func (rt *relayTimer) markTimerInactive() {
+	rt.active = false
+	rt.items = nil
+	rt.id = 0
+	rt.items = nil
+	rt.isOriginator = false
+}
+
+// Stop stops the timer and returns whether the timer was stopped. It returns
+// the same behaviour as https://golang.org/pkg/time/#Timer.Stop.
+func (rt *relayTimer) Stop() bool {
+	stopped := rt.timer.Stop()
+	if stopped {
+		rt.markTimerInactive()
+	}
+	return stopped
+}
+
+// Release releases a timer back to the timer pool. The timer MUST have run or be
+// stopped before Release is called.
+func (rt *relayTimer) Release() {
+	if rt.id != 0 {
+		panic("only stopped or completed timers can be released")
+	}
+	rt.pool.pool.Put(rt)
+}
+

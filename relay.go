@@ -117,8 +117,7 @@ func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 	}
 	r.Unlock()
 
-	item.timeout.Stop()
-	item.timeout.Release()
+	cancelRelayTimer(item.timeout)
 	return item, !item.tomb
 }
 
@@ -144,9 +143,15 @@ func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) (relayItem, bo
 		return item, false
 	}
 	r.tombs++
+
+	prevTimeout := item.timeout
+	item.timeout = nil
 	item.tomb = true
 	r.items[id] = item
 	r.Unlock()
+
+	// We need to check whether the item had a timeout that we need to stop.
+	cancelRelayTimer(prevTimeout)
 
 	// TODO: We should be clearing these out in batches, rather than creating
 	// individual timers for each item.
@@ -600,4 +605,16 @@ func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 		LogField{"defaultMaxTimeout", _defaultRelayMaxTimeout},
 	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 	return _defaultRelayMaxTimeout
+}
+
+func cancelRelayTimer(timeout *relayTimer) {
+	if timeout == nil {
+		// No timeout to cancel.
+		return
+	}
+
+	// If we stopped the timer, then we are responsible for releasing it.
+	if timeout.Stop() {
+		timeout.Release()
+	}
 }
