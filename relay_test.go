@@ -791,3 +791,39 @@ func TestRelayConcurrentNewConnectionAttempts(t *testing.T) {
 		assert.Equal(t, 1, inboundConns, "Expected a single inbound connection to the server")
 	})
 }
+
+func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
+	const (
+		concurrentClients = 10
+		callsPerClient    = 100
+	)
+	// We have to disable log verification due to https://github.com/uber/tchannel-go/issues/688
+	opts := testutils.NewOpts().SetRelayOnly().DisableLogVerification()
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		// Create clients and ensure we can make a successful request.
+		clients := make([]*Channel, concurrentClients)
+		for i := range clients {
+			clients[i] = ts.NewClient(opts)
+			testutils.AssertEcho(t, clients[i], ts.HostPort(), ts.ServiceName())
+		}
+
+		var wg sync.WaitGroup
+		for i := 0; i < concurrentClients; i++ {
+			wg.Add(1)
+			go func(client *Channel) {
+				defer wg.Done()
+
+				for j := 0; j < callsPerClient; j++ {
+					// Make many concurrent calls, some will timeout
+					ctx, cancel := NewContext(5 * time.Millisecond)
+					raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+					cancel()
+				}
+			}(clients[i])
+		}
+
+		wg.Wait()
+	})
+}
