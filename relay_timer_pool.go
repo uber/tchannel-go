@@ -113,7 +113,7 @@ func (rt *relayTimer) Stop() bool {
 // Release releases a timer back to the timer pool. The timer MUST have run or be
 // stopped before Release is called.
 func (rt *relayTimer) Release() {
-	if rt.id != 0 {
+	if rt.active {
 		panic("only stopped or completed timers can be released")
 	}
 	rt.pool.pool.Put(rt)
