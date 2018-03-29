@@ -35,7 +35,7 @@ type relayTimerPool struct {
 
 type relayTimer struct {
 	pool  *relayTimerPool // const
-	timer *time.Timer // const
+	timer *time.Timer     // const
 
 	active bool // mutated on Start/Stop
 
@@ -92,7 +92,6 @@ func (rt *relayTimer) Start(d time.Duration, items *relayItems, id uint32, isOri
 	rt.timer.Reset(d)
 }
 
-
 func (rt *relayTimer) markTimerInactive() {
 	rt.active = false
 	rt.items = nil
@@ -119,4 +118,3 @@ func (rt *relayTimer) Release() {
 	}
 	rt.pool.pool.Put(rt)
 }
-
