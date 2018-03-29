@@ -185,7 +185,8 @@ type Relayer struct {
 	// It stores remappings for all response frames read on this connection.
 	inbound *relayItems
 
-	// TODO
+	// timeouts is the pool of timers used to track call timeouts.
+	// It allows timer re-use, while allow timers to be created and started separately.
 	timeouts *relayTimerPool
 
 	peers   *RootPeerList
