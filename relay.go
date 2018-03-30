@@ -117,7 +117,8 @@ func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 	}
 	r.Unlock()
 
-	cancelRelayTimer(item.timeout)
+	item.timeout.Stop()
+	item.timeout.Release()
 	return item, !item.tomb
 }
 
@@ -143,15 +144,9 @@ func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) (relayItem, bo
 		return item, false
 	}
 	r.tombs++
-
-	prevTimeout := item.timeout
-	item.timeout = nil
 	item.tomb = true
 	r.items[id] = item
 	r.Unlock()
-
-	// We need to check whether the item had a timeout that we need to stop.
-	cancelRelayTimer(prevTimeout)
 
 	// TODO: We should be clearing these out in batches, rather than creating
 	// individual timers for each item.
@@ -245,6 +240,17 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		return false, "relay-not-found"
 	}
 
+	finished := finishesCall(f)
+	if item.tomb {
+		// Call timed out, ignore this frame. (We've already handled stats.)
+		// TODO: metrics for late-arriving frames.
+		return true, ""
+	}
+	if finished && !item.timeout.Stop() {
+		// Timeout is firing, so no point proxying this frame
+		return true, ""
+	}
+
 	// call res frames don't include the OK bit, so we can't wait until the last
 	// frame of a relayed RPC to determine if the call succeeded.
 	if fType == responseFrame {
@@ -256,11 +262,6 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 			item.call.Failed(failMsg)
 		}
 	}
-
-	// When we write the frame to sendCh, we lose ownership of the frame, and it
-	// may be released to the frame pool at any point.
-	finished := finishesCall(f)
-
 	select {
 	case r.conn.sendCh <- f:
 	default:
@@ -275,7 +276,6 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 	}
 
 	if finished {
-		items := r.receiverItems(fType)
 		r.finishRelayItem(items, id)
 	}
 
@@ -421,6 +421,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 // Handle all frames except messageTypeCallReq.
 func (r *Relayer) handleNonCallReq(f *Frame) error {
 	frameType := frameTypeFor(f)
+	finished := finishesCall(f)
 
 	// If we read a request frame, we need to use the outbound map to decide
 	// the destination. Otherwise, we use the inbound map.
@@ -438,11 +439,13 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		// TODO: metrics for late-arriving frames.
 		return nil
 	}
+	if finished && !item.timeout.Stop() {
+		// Timeout is firing, so no point proxying this frame
+		return nil
+	}
+
 	originalID := f.Header.ID
 	f.Header.ID = item.remapID
-
-	// Once we call Receive on the frame, we lose ownership of the frame.
-	finished := finishesCall(f)
 
 	sent, failure := item.destination.Receive(f, frameType)
 	if !sent {
@@ -489,10 +492,25 @@ func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bo
 	r.decrementPending()
 }
 
+// failRelayItem tombs the relay item so that future frames for this call are not
+// forwarded. We keep the relay item tombed, rather than delete it to ensure that
+// future frames do not cause error logs.
 func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
+	item, ok := items.Get(id)
+	if !ok {
+		items.logger.WithFields(LogField{"id", id}).Warn("Attempted to fail non-existent relay item.")
+		return
+	}
+
+	// The call could time-out right as we entomb it, which would cause spurious
+	// error logs, so ensure we can stop the timeout.
+	if !item.timeout.Stop() {
+		return
+	}
+
 	// Entomb it so that we don't get unknown exchange errors on further frames
 	// for this call.
-	item, ok := items.Entomb(id, _relayTombTTL)
+	item, ok = items.Entomb(id, _relayTombTTL)
 	if !ok {
 		return
 	}
@@ -606,16 +624,4 @@ func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 		LogField{"defaultMaxTimeout", _defaultRelayMaxTimeout},
 	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 	return _defaultRelayMaxTimeout
-}
-
-func cancelRelayTimer(timeout *relayTimer) {
-	if timeout == nil {
-		// No timeout to cancel.
-		return
-	}
-
-	// If we stopped the timer, then we are responsible for releasing it.
-	if timeout.Stop() {
-		timeout.Release()
-	}
 }
