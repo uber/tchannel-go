@@ -46,8 +46,9 @@ type relayTimer struct {
 }
 
 func (rt *relayTimer) OnTimer() {
-	rt.pool.trigger(rt.items, rt.id, rt.isOriginator)
+	items, id, isOriginator := rt.items, rt.id, rt.isOriginator
 	rt.markTimerInactive()
+	rt.pool.trigger(items, id, isOriginator)
 }
 
 func newRelayTimerPool(trigger relayTimerTrigger) *relayTimerPool {
