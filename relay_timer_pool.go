@@ -57,7 +57,7 @@ func newRelayTimerPool(trigger relayTimerTrigger) *relayTimerPool {
 	}
 }
 
-// Get returns a Timer that has not started. Timers must be started explicitly
+// Get returns a relay timer that has not started. Timers must be started explicitly
 // using the Start function.
 func (tp *relayTimerPool) Get() *relayTimer {
 	timer, ok := tp.pool.Get().(*relayTimer)
@@ -68,12 +68,11 @@ func (tp *relayTimerPool) Get() *relayTimer {
 	rt := &relayTimer{
 		pool: tp,
 	}
-	rt.timer = time.AfterFunc(time.Duration(math.MaxInt64), rt.OnTimer)
-
 	// Go timers are started by default. However, we need to separate creating
 	// the timer and starting the timer for use in the relay code paths.
 	// To make this work without more locks in the relayTimer, we create a Go timer
 	// with a huge timeout so it doesn't run, then stop it so we can start it later.
+	rt.timer = time.AfterFunc(time.Duration(math.MaxInt64), rt.OnTimer)
 	if !rt.timer.Stop() {
 		panic("relayTimer requires timers in stopped state, but failed to stop underlying timer")
 	}
@@ -103,6 +102,8 @@ func (rt *relayTimer) markTimerInactive() {
 
 // Stop stops the timer and returns whether the timer was stopped. It returns
 // the same behaviour as https://golang.org/pkg/time/#Timer.Stop.
+// This method is safe for concurrent use, and is typically used to check whether
+// a timer was stopped, possibly with other goroutines or when the timer fires.
 func (rt *relayTimer) Stop() bool {
 	stopped := rt.timer.Stop()
 	if stopped {

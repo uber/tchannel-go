@@ -181,7 +181,7 @@ type Relayer struct {
 	inbound *relayItems
 
 	// timeouts is the pool of timers used to track call timeouts.
-	// It allows timer re-use, while allow timers to be created and started separately.
+	// It allows timer re-use, while allowing timers to be created and started separately.
 	timeouts *relayTimerPool
 
 	peers   *RootPeerList
