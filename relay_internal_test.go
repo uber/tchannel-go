@@ -67,6 +67,13 @@ func TestRelayTimerPoolMisuse(t *testing.T) {
 				rt.Start(time.Hour, &relayItems{}, 0, false /* isOriginator */)
 			},
 		},
+		{
+			msg: "underlying timer is already active",
+			f: func(rt *relayTimer) {
+				rt.timer.Reset(time.Hour)
+				rt.Start(time.Hour, &relayItems{}, 0, false /* isOriginator */)
+			},
+		},
 	}
 
 	for _, tt := range tests {

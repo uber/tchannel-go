@@ -89,7 +89,10 @@ func (rt *relayTimer) Start(d time.Duration, items *relayItems, id uint32, isOri
 	rt.items = items
 	rt.id = id
 	rt.isOriginator = isOriginator
-	rt.timer.Reset(d)
+
+	if wasActive := rt.timer.Reset(d); wasActive {
+		panic("relayTimer's underlying timer was Started multiple times without Stop")
+	}
 }
 
 func (rt *relayTimer) markTimerInactive() {
