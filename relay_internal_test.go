@@ -1,6 +1,7 @@
 package tchannel
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -85,4 +86,22 @@ func TestRelayTimerPoolMisuse(t *testing.T) {
 			tt.f(rt)
 		}, tt.msg)
 	}
+}
+
+func TestRelayTimerStopConcurrently(t *testing.T) {
+	trigger := func(*relayItems, uint32, bool) {}
+	rtp := newRelayTimerPool(trigger)
+	timer := rtp.Get()
+	timer.Start(time.Nanosecond, nil, 0 /* items */, false /* isOriginator */)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			timer.Stop()
+		}()
+	}
+
+	wg.Wait()
 }
