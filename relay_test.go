@@ -794,20 +794,27 @@ func TestRelayConcurrentNewConnectionAttempts(t *testing.T) {
 
 func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 	const (
-		concurrentClients = 10
+		concurrentClients = 15
 		callsPerClient    = 100
 	)
-	// We have to disable log verification due to https://github.com/uber/tchannel-go/issues/688
-	opts := testutils.NewOpts().SetRelayOnly().DisableLogVerification()
+	opts := testutils.NewOpts().SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
-
 		// Create clients and ensure we can make a successful request.
 		clients := make([]*Channel, concurrentClients)
+
+		var callTime time.Duration
 		for i := range clients {
 			clients[i] = ts.NewClient(opts)
+			started := time.Now()
 			testutils.AssertEcho(t, clients[i], ts.HostPort(), ts.ServiceName())
+			callTime = time.Since(started)
 		}
+
+		// Overwrite the echo method with one that times out for the test.
+		ts.Server().Register(HandlerFunc(func(ctx context.Context, call *InboundCall) {
+			call.Response().Blackhole()
+		}), "echo")
 
 		var wg sync.WaitGroup
 		for i := 0; i < concurrentClients; i++ {
@@ -816,8 +823,8 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 				defer wg.Done()
 
 				for j := 0; j < callsPerClient; j++ {
-					// Make many concurrent calls, some will timeout
-					ctx, cancel := NewContext(5 * time.Millisecond)
+					// Make many concurrent calls which, some of which should timeout.
+					ctx, cancel := NewContext(callTime)
 					raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
 					cancel()
 				}
