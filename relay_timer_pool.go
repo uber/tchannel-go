@@ -79,6 +79,11 @@ func (tp *relayTimerPool) Get() *relayTimer {
 	return rt
 }
 
+// Put returns a relayTimer back to the pool.
+func (tp *relayTimerPool) Put(rt *relayTimer) {
+	tp.pool.Put(rt)
+}
+
 // Start starts a timer with the given duration for the specified ID.
 func (rt *relayTimer) Start(d time.Duration, items *relayItems, id uint32, isOriginator bool) {
 	if rt.active {
@@ -121,5 +126,5 @@ func (rt *relayTimer) Release() {
 	if rt.active {
 		panic("only stopped or completed timers can be released")
 	}
-	rt.pool.pool.Put(rt)
+	rt.pool.Put(rt)
 }
