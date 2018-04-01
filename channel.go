@@ -76,7 +76,13 @@ type ChannelOptions struct {
 
 	// The maximum allowable timeout for relayed calls (longer timeouts are
 	// clamped to this value). Passing zero uses the default of 2m.
+	// This is an unstable API - breaking changes are likely.
 	RelayMaxTimeout time.Duration
+
+	// RelayTimerVerification will disable pooling of relay timers, and instead
+	// verify that timers are not used once they are released.
+	// This is an unstable API - breaking changes are likely.
+	RelayTimerVerification bool
 
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
@@ -148,6 +154,7 @@ type Channel struct {
 	peers               *PeerList
 	relayHost           RelayHost
 	relayMaxTimeout     time.Duration
+	relayTimerVerify    bool
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
 
@@ -249,6 +256,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		connectionOptions: opts.DefaultConnectionOptions.withDefaults(),
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
+		relayTimerVerify:  opts.RelayTimerVerification,
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
 

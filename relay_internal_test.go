@@ -79,7 +79,7 @@ func TestRelayTimerPoolMisuse(t *testing.T) {
 
 	for _, tt := range tests {
 		trigger := func(*relayItems, uint32, bool) {}
-		rtp := newRelayTimerPool(trigger)
+		rtp := newRelayTimerPool(trigger, true /* verifyPool */)
 
 		rt := rtp.Get()
 		assert.Panics(t, func() {
@@ -90,7 +90,7 @@ func TestRelayTimerPoolMisuse(t *testing.T) {
 
 func TestRelayTimerStopConcurrently(t *testing.T) {
 	trigger := func(*relayItems, uint32, bool) {}
-	rtp := newRelayTimerPool(trigger)
+	rtp := newRelayTimerPool(trigger, true /* verifyPool */)
 	timer := rtp.Get()
 	timer.Start(time.Nanosecond, nil, 0 /* items */, false /* isOriginator */)
 

@@ -29,8 +29,9 @@ import (
 type relayTimerTrigger func(items *relayItems, id uint32, isOriginator bool)
 
 type relayTimerPool struct {
-	pool    sync.Pool
-	trigger relayTimerTrigger
+	pool       sync.Pool
+	trigger    relayTimerTrigger
+	verifyPool bool
 }
 
 type relayTimer struct {
@@ -51,9 +52,10 @@ func (rt *relayTimer) OnTimer() {
 	rt.pool.trigger(items, id, isOriginator)
 }
 
-func newRelayTimerPool(trigger relayTimerTrigger) *relayTimerPool {
+func newRelayTimerPool(trigger relayTimerTrigger, verifyPool bool) *relayTimerPool {
 	return &relayTimerPool{
-		trigger: trigger,
+		trigger:    trigger,
+		verifyPool: verifyPool,
 	}
 }
 
@@ -81,6 +83,11 @@ func (tp *relayTimerPool) Get() *relayTimer {
 
 // Put returns a relayTimer back to the pool.
 func (tp *relayTimerPool) Put(rt *relayTimer) {
+	if tp.verifyPool {
+		// If we are trying to verify correct pool behavior, then we don't release
+		// the timer, and instead ensure no methods are called after being released.
+		return
+	}
 	tp.pool.Put(rt)
 }
 
