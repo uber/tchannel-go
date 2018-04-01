@@ -224,7 +224,20 @@ func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 		// Unwrap any headerCtx, since we'll be rewrapping anyway.
 		parent = headerCtx.Context
 	}
-	ctx, cancel := context.WithTimeout(parent, cb.Timeout)
+
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	// All contexts created must have a timeout, but if the parent
+	// already has a timeout, and the user has not specified one, then we
+	// can use context.WithCancel
+	_, parentHasDeadline := parent.Deadline()
+	if cb.Timeout == 0 && parentHasDeadline {
+		ctx, cancel = context.WithCancel(parent)
+	} else {
+		ctx, cancel = context.WithTimeout(parent, cb.Timeout)
+	}
 
 	ctx = context.WithValue(ctx, contextKeyTChannel, params)
 	return WrapWithHeaders(ctx, cb.getHeaders()), cancel

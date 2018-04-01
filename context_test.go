@@ -30,6 +30,7 @@ import (
 	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
 
@@ -284,5 +285,25 @@ func TestContextWrapChild(t *testing.T) {
 				assert.Nil(t, origCtx.ResponseHeaders(), "%v: Child modified original context's headers", tt.msg)
 			}
 		}
+	}
+}
+
+func TestContextInheritParentTimeout(t *testing.T) {
+	deadlineAfter := time.Now().Add(time.Hour)
+	pctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+
+	ctxBuilder := &ContextBuilder{
+		ParentContext: pctx,
+	}
+	ctx, cancel := ctxBuilder.Build()
+	defer cancel()
+
+	// Ensure deadline is in the future
+	deadline, ok := ctx.Deadline()
+	require.True(t, ok, "Missing deadline")
+
+	if deadline.Before(deadlineAfter) {
+		t.Fatalf("Expected deadline to be after %v, got %v", deadlineAfter, deadline)
 	}
 }
