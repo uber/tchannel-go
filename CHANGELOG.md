@@ -1,6 +1,19 @@
 Changelog
 =========
 
+## [1.10.0] - 2018-04-02
+### Added
+ * Support blackholing requests to trigger client timeout without holding
+   on to resources. (#681)
+ * introspection: Include channel state in output. (#692)
+ * introspection: Add inactive connections to output. (#686)
+
+### Fixed
+ * Inherit deadlines from parent context if available, and timeout is
+   unspecified.
+ * Ensure outbound tracing headers take precedence over application
+   headers. (#683)
+
 ## [1.9.0] - 2018-01-31
 ### Added
  * stats: Add tally reporter to emit tagged metrics. (#676)
@@ -222,6 +235,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.10.0]: https://github.com/uber/tchannel-go/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/uber/tchannel-go/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/uber/tchannel-go/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/uber/tchannel-go/compare/v1.7.0...v1.8.0
