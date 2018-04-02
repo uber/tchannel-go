@@ -106,15 +106,6 @@ func TestTallyIntegration(t *testing.T) {
 	clientScope := tally.NewTestScope("" /* prefix */, nil /* tags */)
 	serverScope := tally.NewTestScope("" /* prefix */, nil /* tags */)
 
-	server := testutils.NewServer(t, testutils.NewOpts().SetStatsReporter(NewTallyReporter(serverScope)))
-	defer server.Close()
-	testutils.RegisterEcho(server, nil)
-
-	client := testutils.NewClient(t, testutils.NewOpts().SetStatsReporter(NewTallyReporter(clientScope)))
-	defer client.Close()
-
-	testutils.AssertEcho(t, client, server.PeerInfo().HostPort, server.ServiceName())
-
 	// Verify the tagged metrics from that call.
 	tests := []struct {
 		msg      string
@@ -146,6 +137,19 @@ func TestTallyIntegration(t *testing.T) {
 			},
 		},
 	}
+
+	// Use a closure so that the server/client are closed before we verify metrics.
+	// Otherwise, we may attempt to verify metrics before they've been flushed by TChannel.
+	func() {
+		server := testutils.NewServer(t, testutils.NewOpts().SetStatsReporter(NewTallyReporter(serverScope)))
+		defer server.Close()
+		testutils.RegisterEcho(server, nil)
+
+		client := testutils.NewClient(t, testutils.NewOpts().SetStatsReporter(NewTallyReporter(clientScope)))
+		defer client.Close()
+
+		testutils.AssertEcho(t, client, server.PeerInfo().HostPort, server.ServiceName())
+	}()
 
 	for _, tt := range tests {
 		snapshot := tt.scope.Snapshot()
