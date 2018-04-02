@@ -119,6 +119,13 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 		// Run with the relay, unless the user has disabled it.
 		if !chanOpts.DisableRelay {
 			withServer(t, chanOpts.Copy(), f)
+
+			// Re-run the same test with timer verification if this is a relay-only test.
+			if chanOpts.OnlyRelay {
+				verifyOpts := chanOpts.Copy()
+				verifyOpts.RelayTimerVerification = true
+				withServer(t, verifyOpts, f)
+			}
 		}
 	}
 }

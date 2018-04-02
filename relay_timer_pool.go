@@ -31,13 +31,15 @@ type relayTimerTrigger func(items *relayItems, id uint32, isOriginator bool)
 type relayTimerPool struct {
 	pool    sync.Pool
 	trigger relayTimerTrigger
+	verify  bool
 }
 
 type relayTimer struct {
 	pool  *relayTimerPool // const
 	timer *time.Timer     // const
 
-	active bool // mutated on Start/Stop
+	active   bool // mutated on Start/Stop
+	released bool // mutated on Get/Release.
 
 	// Per-timer parameters passed back when the timer is triggered.
 	items        *relayItems
@@ -46,14 +48,16 @@ type relayTimer struct {
 }
 
 func (rt *relayTimer) OnTimer() {
+	rt.verifyNotReleased()
 	items, id, isOriginator := rt.items, rt.id, rt.isOriginator
 	rt.markTimerInactive()
 	rt.pool.trigger(items, id, isOriginator)
 }
 
-func newRelayTimerPool(trigger relayTimerTrigger) *relayTimerPool {
+func newRelayTimerPool(trigger relayTimerTrigger, verify bool) *relayTimerPool {
 	return &relayTimerPool{
 		trigger: trigger,
+		verify:  verify,
 	}
 }
 
@@ -62,6 +66,7 @@ func newRelayTimerPool(trigger relayTimerTrigger) *relayTimerPool {
 func (tp *relayTimerPool) Get() *relayTimer {
 	timer, ok := tp.pool.Get().(*relayTimer)
 	if ok {
+		timer.released = false
 		return timer
 	}
 
@@ -81,11 +86,17 @@ func (tp *relayTimerPool) Get() *relayTimer {
 
 // Put returns a relayTimer back to the pool.
 func (tp *relayTimerPool) Put(rt *relayTimer) {
+	if tp.verify {
+		// If we are trying to verify correct pool behavior, then we don't release
+		// the timer, and instead ensure no methods are called after being released.
+		return
+	}
 	tp.pool.Put(rt)
 }
 
 // Start starts a timer with the given duration for the specified ID.
 func (rt *relayTimer) Start(d time.Duration, items *relayItems, id uint32, isOriginator bool) {
+	rt.verifyNotReleased()
 	if rt.active {
 		panic("Tried to start an already-active timer")
 	}
@@ -113,6 +124,7 @@ func (rt *relayTimer) markTimerInactive() {
 // This method is safe for concurrent use, and is typically used to check whether
 // a timer was stopped, possibly with other goroutines or when the timer fires.
 func (rt *relayTimer) Stop() bool {
+	rt.verifyNotReleased()
 	stopped := rt.timer.Stop()
 	if stopped {
 		rt.markTimerInactive()
@@ -123,8 +135,16 @@ func (rt *relayTimer) Stop() bool {
 // Release releases a timer back to the timer pool. The timer MUST have run or be
 // stopped before Release is called.
 func (rt *relayTimer) Release() {
+	rt.verifyNotReleased()
 	if rt.active {
 		panic("only stopped or completed timers can be released")
 	}
+	rt.released = true
 	rt.pool.Put(rt)
+}
+
+func (rt *relayTimer) verifyNotReleased() {
+	if rt.released {
+		panic("Released timer cannot be used")
+	}
 }

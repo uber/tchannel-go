@@ -202,7 +202,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		conn:         conn,
 		logger:       conn.log,
 	}
-	r.timeouts = newRelayTimerPool(r.timeoutRelayItem)
+	r.timeouts = newRelayTimerPool(r.timeoutRelayItem, ch.relayTimerVerify)
 	return r
 }
 
