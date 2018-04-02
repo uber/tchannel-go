@@ -303,7 +303,6 @@ func TestContextInheritParentTimeout(t *testing.T) {
 	deadline, ok := ctx.Deadline()
 	require.True(t, ok, "Missing deadline")
 
-	if deadline.Before(deadlineAfter) {
-		t.Fatalf("Expected deadline to be after %v, got %v", deadlineAfter, deadline)
-	}
+	assert.False(t, deadline.Before(deadlineAfter),
+		"Expected deadline to be after %v, got %v", deadlineAfter, deadline)
 }
