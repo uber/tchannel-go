@@ -55,7 +55,8 @@ type RuntimeVersion struct {
 
 // RuntimeState is a snapshot of the runtime state for a channel.
 type RuntimeState struct {
-	ID uint32 `json:"id"`
+	ID           uint32 `json:"id"`
+	ChannelState string `json:"channelState"`
 
 	// CreatedStack is the stack for how this channel was created.
 	CreatedStack string `json:"createdStack"`
@@ -209,6 +210,7 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 	}
 
 	ch.mutable.RLock()
+	state := ch.mutable.state
 	numConns := len(ch.mutable.conns)
 	inactiveConns := make([]*Connection, 0, numConns)
 	connIDs := make([]uint32, 0, numConns)
@@ -221,8 +223,10 @@ func (ch *Channel) IntrospectState(opts *IntrospectionOptions) *RuntimeState {
 
 	ch.mutable.RUnlock()
 
+	ch.State()
 	return &RuntimeState{
 		ID:                  ch.chID,
+		ChannelState:        state.String(),
 		CreatedStack:        ch.createdStack,
 		LocalPeer:           ch.PeerInfo(),
 		SubChannels:         ch.subChannels.IntrospectState(opts),

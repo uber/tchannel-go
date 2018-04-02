@@ -391,6 +391,9 @@ func comparableState(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) 
 	s := ch.IntrospectState(opts)
 	s.SubChannels = nil
 	s.Peers = nil
+
+	// Tests start with ChannelClient or ChannelListening, but end with ChannelClosed.
+	s.ChannelState = ""
 	return s
 }
 
