@@ -50,22 +50,22 @@ var (
 )
 
 type relayItem struct {
-	*time.Timer
-
 	remapID     uint32
 	tomb        bool
 	local       bool
 	call        RelayCall
 	destination *Relayer
 	span        Span
+	timeout     *relayTimer
 }
 
 type relayItems struct {
 	sync.RWMutex
 
-	logger Logger
-	tombs  uint64
-	items  map[uint32]relayItem
+	logger   Logger
+	timeouts *relayTimerPool
+	tombs    uint64
+	items    map[uint32]relayItem
 }
 
 func newRelayItems(logger Logger) *relayItems {
@@ -117,7 +117,8 @@ func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 	}
 	r.Unlock()
 
-	item.Stop()
+	item.timeout.Stop()
+	item.timeout.Release()
 	return item, !item.tomb
 }
 
@@ -179,6 +180,10 @@ type Relayer struct {
 	// It stores remappings for all response frames read on this connection.
 	inbound *relayItems
 
+	// timeouts is the pool of timers used to track call timeouts.
+	// It allows timer re-use, while allowing timers to be created and started separately.
+	timeouts *relayTimerPool
+
 	peers   *RootPeerList
 	conn    *Connection
 	logger  Logger
@@ -187,7 +192,7 @@ type Relayer struct {
 
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
-	return &Relayer{
+	r := &Relayer{
 		relayHost:    ch.RelayHost(),
 		maxTimeout:   ch.relayMaxTimeout,
 		localHandler: ch.relayLocal,
@@ -197,6 +202,8 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		conn:         conn,
 		logger:       conn.log,
 	}
+	r.timeouts = newRelayTimerPool(r.timeoutRelayItem)
+	return r
 }
 
 // Relay is called for each frame that is read on the connection.
@@ -233,6 +240,17 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		return false, "relay-not-found"
 	}
 
+	finished := finishesCall(f)
+	if item.tomb {
+		// Call timed out, ignore this frame. (We've already handled stats.)
+		// TODO: metrics for late-arriving frames.
+		return true, ""
+	}
+	if finished && !item.timeout.Stop() {
+		// Timeout is firing, so no point proxying this frame
+		return true, ""
+	}
+
 	// call res frames don't include the OK bit, so we can't wait until the last
 	// frame of a relayed RPC to determine if the call succeeded.
 	if fType == responseFrame {
@@ -244,11 +262,6 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 			item.call.Failed(failMsg)
 		}
 	}
-
-	// When we write the frame to sendCh, we lose ownership of the frame, and it
-	// may be released to the frame pool at any point.
-	finished := finishesCall(f)
-
 	select {
 	case r.conn.sendCh <- f:
 	default:
@@ -263,7 +276,6 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 	}
 
 	if finished {
-		items := r.receiverItems(fType)
 		r.finishRelayItem(items, id)
 	}
 
@@ -409,6 +421,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 // Handle all frames except messageTypeCallReq.
 func (r *Relayer) handleNonCallReq(f *Frame) error {
 	frameType := frameTypeFor(f)
+	finished := finishesCall(f)
 
 	// If we read a request frame, we need to use the outbound map to decide
 	// the destination. Otherwise, we use the inbound map.
@@ -426,11 +439,13 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		// TODO: metrics for late-arriving frames.
 		return nil
 	}
+	if finished && !item.timeout.Stop() {
+		// Timeout is firing, so no point proxying this frame
+		return nil
+	}
+
 	originalID := f.Header.ID
 	f.Header.ID = item.remapID
-
-	// Once we call Receive on the frame, we lose ownership of the frame.
-	finished := finishesCall(f)
 
 	sent, failure := item.destination.Receive(f, frameType)
 	if !sent {
@@ -457,12 +472,13 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	if isOriginator {
 		items = r.outbound
 	}
-	item.Timer = time.AfterFunc(ttl, func() { r.timeoutRelayItem(isOriginator, items, id) })
+	item.timeout = r.timeouts.Get()
 	items.Add(id, item)
+	item.timeout.Start(ttl, items, id, isOriginator)
 	return item
 }
 
-func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint32) {
+func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bool) {
 	item, ok := items.Entomb(id, _relayTombTTL)
 	if !ok {
 		return
@@ -476,10 +492,25 @@ func (r *Relayer) timeoutRelayItem(isOriginator bool, items *relayItems, id uint
 	r.decrementPending()
 }
 
+// failRelayItem tombs the relay item so that future frames for this call are not
+// forwarded. We keep the relay item tombed, rather than delete it to ensure that
+// future frames do not cause error logs.
 func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
+	item, ok := items.Get(id)
+	if !ok {
+		items.logger.WithFields(LogField{"id", id}).Warn("Attempted to fail non-existent relay item.")
+		return
+	}
+
+	// The call could time-out right as we entomb it, which would cause spurious
+	// error logs, so ensure we can stop the timeout.
+	if !item.timeout.Stop() {
+		return
+	}
+
 	// Entomb it so that we don't get unknown exchange errors on further frames
 	// for this call.
-	item, ok := items.Entomb(id, _relayTombTTL)
+	item, ok = items.Entomb(id, _relayTombTTL)
 	if !ok {
 		return
 	}

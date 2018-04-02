@@ -58,7 +58,7 @@ func (pl *peerStatusListener) waitForZeroConnections(t *testing.T, channels ...*
 				return true
 			}
 
-		case <-time.After(testutils.Timeout(50 * time.Millisecond)):
+		case <-time.After(testutils.Timeout(500 * time.Millisecond)):
 			return assert.Fail(t, "Some connections are still open: %s", connectionStatus(channels))
 		}
 	}
