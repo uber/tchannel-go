@@ -75,6 +75,13 @@ func TestRelayTimerPoolMisuse(t *testing.T) {
 				rt.Start(time.Hour, &relayItems{}, 0, false /* isOriginator */)
 			},
 		},
+		{
+			msg: "use timer after releasing it",
+			f: func(rt *relayTimer) {
+				rt.Release()
+				rt.Stop()
+			},
+		},
 	}
 
 	for _, tt := range tests {
