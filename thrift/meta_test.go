@@ -30,19 +30,9 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/thrift/gen-go/meta"
 
-	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
-
-func TestDefaultHealth(t *testing.T) {
-	withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
-		ret, err := c.Health(ctx)
-		if assert.NoError(t, err, "Health endpoint failed") {
-			assert.True(t, ret.Ok, "Health status mismatch")
-			assert.Nil(t, ret.Message, "Health message mismatch")
-		}
-	})
-}
 
 func TestThriftIDL(t *testing.T) {
 	withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
@@ -66,34 +56,117 @@ func TestVersionInfo(t *testing.T) {
 	})
 }
 
-func customHealthEmpty(ctx Context) (bool, string) {
-	return false, ""
+func TestHealth(t *testing.T) {
+	tests := []struct {
+		msg           string
+		healthFunc    HealthFunc
+		healthReqFunc HealthRequestFunc
+		req           *meta.HealthRequest
+		wantOK        bool
+		wantMessage   *string
+	}{
+		{
+			msg:    "default health func",
+			wantOK: true,
+		},
+		{
+			msg: "healthFunc returning unhealthy, no message",
+			healthFunc: func(Context) (bool, string) {
+				return false, ""
+			},
+			wantOK: false,
+		},
+		{
+			msg: "healthFunc returning healthy, with message",
+			healthFunc: func(Context) (bool, string) {
+				return true, "ok"
+			},
+			wantOK:      true,
+			wantMessage: stringPtr("ok"),
+		},
+		{
+			msg: "healthReqFunc returning unhealthy for traffic, default check",
+			healthReqFunc: func(_ Context, r HealthRequest) (bool, string) {
+				return r.Type != Traffic, ""
+			},
+			wantOK: true,
+		},
+		{
+			msg: "healthReqFunc returning unhealthy for traffic, traffic check",
+			healthReqFunc: func(_ Context, r HealthRequest) (bool, string) {
+				return r.Type != Traffic, ""
+			},
+			req:    &meta.HealthRequest{Type: meta.HealthRequestTypePtr(meta.HealthRequestType_TRAFFIC)},
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
+				if tt.healthFunc != nil {
+					server.RegisterHealthHandler(tt.healthFunc)
+				}
+				if tt.healthReqFunc != nil {
+					server.RegisterHealthRequestHandler(tt.healthReqFunc)
+				}
+
+				req := tt.req
+				if req == nil {
+					req = &meta.HealthRequest{}
+				}
+
+				ret, err := c.Health(ctx, req)
+				require.NoError(t, err, "Health endpoint failed")
+
+				assert.Equal(t, tt.wantOK, ret.Ok, "Health status mismatch")
+				assert.Equal(t, tt.wantMessage, ret.Message, "Health message mismatch")
+			})
+		})
+	}
 }
 
-func TestCustomHealthEmpty(t *testing.T) {
-	withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
-		server.RegisterHealthHandler(customHealthEmpty)
-		ret, err := c.Health(ctx)
-		if assert.NoError(t, err, "Health endpoint failed") {
-			assert.False(t, ret.Ok, "Health status mismatch")
-			assert.Nil(t, ret.Message, "Health message mismatch")
-		}
-	})
-}
+func TestMetaReqToReq(t *testing.T) {
+	tests := []struct {
+		msg  string
+		r    *meta.HealthRequest
+		want HealthRequest
+	}{
+		{
+			msg:  "nil",
+			r:    nil,
+			want: HealthRequest{},
+		},
+		{
+			msg:  "default",
+			r:    &meta.HealthRequest{},
+			want: HealthRequest{},
+		},
+		{
+			msg: "explcit process check",
+			r: &meta.HealthRequest{
+				Type: meta.HealthRequestTypePtr(meta.HealthRequestType_PROCESS),
+			},
+			want: HealthRequest{
+				Type: Process,
+			},
+		},
+		{
+			msg: "explcit traffic check",
+			r: &meta.HealthRequest{
+				Type: meta.HealthRequestTypePtr(meta.HealthRequestType_TRAFFIC),
+			},
+			want: HealthRequest{
+				Type: Traffic,
+			},
+		},
+	}
 
-func customHealthNoEmpty(ctx Context) (bool, string) {
-	return false, "from me"
-}
-
-func TestCustomHealthNoEmpty(t *testing.T) {
-	withMetaSetup(t, func(ctx Context, c tchanMeta, server *Server) {
-		server.RegisterHealthHandler(customHealthNoEmpty)
-		ret, err := c.Health(ctx)
-		if assert.NoError(t, err, "Health endpoint failed") {
-			assert.False(t, ret.Ok, "Health status mismatch")
-			assert.Equal(t, ret.Message, thrift.StringPtr("from me"), "Health message mismatch")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			assert.Equal(t, tt.want, metaReqToReq(tt.r))
+		})
+	}
 }
 
 func withMetaSetup(t *testing.T, f func(ctx Context, c tchanMeta, server *Server)) {
@@ -120,4 +193,8 @@ func getMetaClient(t *testing.T, dst string) tchanMeta {
 	tchan.Peers().Add(dst)
 	thriftClient := NewClient(tchan, "meta", nil)
 	return newTChanMetaClient(thriftClient)
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

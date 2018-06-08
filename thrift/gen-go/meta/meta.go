@@ -15,7 +15,9 @@ var _ = fmt.Printf
 var _ = bytes.Equal
 
 type Meta interface {
-	Health() (r *HealthStatus, err error)
+	// Parameters:
+	//  - Hr
+	Health(hr *HealthRequest) (r *HealthStatus, err error)
 	ThriftIDL() (r *ThriftIDLs, err error)
 	VersionInfo() (r *VersionInfo, err error)
 }
@@ -46,14 +48,16 @@ func NewMetaClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot th
 	}
 }
 
-func (p *MetaClient) Health() (r *HealthStatus, err error) {
-	if err = p.sendHealth(); err != nil {
+// Parameters:
+//  - Hr
+func (p *MetaClient) Health(hr *HealthRequest) (r *HealthStatus, err error) {
+	if err = p.sendHealth(hr); err != nil {
 		return
 	}
 	return p.recvHealth()
 }
 
-func (p *MetaClient) sendHealth() (err error) {
+func (p *MetaClient) sendHealth(hr *HealthRequest) (err error) {
 	oprot := p.OutputProtocol
 	if oprot == nil {
 		oprot = p.ProtocolFactory.GetProtocol(p.Transport)
@@ -63,7 +67,9 @@ func (p *MetaClient) sendHealth() (err error) {
 	if err = oprot.WriteMessageBegin("health", thrift.CALL, p.SeqId); err != nil {
 		return
 	}
-	args := MetaHealthArgs{}
+	args := MetaHealthArgs{
+		Hr: hr,
+	}
 	if err = args.Write(oprot); err != nil {
 		return
 	}
@@ -331,7 +337,7 @@ func (p *metaProcessorHealth) Process(seqId int32, iprot, oprot thrift.TProtocol
 	result := MetaHealthResult{}
 	var retval *HealthStatus
 	var err2 error
-	if retval, err2 = p.handler.Health(); err2 != nil {
+	if retval, err2 = p.handler.Health(args.Hr); err2 != nil {
 		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing health: "+err2.Error())
 		oprot.WriteMessageBegin("health", thrift.EXCEPTION, seqId)
 		x.Write(oprot)
@@ -457,11 +463,26 @@ func (p *metaProcessorVersionInfo) Process(seqId int32, iprot, oprot thrift.TPro
 
 // HELPER FUNCTIONS AND STRUCTURES
 
+// Attributes:
+//  - Hr
 type MetaHealthArgs struct {
+	Hr *HealthRequest `thrift:"hr,1" db:"hr" json:"hr"`
 }
 
 func NewMetaHealthArgs() *MetaHealthArgs {
 	return &MetaHealthArgs{}
+}
+
+var MetaHealthArgs_Hr_DEFAULT *HealthRequest
+
+func (p *MetaHealthArgs) GetHr() *HealthRequest {
+	if !p.IsSetHr() {
+		return MetaHealthArgs_Hr_DEFAULT
+	}
+	return p.Hr
+}
+func (p *MetaHealthArgs) IsSetHr() bool {
+	return p.Hr != nil
 }
 
 func (p *MetaHealthArgs) Read(iprot thrift.TProtocol) error {
@@ -477,8 +498,15 @@ func (p *MetaHealthArgs) Read(iprot thrift.TProtocol) error {
 		if fieldTypeId == thrift.STOP {
 			break
 		}
-		if err := iprot.Skip(fieldTypeId); err != nil {
-			return err
+		switch fieldId {
+		case 1:
+			if err := p.ReadField1(iprot); err != nil {
+				return err
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
 		}
 		if err := iprot.ReadFieldEnd(); err != nil {
 			return err
@@ -490,9 +518,20 @@ func (p *MetaHealthArgs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
+func (p *MetaHealthArgs) ReadField1(iprot thrift.TProtocol) error {
+	p.Hr = &HealthRequest{}
+	if err := p.Hr.Read(iprot); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Hr), err)
+	}
+	return nil
+}
+
 func (p *MetaHealthArgs) Write(oprot thrift.TProtocol) error {
 	if err := oprot.WriteStructBegin("health_args"); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if err := p.writeField1(oprot); err != nil {
+		return err
 	}
 	if err := oprot.WriteFieldStop(); err != nil {
 		return thrift.PrependError("write field stop error: ", err)
@@ -501,6 +540,19 @@ func (p *MetaHealthArgs) Write(oprot thrift.TProtocol) error {
 		return thrift.PrependError("write struct stop error: ", err)
 	}
 	return nil
+}
+
+func (p *MetaHealthArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err := oprot.WriteFieldBegin("hr", thrift.STRUCT, 1); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:hr: ", p), err)
+	}
+	if err := p.Hr.Write(oprot); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.Hr), err)
+	}
+	if err := oprot.WriteFieldEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write field end error 1:hr: ", p), err)
+	}
+	return err
 }
 
 func (p *MetaHealthArgs) String() string {
@@ -513,7 +565,7 @@ func (p *MetaHealthArgs) String() string {
 // Attributes:
 //  - Success
 type MetaHealthResult struct {
-	Success *HealthStatus `thrift:"success,0" json:"success,omitempty"`
+	Success *HealthStatus `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewMetaHealthResult() *MetaHealthResult {
@@ -547,7 +599,7 @@ func (p *MetaHealthResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -565,7 +617,7 @@ func (p *MetaHealthResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *MetaHealthResult) readField0(iprot thrift.TProtocol) error {
+func (p *MetaHealthResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &HealthStatus{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)
@@ -667,7 +719,7 @@ func (p *MetaThriftIDLArgs) String() string {
 // Attributes:
 //  - Success
 type MetaThriftIDLResult struct {
-	Success *ThriftIDLs `thrift:"success,0" json:"success,omitempty"`
+	Success *ThriftIDLs `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewMetaThriftIDLResult() *MetaThriftIDLResult {
@@ -701,7 +753,7 @@ func (p *MetaThriftIDLResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -719,7 +771,7 @@ func (p *MetaThriftIDLResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *MetaThriftIDLResult) readField0(iprot thrift.TProtocol) error {
+func (p *MetaThriftIDLResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &ThriftIDLs{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)
@@ -821,7 +873,7 @@ func (p *MetaVersionInfoArgs) String() string {
 // Attributes:
 //  - Success
 type MetaVersionInfoResult struct {
-	Success *VersionInfo `thrift:"success,0" json:"success,omitempty"`
+	Success *VersionInfo `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
 
 func NewMetaVersionInfoResult() *MetaVersionInfoResult {
@@ -855,7 +907,7 @@ func (p *MetaVersionInfoResult) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 0:
-			if err := p.readField0(iprot); err != nil {
+			if err := p.ReadField0(iprot); err != nil {
 				return err
 			}
 		default:
@@ -873,7 +925,7 @@ func (p *MetaVersionInfoResult) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *MetaVersionInfoResult) readField0(iprot thrift.TProtocol) error {
+func (p *MetaVersionInfoResult) ReadField0(iprot thrift.TProtocol) error {
 	p.Success = &VersionInfo{}
 	if err := p.Success.Read(iprot); err != nil {
 		return thrift.PrependError(fmt.Sprintf("%T error reading struct: ", p.Success), err)

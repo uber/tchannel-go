@@ -31,7 +31,7 @@ import (
 
 // tchanMeta is the interface that defines the server handler and client interface.
 type tchanMeta interface {
-	Health(ctx Context) (*gen.HealthStatus, error)
+	Health(ctx Context, req *gen.HealthRequest) (*gen.HealthStatus, error)
 	ThriftIDL(ctx Context) (*gen.ThriftIDLs, error)
 	VersionInfo(ctx Context) (*gen.VersionInfo, error)
 }
@@ -50,9 +50,11 @@ func newTChanMetaClient(client TChanClient) tchanMeta {
 	}
 }
 
-func (c *tchanMetaClient) Health(ctx Context) (*gen.HealthStatus, error) {
+func (c *tchanMetaClient) Health(ctx Context, req *gen.HealthRequest) (*gen.HealthStatus, error) {
 	var resp gen.MetaHealthResult
-	args := gen.MetaHealthArgs{}
+	args := gen.MetaHealthArgs{
+		Hr: req,
+	}
 	success, err := c.client.Call(ctx, c.thriftService, "health", &args, &resp)
 	if err == nil && !success {
 	}
@@ -125,7 +127,7 @@ func (s *tchanMetaServer) handleHealth(ctx Context, protocol athrift.TProtocol) 
 	}
 
 	r, err :=
-		s.handler.Health(ctx)
+		s.handler.Health(ctx, req.Hr)
 
 	if err != nil {
 		return false, nil, err
