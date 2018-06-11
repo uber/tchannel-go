@@ -21,3 +21,13 @@ service SimpleService {
 service SecondService {
   string Echo(1: string arg)
 }
+
+struct HealthStatus {
+    1: required bool ok
+    2: optional string message
+}
+
+// Meta contains the old health endpoint without arguments.
+service Meta {
+    HealthStatus health()
+}

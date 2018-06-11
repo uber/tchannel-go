@@ -12,6 +12,11 @@ import (
 
 // Interfaces for the service and client for the services defined in the IDL.
 
+// TChanMeta is the interface that defines the server handler and client interface.
+type TChanMeta interface {
+	Health(ctx thrift.Context) (*HealthStatus, error)
+}
+
 // TChanSecondService is the interface that defines the server handler and client interface.
 type TChanSecondService interface {
 	Echo(ctx thrift.Context, arg string) (string, error)
@@ -25,6 +30,89 @@ type TChanSimpleService interface {
 }
 
 // Implementation of a client and service handler.
+
+type tchanMetaClient struct {
+	thriftService string
+	client        thrift.TChanClient
+}
+
+func NewTChanMetaInheritedClient(thriftService string, client thrift.TChanClient) *tchanMetaClient {
+	return &tchanMetaClient{
+		thriftService,
+		client,
+	}
+}
+
+// NewTChanMetaClient creates a client that can be used to make remote calls.
+func NewTChanMetaClient(client thrift.TChanClient) TChanMeta {
+	return NewTChanMetaInheritedClient("Meta", client)
+}
+
+func (c *tchanMetaClient) Health(ctx thrift.Context) (*HealthStatus, error) {
+	var resp MetaHealthResult
+	args := MetaHealthArgs{}
+	success, err := c.client.Call(ctx, c.thriftService, "health", &args, &resp)
+	if err == nil && !success {
+		switch {
+		default:
+			err = fmt.Errorf("received no result or unknown exception for health")
+		}
+	}
+
+	return resp.GetSuccess(), err
+}
+
+type tchanMetaServer struct {
+	handler TChanMeta
+}
+
+// NewTChanMetaServer wraps a handler for TChanMeta so it can be
+// registered with a thrift.Server.
+func NewTChanMetaServer(handler TChanMeta) thrift.TChanServer {
+	return &tchanMetaServer{
+		handler,
+	}
+}
+
+func (s *tchanMetaServer) Service() string {
+	return "Meta"
+}
+
+func (s *tchanMetaServer) Methods() []string {
+	return []string{
+		"health",
+	}
+}
+
+func (s *tchanMetaServer) Handle(ctx thrift.Context, methodName string, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	switch methodName {
+	case "health":
+		return s.handleHealth(ctx, protocol)
+
+	default:
+		return false, nil, fmt.Errorf("method %v not found in service %v", methodName, s.Service())
+	}
+}
+
+func (s *tchanMetaServer) handleHealth(ctx thrift.Context, protocol athrift.TProtocol) (bool, athrift.TStruct, error) {
+	var req MetaHealthArgs
+	var res MetaHealthResult
+
+	if err := req.Read(protocol); err != nil {
+		return false, nil, err
+	}
+
+	r, err :=
+		s.handler.Health(ctx)
+
+	if err != nil {
+		return false, nil, err
+	} else {
+		res.Success = r
+	}
+
+	return err == nil, &res, nil
+}
 
 type tchanSecondServiceClient struct {
 	thriftService string

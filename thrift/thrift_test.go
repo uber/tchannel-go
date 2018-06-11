@@ -464,6 +464,15 @@ func TestThriftContextFn(t *testing.T) {
 	})
 }
 
+func TestThriftMetaHealthNoArgs(t *testing.T) {
+	withSetup(t, func(ctx Context, args testArgs) {
+		c := gen.NewTChanMetaClient(NewClient(args.clientCh, args.serverCh.ServiceName(), nil /* options */))
+		res, err := c.Health(ctx)
+		require.NoError(t, err)
+		assert.True(t, res.Ok, "Health without args failed")
+	})
+}
+
 func withSetup(t *testing.T, f func(ctx Context, args testArgs)) {
 	args := testArgs{
 		s1: new(mocks.TChanSimpleService),
