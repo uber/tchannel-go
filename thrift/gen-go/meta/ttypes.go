@@ -5,6 +5,8 @@ package meta
 
 import (
 	"bytes"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"github.com/apache/thrift/lib/go/thrift"
 )
@@ -16,16 +18,247 @@ var _ = bytes.Equal
 
 var GoUnusedProtection__ int
 
+type HealthState int64
+
+const (
+	HealthState_REFUSING  HealthState = 0
+	HealthState_ACCEPTING HealthState = 1
+	HealthState_STOPPING  HealthState = 2
+	HealthState_STOPPED   HealthState = 3
+)
+
+func (p HealthState) String() string {
+	switch p {
+	case HealthState_REFUSING:
+		return "REFUSING"
+	case HealthState_ACCEPTING:
+		return "ACCEPTING"
+	case HealthState_STOPPING:
+		return "STOPPING"
+	case HealthState_STOPPED:
+		return "STOPPED"
+	}
+	return "<UNSET>"
+}
+
+func HealthStateFromString(s string) (HealthState, error) {
+	switch s {
+	case "REFUSING":
+		return HealthState_REFUSING, nil
+	case "ACCEPTING":
+		return HealthState_ACCEPTING, nil
+	case "STOPPING":
+		return HealthState_STOPPING, nil
+	case "STOPPED":
+		return HealthState_STOPPED, nil
+	}
+	return HealthState(0), fmt.Errorf("not a valid HealthState string")
+}
+
+func HealthStatePtr(v HealthState) *HealthState { return &v }
+
+func (p HealthState) MarshalText() ([]byte, error) {
+	return []byte(p.String()), nil
+}
+
+func (p *HealthState) UnmarshalText(text []byte) error {
+	q, err := HealthStateFromString(string(text))
+	if err != nil {
+		return err
+	}
+	*p = q
+	return nil
+}
+
+func (p *HealthState) Scan(value interface{}) error {
+	v, ok := value.(int64)
+	if !ok {
+		return errors.New("Scan value is not int64")
+	}
+	*p = HealthState(v)
+	return nil
+}
+
+func (p *HealthState) Value() (driver.Value, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return int64(*p), nil
+}
+
+type HealthRequestType int64
+
+const (
+	HealthRequestType_PROCESS HealthRequestType = 0
+	HealthRequestType_TRAFFIC HealthRequestType = 1
+)
+
+func (p HealthRequestType) String() string {
+	switch p {
+	case HealthRequestType_PROCESS:
+		return "PROCESS"
+	case HealthRequestType_TRAFFIC:
+		return "TRAFFIC"
+	}
+	return "<UNSET>"
+}
+
+func HealthRequestTypeFromString(s string) (HealthRequestType, error) {
+	switch s {
+	case "PROCESS":
+		return HealthRequestType_PROCESS, nil
+	case "TRAFFIC":
+		return HealthRequestType_TRAFFIC, nil
+	}
+	return HealthRequestType(0), fmt.Errorf("not a valid HealthRequestType string")
+}
+
+func HealthRequestTypePtr(v HealthRequestType) *HealthRequestType { return &v }
+
+func (p HealthRequestType) MarshalText() ([]byte, error) {
+	return []byte(p.String()), nil
+}
+
+func (p *HealthRequestType) UnmarshalText(text []byte) error {
+	q, err := HealthRequestTypeFromString(string(text))
+	if err != nil {
+		return err
+	}
+	*p = q
+	return nil
+}
+
+func (p *HealthRequestType) Scan(value interface{}) error {
+	v, ok := value.(int64)
+	if !ok {
+		return errors.New("Scan value is not int64")
+	}
+	*p = HealthRequestType(v)
+	return nil
+}
+
+func (p *HealthRequestType) Value() (driver.Value, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return int64(*p), nil
+}
+
 type Filename string
 
 func FilenamePtr(v Filename) *Filename { return &v }
 
 // Attributes:
+//  - Type
+type HealthRequest struct {
+	Type *HealthRequestType `thrift:"type,1" db:"type" json:"type,omitempty"`
+}
+
+func NewHealthRequest() *HealthRequest {
+	return &HealthRequest{}
+}
+
+var HealthRequest_Type_DEFAULT HealthRequestType
+
+func (p *HealthRequest) GetType() HealthRequestType {
+	if !p.IsSetType() {
+		return HealthRequest_Type_DEFAULT
+	}
+	return *p.Type
+}
+func (p *HealthRequest) IsSetType() bool {
+	return p.Type != nil
+}
+
+func (p *HealthRequest) Read(iprot thrift.TProtocol) error {
+	if _, err := iprot.ReadStructBegin(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read error: ", p), err)
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err := iprot.ReadFieldBegin()
+		if err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", p, fieldId), err)
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+		switch fieldId {
+		case 1:
+			if err := p.ReadField1(iprot); err != nil {
+				return err
+			}
+		default:
+			if err := iprot.Skip(fieldTypeId); err != nil {
+				return err
+			}
+		}
+		if err := iprot.ReadFieldEnd(); err != nil {
+			return err
+		}
+	}
+	if err := iprot.ReadStructEnd(); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+	}
+	return nil
+}
+
+func (p *HealthRequest) ReadField1(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadI32(); err != nil {
+		return thrift.PrependError("error reading field 1: ", err)
+	} else {
+		temp := HealthRequestType(v)
+		p.Type = &temp
+	}
+	return nil
+}
+
+func (p *HealthRequest) Write(oprot thrift.TProtocol) error {
+	if err := oprot.WriteStructBegin("HealthRequest"); err != nil {
+		return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+	}
+	if err := p.writeField1(oprot); err != nil {
+		return err
+	}
+	if err := oprot.WriteFieldStop(); err != nil {
+		return thrift.PrependError("write field stop error: ", err)
+	}
+	if err := oprot.WriteStructEnd(); err != nil {
+		return thrift.PrependError("write struct stop error: ", err)
+	}
+	return nil
+}
+
+func (p *HealthRequest) writeField1(oprot thrift.TProtocol) (err error) {
+	if p.IsSetType() {
+		if err := oprot.WriteFieldBegin("type", thrift.I32, 1); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 1:type: ", p), err)
+		}
+		if err := oprot.WriteI32(int32(*p.Type)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T.type (1) field write error: ", p), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 1:type: ", p), err)
+		}
+	}
+	return err
+}
+
+func (p *HealthRequest) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("HealthRequest(%+v)", *p)
+}
+
+// Attributes:
 //  - Ok
 //  - Message
+//  - State
 type HealthStatus struct {
-	Ok      bool    `thrift:"ok,1,required" json:"ok"`
-	Message *string `thrift:"message,2" json:"message,omitempty"`
+	Ok      bool         `thrift:"ok,1,required" db:"ok" json:"ok"`
+	Message *string      `thrift:"message,2" db:"message" json:"message,omitempty"`
+	State   *HealthState `thrift:"state,3" db:"state" json:"state,omitempty"`
 }
 
 func NewHealthStatus() *HealthStatus {
@@ -44,8 +277,21 @@ func (p *HealthStatus) GetMessage() string {
 	}
 	return *p.Message
 }
+
+var HealthStatus_State_DEFAULT HealthState
+
+func (p *HealthStatus) GetState() HealthState {
+	if !p.IsSetState() {
+		return HealthStatus_State_DEFAULT
+	}
+	return *p.State
+}
 func (p *HealthStatus) IsSetMessage() bool {
 	return p.Message != nil
+}
+
+func (p *HealthStatus) IsSetState() bool {
+	return p.State != nil
 }
 
 func (p *HealthStatus) Read(iprot thrift.TProtocol) error {
@@ -65,12 +311,16 @@ func (p *HealthStatus) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetOk = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
+				return err
+			}
+		case 3:
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 		default:
@@ -91,7 +341,7 @@ func (p *HealthStatus) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HealthStatus) readField1(iprot thrift.TProtocol) error {
+func (p *HealthStatus) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadBool(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -100,11 +350,21 @@ func (p *HealthStatus) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *HealthStatus) readField2(iprot thrift.TProtocol) error {
+func (p *HealthStatus) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
 		p.Message = &v
+	}
+	return nil
+}
+
+func (p *HealthStatus) ReadField3(iprot thrift.TProtocol) error {
+	if v, err := iprot.ReadI32(); err != nil {
+		return thrift.PrependError("error reading field 3: ", err)
+	} else {
+		temp := HealthState(v)
+		p.State = &temp
 	}
 	return nil
 }
@@ -117,6 +377,9 @@ func (p *HealthStatus) Write(oprot thrift.TProtocol) error {
 		return err
 	}
 	if err := p.writeField2(oprot); err != nil {
+		return err
+	}
+	if err := p.writeField3(oprot); err != nil {
 		return err
 	}
 	if err := oprot.WriteFieldStop(); err != nil {
@@ -156,6 +419,21 @@ func (p *HealthStatus) writeField2(oprot thrift.TProtocol) (err error) {
 	return err
 }
 
+func (p *HealthStatus) writeField3(oprot thrift.TProtocol) (err error) {
+	if p.IsSetState() {
+		if err := oprot.WriteFieldBegin("state", thrift.I32, 3); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:state: ", p), err)
+		}
+		if err := oprot.WriteI32(int32(*p.State)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T.state (3) field write error: ", p), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 3:state: ", p), err)
+		}
+	}
+	return err
+}
+
 func (p *HealthStatus) String() string {
 	if p == nil {
 		return "<nil>"
@@ -167,8 +445,8 @@ func (p *HealthStatus) String() string {
 //  - Idls
 //  - EntryPoint
 type ThriftIDLs struct {
-	Idls       map[Filename]string `thrift:"idls,1,required" json:"idls"`
-	EntryPoint Filename            `thrift:"entryPoint,2,required" json:"entryPoint"`
+	Idls       map[Filename]string `thrift:"idls,1,required" db:"idls" json:"idls"`
+	EntryPoint Filename            `thrift:"entryPoint,2,required" db:"entryPoint" json:"entryPoint"`
 }
 
 func NewThriftIDLs() *ThriftIDLs {
@@ -200,12 +478,12 @@ func (p *ThriftIDLs) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetIdls = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetEntryPoint = true
@@ -230,7 +508,7 @@ func (p *ThriftIDLs) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *ThriftIDLs) readField1(iprot thrift.TProtocol) error {
+func (p *ThriftIDLs) ReadField1(iprot thrift.TProtocol) error {
 	_, _, size, err := iprot.ReadMapBegin()
 	if err != nil {
 		return thrift.PrependError("error reading map begin: ", err)
@@ -259,7 +537,7 @@ func (p *ThriftIDLs) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *ThriftIDLs) readField2(iprot thrift.TProtocol) error {
+func (p *ThriftIDLs) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -337,9 +615,9 @@ func (p *ThriftIDLs) String() string {
 //  - LanguageVersion
 //  - Version
 type VersionInfo struct {
-	Language        string `thrift:"language,1,required" json:"language"`
-	LanguageVersion string `thrift:"language_version,2,required" json:"language_version"`
-	Version         string `thrift:"version,3,required" json:"version"`
+	Language        string `thrift:"language,1,required" db:"language" json:"language"`
+	LanguageVersion string `thrift:"language_version,2,required" db:"language_version" json:"language_version"`
+	Version         string `thrift:"version,3,required" db:"version" json:"version"`
 }
 
 func NewVersionInfo() *VersionInfo {
@@ -376,17 +654,17 @@ func (p *VersionInfo) Read(iprot thrift.TProtocol) error {
 		}
 		switch fieldId {
 		case 1:
-			if err := p.readField1(iprot); err != nil {
+			if err := p.ReadField1(iprot); err != nil {
 				return err
 			}
 			issetLanguage = true
 		case 2:
-			if err := p.readField2(iprot); err != nil {
+			if err := p.ReadField2(iprot); err != nil {
 				return err
 			}
 			issetLanguageVersion = true
 		case 3:
-			if err := p.readField3(iprot); err != nil {
+			if err := p.ReadField3(iprot); err != nil {
 				return err
 			}
 			issetVersion = true
@@ -414,7 +692,7 @@ func (p *VersionInfo) Read(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *VersionInfo) readField1(iprot thrift.TProtocol) error {
+func (p *VersionInfo) ReadField1(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 1: ", err)
 	} else {
@@ -423,7 +701,7 @@ func (p *VersionInfo) readField1(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *VersionInfo) readField2(iprot thrift.TProtocol) error {
+func (p *VersionInfo) ReadField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
@@ -432,7 +710,7 @@ func (p *VersionInfo) readField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
-func (p *VersionInfo) readField3(iprot thrift.TProtocol) error {
+func (p *VersionInfo) ReadField3(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 3: ", err)
 	} else {

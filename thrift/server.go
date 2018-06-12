@@ -85,6 +85,16 @@ func (s *Server) Register(svr TChanServer, opts ...RegisterOption) {
 
 // RegisterHealthHandler uses the user-specified function f for the Health endpoint.
 func (s *Server) RegisterHealthHandler(f HealthFunc) {
+	wrapped := func(ctx Context, r HealthRequest) (bool, string) {
+		return f(ctx)
+	}
+	s.metaHandler.setHandler(wrapped)
+}
+
+// RegisterHealthRequestHandler uses the user-specified function for the
+// Health endpoint. The function receives the health request which includes
+// information about the type of the request being performed.
+func (s *Server) RegisterHealthRequestHandler(f HealthRequestFunc) {
 	s.metaHandler.setHandler(f)
 }
 
