@@ -370,8 +370,9 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return nil
 	}
 
+	// Check that the current connection is in a valid state to handle a new call.
 	if canHandle, state := r.canHandleNewCall(); !canHandle {
-		call.Failed("relay-conn-inactive")
+		call.Failed("relay-client-conn-inactive")
 		call.End()
 		err := errConnNotActive{"incoming", state}
 		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))

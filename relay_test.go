@@ -563,7 +563,7 @@ func TestRelayUsesRootPeers(t *testing.T) {
 }
 
 // Ensure that if the relay recieves a call on a connection that is not active,
-// it declines the call, and increments a relay-conn-inactive stat.
+// it declines the call, and increments a relay-client-conn-inactive stat.
 func TestRelayRejectsDuringClose(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly().
 		AddLogFilter("Failed to relay frame.", 1, "error", "incoming connection is not active: connectionStartClose")
@@ -600,7 +600,7 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 			Succeeded().End()
 		calls.Add(client.PeerInfo().ServiceName, ts.ServiceName(), "echo").
 			// No peer is set since we rejected the call before selecting one.
-			Failed("relay-conn-inactive").End()
+			Failed("relay-client-conn-inactive").End()
 		ts.AssertRelayStats(calls)
 	})
 }
