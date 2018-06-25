@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.11.0] - 2018-06-25
+### Added
+ * thrift: Support health check type in Health endpoint. (#696)
+
 ## [1.10.0] - 2018-04-02
 ### Added
  * Support blackholing requests to trigger client timeout without holding
@@ -235,6 +239,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.11.0]: https://github.com/uber/tchannel-go/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/uber/tchannel-go/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/uber/tchannel-go/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/uber/tchannel-go/compare/v1.8.0...v1.8.1
