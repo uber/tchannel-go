@@ -366,7 +366,7 @@ func stubbedSleep() *ClientOptions {
 }
 
 func withSetup(t *testing.T, f func(ch *tchannel.Channel, hostPort string)) {
-	serverCh, err := tchannel.NewChannel(hyperbahnServiceName, nil)
+	serverCh, err := tchannel.NewChannel(hyperbahnServiceName)
 	require.NoError(t, err)
 	defer serverCh.Close()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

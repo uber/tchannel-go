@@ -96,7 +96,7 @@ func TestUnexpectedInitReq(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ch, err := NewChannel("test", nil)
+		ch, err := NewChannel("test")
 		require.NoError(t, err)
 		defer ch.Close()
 		require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
@@ -278,7 +278,7 @@ func TestHandleInitRes(t *testing.T) {
 		assert.Equal(t, messageTypePingRes, f.Header.messageType, "expected pingRes message")
 	}()
 
-	ch, err := NewChannel("test-svc", nil)
+	ch, err := NewChannel("test-svc")
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
 
@@ -315,7 +315,13 @@ func TestInitReqGetsError(t *testing.T) {
 	}()
 
 	logOut := &bytes.Buffer{}
-	ch, err := NewChannel("test-svc", &ChannelOptions{Logger: NewLevelLogger(NewLogger(logOut), LogLevelWarn)})
+	logger := func(opts *ChannelOptions) {
+		opts.Logger = NewLevelLogger(
+			NewLogger(logOut),
+			LogLevelWarn,
+		)
+	}
+	ch, err := NewChannel("test-svc", logger)
 	require.NoError(t, err, "NewClient failed")
 	defer ch.Close()
 

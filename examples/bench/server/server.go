@@ -66,9 +66,10 @@ func main() {
 
 func setupServer(host string, basePort, instanceNum int) error {
 	hostPort := fmt.Sprintf("%s:%v", host, basePort+instanceNum)
-	ch, err := tchannel.NewChannel("benchmark", &tchannel.ChannelOptions{
-		ProcessName: fmt.Sprintf("benchmark-%v", instanceNum),
-	})
+	process := func(opts *tchannel.ChannelOptions) {
+		opts.ProcessName = fmt.Sprintf("benchmark-%v", instanceNum)
+	}
+	ch, err := tchannel.NewChannel("benchmark", process)
 	if err != nil {
 		return fmt.Errorf("NewChannel failed: %v", err)
 	}

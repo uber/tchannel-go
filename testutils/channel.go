@@ -48,7 +48,10 @@ func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	serviceName := defaultString(opts.ServiceName, DefaultServerName)
 	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+port)
 	updateOptsLogger(opts)
-	ch, err := tchannel.NewChannel(serviceName, &opts.ChannelOptions)
+	chopts := func(tmpOpts *tchannel.ChannelOptions) {
+		tmpOpts = &opts.ChannelOptions
+	}
+	ch, err := tchannel.NewChannel(serviceName, chopts)
 	if err != nil {
 		return nil, fmt.Errorf("NewChannel failed: %v", err)
 	}
@@ -71,7 +74,10 @@ func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	serviceName := defaultString(opts.ServiceName, DefaultClientName)
 	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+fmt.Sprint(clientNum))
 	updateOptsLogger(opts)
-	return tchannel.NewChannel(serviceName, &opts.ChannelOptions)
+	optFn := func(tmpOpts *tchannel.ChannelOptions) {
+		tmpOpts = &opts.ChannelOptions
+	}
+	return tchannel.NewChannel(serviceName, optFn)
 }
 
 type rawFuncHandler struct {
