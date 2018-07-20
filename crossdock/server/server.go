@@ -61,10 +61,10 @@ func (s *Server) Start() error {
 	if s.HostPort == "" {
 		s.HostPort = ":" + common.DefaultServerPort
 	}
-	channelOpts := &tchannel.ChannelOptions{
-		Tracer: s.Tracer,
+	tracer := func(opts *tchannel.ChannelOptions) {
+		opts.Tracer = s.Tracer
 	}
-	ch, err := tchannel.NewChannel(common.DefaultServiceName, channelOpts)
+	ch, err := tchannel.NewChannel(common.DefaultServiceName, tracer)
 	if err != nil {
 		return err
 	}

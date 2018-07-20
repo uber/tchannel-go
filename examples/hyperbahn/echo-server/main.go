@@ -35,7 +35,7 @@ import (
 )
 
 func main() {
-	tchan, err := tchannel.NewChannel("go-echo-server", nil)
+	tchan, err := tchannel.NewChannel("go-echo-server")
 	if err != nil {
 		log.Fatalf("Failed to create channel: %v", err)
 	}

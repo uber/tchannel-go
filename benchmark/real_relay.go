@@ -54,10 +54,16 @@ type realRelay struct {
 // NewRealRelay creates a TChannel relay.
 func NewRealRelay(services map[string][]string) (Relay, error) {
 	hosts := &fixedHosts{hosts: services}
-	ch, err := tchannel.NewChannel("relay", &tchannel.ChannelOptions{
-		RelayHost: relaytest.HostFunc(hosts.Get),
-		Logger:    tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
-	})
+	relay := func(opts *tchannel.ChannelOptions) {
+		opts.RelayHost = relaytest.HostFunc(hosts.Get)
+	}
+	logger := func(opts *tchannel.ChannelOptions) {
+		opts.Logger = tchannel.NewLevelLogger(
+			tchannel.NewLogger(os.Stderr),
+			tchannel.LogLevelWarn,
+		)
+	}
+	ch, err := tchannel.NewChannel("relay", relay, logger)
 	if err != nil {
 		return nil, err
 	}
