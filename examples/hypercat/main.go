@@ -79,7 +79,7 @@ func parseArgs() {
 func main() {
 	parseArgs()
 
-	ch, err := tchannel.NewChannel(options.ServiceName, nil)
+	ch, err := tchannel.NewChannel(options.ServiceName)
 	if err != nil {
 		log.Fatalf("NewChannel failed: %v", err)
 	}

@@ -177,7 +177,7 @@ func TestUnexpectedInitRes(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			ch, err := NewChannel("test", nil)
+			ch, err := NewChannel("test")
 			require.NoError(t, err)
 			defer ch.Close()
 
@@ -209,7 +209,7 @@ func TestUnexpectedInitRes(t *testing.T) {
 }
 
 func TestHandleInitReqNewVersion(t *testing.T) {
-	ch, err := NewChannel("test", nil)
+	ch, err := NewChannel("test")
 	require.NoError(t, err)
 	defer ch.Close()
 	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
