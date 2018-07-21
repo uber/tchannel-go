@@ -49,9 +49,13 @@ func NewServer(optFns ...Option) Server {
 		return newExternalServer(opts)
 	}
 
-	ch, err := tchannel.NewChannel(opts.svcName, &tchannel.ChannelOptions{
-		Logger: tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
-	})
+	logger := func(opts *tchannel.ChannelOptions) {
+		opts.Logger = tchannel.NewLevelLogger(
+			tchannel.NewLogger(os.Stderr),
+			tchannel.LogLevelWarn,
+		)
+	}
+	ch, err := tchannel.NewChannel(opts.svcName, logger)
 	if err != nil {
 		panic("failed to create channel: " + err.Error())
 	}

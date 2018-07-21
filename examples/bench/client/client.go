@@ -55,7 +55,7 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6061", nil))
 	}()
 
-	ch, err := tchannel.NewChannel("benchmark-client", nil)
+	ch, err := tchannel.NewChannel("benchmark-client")
 	if err != nil {
 		log.Fatalf("NewChannel failed: %v", err)
 	}

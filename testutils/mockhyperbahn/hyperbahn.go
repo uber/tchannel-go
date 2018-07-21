@@ -46,10 +46,13 @@ type Mock struct {
 // New returns a mock Hyperbahn server that can be used for testing.
 func New() (*Mock, error) {
 	stubHost := relaytest.NewStubRelayHost()
-	ch, err := tchannel.NewChannel("hyperbahn", &tchannel.ChannelOptions{
-		RelayHost:          stubHost,
-		RelayLocalHandlers: []string{"hyperbahn"},
-	})
+	relayHost := func(opts *tchannel.ChannelOptions) {
+		opts.RelayHost = stubHost
+	}
+	relayLocalHandlers := func(opts *tchannel.ChannelOptions) {
+		opts.RelayLocalHandlers = []string{"hyperbahn"}
+	}
+	ch, err := tchannel.NewChannel("hyperbahn", relayHost, relayLocalHandlers)
 	if err != nil {
 		return nil, err
 	}
