@@ -32,7 +32,7 @@ import (
 )
 
 func checkAllChannels() error {
-	ch, err := NewChannel("test-end", nil)
+	ch, err := NewChannel("test-end")
 	if err != nil {
 		return err
 	}

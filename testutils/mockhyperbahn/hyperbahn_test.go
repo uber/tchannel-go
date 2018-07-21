@@ -41,7 +41,7 @@ var config = struct {
 
 // setupServer is the application code we are attempting to test.
 func setupServer() (*hyperbahn.Client, error) {
-	ch, err := tchannel.NewChannel("myservice", nil)
+	ch, err := tchannel.NewChannel("myservice")
 	if err != nil {
 		return nil, err
 	}
