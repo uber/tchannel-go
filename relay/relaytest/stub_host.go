@@ -22,6 +22,7 @@ package relaytest
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
@@ -54,6 +55,13 @@ func NewStubRelayHost() *StubRelayHost {
 // get a reference to the channels' peers.
 func (rh *StubRelayHost) SetChannel(ch *tchannel.Channel) {
 	rh.ch = ch
+}
+
+func (rh *StubRelayHost) ChannelIsNil() bool {
+	if rh == nil {
+		fmt.Println("subRelayHost is nil")
+	}
+	return rh.ch == nil
 }
 
 // Start starts a new RelayCall for the given call on a specific connection.

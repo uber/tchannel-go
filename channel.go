@@ -197,13 +197,101 @@ func (ccc channelConnectionCommon) Tracer() opentracing.Tracer {
 // NewChannel creates a new Channel.  The new channel can be used to send outbound requests
 // to peers, but will not listen or handling incoming requests until one of ListenAndServe
 // or Serve is called. The local service name should be passed to serviceName.
-func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
+/*
+func NewChannel(serviceName string, optFns ...func(*ChannelOptions)) (*Channel, error) {
+	if serviceName == "" {
+		return nil, ErrNoServiceName
+	}
+	opts := &ChannelOptions{
+		ProcessName:   fmt.Sprintf("%s[%d]", filepath.Base(os.Args[0]), os.Getpid()),
+		Logger:        NullLogger,
+		StatsReporter: NullStatsReporter,
+		TimeNow:       time.Now,
+		TimeTicker:    time.NewTicker,
+	}
+
+	for _, optFn := range optFns {
+		optFn(opts)
+	}
+
+	chID := _nextChID.Inc()
+	opts.Logger = opts.Logger.WithFields(
+		LogField{"serviceName", serviceName},
+		LogField{"process", opts.ProcessName},
+		LogField{"chID", chID},
+	)
+
+	if err := opts.validateIdleCheck(); err != nil {
+		return nil, err
+	}
+
+	ch := &Channel{
+		channelConnectionCommon: channelConnectionCommon{
+			log:           opts.Logger,
+			relayLocal:    toStringSet(opts.RelayLocalHandlers),
+			statsReporter: opts.StatsReporter,
+			subChannels:   &subChannelMap{},
+			timeNow:       opts.TimeNow,
+			timeTicker:    opts.TimeTicker,
+			tracer:        opts.Tracer,
+		},
+		chID:              chID,
+		connectionOptions: opts.DefaultConnectionOptions.withDefaults(),
+		relayHost:         opts.RelayHost,
+		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, opts.Logger),
+		relayTimerVerify:  opts.RelayTimerVerification,
+	}
+	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
+
+	if opts.Handler != nil {
+		ch.handler = opts.Handler
+	} else {
+		ch.handler = channelHandler{ch}
+	}
+
+	ch.mutable.peerInfo = LocalPeerInfo{
+		PeerInfo: PeerInfo{
+			ProcessName: opts.ProcessName,
+			HostPort:    ephemeralHostPort,
+			IsEphemeral: true,
+			Version: PeerVersion{
+				Language:        "go",
+				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+				TChannelVersion: VersionInfo,
+			},
+		},
+		ServiceName: serviceName,
+	}
+	ch.mutable.state = ChannelClient
+	ch.mutable.conns = make(map[uint32]*Connection)
+	ch.createCommonStats()
+
+	// Register internal unless the root handler has been overridden, since
+	// Register will panic.
+	if opts.Handler == nil {
+		ch.registerInternal()
+	}
+
+	registerNewChannel(ch)
+
+	if opts.RelayHost != nil {
+		opts.RelayHost.SetChannel(ch)
+	}
+
+	// Start the idle connection timer.
+	ch.mutable.idleSweep = startIdleSweep(ch, opts)
+
+	return ch, nil
+}
+*/
+func NewChannel(serviceName string, optFns ...func(*ChannelOptions)) (*Channel, error) {
 	if serviceName == "" {
 		return nil, ErrNoServiceName
 	}
 
-	if opts == nil {
-		opts = &ChannelOptions{}
+	opts := &ChannelOptions{}
+	for _, optFn := range optFns {
+		optFn(opts)
 	}
 
 	processName := opts.ProcessName
