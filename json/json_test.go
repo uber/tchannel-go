@@ -147,7 +147,7 @@ func TestForwardChain(t *testing.T) {
 	// Use the above data to setup the test and ensure the calls are made as expected.
 	for name, s := range servers {
 		var err error
-		s.channel, err = tchannel.NewChannel(name, nil)
+		s.channel, err = tchannel.NewChannel(name)
 		require.NoError(t, err)
 
 		s.handler = &testHandler{t: t}
@@ -179,7 +179,7 @@ func TestForwardChain(t *testing.T) {
 }
 
 func TestHeadersForwarded(t *testing.T) {
-	ch, err := tchannel.NewChannel("svc", nil)
+	ch, err := tchannel.NewChannel("svc")
 	require.NoError(t, err)
 
 	handler := &testHandler{t: t}
@@ -212,7 +212,7 @@ func TestEmptyRequestHeader(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	ch, err := tchannel.NewChannel("server", nil)
+	ch, err := tchannel.NewChannel("server")
 	require.NoError(t, err)
 	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
 
@@ -243,7 +243,7 @@ func TestMapInputOutput(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	ch, err := tchannel.NewChannel("server", nil)
+	ch, err := tchannel.NewChannel("server")
 	require.NoError(t, err)
 	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
 

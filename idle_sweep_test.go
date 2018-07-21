@@ -273,9 +273,10 @@ func TestIdleSweepWithPings(t *testing.T) {
 
 // Validates that when MaxIdleTime isn't set, NewChannel returns an error.
 func TestIdleSweepMisconfiguration(t *testing.T) {
-	ch, err := NewChannel("svc", &ChannelOptions{
-		IdleCheckInterval: time.Duration(30 * time.Second),
-	})
+	idleCheckInterval := func(opts *ChannelOptions) {
+		opts.IdleCheckInterval = time.Duration(30 * time.Second)
+	}
+	ch, err := NewChannel("svc", idleCheckInterval)
 
 	assert.Nil(t, ch, "NewChannel should not return a channel")
 	assert.Error(t, err, "NewChannel should fail")
