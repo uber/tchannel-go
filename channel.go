@@ -520,9 +520,11 @@ func (ch *Channel) StatsReporter() StatsReporter {
 // It returns a new map for each call.
 func (ch *Channel) StatsTags() map[string]string {
 	m := make(map[string]string)
+	ch.mutable.Lock()
 	for k, v := range ch.commonStatsTags {
 		m[k] = v
 	}
+	ch.mutable.Unlock()
 	return m
 }
 
