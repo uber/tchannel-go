@@ -44,9 +44,10 @@ func toMap(fields LogFields) map[string]interface{} {
 }
 
 func TestNewChannel(t *testing.T) {
-	ch, err := NewChannel("svc", &ChannelOptions{
-		ProcessName: "pname",
-	})
+	process := func(opts *ChannelOptions) {
+		opts.ProcessName = "pname"
+	}
+	ch, err := NewChannel("svc", process)
 	require.NoError(t, err, "NewChannel failed")
 
 	assert.Equal(t, LocalPeerInfo{
@@ -65,9 +66,10 @@ func TestNewChannel(t *testing.T) {
 }
 
 func TestLoggers(t *testing.T) {
-	ch, err := NewChannel("svc", &ChannelOptions{
-		Logger: NewLogger(ioutil.Discard),
-	})
+	logger := func(opts *ChannelOptions) {
+		opts.Logger = NewLogger(ioutil.Discard)
+	}
+	ch, err := NewChannel("svc", logger)
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
 
@@ -82,9 +84,10 @@ func TestLoggers(t *testing.T) {
 }
 
 func TestStats(t *testing.T) {
-	ch, err := NewChannel("svc", &ChannelOptions{
-		Logger: NewLogger(ioutil.Discard),
-	})
+	logger := func(opts *ChannelOptions) {
+		opts.Logger = NewLogger(ioutil.Discard)
+	}
+	ch, err := NewChannel("svc", logger)
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
 
@@ -121,18 +124,20 @@ func TestRelayMaxTTL(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ch, err := NewChannel("svc", &ChannelOptions{
-			RelayMaxTimeout: tt.max,
-		})
+		relayMaxTimeout := func(opts *ChannelOptions) {
+			opts.RelayMaxTimeout = tt.max
+		}
+		ch, err := NewChannel("svc", relayMaxTimeout)
 		assert.NoError(t, err, "Unexpected error when creating channel.")
 		assert.Equal(t, ch.relayMaxTimeout, tt.expected, "Unexpected max timeout on channel.")
 	}
 }
 
 func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
-	ch, err := NewChannel("svc", &ChannelOptions{
-		Logger: NewLogger(ioutil.Discard),
-	})
+	logger := func(opts *ChannelOptions) {
+		opts.Logger = NewLogger(ioutil.Discard)
+	}
+	ch, err := NewChannel("svc", logger)
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
 
@@ -163,14 +168,15 @@ func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
 
 func TestChannelTracerMethod(t *testing.T) {
 	mockTracer := mocktracer.New()
-	ch, err := NewChannel("svc", &ChannelOptions{
-		Tracer: mockTracer,
-	})
+	tracer := func(opts *ChannelOptions) {
+		opts.Tracer = mockTracer
+	}
+	ch, err := NewChannel("svc", tracer)
 	require.NoError(t, err)
 	defer ch.Close()
 	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer passed at initialization")
 
-	ch, err = NewChannel("svc", &ChannelOptions{})
+	ch, err = NewChannel("svc")
 	require.NoError(t, err)
 	defer ch.Close()
 	assert.EqualValues(t, opentracing.GlobalTracer(), ch.Tracer(), "expecting default tracer")
