@@ -52,7 +52,7 @@ func (rawHandler) OnError(ctx context.Context, err error) {
 func main() {
 	flag.Parse()
 
-	ch, err := tchannel.NewChannel("test_as_raw", nil)
+	ch, err := tchannel.NewChannel("test_as_raw")
 	if err != nil {
 		log.Fatalf("NewChannel failed: %v", err)
 	}

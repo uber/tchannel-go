@@ -43,7 +43,7 @@ func printHelp() {
 
 func main() {
 	// Create a TChannel.
-	ch, err := tchannel.NewChannel("keyvalue-client", nil)
+	ch, err := tchannel.NewChannel("keyvalue-client")
 	if err != nil {
 		log.Fatalf("Failed to create tchannel: %v", err)
 	}
