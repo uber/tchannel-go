@@ -149,7 +149,6 @@ type Channel struct {
 
 	chID                uint32
 	createdStack        string
-	commonStatsTags     map[string]string
 	connectionOptions   ConnectionOptions
 	peers               *PeerList
 	relayHost           RelayHost
@@ -160,12 +159,13 @@ type Channel struct {
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
-		sync.RWMutex // protects members of the mutable struct.
-		state        ChannelState
-		peerInfo     LocalPeerInfo // May be ephemeral if this is a client only channel
-		l            net.Listener  // May be nil if this is a client only channel
-		idleSweep    *idleSweep
-		conns        map[uint32]*Connection
+		sync.RWMutex    // protects members of the mutable struct.
+		state           ChannelState
+		peerInfo        LocalPeerInfo // May be ephemeral if this is a client only channel
+		commonStatsTags map[string]string
+		l               net.Listener // May be nil if this is a client only channel
+		idleSweep       *idleSweep
+		conns           map[uint32]*Connection
 	}
 }
 
@@ -194,47 +194,42 @@ func (ccc channelConnectionCommon) Tracer() opentracing.Tracer {
 	return opentracing.GlobalTracer()
 }
 
+var defaultChannelFn = func(opts *ChannelOptions) {
+	if opts.TimeNow == nil {
+		opts.TimeNow = time.Now
+	}
+	if opts.TimeTicker == nil {
+		opts.TimeTicker = time.NewTicker
+	}
+	if opts.StatsReporter == nil {
+		opts.StatsReporter = NullStatsReporter
+	}
+	if opts.Logger == nil {
+		opts.Logger = NullLogger
+	}
+	if opts.ProcessName == "" {
+		opts.ProcessName = fmt.Sprintf("%s[%d]", filepath.Base(os.Args[0]), os.Getpid())
+	}
+}
+
 // NewChannel creates a new Channel.  The new channel can be used to send outbound requests
 // to peers, but will not listen or handling incoming requests until one of ListenAndServe
 // or Serve is called. The local service name should be passed to serviceName.
-func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
+func NewChannel(serviceName string, optFns ...func(*ChannelOptions)) (*Channel, error) {
 	if serviceName == "" {
 		return nil, ErrNoServiceName
 	}
+	opts := &ChannelOptions{}
+	optFns = append(optFns, defaultChannelFn)
 
-	if opts == nil {
-		opts = &ChannelOptions{}
-	}
-
-	processName := opts.ProcessName
-	if processName == "" {
-		processName = fmt.Sprintf("%s[%d]", filepath.Base(os.Args[0]), os.Getpid())
-	}
-
-	logger := opts.Logger
-	if logger == nil {
-		logger = NullLogger
-	}
-
-	statsReporter := opts.StatsReporter
-	if statsReporter == nil {
-		statsReporter = NullStatsReporter
-	}
-
-	timeNow := opts.TimeNow
-	if timeNow == nil {
-		timeNow = time.Now
-	}
-
-	timeTicker := opts.TimeTicker
-	if timeTicker == nil {
-		timeTicker = time.NewTicker
+	for _, optFn := range optFns {
+		optFn(opts)
 	}
 
 	chID := _nextChID.Inc()
-	logger = logger.WithFields(
+	opts.Logger = opts.Logger.WithFields(
 		LogField{"serviceName", serviceName},
-		LogField{"process", processName},
+		LogField{"process", opts.ProcessName},
 		LogField{"chID", chID},
 	)
 
@@ -244,18 +239,18 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
-			log:           logger,
+			log:           opts.Logger,
 			relayLocal:    toStringSet(opts.RelayLocalHandlers),
-			statsReporter: statsReporter,
+			statsReporter: opts.StatsReporter,
 			subChannels:   &subChannelMap{},
-			timeNow:       timeNow,
-			timeTicker:    timeTicker,
+			timeNow:       opts.TimeNow,
+			timeTicker:    opts.TimeTicker,
 			tracer:        opts.Tracer,
 		},
 		chID:              chID,
 		connectionOptions: opts.DefaultConnectionOptions.withDefaults(),
 		relayHost:         opts.RelayHost,
-		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
+		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, opts.Logger),
 		relayTimerVerify:  opts.RelayTimerVerification,
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
@@ -268,7 +263,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 	ch.mutable.peerInfo = LocalPeerInfo{
 		PeerInfo: PeerInfo{
-			ProcessName: processName,
+			ProcessName: opts.ProcessName,
 			HostPort:    ephemeralHostPort,
 			IsEphemeral: true,
 			Version: PeerVersion{
@@ -404,7 +399,7 @@ func (ch *Channel) PeerInfo() LocalPeerInfo {
 }
 
 func (ch *Channel) createCommonStats() {
-	ch.commonStatsTags = map[string]string{
+	ch.mutable.commonStatsTags = map[string]string{
 		"app":     ch.mutable.peerInfo.ProcessName,
 		"service": ch.mutable.peerInfo.ServiceName,
 	}
@@ -413,7 +408,7 @@ func (ch *Channel) createCommonStats() {
 		ch.log.WithFields(ErrField(err)).Info("Channel creation failed to get host.")
 		return
 	}
-	ch.commonStatsTags["host"] = host
+	ch.mutable.commonStatsTags["host"] = host
 	// TODO(prashant): Allow user to pass extra tags (such as cluster, version).
 }
 
@@ -525,9 +520,11 @@ func (ch *Channel) StatsReporter() StatsReporter {
 // It returns a new map for each call.
 func (ch *Channel) StatsTags() map[string]string {
 	m := make(map[string]string)
-	for k, v := range ch.commonStatsTags {
+	ch.mutable.RLock()
+	for k, v := range ch.mutable.commonStatsTags {
 		m[k] = v
 	}
+	ch.mutable.RUnlock()
 	return m
 }
 

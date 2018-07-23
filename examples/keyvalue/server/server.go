@@ -37,7 +37,7 @@ import (
 
 func main() {
 	// Create a TChannel and register the Thrift handlers.
-	ch, err := tchannel.NewChannel("keyvalue", nil)
+	ch, err := tchannel.NewChannel("keyvalue")
 	if err != nil {
 		log.Fatalf("Failed to create tchannel: %v", err)
 	}

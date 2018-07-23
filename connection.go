@@ -311,7 +311,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		outbound:           newMessageExchangeSet(log, messageExchangeSetOutbound),
 		handler:            ch.handler,
 		events:             events,
-		commonStatsTags:    ch.commonStatsTags,
+		commonStatsTags:    ch.mutable.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
 		lastActivity:       *atomic.NewInt64(ch.timeNow().UnixNano()),
 	}

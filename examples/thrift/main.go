@@ -61,7 +61,7 @@ func main() {
 }
 
 func setupServer() (net.Listener, error) {
-	tchan, err := tchannel.NewChannel("server", optsFor("server"))
+	tchan, err := tchannel.NewChannel("server", optsFor("server")...)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func setupServer() (net.Listener, error) {
 }
 
 func runClient1(hyperbahnService string, addr net.Addr) error {
-	tchan, err := tchannel.NewChannel("client1", optsFor("client1"))
+	tchan, err := tchannel.NewChannel("client1", optsFor("client1")...)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func runClient1(hyperbahnService string, addr net.Addr) error {
 }
 
 func runClient2(hyperbahnService string, addr net.Addr) error {
-	tchan, err := tchannel.NewChannel("client2", optsFor("client2"))
+	tchan, err := tchannel.NewChannel("client2", optsFor("client2")...)
 	if err != nil {
 		return err
 	}
@@ -178,9 +178,16 @@ func (h *secondHandler) Test(ctx thrift.Context) error {
 	return nil
 }
 
-func optsFor(processName string) *tchannel.ChannelOptions {
-	return &tchannel.ChannelOptions{
-		ProcessName: processName,
-		Logger:      tchannel.NewLevelLogger(tchannel.SimpleLogger, tchannel.LogLevelWarn),
+func optsFor(processName string) []func(opts *tchannel.ChannelOptions) {
+	return []func(opts *tchannel.ChannelOptions){
+		func(opts *tchannel.ChannelOptions) {
+			opts.ProcessName = processName
+		},
+		func(opts *tchannel.ChannelOptions) {
+			opts.Logger = tchannel.NewLevelLogger(
+				tchannel.SimpleLogger,
+				tchannel.LogLevelWarn,
+			)
+		},
 	}
 }
