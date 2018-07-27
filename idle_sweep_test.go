@@ -32,6 +32,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // peerStatusListener is a test tool used to wait for connections to drop by
@@ -59,7 +60,8 @@ func (pl *peerStatusListener) waitForZeroConnections(t *testing.T, channels ...*
 			}
 
 		case <-time.After(testutils.Timeout(500 * time.Millisecond)):
-			return assert.Fail(t, "Some connections are still open: %s", connectionStatus(channels))
+			t.Fatalf("Some connections are still open: %s", connectionStatus(channels))
+			return false
 		}
 	}
 }
@@ -279,4 +281,65 @@ func TestIdleSweepMisconfiguration(t *testing.T) {
 
 	assert.Nil(t, ch, "NewChannel should not return a channel")
 	assert.Error(t, err, "NewChannel should fail")
+}
+
+func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	clientTicker := testutils.NewFakeTicker()
+	clock := testutils.NewStubClock(time.Now())
+
+	listener := newPeerStatusListener()
+	serverOpts := testutils.NewOpts().
+		AddLogFilter("Skip closing idle Connection as it has pending calls.", 1).
+		SetOnPeerStatusChanged(listener.onStatusChange).
+		SetTimeNow(clock.Now).
+		SetTimeTicker(clientTicker.New).
+		SetMaxIdleTime(3 * time.Minute).
+		SetIdleCheckInterval(30 * time.Second).
+		NoRelay()
+
+	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+		var (
+			gotCall = make(chan struct{})
+			block   = make(chan struct{})
+		)
+		testutils.RegisterEcho(ts.Server(), func() {
+			close(gotCall)
+			<-block
+		})
+
+		clientOpts := testutils.NewOpts().SetOnPeerStatusChanged(listener.onStatusChange)
+
+		// Client 1 will just ping, so we create a connection that should be closed.
+		c1 := ts.NewClient(clientOpts)
+		require.NoError(t, c1.Ping(ctx, ts.HostPort()), "Ping failed")
+
+		// Client 2 will make a call that will be blocked. Wait for the call to be received.
+		c2CallComplete := make(chan struct{})
+		c2 := ts.NewClient(clientOpts)
+		go func() {
+			testutils.AssertEcho(t, c2, ts.HostPort(), ts.ServiceName())
+			close(c2CallComplete)
+		}()
+		<-gotCall
+
+		// Ensure we have 2 connections on the server side.
+		assert.Equal(t, 2, ts.Server().IntrospectNumConnections(), "Expect connection to client 1 and client 2")
+
+		// Let the idle checker to close client 1's connection.
+		clock.Elapse(5 * time.Minute)
+		clientTicker.Tick()
+		listener.waitForZeroConnections(t, c1)
+
+		assert.Equal(t, 1, ts.Server().IntrospectNumConnections(), "Expect connection only to client 2")
+
+		// Unblock the call.
+		close(block)
+		<-c2CallComplete
+		clock.Elapse(5 * time.Minute)
+		clientTicker.Tick()
+		listener.waitForZeroConnections(t, ts.Server(), c2)
+	})
 }
