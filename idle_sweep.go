@@ -107,6 +107,13 @@ func (is *idleSweep) checkIdleConnections() {
 			continue
 		}
 
+		// We shouldn't get to a state where we have pending calls, but the connection
+		// is idle. This either means the max-idle time is too low, or there's a stuck call.
+		if conn.hasExchanges() {
+			conn.log.Error("Skip closing idle Connection as it has pending calls.")
+			continue
+		}
+
 		is.ch.log.WithFields(
 			LogField{"remotePeer", conn.remotePeerInfo},
 			LogField{"lastActivityTime", conn.getLastActivityTime()},
