@@ -109,7 +109,7 @@ func (is *idleSweep) checkIdleConnections() {
 
 		// We shouldn't get to a state where we have pending calls, but the connection
 		// is idle. This either means the max-idle time is too low, or there's a stuck call.
-		if conn.hasExchanges() {
+		if conn.hasPendingCalls() {
 			conn.log.Error("Skip closing idle Connection as it has pending calls.")
 			continue
 		}
