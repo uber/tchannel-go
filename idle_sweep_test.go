@@ -340,6 +340,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 				clientTicker.Tick()
 			},
 		}
+
 		if relay := ts.Relay(); relay != nil {
 			check.ch = relay
 			check.preCloseConns++
