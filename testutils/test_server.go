@@ -95,6 +95,23 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 	return ts
 }
 
+// runSubTest runs the specified function as a sub-test of a testing.T or
+// testing.B if the types match.
+func runSubTest(t testing.TB, name string, f func(t testing.TB)) {
+	switch t := t.(type) {
+	case *testing.T:
+		t.Run(name, func(t *testing.T) {
+			f(t)
+		})
+	case *testing.B:
+		t.Run(name, func(b *testing.B) {
+			f(b)
+		})
+	default:
+		f(t)
+	}
+}
+
 // WithTestServer creates a new TestServer, runs the passed function, and then
 // verifies that no resources were leaked.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
@@ -111,20 +128,26 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
 
 		// Run without the relay, unless OnlyRelay was set.
 		if !chanOpts.OnlyRelay {
-			noRelayOpts := chanOpts.Copy()
-			noRelayOpts.DisableRelay = true
-			withServer(t, noRelayOpts, f)
+			runSubTest(t, "no relay", func(t testing.TB) {
+				noRelayOpts := chanOpts.Copy()
+				noRelayOpts.DisableRelay = true
+				withServer(t, noRelayOpts, f)
+			})
 		}
 
 		// Run with the relay, unless the user has disabled it.
 		if !chanOpts.DisableRelay {
-			withServer(t, chanOpts.Copy(), f)
+			runSubTest(t, "with relay", func(t testing.TB) {
+				withServer(t, chanOpts.Copy(), f)
+			})
 
 			// Re-run the same test with timer verification if this is a relay-only test.
 			if chanOpts.OnlyRelay {
-				verifyOpts := chanOpts.Copy()
-				verifyOpts.RelayTimerVerification = true
-				withServer(t, verifyOpts, f)
+				runSubTest(t, "with relay and timer verification", func(t testing.TB) {
+					verifyOpts := chanOpts.Copy()
+					verifyOpts.RelayTimerVerification = true
+					withServer(t, verifyOpts, f)
+				})
 			}
 		}
 	}
