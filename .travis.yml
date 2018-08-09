@@ -6,20 +6,20 @@ cache:
   - $HOME/.glide/cache
 
 go:
-- 1.7
-- 1.8
-- 1.9
+- 1.8.x
+- 1.9.x
+- 1.10.x
 
 matrix:
   include:
-  - go: 1.9
+  - go: 1.10.x
     env: CROSSDOCK=true
     sudo: required
     dist: trusty
     services:
     - docker
   include:
-  - go: 1.9
+  - go: 1.10.x
     env: NO_TEST=yes COVERAGE=yes LINT=yes
 
 env:

@@ -92,7 +92,7 @@ test: clean setup install_test check_no_test_deps $(BIN)/thrift
 	PATH=$(BIN):$$PATH go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
 check_no_test_deps:
-	! go list -json $(PROD_PKGS) | jq -r .Deps[] | grep -e test -e mock
+	! go list -json $(PROD_PKGS) | jq -r '.Deps | select ((. | length) > 0) | .[]' | grep -e test -e mock | grep -v '^internal/testlog'
 
 benchmark: clean setup $(BIN)/thrift
 	echo Running benchmarks:
