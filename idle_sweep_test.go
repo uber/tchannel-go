@@ -293,13 +293,13 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 	listener := newPeerStatusListener()
 	// TODO: Log filtering doesn't require the message to be seen.
 	serverOpts := testutils.NewOpts().
-		AddLogFilter("Skip closing idle Connection as it has pending calls.", 1).
+		AddLogFilter("Skip closing idle Connection as it has pending calls.", 2).
 		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetTimeNow(clock.Now).
 		SetTimeTicker(clientTicker.New).
+		SetRelayMaxTimeout(time.Hour).
 		SetMaxIdleTime(3 * time.Minute).
-		SetIdleCheckInterval(30 * time.Second).
-		NoRelay()
+		SetIdleCheckInterval(30 * time.Second)
 
 	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
 		var (
@@ -326,21 +326,48 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 		}()
 		<-gotCall
 
-		// Ensure we have 2 connections on the server side.
-		assert.Equal(t, 2, ts.Server().IntrospectNumConnections(), "Expect connection to client 1 and client 2")
+		// If we are in no-relay mode, we expect 2 connections to the server (from each client).
+		// If we are in relay mode, the relay will have the 2 connections from clients + 1 connection to the server.
+		check := struct {
+			ch            *Channel
+			preCloseConns int
+			tick          func()
+		}{
+			ch:            ts.Server(),
+			preCloseConns: 2,
+			tick: func() {
+				clock.Elapse(5 * time.Minute)
+				clientTicker.Tick()
+			},
+		}
+		if relay := ts.Relay(); relay != nil {
+			check.ch = relay
+			check.preCloseConns++
+			oldTick := check.tick
+			check.tick = func() {
+				oldTick()
 
-		// Let the idle checker to close client 1's connection.
-		clock.Elapse(5 * time.Minute)
-		clientTicker.Tick()
+				// The same ticker is being used by the server and the relay
+				// so we need to tick it twice.
+				clientTicker.Tick()
+			}
+		}
+
+		assert.Equal(t, check.preCloseConns, check.ch.IntrospectNumConnections(), "Expect connection to client 1 and client 2")
+
+		// Let the idle checker close client 1's connection.
+		check.tick()
 		listener.waitForZeroConnections(t, c1)
 
-		assert.Equal(t, 1, ts.Server().IntrospectNumConnections(), "Expect connection only to client 2")
+		// Make sure we have only a connection for client 2, which is active.
+		assert.Equal(t, check.preCloseConns-1, check.ch.IntrospectNumConnections(), "Expect connection only to client 2")
+		state := check.ch.IntrospectState(nil)
+		require.Empty(t, state.InactiveConnections, "Ensure all connections are active")
 
 		// Unblock the call.
 		close(block)
 		<-c2CallComplete
-		clock.Elapse(5 * time.Minute)
-		clientTicker.Tick()
+		check.tick()
 		listener.waitForZeroConnections(t, ts.Server(), c2)
 	})
 }

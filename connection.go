@@ -767,8 +767,15 @@ func (c *Connection) closeSendCh(connID uint32) {
 }
 
 // hasExchanges returns whether there's any pending inbound or outbound calls on this connection.
-func (c *Connection) hasExchanges() bool {
-	return c.inbound.count() > 0 || c.outbound.count() > 0
+func (c *Connection) hasPendingCalls() bool {
+	if c.inbound.count() > 0 || c.outbound.count() > 0 {
+		return true
+	}
+	if !c.relay.canClose() {
+		return true
+	}
+
+	return false
 }
 
 // checkExchanges is called whenever an exchange is removed, and when Close is called.
