@@ -97,7 +97,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 
 // runSubTest runs the specified function as a sub-test of a testing.T or
 // testing.B if the types match.
-func runSubTest(t testing.TB, name string, f func(t testing.TB)) {
+func runSubTest(t testing.TB, name string, f func(testing.TB)) {
 	switch t := t.(type) {
 	case *testing.T:
 		t.Run(name, func(t *testing.T) {
