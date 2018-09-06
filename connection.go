@@ -494,7 +494,7 @@ func (c *Connection) SendSystemError(id uint32, span Span, err error) error {
 			LogField{"id", id},
 			ErrField(err),
 		).Warn("Couldn't create outbound frame.")
-		return fmt.Errorf("failed to create outbound error frame")
+		return fmt.Errorf("failed to create outbound error frame: %v", err)
 	}
 
 	// When sending errors, we hold the state rlock to ensure that sendCh is not closed
