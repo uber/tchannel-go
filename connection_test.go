@@ -37,6 +37,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/tos"
+	"github.com/uber/tchannel-go/typed"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -623,6 +624,23 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 		calls := relaytest.NewMockStats()
 		calls.Add(ts.ServiceName(), ts.ServiceName(), "call").Failed("timeout").Succeeded().End()
 		ts.AssertRelayStats(calls)
+	})
+}
+
+func TestLargeSendSystemError(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		opts := testutils.NewOpts().AddLogFilter("Couldn't create outbound frame.", 1)
+		client := ts.NewClient(opts)
+		conn, err := client.Connect(ctx, ts.HostPort())
+		require.NoError(t, err, "Connect failed")
+
+		largeErr := errors.New(strings.Repeat("1234567890", 10000))
+		err = conn.SendSystemError(1, Span{}, largeErr)
+		require.Error(t, err, "Expect err")
+		assert.Contains(t, err.Error(), typed.ErrBufferFull.Error())
 	})
 }
 
