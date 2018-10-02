@@ -294,6 +294,9 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 func (ts *TestServer) close(ch *tchannel.Channel) {
 	ch.Close()
 	ts.waitForChannelClose(ch)
+
+	_, ok := <-ch.ClosedChan()
+	assert.False(ts.TB, ok, "Channel's close channel should've closed")
 }
 
 func (ts *TestServer) verify(ch *tchannel.Channel) {

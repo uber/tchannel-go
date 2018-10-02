@@ -166,6 +166,7 @@ type Channel struct {
 		l            net.Listener  // May be nil if this is a client only channel
 		idleSweep    *idleSweep
 		conns        map[uint32]*Connection
+		closed       chan struct{}
 	}
 }
 
@@ -281,6 +282,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 	ch.mutable.state = ChannelClient
 	ch.mutable.conns = make(map[uint32]*Connection)
+	ch.mutable.closed = make(chan struct{})
 	ch.createCommonStats()
 
 	// Register internal unless the root handler has been overridden, since
@@ -758,12 +760,23 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 
 func (ch *Channel) onClosed() {
 	removeClosedChannel(ch)
+	ch.mutable.Lock()
+	if _, ok := <-ch.mutable.closed; ok {
+		close(ch.mutable.closed)
+	}
+	ch.mutable.Unlock()
 	ch.log.Infof("Channel closed.")
 }
 
 // Closed returns whether this channel has been closed with .Close()
 func (ch *Channel) Closed() bool {
 	return ch.State() == ChannelClosed
+}
+
+// ClosedChan returns a channel that will close when the Channel has completely
+// closed.
+func (ch *Channel) ClosedChan() <-chan struct{} {
+	return ch.mutable.closed
 }
 
 // State returns the current channel state.
