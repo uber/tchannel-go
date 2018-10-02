@@ -184,12 +184,11 @@ type Relayer struct {
 	// It allows timer re-use, while allowing timers to be created and started separately.
 	timeouts *relayTimerPool
 
-	peers      *RootPeerList
-	conn       *Connection
-	relayConn  *relay.Conn
-	remoteAddr string
-	logger     Logger
-	pending    atomic.Uint32
+	peers     *RootPeerList
+	conn      *Connection
+	relayConn *relay.Conn
+	logger    Logger
+	pending   atomic.Uint32
 }
 
 // NewRelayer constructs a Relayer.
