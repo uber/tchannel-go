@@ -39,6 +39,15 @@ type CallFrame interface {
 	RoutingKey() []byte
 }
 
+// Conn contains information about the underlying connection.
+type Conn struct {
+	// RemoteAddr is the remote address of the underlying TCP connection.
+	RemoteAddr string
+
+	// RemoteProcessName is the process name sent in the TChannel handshake.
+	RemoteProcessName string
+}
+
 // RateLimitDropError is the error that should be returned from
 // RelayHosts.Get if the request should be dropped silently.
 // This is bit of a hack, because rate limiting of this nature isn't part of
