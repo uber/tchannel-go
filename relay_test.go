@@ -199,7 +199,7 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		f := func(relay.CallFrame, *Connection) (string, error) {
+		f := func(relay.CallFrame, *relay.Conn) (string, error) {
 			return tt.returnPeer, tt.returnErr
 		}
 
@@ -501,9 +501,10 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 
 func TestRelayConnection(t *testing.T) {
 	var errTest = errors.New("test")
-	var wantHostPort string
-	getHost := func(call relay.CallFrame, conn *Connection) (string, error) {
-		assert.Equal(t, wantHostPort, conn.RemotePeerInfo().HostPort, "Unexpected RemoteHostPort")
+	var gotConn *relay.Conn
+
+	getHost := func(_ relay.CallFrame, conn *relay.Conn) (string, error) {
+		gotConn = conn
 		return "", errTest
 	}
 
@@ -511,23 +512,52 @@ func TestRelayConnection(t *testing.T) {
 		SetRelayOnly().
 		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		getOutboundConn := func(ch *Channel) ConnectionRuntimeState {
+			// Verify that the connection is what we expect.
+			state := ch.IntrospectState(nil)
+			peer, ok := state.RootPeers[ts.HostPort()]
+			require.True(t, ok, "Failed to find peer for relay")
+			conns := peer.OutboundConnections
+			require.Len(t, conns, 1, "Expect single connection from client to relay")
+
+			return conns[0]
+		}
+
 		// Create a client that is listening so we can set the expected host:port.
-		clientOpts := testutils.NewOpts().SetProcessName("nodejs-hyperbahn")
-		client := ts.NewServer(clientOpts)
-		wantHostPort = client.PeerInfo().HostPort
+		client := ts.NewClient(nil)
 
 		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
 		require.Error(t, err, "Expected CallEcho to fail")
 		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
 
-		// Verify that the relay has not closed any connections.
-		assert.Equal(t, 1, ts.Relay().IntrospectNumConnections(), "Relay should maintain client connection")
+		wantConn := &relay.Conn{
+			RemoteAddr:        getOutboundConn(client).LocalHostPort,
+			RemoteProcessName: client.PeerInfo().ProcessName,
+		}
+		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
+
+		// Verify something similar with a listening channel, ensuring that
+		// we're not using the host:port of the listening server, but the
+		// host:port of the outbound TCP connection.
+		listeningC := ts.NewServer(nil)
+
+		err = testutils.CallEcho(listeningC, ts.HostPort(), ts.ServiceName(), nil)
+		require.Error(t, err, "Expected CallEcho to fail")
+		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+
+		connHostPort := getOutboundConn(listeningC).LocalHostPort
+		assert.NotEqual(t, connHostPort, listeningC.PeerInfo().HostPort, "Ensure connection host:port is not listening host:port")
+		wantConn = &relay.Conn{
+			RemoteAddr:        connHostPort,
+			RemoteProcessName: listeningC.PeerInfo().ProcessName,
+		}
+		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 	})
 }
 
 func TestRelayConnectionClosed(t *testing.T) {
 	protocolErr := NewSystemError(ErrCodeProtocol, "invalid service name")
-	getHost := func(call relay.CallFrame, conn *Connection) (string, error) {
+	getHost := func(relay.CallFrame, *relay.Conn) (string, error) {
 		return "", protocolErr
 	}
 
@@ -606,7 +636,7 @@ func TestRelayRejectsDuringClose(t *testing.T) {
 }
 
 func TestRelayRateLimitDrop(t *testing.T) {
-	getHost := func(call relay.CallFrame, _ *Connection) (string, error) {
+	getHost := func(relay.CallFrame, *relay.Conn) (string, error) {
 		return "", relay.RateLimitDropError{}
 	}
 
@@ -720,7 +750,7 @@ func TestRelayThroughSeparateRelay(t *testing.T) {
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
 		serverHP := ts.Server().PeerInfo().HostPort
-		dummyFactory := func(relay.CallFrame, *Connection) (string, error) {
+		dummyFactory := func(relay.CallFrame, *relay.Conn) (string, error) {
 			panic("should not get invoked")
 		}
 		relay2Opts := testutils.NewOpts().SetRelayHost(relaytest.HostFunc(dummyFactory))

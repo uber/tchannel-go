@@ -32,7 +32,7 @@ type RelayHost interface {
 	// Start starts a new RelayCall given the call frame and connection.
 	// It may return a call and an error, in which case the caller will
 	// call Failed/End on the RelayCall.
-	Start(relay.CallFrame, *Connection) (RelayCall, error)
+	Start(relay.CallFrame, *relay.Conn) (RelayCall, error)
 }
 
 // RelayCall abstracts away peer selection, stats, and any other business

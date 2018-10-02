@@ -8,7 +8,7 @@ import (
 type hostFunc struct {
 	ch    *tchannel.Channel
 	stats *MockStats
-	fn    func(relay.CallFrame, *tchannel.Connection) (string, error)
+	fn    func(relay.CallFrame, *relay.Conn) (string, error)
 }
 
 type hostFuncPeer struct {
@@ -18,7 +18,7 @@ type hostFuncPeer struct {
 }
 
 // HostFunc wraps a given function to implement tchannel.RelayHost.
-func HostFunc(fn func(relay.CallFrame, *tchannel.Connection) (string, error)) tchannel.RelayHost {
+func HostFunc(fn func(relay.CallFrame, *relay.Conn) (string, error)) tchannel.RelayHost {
 	return &hostFunc{fn: fn}
 }
 
@@ -27,7 +27,7 @@ func (hf *hostFunc) SetChannel(ch *tchannel.Channel) {
 	hf.stats = NewMockStats()
 }
 
-func (hf *hostFunc) Start(cf relay.CallFrame, conn *tchannel.Connection) (tchannel.RelayCall, error) {
+func (hf *hostFunc) Start(cf relay.CallFrame, conn *relay.Conn) (tchannel.RelayCall, error) {
 	var peer *tchannel.Peer
 
 	peerHP, err := hf.fn(cf, conn)

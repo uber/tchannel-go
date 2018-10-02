@@ -184,10 +184,12 @@ type Relayer struct {
 	// It allows timer re-use, while allowing timers to be created and started separately.
 	timeouts *relayTimerPool
 
-	peers   *RootPeerList
-	conn    *Connection
-	logger  Logger
-	pending atomic.Uint32
+	peers      *RootPeerList
+	conn       *Connection
+	relayConn  *relay.Conn
+	remoteAddr string
+	logger     Logger
+	pending    atomic.Uint32
 }
 
 // NewRelayer constructs a Relayer.
@@ -200,7 +202,11 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		inbound:      newRelayItems(conn.log.WithFields(LogField{"relayItems", "inbound"})),
 		peers:        ch.RootPeers(),
 		conn:         conn,
-		logger:       conn.log,
+		relayConn: &relay.Conn{
+			RemoteAddr:        conn.conn.RemoteAddr().String(),
+			RemoteProcessName: conn.RemotePeerInfo().ProcessName,
+		},
+		logger: conn.log,
 	}
 	r.timeouts = newRelayTimerPool(r.timeoutRelayItem, ch.relayTimerVerify)
 	return r
@@ -343,7 +349,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return nil
 	}
 
-	call, err := r.relayHost.Start(f, r.conn)
+	call, err := r.relayHost.Start(f, r.relayConn)
 	if err != nil {
 		// If we have a RateLimitDropError we record the statistic, but
 		// we *don't* send an error frame back to the client.
