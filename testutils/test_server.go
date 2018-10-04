@@ -23,7 +23,6 @@ package testutils
 import (
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -293,7 +292,16 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 // it waits for the channels to close.
 func (ts *TestServer) close(ch *tchannel.Channel) {
 	ch.Close()
-	ts.waitForChannelClose(ch)
+
+	select {
+	case <-time.After(Timeout(200 * time.Millisecond)):
+		ts.Errorf("Channel %p did not close after 200 ms, last state: %v", ch, ch.State())
+
+		// The introspected state might help debug why the channel isn't closing.
+		introspected := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true, IncludeTombstones: true})
+		ts.Logf("Introspected state: %s", spew.Sdump(introspected))
+	case <-ch.ClosedChan():
+	}
 }
 
 func (ts *TestServer) verify(ch *tchannel.Channel) {
@@ -317,36 +325,6 @@ func (ts *TestServer) post() {
 	for _, fn := range ts.postFns {
 		fn()
 	}
-}
-
-func (ts *TestServer) waitForChannelClose(ch *tchannel.Channel) {
-	if ts.Failed() {
-		return
-	}
-	started := time.Now()
-
-	var state tchannel.ChannelState
-	for i := 0; i < 60; i++ {
-		if state = ch.State(); state == tchannel.ChannelClosed {
-			return
-		}
-
-		runtime.Gosched()
-		if i < 5 {
-			continue
-		}
-
-		sleepFor := time.Duration(i) * 100 * time.Microsecond
-		time.Sleep(Timeout(sleepFor))
-	}
-
-	// Channel is not closing, fail the test.
-	sinceStart := time.Since(started)
-	ts.Errorf("Channel %p did not close after %v, last state: %v", ch, sinceStart, state)
-
-	// The introspected state might help debug why the channel isn't closing.
-	introspected := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true, IncludeTombstones: true})
-	ts.Logf("Introspected state: %s", spew.Sdump(introspected))
 }
 
 func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
