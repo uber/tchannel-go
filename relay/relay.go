@@ -46,6 +46,10 @@ type Conn struct {
 
 	// RemoteProcessName is the process name sent in the TChannel handshake.
 	RemoteProcessName string
+
+	// IsOutbound returns whether this connection is an outbound connection
+	// initiated via the relay.
+	IsOutbound bool
 }
 
 // RateLimitDropError is the error that should be returned from

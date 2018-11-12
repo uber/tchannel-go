@@ -204,6 +204,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		relayConn: &relay.Conn{
 			RemoteAddr:        conn.conn.RemoteAddr().String(),
 			RemoteProcessName: conn.RemotePeerInfo().ProcessName,
+			IsOutbound:        conn.connDirection == outbound,
 		},
 		logger: conn.log,
 	}

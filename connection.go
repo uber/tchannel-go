@@ -159,6 +159,7 @@ type Connection struct {
 	channelConnectionCommon
 
 	connID          uint32
+	connDirection   connectionDirection
 	opts            ConnectionOptions
 	conn            net.Conn
 	localPeerInfo   LocalPeerInfo
@@ -276,6 +277,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
+	connDirection := inbound
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
 		{"localAddr", conn.LocalAddr().String()},
@@ -285,13 +287,11 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		{"remoteProcess", remotePeer.ProcessName},
 	}...)
 	if outboundHP != "" {
-		log = log.WithFields(LogFields{
-			{"outboundHP", outboundHP},
-			{"connectionDirection", outbound},
-		}...)
-	} else {
-		log = log.WithFields(LogField{"connectionDirection", inbound})
+		connDirection = outbound
+		log = log.WithFields(LogField{"outboundHP", outboundHP})
 	}
+
+	log = log.WithFields(LogField{"connectionDirection", connDirection})
 	peerInfo := ch.PeerInfo()
 
 	c := &Connection{
@@ -299,6 +299,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 		connID:             connID,
 		conn:               conn,
+		connDirection:      connDirection,
 		opts:               opts,
 		state:              connectionActive,
 		sendCh:             make(chan *Frame, opts.SendBufferSize),

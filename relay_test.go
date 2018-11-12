@@ -512,14 +512,17 @@ func TestRelayConnection(t *testing.T) {
 		SetRelayOnly().
 		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
-		getOutboundConn := func(ch *Channel) ConnectionRuntimeState {
-			// Verify that the connection is what we expect.
+		getConn := func(ch *Channel, outbound bool) ConnectionRuntimeState {
 			state := ch.IntrospectState(nil)
 			peer, ok := state.RootPeers[ts.HostPort()]
 			require.True(t, ok, "Failed to find peer for relay")
-			conns := peer.OutboundConnections
-			require.Len(t, conns, 1, "Expect single connection from client to relay")
 
+			conns := peer.InboundConnections
+			if outbound {
+				conns = peer.OutboundConnections
+			}
+
+			require.Len(t, conns, 1, "Expect single connection from client to relay")
 			return conns[0]
 		}
 
@@ -531,8 +534,9 @@ func TestRelayConnection(t *testing.T) {
 		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
 
 		wantConn := &relay.Conn{
-			RemoteAddr:        getOutboundConn(client).LocalHostPort,
+			RemoteAddr:        getConn(client, true /* outbound */).LocalHostPort,
 			RemoteProcessName: client.PeerInfo().ProcessName,
+			IsOutbound:        false,
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 
@@ -545,11 +549,37 @@ func TestRelayConnection(t *testing.T) {
 		require.Error(t, err, "Expected CallEcho to fail")
 		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
 
-		connHostPort := getOutboundConn(listeningC).LocalHostPort
+		connHostPort := getConn(listeningC, true /* outbound */).LocalHostPort
 		assert.NotEqual(t, connHostPort, listeningC.PeerInfo().HostPort, "Ensure connection host:port is not listening host:port")
 		wantConn = &relay.Conn{
 			RemoteAddr:        connHostPort,
 			RemoteProcessName: listeningC.PeerInfo().ProcessName,
+		}
+		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
+
+		// Connections created when relaying hide the relay host:port to ensure
+		// services don't send calls back over that same connection. However,
+		// this is what happens in the hyperbahn emulation case, so create
+		// an explicit connection to a new listening channel.
+		listeningHBSvc := ts.NewServer(nil)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		_, err = ts.Relay().Connect(ctx, listeningHBSvc.PeerInfo().HostPort)
+		require.NoError(t, err, "Failed to connect from relay to listening host:port")
+
+		// Now when listeningHBSvc makes a call, it should use the above connection.
+		err = testutils.CallEcho(listeningHBSvc, ts.HostPort(), ts.ServiceName(), nil)
+		require.Error(t, err, "Expected CallEcho to fail")
+		assert.Contains(t, err.Error(), errTest.Error(), "Unexpected error")
+
+		// We expect an inbound connection on listeningHBSvc.
+		connHostPort = getConn(listeningHBSvc, false /* outbound */).LocalHostPort
+		wantConn = &relay.Conn{
+			RemoteAddr:        connHostPort,
+			RemoteProcessName: listeningHBSvc.PeerInfo().ProcessName,
+			IsOutbound:        true, // outbound connection according to relay.
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 	})
