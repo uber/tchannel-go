@@ -97,7 +97,7 @@ func connectionStatus(channels []*Channel) string {
 	return strings.Join(status, ", ")
 }
 
-// Validates that inbound idle connections are dropped.
+// TestServerBasedSweep Validates that inbound idle connections are dropped.
 func TestServerBasedSweep(t *testing.T) {
 	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
@@ -140,7 +140,7 @@ func TestServerBasedSweep(t *testing.T) {
 	})
 }
 
-// Validates that outbound idle connections are dropped.
+// TestClientBasedSweep Validates that outbound idle connections are dropped.
 func TestClientBasedSweep(t *testing.T) {
 	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
@@ -180,7 +180,7 @@ func TestClientBasedSweep(t *testing.T) {
 	})
 }
 
-// Validates that a relay also disconnects idle connections - both inbound and
+// TestRelayBasedSweep Validates that a relay also disconnects idle connections - both inbound and
 // outbound.
 func TestRelayBasedSweep(t *testing.T) {
 	listener := newPeerStatusListener()
@@ -228,7 +228,7 @@ func TestRelayBasedSweep(t *testing.T) {
 	})
 }
 
-// Validates that pings do not keep the connection alive.
+// TestIdleSweepWithPings Validates that pings do not keep the connection alive.
 func TestIdleSweepWithPings(t *testing.T) {
 	listener := newPeerStatusListener()
 	ctx, cancel := NewContext(time.Second)
@@ -273,7 +273,7 @@ func TestIdleSweepWithPings(t *testing.T) {
 	})
 }
 
-// Validates that when MaxIdleTime isn't set, NewChannel returns an error.
+// TestIdleSweepMisconfiguration Validates that when MaxIdleTime isn't set, NewChannel returns an error.
 func TestIdleSweepMisconfiguration(t *testing.T) {
 	ch, err := NewChannel("svc", &ChannelOptions{
 		IdleCheckInterval: time.Duration(30 * time.Second),

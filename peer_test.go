@@ -938,7 +938,7 @@ func (pt *peerSelectionTest) runStress() {
 	wg.Wait()
 }
 
-// Run these commands before run the benchmark.
+// BenchmarkSimplePeerHeapPerf Run these commands before run the benchmark.
 // sudo sysctl w kern.maxfiles=50000
 // ulimit n 50000
 func BenchmarkSimplePeerHeapPerf(b *testing.B) {
@@ -1123,7 +1123,7 @@ func TestConnectToPeerHostPortMismatch(t *testing.T) {
 	})
 }
 
-// Test ensures that a closing connection does not count in NumConnections.
+// TestPeerConnectionsClosing ensures that a closing connection does not count in NumConnections.
 // NumConnections should only include connections that be used to make calls.
 func TestPeerConnectionsClosing(t *testing.T) {
 	// Disable the relay since we check the host:port directly.

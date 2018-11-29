@@ -248,7 +248,7 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 	})
 }
 
-// Trigger a race between receiving a new call and a connection closing
+// TestRaceCloseWithNewCall Trigger a race between receiving a new call and a connection closing
 // by closing the relay while a lot of background calls are being made.
 func TestRaceCloseWithNewCall(t *testing.T) {
 	opts := serviceNameOpts("s1").SetRelayOnly().DisableLogVerification()
@@ -404,7 +404,7 @@ func TestRelayConcurrentCalls(t *testing.T) {
 	})
 }
 
-// Ensure that any connections created in the relay path send the ephemeral
+// TestRelayOutgoingConnectionsEphemeral Ensure that any connections created in the relay path send the ephemeral
 // host:port.
 func TestRelayOutgoingConnectionsEphemeral(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly()
@@ -622,7 +622,7 @@ func TestRelayUsesRootPeers(t *testing.T) {
 	})
 }
 
-// Ensure that if the relay recieves a call on a connection that is not active,
+// TestRelayRejectsDuringClose Ensure that if the relay recieves a call on a connection that is not active,
 // it declines the call, and increments a relay-client-conn-inactive stat.
 func TestRelayRejectsDuringClose(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly().
@@ -703,7 +703,7 @@ func TestRelayRateLimitDrop(t *testing.T) {
 	})
 }
 
-// Test that a stalled connection to a single server does not block all calls
+// TestRelayStalledConnection that a stalled connection to a single server does not block all calls
 // from that server, and we have stats to capture that this is happening.
 func TestRelayStalledConnection(t *testing.T) {
 	opts := testutils.NewOpts().

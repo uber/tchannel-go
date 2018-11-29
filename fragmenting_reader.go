@@ -100,7 +100,7 @@ func newFragmentingReader(logger Logger, receiver fragmentReceiver) *fragmenting
 	}
 }
 
-// The ArgReader will handle fragmentation as needed. Once the argument has
+// ArgReader The ArgReader will handle fragmentation as needed. Once the argument has
 // been read, the ArgReader must be closed.
 func (r *fragmentingReader) ArgReader(last bool) (ArgReader, error) {
 	if err := r.BeginArgument(last); err != nil {

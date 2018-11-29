@@ -48,7 +48,7 @@ func NewSimpleServiceClientProtocol(t thrift.TTransport, iprot thrift.TProtocol,
 	}
 }
 
-// Parameters:
+// Call Parameters:
 //  - Arg
 func (p *SimpleServiceClient) Call(arg *Data) (r *Data, err error) {
 	if err = p.sendCall(arg); err != nil {

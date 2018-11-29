@@ -48,7 +48,7 @@ func NewMetaClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot th
 	}
 }
 
-// Parameters:
+// Health Parameters:
 //  - Hr
 func (p *MetaClient) Health(hr *HealthRequest) (r *HealthStatus, err error) {
 	if err = p.sendHealth(hr); err != nil {

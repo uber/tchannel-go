@@ -169,7 +169,7 @@ func TestTracingSpanAttributes(t *testing.T) {
 	})
 }
 
-// Per https://github.com/uber/tchannel-go/issues/505, concurrent client calls
+// TestReusableHeaders Per https://github.com/uber/tchannel-go/issues/505, concurrent client calls
 // made with the same shared map used as headers were causing panic due to
 // concurrent writes to the map when injecting tracing headers.
 func TestReusableHeaders(t *testing.T) {

@@ -36,7 +36,7 @@ func NewFirstClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot t
 	return &FirstClient{BaseClient: NewBaseClientProtocol(t, iprot, oprot)}
 }
 
-// Parameters:
+// Echo Parameters:
 //  - Msg
 func (p *FirstClient) Echo(msg string) (r string, err error) {
 	if err = p.sendEcho(msg); err != nil {

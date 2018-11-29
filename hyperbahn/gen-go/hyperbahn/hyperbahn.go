@@ -46,7 +46,7 @@ func NewHyperbahnClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, opr
 	}
 }
 
-// Parameters:
+// Discover Parameters:
 //  - Query
 func (p *HyperbahnClient) Discover(query *DiscoveryQuery) (r *DiscoveryResult_, err error) {
 	if err = p.sendDiscover(query); err != nil {

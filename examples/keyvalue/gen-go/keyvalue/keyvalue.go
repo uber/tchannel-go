@@ -38,7 +38,7 @@ func NewKeyValueClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, opro
 	return &KeyValueClient{BaseServiceClient: NewBaseServiceClientProtocol(t, iprot, oprot)}
 }
 
-// Parameters:
+// Get Parameters:
 //  - Key
 func (p *KeyValueClient) Get(key string) (r string, err error) {
 	if err = p.sendGet(key); err != nil {
@@ -122,7 +122,7 @@ func (p *KeyValueClient) recvGet() (value string, err error) {
 	return
 }
 
-// Parameters:
+// Set Parameters:
 //  - Key
 //  - Value
 func (p *KeyValueClient) Set(key string, value string) (err error) {

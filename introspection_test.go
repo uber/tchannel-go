@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Purpose of this test is to ensure introspection doesn't cause any panics
+// TestIntrospection Purpose of this test is to ensure introspection doesn't cause any panics
 // and we have coverage of the introspection code.
 func TestIntrospection(t *testing.T) {
 	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {

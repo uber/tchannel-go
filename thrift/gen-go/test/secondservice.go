@@ -46,7 +46,7 @@ func NewSecondServiceClientProtocol(t thrift.TTransport, iprot thrift.TProtocol,
 	}
 }
 
-// Parameters:
+// Echo Parameters:
 //  - Arg
 func (p *SecondServiceClient) Echo(arg string) (r string, err error) {
 	if err = p.sendEcho(arg); err != nil {
