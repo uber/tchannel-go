@@ -77,14 +77,21 @@ func TestCloseNewClient(t *testing.T) {
 	assert.True(t, ch.Closed(), "Channel should be closed")
 }
 
+func ignoreError(h *testHandler) Handler {
+	return raw.Wrap(onErrorTestHandler{
+		testHandler: h,
+		onError:     func(_ context.Context, err error) {},
+	})
+}
+
 func TestCloseAfterTimeout(t *testing.T) {
 	// Disable log verfication since connections are closed after a timeout
 	// and the relay might still be reading/writing to the connection.
 	// TODO: Ideally, we only disable log verification on the relay.
 	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
-		testHandler := onErrorTestHandler{newTestHandler(t), func(_ context.Context, err error) {}}
-		ts.Register(raw.Wrap(testHandler), "block")
+		testHandler := newTestHandler(t)
+		ts.Register(ignoreError(testHandler), "block")
 
 		ctx, cancel := NewContext(100 * time.Millisecond)
 		defer cancel()
@@ -98,9 +105,43 @@ func TestCloseAfterTimeout(t *testing.T) {
 		clientCh.Close()
 		assertStateChangesTo(t, clientCh, ChannelClosed)
 		assert.True(t, clientCh.Closed(), "Channel should be closed")
+	})
+}
 
-		// Unblock the testHandler so that a goroutine isn't leaked.
-		<-testHandler.blockErr
+func TestRelayCloseTimeout(t *testing.T) {
+	opts := testutils.NewOpts().
+		SetRelayOnly().          // this is a relay-specific test.
+		DisableLogVerification() // we're causing errors on purpose.
+	opts.DefaultConnectionOptions.MaxCloseTime = 100 * time.Millisecond
+
+	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		gotCall := make(chan struct{})
+		unblock := make(chan struct{})
+		defer close(unblock)
+
+		testutils.RegisterEcho(ts.Server(), func() {
+			close(gotCall)
+			<-unblock
+		})
+
+		clientCh := ts.NewClient(opts)
+
+		// Start a call in the background, since it will block
+		go func() {
+			ctx, cancel := NewContext(10 * time.Second)
+			defer cancel()
+
+			_, _, _, err := raw.Call(ctx, clientCh, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+			require.Error(t, err)
+			assert.Equal(t, ErrCodeNetwork, GetSystemErrorCode(err),
+				"expect network error from relay closing connection on timeout")
+		}()
+
+		<-gotCall
+		ts.Relay().Close()
+
+		// The relay should close within the timeout.
+		<-ts.Relay().ClosedChan()
 	})
 }
 

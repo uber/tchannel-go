@@ -140,6 +140,10 @@ type ConnectionOptions struct {
 	// HealthChecks configures active connection health checking for this channel.
 	// By default, health checks are not enabled.
 	HealthChecks HealthCheckOptions
+
+	// MaxCloseTime controls how long we allow a connection to complete pending
+	// calls before shutting down. Only used if it is non-zero.
+	MaxCloseTime time.Duration
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -533,9 +537,12 @@ func (c *Connection) logConnectionError(site string, err error) error {
 			LogField{"site", site},
 			ErrField(err),
 		)
+
 		if se, ok := err.(SystemError); ok && se.Code() != ErrCodeNetwork {
 			errCode = se.Code()
 			logger.Error("Connection error.")
+		} else if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			logger.Warn("Connection error due to timeout.")
 		} else {
 			logger.Info("Connection error.")
 		}
@@ -564,6 +571,9 @@ func (c *Connection) connectionError(site string, err error) error {
 		c.outbound.stopExchanges(err)
 		c.inbound.stopExchanges(err)
 	}
+
+	// checkExchanges will close the connection due to stoppedExchanges.
+	c.checkExchanges()
 	return err
 }
 
@@ -794,21 +804,25 @@ func (c *Connection) checkExchanges() {
 		return err == nil
 	}
 
-	var updated connectionState
-	if c.readState() == connectionStartClose {
+	curState := c.readState()
+	origState := curState
+
+	if curState != connectionClosed && c.stoppedExchanges.Load() {
+		if moveState(curState, connectionClosed) {
+			curState = connectionClosed
+		}
+	}
+
+	if curState == connectionStartClose {
 		if !c.relay.canClose() {
 			return
 		}
 		if c.inbound.count() == 0 && moveState(connectionStartClose, connectionInboundClosed) {
-			updated = connectionInboundClosed
-		}
-		// If there was no update to the state, there's no more processing to do.
-		if updated == 0 {
-			return
+			curState = connectionInboundClosed
 		}
 	}
 
-	if c.readState() == connectionInboundClosed {
+	if curState == connectionInboundClosed {
 		// Safety check -- this should never happen since we already did the check
 		// when transitioning to connectionInboundClosed.
 		if !c.relay.canClose() {
@@ -817,18 +831,18 @@ func (c *Connection) checkExchanges() {
 		}
 
 		if c.outbound.count() == 0 && moveState(connectionInboundClosed, connectionClosed) {
-			updated = connectionClosed
+			curState = connectionClosed
 		}
 	}
 
-	if updated != 0 {
+	if curState != origState {
 		// If the connection is closed, we can safely close the channel.
-		if updated == connectionClosed {
+		if curState == connectionClosed {
 			go c.closeSendCh(c.connID)
 		}
 
 		c.log.WithFields(
-			LogField{"newState", updated},
+			LogField{"newState", curState},
 		).Debug("Connection state updated during shutdown.")
 		c.callOnCloseStateChange()
 	}
@@ -839,15 +853,21 @@ func (c *Connection) close(fields ...LogField) error {
 
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
-		switch c.state {
+		switch s := c.state; s {
 		case connectionActive:
 			c.state = connectionStartClose
 		default:
-			return fmt.Errorf("connection must be Active to Close")
+			return fmt.Errorf("connection must be Active to Close, but it is %v", s)
 		}
 		return nil
 	}); err != nil {
 		return err
+	}
+
+	// Set a read deadline with any close timeout. This will cause a i/o timeout
+	// if the connection isn't closed by then.
+	if c.opts.MaxCloseTime > 0 {
+		c.conn.SetReadDeadline(c.timeNow().Add(c.opts.MaxCloseTime))
 	}
 
 	c.log.WithFields(

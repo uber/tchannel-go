@@ -67,7 +67,7 @@ type testHandler struct {
 }
 
 func newTestHandler(t testing.TB) *testHandler {
-	return &testHandler{t: t, blockErr: make(chan error)}
+	return &testHandler{t: t, blockErr: make(chan error, 1)}
 }
 
 func (h *testHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
