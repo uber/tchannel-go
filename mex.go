@@ -50,7 +50,7 @@ const (
 type errNotifier struct {
 	c        chan struct{}
 	err      error
-	notified atomic.Int32
+	notified atomic.Bool
 }
 
 func newErrNotifier() errNotifier {
@@ -65,7 +65,7 @@ func (e *errNotifier) Notify(err error) error {
 	}
 
 	// There may be some sort of race where we try to notify the mex twice.
-	if !e.notified.CAS(0, 1) {
+	if !e.notified.CAS(false, true) {
 		return fmt.Errorf("cannot broadcast error: %v, already have: %v", err, e.err)
 	}
 
@@ -97,8 +97,8 @@ type messageExchange struct {
 	mexset    *messageExchangeSet
 	framePool FramePool
 
-	shutdownAtomic atomic.Uint32
-	errChNotified  atomic.Uint32
+	shutdownAtomic atomic.Bool
+	errChNotified  atomic.Bool
 }
 
 // checkError is called before waiting on the mex channels.
@@ -235,11 +235,11 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 func (mex *messageExchange) shutdown() {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
-	if !mex.shutdownAtomic.CAS(0, 1) {
+	if !mex.shutdownAtomic.CAS(false, true) {
 		return
 	}
 
-	if mex.errChNotified.CAS(0, 1) {
+	if mex.errChNotified.CAS(false, true) {
 		mex.errCh.Notify(errMexShutdown)
 	}
 
@@ -496,7 +496,7 @@ func (mexset *messageExchangeSet) stopExchanges(err error) {
 		// on sendChRefs that there's no references to sendCh is violated since
 		// readers/writers could still have a reference to sendCh even though
 		// we shutdown the exchange and called Done on sendChRefs.
-		if mex.errChNotified.CAS(0, 1) {
+		if mex.errChNotified.CAS(false, true) {
 			mex.errCh.Notify(err)
 		}
 	}

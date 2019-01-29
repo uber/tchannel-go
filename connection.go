@@ -183,9 +183,9 @@ type Connection struct {
 
 	// closeNetworkCalled is used to avoid errors from being logged
 	// when this side closes a connection.
-	closeNetworkCalled atomic.Int32
+	closeNetworkCalled atomic.Bool
 	// stoppedExchanges is atomically set when exchanges are stopped due to error.
-	stoppedExchanges atomic.Uint32
+	stoppedExchanges atomic.Bool
 	// pendingMethods is the number of methods running that may block closing of sendCh.
 	pendingMethods atomic.Int64
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
@@ -560,7 +560,7 @@ func (c *Connection) connectionError(site string, err error) error {
 	c.close(closeLogFields...)
 
 	// On any connection error, notify the exchanges of this error.
-	if c.stoppedExchanges.CAS(0, 1) {
+	if c.stoppedExchanges.CAS(false, true) {
 		c.outbound.stopExchanges(err)
 		c.inbound.stopExchanges(err)
 	}
@@ -578,7 +578,7 @@ func (c *Connection) protocolError(id uint32, err error) error {
 	)
 
 	// On any connection error, notify the exchanges of this error.
-	if c.stoppedExchanges.CAS(0, 1) {
+	if c.stoppedExchanges.CAS(false, true) {
 		c.outbound.stopExchanges(sysErr)
 		c.inbound.stopExchanges(sysErr)
 	}
@@ -619,7 +619,7 @@ func (c *Connection) readFrames(_ uint32) {
 	headerBuf := make([]byte, FrameHeaderSize)
 
 	handleErr := func(err error) {
-		if c.closeNetworkCalled.Load() == 0 {
+		if !c.closeNetworkCalled.Load() {
 			c.connectionError("read frames", err)
 		} else {
 			c.log.Debugf("Ignoring error after connection was closed: %v", err)
@@ -876,7 +876,7 @@ func (c *Connection) closeNetwork() {
 	// channel would be dangerous since other goroutine might be sending)
 	c.log.Debugf("Closing underlying network connection")
 	c.stopHealthCheck()
-	c.closeNetworkCalled.Inc()
+	c.closeNetworkCalled.Store(true)
 	if err := c.conn.Close(); err != nil {
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},

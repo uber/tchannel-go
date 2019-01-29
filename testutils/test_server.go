@@ -40,7 +40,7 @@ import (
 )
 
 // Has a previous test already leaked a goroutine?
-var _leakedGoroutine = atomic.NewInt32(0)
+var _leakedGoroutine atomic.Bool
 
 // A TestServer encapsulates a TChannel server, a client factory, and functions
 // to ensure that we're not leaking resources.
@@ -374,7 +374,7 @@ func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
 }
 
 func (ts *TestServer) verifyNoGoroutinesLeaked() {
-	if _leakedGoroutine.Load() == 1 {
+	if _leakedGoroutine.Load() {
 		ts.Log("Skipping check for leaked goroutines because of a previous leak.")
 		return
 	}
@@ -383,7 +383,7 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 		// No leaks, nothing to do.
 		return
 	}
-	if isFirstLeak := _leakedGoroutine.CAS(0, 1); !isFirstLeak {
+	if isFirstLeak := _leakedGoroutine.CAS(false, true); !isFirstLeak {
 		ts.Log("Skipping check for leaked goroutines because of a previous leak.")
 		return
 	}
