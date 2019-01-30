@@ -24,7 +24,7 @@ import:
   - ipv4
   - ipv6
 - package: github.com/uber-go/atomic
-  version: ^1
+  version: ^1.3
   subpackages:
   - utils
 - package: github.com/opentracing/opentracing-go
