@@ -37,7 +37,6 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/tos"
-	"github.com/uber/tchannel-go/typed"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -640,7 +639,7 @@ func TestLargeSendSystemError(t *testing.T) {
 		largeErr := errors.New(strings.Repeat("1234567890", 10000))
 		err = conn.SendSystemError(1, Span{}, largeErr)
 		require.Error(t, err, "Expect err")
-		assert.Contains(t, err.Error(), typed.ErrBufferFull.Error())
+		assert.Contains(t, err.Error(), "too long", "unexpected error")
 	})
 }
 
@@ -1235,4 +1234,67 @@ func TestLastActivityTimePings(t *testing.T) {
 			clock.Elapse(1 * time.Second)
 		}
 	})
+}
+
+func TestInvalidTransportHeaders(t *testing.T) {
+	long100 := strings.Repeat("0123456789", 10)
+	long300 := strings.Repeat("0123456789", 30)
+
+	tests := []struct {
+		msg         string
+		ctxFn       func(*ContextBuilder)
+		svcOverride string
+		wantErr     string
+	}{
+		{
+			msg: "valid long fields",
+			ctxFn: func(cb *ContextBuilder) {
+				cb.SetRoutingKey(long100)
+				cb.SetShardKey(long100)
+			},
+		},
+		{
+			msg: "long routing key",
+			ctxFn: func(cb *ContextBuilder) {
+				cb.SetRoutingKey(long300)
+			},
+			wantErr: "too long",
+		},
+		{
+			msg: "long shard key",
+			ctxFn: func(cb *ContextBuilder) {
+				cb.SetShardKey(long300)
+			},
+			wantErr: "too long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+				testutils.RegisterEcho(ts.Server(), nil)
+
+				client := ts.NewClient(nil)
+
+				cb := NewContextBuilder(time.Second)
+				tt.ctxFn(cb)
+				ctx, cancel := cb.Build()
+				defer cancel()
+
+				svc := ts.ServiceName()
+				if tt.svcOverride != "" {
+					svc = tt.svcOverride
+				}
+
+				_, _, _, err := raw.Call(ctx, client, ts.HostPort(), svc, "echo", nil, nil)
+				if tt.wantErr == "" {
+					require.NoError(t, err, "unexpected error")
+					return
+				}
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr, "unexpected error")
+			})
+		})
+	}
 }
