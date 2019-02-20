@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"runtime"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/tos"
+	"github.com/uber/tchannel-go/typed"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -627,20 +629,42 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 }
 
 func TestLargeSendSystemError(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	largeStr := strings.Repeat("0123456789", 10000)
 
-		opts := testutils.NewOpts().AddLogFilter("Couldn't create outbound frame.", 1)
-		client := ts.NewClient(opts)
-		conn, err := client.Connect(ctx, ts.HostPort())
-		require.NoError(t, err, "Connect failed")
+	tests := []struct {
+		msg     string
+		err     error
+		wantErr string
+	}{
+		{
+			msg:     "error message too long",
+			err:     errors.New(largeStr),
+			wantErr: "too long",
+		},
+		{
+			msg:     "max allowed error message",
+			err:     errors.New(largeStr[:math.MaxUint16-1]),
+			wantErr: typed.ErrBufferFull.Error(), // error message is within length, but it overflows the frame.
+		},
+	}
 
-		largeErr := errors.New(strings.Repeat("1234567890", 10000))
-		err = conn.SendSystemError(1, Span{}, largeErr)
-		require.Error(t, err, "Expect err")
-		assert.Contains(t, err.Error(), "too long", "unexpected error")
-	})
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				opts := testutils.NewOpts().AddLogFilter("Couldn't create outbound frame.", 1)
+				client := ts.NewClient(opts)
+				conn, err := client.Connect(ctx, ts.HostPort())
+				require.NoError(t, err, "Connect failed")
+
+				err = conn.SendSystemError(1, Span{}, tt.err)
+				require.Error(t, err, "Expect err")
+				assert.Contains(t, err.Error(), tt.wantErr, "unexpected error")
+			})
+		})
+	}
 }
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
