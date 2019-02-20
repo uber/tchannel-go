@@ -34,7 +34,8 @@ var (
 	ErrBufferFull = errors.New("no more room in buffer")
 
 	// errStringTooLong is returned when writing a string with length larger
-	// than the allows length limit.
+	// than the allows length limit. Intentionally not exported, in case we
+	// want to add more context in future.
 	errStringTooLong = errors.New("string is too long")
 )
 
