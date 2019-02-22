@@ -83,6 +83,8 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, ErrConnectionClosed
 	}
 
+	// Note: We don't verify number of transport headers as the library doesn't
+	// allow adding arbitrary headers. Ensure we never add >= 256 headers here.
 	headers := transportHeaders{
 		CallerName: c.localPeerInfo.ServiceName,
 	}

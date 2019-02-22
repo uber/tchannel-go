@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"runtime"
 	"strings"
@@ -628,20 +629,42 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 }
 
 func TestLargeSendSystemError(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	largeStr := strings.Repeat("0123456789", 10000)
 
-		opts := testutils.NewOpts().AddLogFilter("Couldn't create outbound frame.", 1)
-		client := ts.NewClient(opts)
-		conn, err := client.Connect(ctx, ts.HostPort())
-		require.NoError(t, err, "Connect failed")
+	tests := []struct {
+		msg     string
+		err     error
+		wantErr string
+	}{
+		{
+			msg:     "error message too long",
+			err:     errors.New(largeStr),
+			wantErr: "too long",
+		},
+		{
+			msg:     "max allowed error message",
+			err:     errors.New(largeStr[:math.MaxUint16-1]),
+			wantErr: typed.ErrBufferFull.Error(), // error message is within length, but it overflows the frame.
+		},
+	}
 
-		largeErr := errors.New(strings.Repeat("1234567890", 10000))
-		err = conn.SendSystemError(1, Span{}, largeErr)
-		require.Error(t, err, "Expect err")
-		assert.Contains(t, err.Error(), typed.ErrBufferFull.Error())
-	})
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				opts := testutils.NewOpts().AddLogFilter("Couldn't create outbound frame.", 1)
+				client := ts.NewClient(opts)
+				conn, err := client.Connect(ctx, ts.HostPort())
+				require.NoError(t, err, "Connect failed")
+
+				err = conn.SendSystemError(1, Span{}, tt.err)
+				require.Error(t, err, "Expect err")
+				assert.Contains(t, err.Error(), tt.wantErr, "unexpected error")
+			})
+		})
+	}
 }
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
@@ -1235,4 +1258,67 @@ func TestLastActivityTimePings(t *testing.T) {
 			clock.Elapse(1 * time.Second)
 		}
 	})
+}
+
+func TestInvalidTransportHeaders(t *testing.T) {
+	long100 := strings.Repeat("0123456789", 10)
+	long300 := strings.Repeat("0123456789", 30)
+
+	tests := []struct {
+		msg         string
+		ctxFn       func(*ContextBuilder)
+		svcOverride string
+		wantErr     string
+	}{
+		{
+			msg: "valid long fields",
+			ctxFn: func(cb *ContextBuilder) {
+				cb.SetRoutingKey(long100)
+				cb.SetShardKey(long100)
+			},
+		},
+		{
+			msg: "long routing key",
+			ctxFn: func(cb *ContextBuilder) {
+				cb.SetRoutingKey(long300)
+			},
+			wantErr: "too long",
+		},
+		{
+			msg: "long shard key",
+			ctxFn: func(cb *ContextBuilder) {
+				cb.SetShardKey(long300)
+			},
+			wantErr: "too long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+				testutils.RegisterEcho(ts.Server(), nil)
+
+				client := ts.NewClient(nil)
+
+				cb := NewContextBuilder(time.Second)
+				tt.ctxFn(cb)
+				ctx, cancel := cb.Build()
+				defer cancel()
+
+				svc := ts.ServiceName()
+				if tt.svcOverride != "" {
+					svc = tt.svcOverride
+				}
+
+				_, _, _, err := raw.Call(ctx, client, ts.HostPort(), svc, "echo", nil, nil)
+				if tt.wantErr == "" {
+					require.NoError(t, err, "unexpected error")
+					return
+				}
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr, "unexpected error")
+			})
+		})
+	}
 }

@@ -136,7 +136,9 @@ type TransportHeaderName string
 
 func (cn TransportHeaderName) String() string { return string(cn) }
 
-// Known transport header keys for call requests. See protocol docs for more information.
+// Known transport header keys for call requests.
+// Note: transport header names must be <= 16 bytes:
+// https://tchannel.readthedocs.io/en/latest/protocol/#transport-headers
 const (
 	// ArgScheme header specifies the format of the args.
 	ArgScheme TransportHeaderName = "as"

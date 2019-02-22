@@ -32,6 +32,11 @@ var (
 
 	// ErrBufferFull is returned when trying to write past end of buffer
 	ErrBufferFull = errors.New("no more room in buffer")
+
+	// errStringTooLong is returned when writing a string with length larger
+	// than the allows length limit. Intentionally not exported, in case we
+	// want to add more context in future.
+	errStringTooLong = errors.New("string is too long")
 )
 
 // A ReadBuffer is a wrapper around an underlying []byte with methods to read from
@@ -196,7 +201,7 @@ func (w *WriteBuffer) WriteSingleByte(n byte) {
 	}
 
 	if len(w.remaining) == 0 {
-		w.err = ErrBufferFull
+		w.setErr(ErrBufferFull)
 		return
 	}
 
@@ -253,12 +258,20 @@ func (w *WriteBuffer) WriteString(s string) {
 
 // WriteLen8String writes an 8-bit length preceded string
 func (w *WriteBuffer) WriteLen8String(s string) {
+	if int(byte(len(s))) != len(s) {
+		w.setErr(errStringTooLong)
+	}
+
 	w.WriteSingleByte(byte(len(s)))
 	w.WriteString(s)
 }
 
 // WriteLen16String writes a 16-bit length preceded string
 func (w *WriteBuffer) WriteLen16String(s string) {
+	if int(uint16(len(s))) != len(s) {
+		w.setErr(errStringTooLong)
+	}
+
 	w.WriteUint16(uint16(len(s)))
 	w.WriteString(s)
 }
@@ -267,7 +280,7 @@ func (w *WriteBuffer) WriteLen16String(s string) {
 // reference that can be used to update that byte later
 func (w *WriteBuffer) DeferByte() ByteRef {
 	if len(w.remaining) == 0 {
-		w.err = ErrBufferFull
+		w.setErr(ErrBufferFull)
 		return ByteRef(nil)
 	}
 
@@ -316,7 +329,7 @@ func (w *WriteBuffer) reserve(n int) []byte {
 	}
 
 	if len(w.remaining) < n {
-		w.err = ErrBufferFull
+		w.setErr(ErrBufferFull)
 		return nil
 	}
 
@@ -343,6 +356,15 @@ func (w *WriteBuffer) BytesWritten() int { return len(w.buffer) - len(w.remainin
 func (w *WriteBuffer) Reset() {
 	w.remaining = w.buffer
 	w.err = nil
+}
+
+func (w *WriteBuffer) setErr(err error) {
+	// Only store the first error
+	if w.err != nil {
+		return
+	}
+
+	w.err = err
 }
 
 // Err returns the current error in the buffer
