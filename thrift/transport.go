@@ -34,6 +34,7 @@ type readWriterTransport struct {
 	io.Reader
 	readBuf  [1]byte
 	writeBuf [1]byte
+	strBuf   []byte
 }
 
 var errNoBytesRead = errors.New("no bytes read")
@@ -82,7 +83,22 @@ func (t *readWriterTransport) WriteByte(b byte) error {
 }
 
 func (t *readWriterTransport) WriteString(s string) (int, error) {
-	return io.WriteString(t.Writer, s)
+	// TODO switch to io.StringWriter once we don't need to support < 1.12
+	type stringWriter interface{ WriteString(string) (int, error) }
+
+	if sw, ok := t.Writer.(stringWriter); ok {
+		return sw.WriteString(s)
+	}
+
+	// This path frequently taken since thrift.TBinaryProtocol calls
+	// WriteString a lot, but fragmentingWriter does not implement WriteString;
+	// furthermore it is difficult to add a dual WriteString path to
+	// fragmentingWriter, since hash checksumming does not accept strings.
+	//
+	// Without this, io.WriteString ends up allocating every time.
+	b := append(t.strBuf[:0], s...)
+	t.strBuf = b[:0]
+	return t.Writer.Write(b)
 }
 
 // RemainingBytes returns the max number of bytes (same as Thrift's StreamTransport) as we
