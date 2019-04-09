@@ -265,11 +265,10 @@ func (mex *messageExchange) inboundExpired() {
 type messageExchangeSet struct {
 	sync.RWMutex
 
-	log        Logger
-	name       string
-	onRemoved  func()
-	onAdded    func()
-	sendChRefs sync.WaitGroup
+	log       Logger
+	name      string
+	onRemoved func()
+	onAdded   func()
 
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
@@ -298,7 +297,6 @@ func (mexset *messageExchangeSet) addExchange(mex *messageExchange) error {
 	}
 
 	mexset.exchanges[mex.msgID] = mex
-	mexset.sendChRefs.Add(1)
 	return nil
 }
 
@@ -361,8 +359,6 @@ func (mexset *messageExchangeSet) deleteExchange(msgID uint32) (found, timedOut 
 }
 
 // removeExchange removes a message exchange from the set, if it exists.
-// It decrements the sendChRefs wait group, signalling that this exchange no longer has
-// any active goroutines that will try to send to sendCh.
 func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 	if mexset.log.Enabled(LogLevelDebug) {
 		mexset.log.Debugf("Removing %s message exchange %d", mexset.name, msgID)
@@ -381,13 +377,11 @@ func (mexset *messageExchangeSet) removeExchange(msgID uint32) {
 
 	// If the message exchange was found, then we perform clean up actions.
 	// These clean up actions can only be run once per exchange.
-	mexset.sendChRefs.Done()
 	mexset.onRemoved()
 }
 
-// expireExchange is similar to removeExchange, however it does not decrement
-// the sendChRefs wait group, since there could still be a handler running that
-// will write to the send channel.
+// expireExchange is similar to removeExchange, but it marks the exchange as
+// expired.
 func (mexset *messageExchangeSet) expireExchange(msgID uint32) {
 	mexset.log.Debugf(
 		"Removing %s message exchange %d due to timeout, cancellation or blackhole",
@@ -409,11 +403,6 @@ func (mexset *messageExchangeSet) expireExchange(msgID uint32) {
 	}
 
 	mexset.onRemoved()
-}
-
-// waitForSendCh waits for all goroutines with references to sendCh to complete.
-func (mexset *messageExchangeSet) waitForSendCh() {
-	mexset.sendChRefs.Wait()
 }
 
 func (mexset *messageExchangeSet) count() int {
