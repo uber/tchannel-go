@@ -23,6 +23,7 @@ package testutils
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -155,6 +156,10 @@ func (l testLogger) WithFields(fields ...tchannel.LogField) tchannel.Logger {
 }
 
 func (l testLogger) report() {
+	if os.Getenv("LOGS_ON_FAILURE") == "" {
+		return
+	}
+
 	if l.t.Failed() {
 		l.w.withLock(func(w *bytes.Buffer) {
 			l.t.Logf("Debug logs:\n%s", w.String())
