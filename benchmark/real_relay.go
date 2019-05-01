@@ -28,7 +28,7 @@ import (
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/relay/relaytest"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 type fixedHosts struct {

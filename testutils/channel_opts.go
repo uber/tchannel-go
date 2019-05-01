@@ -28,7 +28,7 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/tos"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")

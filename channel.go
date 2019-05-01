@@ -34,7 +34,7 @@ import (
 	"github.com/uber/tchannel-go/tnet"
 
 	"github.com/opentracing/opentracing-go"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 

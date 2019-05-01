@@ -29,7 +29,7 @@ import (
 
 	"github.com/uber/tchannel-go/trand"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 

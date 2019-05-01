@@ -29,7 +29,7 @@ import (
 
 	"github.com/uber/tchannel-go/relay"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 const (
