@@ -30,7 +30,7 @@ import (
 
 	"github.com/uber/tchannel-go/tos"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"

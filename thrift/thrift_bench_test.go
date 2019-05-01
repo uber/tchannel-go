@@ -29,7 +29,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/require"
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 const callBatch = 100

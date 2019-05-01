@@ -26,7 +26,7 @@ import (
 
 	"github.com/uber/tchannel-go"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 // internalTCPServer represents a TCP server responds to TChannel

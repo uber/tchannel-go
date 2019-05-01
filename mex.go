@@ -27,7 +27,7 @@ import (
 
 	"github.com/uber/tchannel-go/typed"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 

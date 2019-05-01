@@ -31,7 +31,7 @@ import (
 
 	"github.com/uber/tchannel-go"
 
-	"github.com/uber-go/atomic"
+	"go.uber.org/atomic"
 )
 
 // writer is shared between multiple loggers, and serializes acccesses to

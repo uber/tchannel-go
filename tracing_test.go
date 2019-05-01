@@ -25,11 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber-go/atomic"
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testtracing"
+	"go.uber.org/atomic"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
