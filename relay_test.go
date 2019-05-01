@@ -63,23 +63,6 @@ func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel, ts *te
 	})
 }
 
-func getRelayPending(state *RuntimeState) int {
-	var totalPending int
-
-	aggregateConns := func(conns []ConnectionRuntimeState) {
-		for _, c := range conns {
-			totalPending += c.Relayer.Count
-		}
-	}
-
-	for _, peer := range state.RootPeers {
-		aggregateConns(peer.InboundConnections)
-		aggregateConns(peer.OutboundConnections)
-	}
-
-	return totalPending
-}
-
 func TestRelay(t *testing.T) {
 	withRelayedEcho(t, func(_, _, client *Channel, ts *testutils.TestServer) {
 		tests := []struct {
@@ -853,9 +836,6 @@ func TestRelayStalledClientConnection(t *testing.T) {
 		stats := ts.RelayHost().Stats()
 		stats.WaitForEnd()
 		assert.Contains(t, stats.Map(), "testService-client->s1::echo.failed-relay-dest-conn-slow", "Expect at least 1 failed call due to slow client")
-
-		// Ensure that the relay has no pending calls.
-		assert.Equal(t, 0, getRelayPending(ts.Relay().IntrospectState(nil)), "Expected no pending after all calls have ended")
 
 		// We don't read the responses, as we want the client's TCP buffers to fill up
 		// and the relay to drop calls. However, we should unblock the client reader
