@@ -23,6 +23,7 @@ package relaytest
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -107,8 +108,7 @@ func (m *MockStats) Add(caller, callee, procedure string) *FluentMockCallStats {
 
 // AssertEqual asserts that two MockStats describe the same call graph.
 func (m *MockStats) AssertEqual(t testing.TB, expected *MockStats) {
-	// Wait for any outstandanding CallStats to end.
-	m.wg.Wait()
+	m.WaitForEnd()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -121,6 +121,11 @@ func (m *MockStats) AssertEqual(t testing.TB, expected *MockStats) {
 			m.assertEdgeEqual(t, expected, edge)
 		}
 	}
+}
+
+// WaitForEnd waits for all calls to End.
+func (m *MockStats) WaitForEnd() {
+	m.wg.Wait()
 }
 
 func (m *MockStats) assertEdgeEqual(t testing.TB, expected *MockStats, edge string) {
@@ -164,4 +169,30 @@ func getEdges(m map[string][]*MockCallStats) []string {
 	}
 	sort.Strings(edges)
 	return edges
+}
+
+// Map returns all stats as a map of key to int.
+func (m *MockStats) Map() map[string]int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	stats := make(map[string]int)
+	for k, calls := range m.stats {
+		for _, call := range calls {
+			name := k
+
+			stats[name+".calls"]++
+			if call.ended > 0 {
+				stats[name+".ended"]++
+			}
+			if call.succeeded > 0 {
+				stats[name+".succeeded"]++
+			}
+			if len(call.failedMsgs) > 0 {
+				failureName := name + ".failed-" + strings.Join(call.failedMsgs, ",")
+				stats[failureName]++
+			}
+		}
+	}
+	return stats
 }

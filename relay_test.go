@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"runtime"
@@ -60,6 +61,23 @@ func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel, ts *te
 		client.Peers().Add(ts.HostPort())
 		f(ts.Relay(), ts.Server(), client, ts)
 	})
+}
+
+func getRelayPending(state *RuntimeState) int {
+	var totalPending int
+
+	aggregateConns := func(conns []ConnectionRuntimeState) {
+		for _, c := range conns {
+			totalPending += c.Relayer.Count
+		}
+	}
+
+	for _, peer := range state.RootPeers {
+		aggregateConns(peer.InboundConnections)
+		aggregateConns(peer.OutboundConnections)
+	}
+
+	return totalPending
 }
 
 func TestRelay(t *testing.T) {
@@ -775,6 +793,80 @@ func TestRelayStalledConnection(t *testing.T) {
 	})
 }
 
+// Test that a stalled connection to the client does not cause stuck calls
+// See https://github.com/uber/tchannel-go/issues/700 for more info.
+func TestRelayStalledClientConnection(t *testing.T) {
+	// This needs to be large enough to fill up the client TCP buffer.
+	const _calls = 100
+
+	opts := testutils.NewOpts().
+		// Expect errors from dropped frames.
+		AddLogFilter("Dropping call due to slow connection to destination.", _calls).
+		AddLogFilter("Couldn't send outbound frame.", _calls).
+		// DisableLogVerification(). // we expect warnings due to removed relay item.
+		SetSendBufferSize(10). // We want to hit the buffer size earlier.
+		SetServiceName("s1").
+		SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		// Track when the server receives calls
+		gotCall := make(chan struct{}, _calls)
+		testutils.RegisterEcho(ts.Server(), func() {
+			gotCall <- struct{}{}
+		})
+
+		// Create a frame relay that will block all client inbound frames.
+		unblockClientInbound := make(chan struct{})
+		blockerHostPort, relayCancel := testutils.FrameRelay(t, ts.HostPort(), func(outgoing bool, f *Frame) *Frame {
+			if !outgoing && f.Header.ID > 1 {
+				// Block all inbound frames except the initRes
+				<-unblockClientInbound
+			}
+
+			return f
+		})
+		defer relayCancel()
+		defer close(unblockClientInbound)
+
+		client := ts.NewClient(nil)
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+
+		var calls []*OutboundCall
+
+		// Data to fit one frame fully, large enough to fill TCP buffers.
+		data := bytes.Repeat([]byte("test"), 256*60)
+		for i := 0; i < _calls; i++ {
+			call, err := client.BeginCall(ctx, blockerHostPort, ts.ServiceName(), "echo", nil)
+			require.NoError(t, err, "BeginCall failed")
+
+			require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "arg2 write failed")
+			require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(data), "arg2 write failed")
+
+			// Wait for server to receive the call
+			<-gotCall
+
+			calls = append(calls, call)
+		}
+
+		// Wait for all calls to end on the relay, and ensure we got failures from the slow client.
+		stats := ts.RelayHost().Stats()
+		stats.WaitForEnd()
+		assert.Contains(t, stats.Map(), "testService-client->s1::echo.failed-relay-dest-conn-slow", "Expect at least 1 failed call due to slow client")
+
+		// Ensure that the relay has no pending calls.
+		assert.Equal(t, 0, getRelayPending(ts.Relay().IntrospectState(nil)), "Expected no pending after all calls have ended")
+
+		// We don't read the responses, as we want the client's TCP buffers to fill up
+		// and the relay to drop calls. However, we should unblock the client reader
+		// to make sure the client channel can close.
+		// Unblock the client so it can close.
+		cancel()
+		for _, call := range calls {
+			require.Error(t, NewArgReader(call.Response().Arg2Reader()).Read(&data), "should fail to read response")
+		}
+	})
+}
 func TestRelayThroughSeparateRelay(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly()
