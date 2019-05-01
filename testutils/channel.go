@@ -21,6 +21,7 @@
 package testutils
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -95,4 +96,15 @@ func RegisterFunc(ch tchannel.Registrar, name string,
 	f func(ctx context.Context, args *raw.Args) (*raw.Res, error)) {
 
 	ch.Register(raw.Wrap(rawFuncHandler{ch, f}), name)
+}
+
+// IntrospectJSON returns the introspected state of the channel as a JSON string.
+func IntrospectJSON(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) string {
+	state := ch.IntrospectState(opts)
+	marshalled, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("failed to marshal introspected state: %v", err)
+	}
+
+	return string(marshalled)
 }
