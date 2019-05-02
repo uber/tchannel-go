@@ -113,7 +113,7 @@ func runSubTest(t testing.TB, name string, f func(testing.TB)) {
 
 // WithTestServer creates a new TestServer, runs the passed function, and then
 // verifies that no resources were leaked.
-func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
+func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(testing.TB, *TestServer)) {
 	chanOpts = chanOpts.Copy()
 	runCount := chanOpts.RunCount
 	if runCount < 1 {
@@ -447,13 +447,13 @@ func describeLeakedExchangesSingleConn(cs *tchannel.ConnectionRuntimeState) stri
 	return fmt.Sprintf("Connection %d has leftover exchanges:\n\t%v", cs.ID, strings.Join(exchanges, "\n\t"))
 }
 
-func withServer(t testing.TB, chanOpts *ChannelOpts, f func(*TestServer)) {
+func withServer(t testing.TB, chanOpts *ChannelOpts, f func(testing.TB, *TestServer)) {
 	ts := NewTestServer(t, chanOpts)
 	// Note: We use defer, as we want the postFns to run even if the test
 	// goroutine exits (e.g. user calls t.Fatalf).
 	defer ts.post()
 
-	f(ts)
+	f(t, ts)
 	ts.Server().Logger().Debugf("TEST: Test function complete")
 	ts.CloseAndVerify()
 }

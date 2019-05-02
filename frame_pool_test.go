@@ -44,7 +44,7 @@ import (
 )
 
 type swapper struct {
-	t *testing.T
+	t testing.TB
 }
 
 func (s *swapper) OnError(ctx context.Context, err error) {
@@ -58,7 +58,7 @@ func (*swapper) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 	}, nil
 }
 
-func doPingAndCall(t *testing.T, clientCh *Channel, hostPort string) {
+func doPingAndCall(t testing.TB, clientCh *Channel, hostPort string) {
 	ctx, cancel := NewContext(time.Second * 5)
 	defer cancel()
 
@@ -82,7 +82,7 @@ func doPingAndCall(t *testing.T, clientCh *Channel, hostPort string) {
 	}
 }
 
-func doErrorCall(t *testing.T, clientCh *Channel, hostPort string) {
+func doErrorCall(t testing.TB, clientCh *Channel, hostPort string) {
 	ctx, cancel := NewContext(time.Second * 5)
 	defer cancel()
 
@@ -106,7 +106,7 @@ func TestFramesReleased(t *testing.T) {
 		SetFramePool(pool).
 		AddLogFilter("Couldn't find handler.", 2*numGoroutines*requestsPerGoroutine)
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(&swapper{t}), "swap")
 
 		clientOpts := testutils.NewOpts().SetFramePool(pool)
@@ -163,7 +163,7 @@ func TestDirtyFrameRequests(t *testing.T) {
 		SetServiceName("swap-server").
 		SetFramePool(dirtyFramePool{})
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(&swapper{t}), "swap")
 
 		for _, argSize := range argSizes {

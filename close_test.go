@@ -51,7 +51,7 @@ func makeCall(client *Channel, server *testutils.TestServer) error {
 	return err
 }
 
-func assertStateChangesTo(t *testing.T, ch *Channel, state ChannelState) {
+func assertStateChangesTo(t testing.TB, ch *Channel, state ChannelState) {
 	var lastState ChannelState
 	require.True(t, testutils.WaitFor(time.Second, func() bool {
 		lastState = ch.State()
@@ -89,7 +89,7 @@ func TestCloseAfterTimeout(t *testing.T) {
 	// and the relay might still be reading/writing to the connection.
 	// TODO: Ideally, we only disable log verification on the relay.
 	opts := testutils.NewOpts().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testHandler := newTestHandler(t)
 		ts.Register(ignoreError(testHandler), "block")
 
@@ -114,7 +114,7 @@ func TestRelayCloseTimeout(t *testing.T) {
 		DisableLogVerification() // we're causing errors on purpose.
 	opts.DefaultConnectionOptions.MaxCloseTime = 100 * time.Millisecond
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		gotCall := make(chan struct{})
 		unblock := make(chan struct{})
 		defer close(unblock)
@@ -152,7 +152,7 @@ func TestRaceExchangesWithClose(t *testing.T) {
 	defer cancel()
 
 	opts := testutils.NewOpts().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		server := ts.Server()
 
 		gotCall := make(chan struct{})
@@ -230,7 +230,7 @@ func TestCloseStress(t *testing.T) {
 	for i := 0; i < numHandlers; i++ {
 		wg.Add(1)
 		go func() {
-			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+			testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 				ts.Register(raw.Wrap(handler), "test")
 
 				chState := &channelState{

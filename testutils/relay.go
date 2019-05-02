@@ -36,7 +36,7 @@ import (
 type frameRelay struct {
 	sync.Mutex // protects conns
 
-	t           *testing.T
+	t           testing.TB
 	destination string
 	relayFunc   func(outgoing bool, f *tchannel.Frame) *tchannel.Frame
 	closed      atomic.Uint32
@@ -134,7 +134,7 @@ func (r *frameRelay) relayBetween(outgoing bool, c net.Conn, outC net.Conn) {
 }
 
 // FrameRelay sets up a relay that can modify frames using relayFunc.
-func FrameRelay(t *testing.T, destination string, relayFunc func(outgoing bool, f *tchannel.Frame) *tchannel.Frame) (listenHostPort string, cancel func()) {
+func FrameRelay(t testing.TB, destination string, relayFunc func(outgoing bool, f *tchannel.Frame) *tchannel.Frame) (listenHostPort string, cancel func()) {
 	relay := &frameRelay{
 		t:           t,
 		destination: destination,

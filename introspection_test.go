@@ -35,7 +35,7 @@ import (
 // Purpose of this test is to ensure introspection doesn't cause any panics
 // and we have coverage of the introspection code.
 func TestIntrospection(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		client := testutils.NewClient(t, nil)
 		defer client.Close()
 
@@ -72,7 +72,7 @@ func TestIntrospectClosedConn(t *testing.T) {
 	// Disable the relay, since the relay does not maintain a 1:1 mapping betewen
 	// incoming connections vs outgoing connections.
 	opts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		blockEcho := make(chan struct{})
 		gotEcho := make(chan struct{})
 		testutils.RegisterEcho(ts.Server(), func() {

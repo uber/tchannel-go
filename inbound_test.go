@@ -92,7 +92,7 @@ func TestInboundConnection(t *testing.T) {
 
 	// Disable relay since relays hide host:port on outbound calls.
 	opts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(nil)
 
 		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -110,7 +110,7 @@ func TestInboundConnection_CallOptions(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	testutils.WithTestServer(t, nil, func(server *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, server *testutils.TestServer) {
 		server.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			assert.Equal(t, "client", CurrentCall(ctx).CallerName(), "Expected caller name to be passed through")
 			return &raw.Res{}, nil
@@ -146,7 +146,7 @@ func TestInboundConnection_CallOptions(t *testing.T) {
 func TestBlackhole(t *testing.T) {
 	ctx, cancel := NewContext(testutils.Timeout(time.Hour))
 
-	testutils.WithTestServer(t, nil, func(server *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, server *testutils.TestServer) {
 		serviceName := server.ServiceName()
 		handlerName := "test-handler"
 

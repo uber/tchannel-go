@@ -35,7 +35,7 @@ import (
 
 func TestHealthCheckStopBeforeStart(t *testing.T) {
 	opts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 
 		var pingCount int
 		frameRelay, cancel := testutils.FrameRelay(t, ts.HostPort(), func(outgoing bool, f *Frame) *Frame {
@@ -70,7 +70,7 @@ func TestHealthCheckStopBeforeStart(t *testing.T) {
 
 func TestHealthCheckStopNoError(t *testing.T) {
 	opts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 
 		var pingCount int
 		frameRelay, cancel := testutils.FrameRelay(t, ts.HostPort(), func(outgoing bool, f *Frame) *Frame {
@@ -159,7 +159,7 @@ func TestHealthCheckIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
 			opts := testutils.NewOpts().NoRelay()
-			testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 				var pingCount int
 				frameRelay, cancel := testutils.FrameRelay(t, ts.HostPort(), func(outgoing bool, f *Frame) *Frame {
 					if strings.Contains(f.Header.String(), "PingRes") {
@@ -206,7 +206,7 @@ func TestHealthCheckIntegration(t *testing.T) {
 	}
 }
 
-func waitForNHealthChecks(t *testing.T, conn *Connection, n int) {
+func waitForNHealthChecks(t testing.TB, conn *Connection, n int) {
 	require.True(t, testutils.WaitFor(time.Second, func() bool {
 		return len(introspectConn(conn).HealthChecks) >= n
 	}), "Failed while waiting for %v health checks", n)

@@ -256,7 +256,7 @@ func TestGetSubchannelOptionsOnNew(t *testing.T) {
 func TestHandlerWithoutSubChannel(t *testing.T) {
 	opts := testutils.NewOpts().NoRelay()
 	opts.Handler = raw.Wrap(newTestHandler(t))
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(nil)
 		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
 		testutils.AssertEcho(t, client, ts.HostPort(), "larry")

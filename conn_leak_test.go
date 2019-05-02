@@ -68,7 +68,7 @@ func TestPeerConnectionLeaks(t *testing.T) {
 		})
 	}
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2Opts := testutils.NewOpts().SetServiceName("s2")
 		s2Opts.Logger = NewLogger(ioutil.Discard)
 		s2 := ts.NewServer(s2Opts)
