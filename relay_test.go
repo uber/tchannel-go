@@ -786,7 +786,6 @@ func TestRelayStalledClientConnection(t *testing.T) {
 		// Expect errors from dropped frames.
 		AddLogFilter("Dropping call due to slow connection to destination.", _calls).
 		AddLogFilter("Couldn't send outbound frame.", _calls).
-		// DisableLogVerification(). // we expect warnings due to removed relay item.
 		SetSendBufferSize(10). // We want to hit the buffer size earlier.
 		SetServiceName("s1").
 		SetRelayOnly()
