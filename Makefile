@@ -48,7 +48,7 @@ install:
 
 install_lint:
 	@echo "Installing golint, since we expect to lint"
-	GOPATH=$(OLD_GOPATH) go get -u -f github.com/golang/lint/golint
+	GOPATH=$(OLD_GOPATH) go get -u -f golang.org/x/lint/golint
 
 install_glide:
 	# all we want is: GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
