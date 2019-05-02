@@ -817,7 +817,11 @@ func TestRelayStalledClientConnection(t *testing.T) {
 
 		var calls []*OutboundCall
 
-		// Data to fit one frame fully, large enough to fill TCP buffers.
+		// Data to fit one frame fully, but large enough that a number of these frames will fill
+		// all the buffers and cause the relay to drop the response frame. Buffers are:
+		// 1. Relay's sendCh on the connection to the client (set to 10 frames explicitly)
+		// 2. Relay's TCP send buffer for the connection to the client.
+		// 3. Client's TCP receive buffer on the connection to the relay.
 		data := bytes.Repeat([]byte("test"), 256*60)
 		for i := 0; i < _calls; i++ {
 			call, err := client.BeginCall(ctx, blockerHostPort, ts.ServiceName(), "echo", nil)
