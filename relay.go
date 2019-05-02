@@ -252,10 +252,6 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		// TODO: metrics for late-arriving frames.
 		return true, ""
 	}
-	if finished && !item.timeout.Stop() {
-		// Timeout is firing, so no point proxying this frame
-		return true, ""
-	}
 
 	// call res frames don't include the OK bit, so we can't wait until the last
 	// frame of a relayed RPC to determine if the call succeeded.
@@ -444,10 +440,6 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	if item.tomb {
 		// Call timed out, ignore this frame. (We've already handled stats.)
 		// TODO: metrics for late-arriving frames.
-		return nil
-	}
-	if finished && !item.timeout.Stop() {
-		// Timeout is firing, so no point proxying this frame
 		return nil
 	}
 
