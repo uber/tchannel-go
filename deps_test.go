@@ -28,16 +28,12 @@
 package tchannel_test
 
 import (
-	"fmt"
 	"testing"
 
 	jcg "github.com/uber/jaeger-client-go"
-	// why is this not automatically included from jaeger-client-go?
-	// _ "github.com/uber/jaeger-lib/metrics"
 )
 
 func TestJaegerDeps(t *testing.T) {
 	m := jcg.Metrics{}
 	_ = m.SamplerUpdateFailure
-	fmt.Println("m", m)
 }

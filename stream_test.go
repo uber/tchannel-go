@@ -251,10 +251,10 @@ func TestStreamCancelled(t *testing.T) {
 		defer cancel()
 
 		helper := streamHelper{t}
-		ch := ts.NewClient(nil)
+		client := ts.NewClient(nil)
 		cancelContext := make(chan struct{})
 
-		arg3Writer, arg3Reader := helper.startCall(ctx, ch, ts.HostPort(), ts.ServiceName())
+		arg3Writer, arg3Reader := helper.startCall(ctx, client, ts.HostPort(), ts.ServiceName())
 		go func() {
 			for i := 0; i < 10; i++ {
 				assert.NoError(t, writeFlushBytes(arg3Writer, []byte{1}), "Write failed")
@@ -284,6 +284,10 @@ func TestStreamCancelled(t *testing.T) {
 		assert.EqualValues(t, 0, n, "Read should not read any bytes after cancel")
 		assert.Error(t, err, "Read should fail after cancel")
 		assert.Error(t, arg3Reader.Close(), "reader.Close should fail after cancel")
+
+		// Close the client to clear out the pending exchange. Otherwise the test
+		// waits for the timeout, causing a slowdown.
+		client.Close()
 	})
 }
 

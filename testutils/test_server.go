@@ -21,7 +21,6 @@
 package testutils
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,10 +30,10 @@ import (
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils/goroutines"
+	"go.uber.org/multierr"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
@@ -210,12 +209,25 @@ func (ts *TestServer) RegisterFunc(name string, f func(context.Context, *raw.Arg
 // CloseAndVerify closes all channels verifying each channel as it is closed.
 // It then verifies that no goroutines were leaked.
 func (ts *TestServer) CloseAndVerify() {
+	// Verify channels before they are closed to ensure that we catch any
+	// unexpected pending exchanges.
+	for i := len(ts.channels) - 1; i >= 0; i-- {
+		ch := ts.channels[i]
+		ch.Logger().Debugf("TEST: TestServer is verifying channel")
+		ts.verify(ch)
+	}
+
+	// Close the connection, then verify again to ensure connection close didn't
+	// cause any unexpected issues.
 	for i := len(ts.channels) - 1; i >= 0; i-- {
 		ch := ts.channels[i]
 		ch.Logger().Debugf("TEST: TestServer is closing and verifying channel")
 		ts.close(ch)
 		ts.verify(ch)
 	}
+
+	// Verify that there's no goroutine leaks after all tests are complete.
+	ts.verifyNoGoroutinesLeaked()
 }
 
 // AssertRelayStats checks that the relayed call graph matches expectations. If
@@ -305,15 +317,27 @@ func (ts *TestServer) close(ch *tchannel.Channel) {
 }
 
 func (ts *TestServer) verify(ch *tchannel.Channel) {
-	// For the main server channel, we want to ensure there's no goroutine leaks
-	// which will wait for all runnable goroutines. We cannot verify goroutines
-	// for all channels, as it would detect goroutines in the outer channels.
-	if ch == ts.channels[0] {
-		ts.verifyNoGoroutinesLeaked()
+	if ts.Failed() {
+		return
 	}
 
-	ts.verifyRelaysEmpty(ch)
-	ts.verifyExchangesCleared(ch)
+	// Tests may end with running background goroutines that are cleaning up, so give
+	// them some time to finish before running verifications.
+	var errs error
+	WaitFor(time.Second, func() bool {
+		errs = multierr.Combine(
+			ts.verifyExchangesCleared(ch),
+			ts.verifyRelaysEmpty(ch),
+		)
+		return errs == nil
+	})
+
+	if errs == nil {
+		return
+	}
+
+	// If verification fails, get the marshalled state.
+	assert.NoError(ts, errs, "Verification failed. Channel state:\n%v", IntrospectJSON(ch, nil /* opts */))
 }
 
 func (ts *TestServer) post() {
@@ -333,22 +357,18 @@ func (ts *TestServer) verifyNoStateLeak(ch *tchannel.Channel) {
 	assert.Equal(ts.TB, initial, final, "Runtime state has leaks")
 }
 
-func (ts *TestServer) verifyExchangesCleared(ch *tchannel.Channel) {
-	if ts.Failed() {
-		return
-	}
+func (ts *TestServer) verifyExchangesCleared(ch *tchannel.Channel) error {
 	// Ensure that all the message exchanges are empty.
 	serverState := ch.IntrospectState(ts.introspectOpts)
 	if exchangesLeft := describeLeakedExchanges(serverState); exchangesLeft != "" {
-		ts.Errorf("Found uncleared message exchanges on server:\n%v", exchangesLeft)
+		return fmt.Errorf("found uncleared message exchanges on %q:\n%v", ch.ServiceName(), exchangesLeft)
 	}
+
+	return nil
 }
 
-func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
-	if ts.Failed() {
-		return
-	}
-	var foundErrors bool
+func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) error {
+	var errs error
 	state := ch.IntrospectState(ts.introspectOpts)
 	for _, peerState := range state.RootPeers {
 		var connStates []tchannel.ConnectionRuntimeState
@@ -356,21 +376,13 @@ func (ts *TestServer) verifyRelaysEmpty(ch *tchannel.Channel) {
 		connStates = append(connStates, peerState.OutboundConnections...)
 		for _, connState := range connStates {
 			n := connState.Relayer.Count
-			if assert.Equal(ts, 0, n, "Found %v left-over items in relayer for %v.", n, connState.LocalHostPort) {
-				continue
+			if n != 0 {
+				errs = multierr.Append(errs, fmt.Errorf("found %v left-over items in relayer for %v", n, connState.LocalHostPort))
 			}
-			foundErrors = true
 		}
 	}
 
-	if !foundErrors {
-		return
-	}
-
-	marshalled, err := json.MarshalIndent(state, "", "  ")
-	require.NoError(ts, err, "Failed to marshal relayer state")
-	// Print out all the exchanges we found.
-	ts.Logf("Relayer state:\n%s", marshalled)
+	return errs
 }
 
 func (ts *TestServer) verifyNoGoroutinesLeaked() {
