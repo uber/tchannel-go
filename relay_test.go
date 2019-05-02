@@ -784,8 +784,7 @@ func TestRelayStalledClientConnection(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		// Expect errors from dropped frames.
-		AddLogFilter("Dropping call due to slow connection to destination.", _calls).
-		AddLogFilter("Couldn't send outbound frame.", _calls).
+		AddLogFilter("Dropping call due to slow connection.", _calls).
 		SetSendBufferSize(10). // We want to hit the buffer size earlier.
 		SetServiceName("s1").
 		SetRelayOnly()
@@ -838,7 +837,7 @@ func TestRelayStalledClientConnection(t *testing.T) {
 		// Wait for all calls to end on the relay, and ensure we got failures from the slow client.
 		stats := ts.RelayHost().Stats()
 		stats.WaitForEnd()
-		assert.Contains(t, stats.Map(), "testService-client->s1::echo.failed-relay-dest-conn-slow", "Expect at least 1 failed call due to slow client")
+		assert.Contains(t, stats.Map(), "testService-client->s1::echo.failed-relay-source-conn-slow", "Expect at least 1 failed call due to slow client")
 
 		// We don't read the responses, as we want the client's TCP buffers to fill up
 		// and the relay to drop calls. However, we should unblock the client reader
