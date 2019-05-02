@@ -37,7 +37,7 @@ func TestRequestStateRetry(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		closedHostPorts := make([]string, 4)

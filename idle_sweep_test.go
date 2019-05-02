@@ -51,7 +51,7 @@ func (pl *peerStatusListener) onStatusChange(p *Peer) {
 	pl.changes <- struct{}{}
 }
 
-func (pl *peerStatusListener) waitForZeroConnections(t *testing.T, channels ...*Channel) bool {
+func (pl *peerStatusListener) waitForZeroConnections(t testing.TB, channels ...*Channel) bool {
 	for {
 		select {
 		case <-pl.changes:
@@ -117,7 +117,7 @@ func TestServerBasedSweep(t *testing.T) {
 	clientOpts := testutils.NewOpts().
 		SetOnPeerStatusChanged(listener.onStatusChange)
 
-	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, serverOpts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 
 		client := ts.NewClient(clientOpts)
@@ -160,7 +160,7 @@ func TestClientBasedSweep(t *testing.T) {
 		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetIdleCheckInterval(30 * time.Second)
 
-	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, serverOpts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 
 		client := ts.NewClient(clientOpts)
@@ -201,7 +201,7 @@ func TestRelayBasedSweep(t *testing.T) {
 		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetRelayOnly()
 
-	testutils.WithTestServer(t, relayOpts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, relayOpts, func(t testing.TB, ts *testutils.TestServer) {
 		// Replace the auto-created server with a new one that doesn't have
 		// an idle-connection poller.
 		ts.Relay().GetSubChannel(ts.ServiceName()).Peers().Remove(
@@ -248,7 +248,7 @@ func TestIdleSweepWithPings(t *testing.T) {
 		SetIdleCheckInterval(30 * time.Second).
 		SetOnPeerStatusChanged(listener.onStatusChange)
 
-	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, serverOpts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 
 		client := ts.NewClient(clientOpts)
@@ -301,7 +301,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 		SetMaxIdleTime(3 * time.Minute).
 		SetIdleCheckInterval(30 * time.Second)
 
-	testutils.WithTestServer(t, serverOpts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, serverOpts, func(t testing.TB, ts *testutils.TestServer) {
 		var (
 			gotCall = make(chan struct{})
 			block   = make(chan struct{})

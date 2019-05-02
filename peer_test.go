@@ -1074,7 +1074,7 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+		testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 			ctx, cancel := NewContext(time.Second)
 			defer cancel()
 
@@ -1104,7 +1104,7 @@ func TestPeerScoreOnNewConnection(t *testing.T) {
 }
 
 func TestConnectToPeerHostPortMismatch(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -1128,7 +1128,7 @@ func TestConnectToPeerHostPortMismatch(t *testing.T) {
 func TestPeerConnectionsClosing(t *testing.T) {
 	// Disable the relay since we check the host:port directly.
 	opts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		unblock := make(chan struct{})
 		gotCall := make(chan struct{})
 		testutils.RegisterEcho(ts.Server(), func() {

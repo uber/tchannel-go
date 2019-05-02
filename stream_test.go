@@ -59,7 +59,7 @@ func writeFlushBytes(w ArgWriter, bs []byte) error {
 }
 
 type streamHelper struct {
-	t *testing.T
+	t testing.TB
 }
 
 // startCall starts a call to echoStream and returns the arg3 reader and writer.
@@ -90,7 +90,7 @@ func (h streamHelper) startCall(ctx context.Context, ch *Channel, hostPort, serv
 // streamPartialHandler returns a streaming handler that has the following contract:
 // read a byte, write N bytes where N = the byte that was read.
 // The results are be written as soon as the byte is read.
-func streamPartialHandler(t *testing.T, reportErrors bool) HandlerFunc {
+func streamPartialHandler(t testing.TB, reportErrors bool) HandlerFunc {
 	return func(ctx context.Context, call *InboundCall) {
 		response := call.Response()
 		onError := func(err error) {
@@ -244,7 +244,7 @@ func TestStreamCancelled(t *testing.T) {
 	// Since the cancel message is unimplemented, the relay does not know that the
 	// call was cancelled, andwill block closing till the timeout.
 	opts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
 		ctx, cancel := NewContext(testutils.Timeout(time.Second))
@@ -288,7 +288,7 @@ func TestStreamCancelled(t *testing.T) {
 }
 
 func TestResponseClosedBeforeRequest(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(streamPartialHandler(t, false /* report errors */), "echoStream")
 
 		ctx, cancel := NewContext(testutils.Timeout(time.Second))

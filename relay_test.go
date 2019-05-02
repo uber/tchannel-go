@@ -54,7 +54,7 @@ func serviceNameOpts(s string) *testutils.ChannelOpts {
 
 func withRelayedEcho(t testing.TB, f func(relay, server, client *Channel, ts *testutils.TestServer)) {
 	opts := serviceNameOpts("test").SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		client := ts.NewClient(serviceNameOpts("client"))
 		client.Peers().Add(ts.HostPort())
@@ -94,7 +94,7 @@ func TestRelayHandlesClosedPeers(t *testing.T) {
 	opts := serviceNameOpts("test").SetRelayOnly().
 		// Disable logs as we are closing connections that can error in a lot of places.
 		DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(300 * time.Millisecond)
 		defer cancel()
 
@@ -115,7 +115,7 @@ func TestRelayHandlesClosedPeers(t *testing.T) {
 
 func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 	opts := serviceNameOpts("s1").SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -140,7 +140,7 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 
 func TestRelayIDClash(t *testing.T) {
 	opts := serviceNameOpts("s1").SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2"))
 
@@ -207,7 +207,7 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 			SetRelayHost(relaytest.HostFunc(f)).
 			SetRelayOnly().
 			DisableLogVerification() // some of the test cases cause warnings.
-		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+		testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 			client := ts.NewClient(nil)
 			err := testutils.CallEcho(client, ts.HostPort(), "svc", nil)
 			if !assert.Error(t, err, "Call to unknown service should fail") {
@@ -227,7 +227,7 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 func TestErrorFrameEndsRelay(t *testing.T) {
 	// TestServer validates that there are no relay items left after the given func.
 	opts := serviceNameOpts("svc").SetRelayOnly().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(nil)
 
 		err := testutils.CallEcho(client, ts.HostPort(), "svc", nil)
@@ -252,7 +252,7 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 // by closing the relay while a lot of background calls are being made.
 func TestRaceCloseWithNewCall(t *testing.T) {
 	opts := serviceNameOpts("s1").SetRelayOnly().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
 		testutils.RegisterEcho(s1, nil)
@@ -302,7 +302,7 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
 
 	opts := serviceNameOpts("s1").SetRelayOnly().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
 
@@ -341,7 +341,7 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 		SetRelayMaxTimeout(clampTTL).
 		DisableLogVerification() // handler returns after deadline
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		srv := ts.Server()
 		client := ts.NewClient(nil)
 
@@ -380,7 +380,7 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 func TestRelayConcurrentCalls(t *testing.T) {
 	pool := NewProtectMemFramePool()
 	opts := testutils.NewOpts().SetRelayOnly().SetFramePool(pool)
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		server := benchmark.NewServer(
 			benchmark.WithNoLibrary(),
 			benchmark.WithServiceName("s1"),
@@ -408,7 +408,7 @@ func TestRelayConcurrentCalls(t *testing.T) {
 // host:port.
 func TestRelayOutgoingConnectionsEphemeral(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(serviceNameOpts("s2"))
 		testutils.RegisterFunc(s2, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			assert.True(t, CurrentCall(ctx).RemotePeer().IsEphemeral,
@@ -429,7 +429,7 @@ func TestRelayHandleLocalCall(t *testing.T) {
 		SetRelayLocal("relay", "tchannel", "test").
 		// We make a call to "test" for an unknown method.
 		AddLogFilter("Couldn't find handler.", 1)
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(serviceNameOpts("s2"))
 		testutils.RegisterEcho(s2, nil)
 
@@ -460,7 +460,7 @@ func TestRelayHandleLargeLocalCall(t *testing.T) {
 		AddLogFilter("Received fragmented callReq", 1).
 		// Expect 4 callReqContinues for 256 kb payload that we cannot relay.
 		AddLogFilter("Failed to relay frame.", 4)
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(nil)
 		testutils.RegisterEcho(ts.Relay(), nil)
 
@@ -483,7 +483,7 @@ func TestRelayHandleLargeLocalCall(t *testing.T) {
 
 func TestRelayMakeOutgoingCall(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		svr1 := ts.Relay()
 		svr2 := ts.NewServer(testutils.NewOpts().SetServiceName("svc2"))
 		testutils.RegisterEcho(svr2, nil)
@@ -511,7 +511,7 @@ func TestRelayConnection(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHost(relaytest.HostFunc(getHost))
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		getConn := func(ch *Channel, outbound bool) ConnectionRuntimeState {
 			state := ch.IntrospectState(nil)
 			peer, ok := state.RootPeers[ts.HostPort()]
@@ -594,7 +594,7 @@ func TestRelayConnectionClosed(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHost(relaytest.HostFunc(getHost))
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// The client receives a protocol error which causes the following logs.
 		opts := testutils.NewOpts().
 			AddLogFilter("Peer reported protocol error", 1).
@@ -613,7 +613,7 @@ func TestRelayConnectionClosed(t *testing.T) {
 
 func TestRelayUsesRootPeers(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		client := testutils.NewClient(t, nil)
 		err := testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil)
@@ -627,7 +627,7 @@ func TestRelayUsesRootPeers(t *testing.T) {
 func TestRelayRejectsDuringClose(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly().
 		AddLogFilter("Failed to relay frame.", 1, "error", "incoming connection is not active: connectionStartClose")
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		gotCall := make(chan struct{})
 		block := make(chan struct{})
 
@@ -673,7 +673,7 @@ func TestRelayRateLimitDrop(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHost(relaytest.HostFunc(getHost))
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		var gotCall bool
 		testutils.RegisterEcho(ts.Server(), func() {
 			gotCall = true
@@ -711,7 +711,7 @@ func TestRelayStalledConnection(t *testing.T) {
 		SetSendBufferSize(10).    // We want to hit the buffer size earlier.
 		SetServiceName("s1").
 		SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
 		testutils.RegisterEcho(s2, nil)
 
@@ -778,7 +778,7 @@ func TestRelayStalledConnection(t *testing.T) {
 func TestRelayThroughSeparateRelay(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		serverHP := ts.Server().PeerInfo().HostPort
 		dummyFactory := func(relay.CallFrame, *relay.Conn) (string, error) {
 			panic("should not get invoked")
@@ -809,7 +809,7 @@ func TestRelayThroughSeparateRelay(t *testing.T) {
 
 func TestRelayConcurrentNewConnectionAttempts(t *testing.T) {
 	opts := testutils.NewOpts().SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// Create a server that is slow to accept connections by using
 		// a frame relay to slow down the initial message.
 		slowServer := testutils.NewServer(t, serviceNameOpts("slow-server"))
@@ -858,7 +858,7 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 		callsPerClient    = 100
 	)
 	opts := testutils.NewOpts().SetRelayOnly()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		// Create clients and ensure we can make a successful request.
 		clients := make([]*Channel, concurrentClients)

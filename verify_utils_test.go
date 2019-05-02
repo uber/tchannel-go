@@ -31,7 +31,7 @@ import (
 // WithVerifiedServer runs the given test function with a server channel that is verified
 // at the end to make sure there are no leaks (e.g. no exchanges leaked).
 func WithVerifiedServer(t *testing.T, opts *testutils.ChannelOpts, f func(serverCh *Channel, hostPort string)) {
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		f(ts.Server(), ts.HostPort())
 	})
 }

@@ -130,7 +130,7 @@ func isTosPriority(c net.Conn, tosPriority tos.ToS) (bool, error) {
 	return connTosPriority == int(tosPriority), err
 }
 
-func getErrorFrame(t *testing.T) *Frame {
+func getErrorFrame(t testing.TB) *Frame {
 	var errFrame *Frame
 	server := testutils.NewServer(t, testutils.NewOpts().DisableLogVerification())
 	defer server.Close()
@@ -149,7 +149,7 @@ func getErrorFrame(t *testing.T) *Frame {
 }
 
 func TestRoundTrip(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		handler := newTestHandler(t)
 		ts.Register(raw.Wrap(handler), "echo")
 
@@ -179,7 +179,7 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestDefaultFormat(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		handler := newTestHandler(t)
 		ts.Register(raw.Wrap(handler), "echo")
 
@@ -204,12 +204,12 @@ func TestRemotePeer(t *testing.T) {
 	}
 	tests := []struct {
 		name       string
-		remote     func(*testutils.TestServer) *Channel
+		remote     func(testing.TB, *testutils.TestServer) *Channel
 		expectedFn func(*RuntimeState, *testutils.TestServer) PeerInfo
 	}{
 		{
 			name:   "ephemeral client",
-			remote: func(ts *testutils.TestServer) *Channel { return ts.NewClient(nil) },
+			remote: func(t testing.TB, ts *testutils.TestServer) *Channel { return ts.NewClient(nil) },
 			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
 				return PeerInfo{
 					HostPort:    state.RootPeers[ts.HostPort()].OutboundConnections[0].LocalHostPort,
@@ -221,7 +221,7 @@ func TestRemotePeer(t *testing.T) {
 		},
 		{
 			name:   "listening server",
-			remote: func(ts *testutils.TestServer) *Channel { return ts.NewServer(nil) },
+			remote: func(t testing.TB, ts *testutils.TestServer) *Channel { return ts.NewServer(nil) },
 			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
 				return PeerInfo{
 					HostPort:    state.LocalPeer.HostPort,
@@ -238,8 +238,8 @@ func TestRemotePeer(t *testing.T) {
 
 	for _, tt := range tests {
 		opts := testutils.NewOpts().SetServiceName("fake-service").NoRelay()
-		testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
-			remote := tt.remote(ts)
+		testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+			remote := tt.remote(t, ts)
 			defer remote.Close()
 
 			gotPeer := make(chan PeerInfo, 1)
@@ -265,7 +265,7 @@ func TestReuseConnection(t *testing.T) {
 	// we can't interpose a relay in this test.
 	s1Opts := testutils.NewOpts().SetServiceName("s1").NoRelay()
 
-	testutils.WithTestServer(t, s1Opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, s1Opts, func(t testing.TB, ts *testutils.TestServer) {
 		ch2 := ts.NewServer(&testutils.ChannelOpts{ServiceName: "s2"})
 		hostPort2 := ch2.PeerInfo().HostPort
 		defer ch2.Close()
@@ -314,7 +314,7 @@ func TestReuseConnection(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -348,7 +348,7 @@ func TestPing(t *testing.T) {
 func TestBadRequest(t *testing.T) {
 	// ch will log an error when it receives a request for an unknown handler.
 	opts := testutils.NewOpts().AddLogFilter("Couldn't find handler.", 1)
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -363,7 +363,7 @@ func TestBadRequest(t *testing.T) {
 }
 
 func TestNoTimeout(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "Echo")
 
 		ctx := context.Background()
@@ -375,7 +375,7 @@ func TestNoTimeout(t *testing.T) {
 }
 
 func TestCancelled(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 		ctx, cancel := NewContext(time.Second)
 
@@ -392,7 +392,7 @@ func TestCancelled(t *testing.T) {
 }
 
 func TestNoServiceNaming(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -404,7 +404,7 @@ func TestNoServiceNaming(t *testing.T) {
 }
 
 func TestServerBusy(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
 			if _, err := raw.ReadArgs(call); err != nil {
 				return err
@@ -429,7 +429,7 @@ func TestUnexpectedHandlerError(t *testing.T) {
 	opts := testutils.NewOpts().
 		AddLogFilter("Unexpected handler error", 1)
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(ErrorHandlerFunc(func(ctx context.Context, call *InboundCall) error {
 			if _, err := raw.ReadArgs(call); err != nil {
 				return err
@@ -460,7 +460,7 @@ func (h onErrorTestHandler) OnError(ctx context.Context, err error) {
 }
 
 func TestTimeout(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		// onError may be called when the block call tries to write the call response.
 		onError := func(ctx context.Context, err error) {
 			assert.Equal(t, ErrTimeout, err, "onError err should be ErrTimeout")
@@ -490,7 +490,7 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestLargeMethod(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -501,7 +501,7 @@ func TestLargeMethod(t *testing.T) {
 }
 
 func TestLargeTimeout(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		ctx, cancel := NewContext(1000 * time.Second)
@@ -517,7 +517,7 @@ func TestLargeTimeout(t *testing.T) {
 }
 
 func TestFragmentation(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		arg2 := make([]byte, MaxFramePayloadSize*2)
@@ -550,7 +550,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 		AddLogFilter("Unable to forward frame", 1).
 		AddLogFilter("Connection error", 1)
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		startReading, handlerComplete := make(chan struct{}), make(chan struct{})
 		handler := func(ctx context.Context, call *InboundCall) {
 			<-startReading
@@ -587,7 +587,7 @@ func TestFragmentationSlowReader(t *testing.T) {
 func TestWriteArg3AfterTimeout(t *testing.T) {
 	// The channel reads and writes during timeouts, causing warning logs.
 	opts := testutils.NewOpts().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 
 		handler := func(ctx context.Context, call *InboundCall) {
@@ -650,7 +650,7 @@ func TestLargeSendSystemError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
-			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+			testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
@@ -669,7 +669,7 @@ func TestLargeSendSystemError(t *testing.T) {
 
 func TestWriteErrorAfterTimeout(t *testing.T) {
 	// TODO: Make this test block at different points (e.g. before, during read/write).
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		timedOut := make(chan struct{})
 		done := make(chan struct{})
 		handler := func(ctx context.Context, call *InboundCall) {
@@ -709,7 +709,7 @@ func TestWriteAfterConnectionError(t *testing.T) {
 	// TODO: Relay is disabled due to https://github.com/uber/tchannel-go/issues/390
 	// Enabling relay causes the test to be flaky.
 	opts := testutils.NewOpts().DisableLogVerification().NoRelay()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		server := ts.Server()
 
@@ -748,7 +748,7 @@ func TestReadTimeout(t *testing.T) {
 		AddLogFilter("simpleHandler OnError", 1,
 			"error", "failed to send error frame, connection state connectionClosed")
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		sn := ts.ServiceName()
 		calls := relaytest.NewMockStats()
 
@@ -770,7 +770,7 @@ func TestReadTimeout(t *testing.T) {
 }
 
 func TestWriteTimeout(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ch := ts.Server()
 		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
 		defer cancel()
@@ -793,7 +793,7 @@ func TestWriteTimeout(t *testing.T) {
 }
 
 func TestGracefulClose(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ch2 := ts.NewServer(nil)
 		hp2 := ch2.PeerInfo().HostPort
 		defer ch2.Close()
@@ -838,7 +838,7 @@ func TestNetDialTimeout(t *testing.T) {
 
 func TestConnectTimeout(t *testing.T) {
 	opts := testutils.NewOpts().DisableLogVerification()
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// Set up a relay that will delay the initial init req.
 		testComplete := make(chan struct{})
 
@@ -880,7 +880,7 @@ func TestConnectTimeout(t *testing.T) {
 
 func TestParallelConnectionAccepts(t *testing.T) {
 	opts := testutils.NewOpts().AddLogFilter("Failed during connection handshake", 1)
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 
 		// Start a connection attempt that should timeout.
@@ -897,7 +897,7 @@ func TestParallelConnectionAccepts(t *testing.T) {
 }
 
 func TestConnectionIDs(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		var inbound, outbound []uint32
 		relayFunc := func(outgoing bool, f *Frame) *Frame {
 			if outgoing {
@@ -939,7 +939,7 @@ func TestTosPriority(t *testing.T) {
 	defer cancel()
 
 	opts := testutils.NewOpts().SetServiceName("s1").SetTosPriority(tos.Lowdelay)
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
 
 		outbound, err := ts.Server().BeginCall(ctx, ts.HostPort(), "s1", "echo", nil)
@@ -956,7 +956,7 @@ func TestTosPriority(t *testing.T) {
 
 func TestPeerStatusChangeClientReduction(t *testing.T) {
 	sopts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
 		server := ts.Server()
 		testutils.RegisterEcho(server, nil)
 		changes := make(chan int, 2)
@@ -986,7 +986,7 @@ func TestPeerStatusChangeClientReduction(t *testing.T) {
 
 func TestPeerStatusChangeClient(t *testing.T) {
 	sopts := testutils.NewOpts().NoRelay()
-	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
 		server := ts.Server()
 		testutils.RegisterEcho(server, nil)
 		changes := make(chan int, 2)
@@ -1032,7 +1032,7 @@ func TestPeerStatusChangeServer(t *testing.T) {
 		assert.Equal(t, 0, o, "no outbound connections from server")
 		changes <- i
 	})
-	testutils.WithTestServer(t, sopts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
 		server := ts.Server()
 		testutils.RegisterEcho(server, nil)
 
@@ -1063,7 +1063,7 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 	// that comes with the test server
 	opts := testutils.NewOpts().NoRelay().AddLogFilter("simpleHandler OnError", 1)
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		serverDoneC := make(chan struct{})
 		callForwarded := make(chan struct{})
 
@@ -1129,7 +1129,7 @@ func TestContextCanceledOnTCPClose(t *testing.T) {
 // getConnection returns the introspection result for the unique inbound or
 // outbound connection. An assert will be raised if there is more than one
 // connection of the given type.
-func getConnection(t *testing.T, ch *Channel, direction int) *ConnectionRuntimeState {
+func getConnection(t testing.TB, ch *Channel, direction int) *ConnectionRuntimeState {
 	state := ch.IntrospectState(nil)
 
 	for _, peer := range state.RootPeers {
@@ -1155,7 +1155,7 @@ func TestLastActivityTime(t *testing.T) {
 	clock := testutils.NewStubClock(initialTime)
 	opts := testutils.NewOpts().SetTimeNow(clock.Now)
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(opts)
 		server := ts.Server()
 
@@ -1230,7 +1230,7 @@ func TestLastActivityTimePings(t *testing.T) {
 	ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
 	defer cancel()
 
-	testutils.WithTestServer(t, opts, func(ts *testutils.TestServer) {
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(opts)
 
 		// Send an 'echo' to establish the connection.
@@ -1295,7 +1295,7 @@ func TestInvalidTransportHeaders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
-			testutils.WithTestServer(t, nil, func(ts *testutils.TestServer) {
+			testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 				testutils.RegisterEcho(ts.Server(), nil)
 
 				client := ts.NewClient(nil)
