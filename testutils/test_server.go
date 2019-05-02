@@ -32,7 +32,6 @@ import (
 	"github.com/uber/tchannel-go/testutils/goroutines"
 	"go.uber.org/multierr"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 	"golang.org/x/net/context"
@@ -305,13 +304,16 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 func (ts *TestServer) close(ch *tchannel.Channel) {
 	ch.Close()
 
+	timeout := Timeout(time.Second)
 	select {
-	case <-time.After(Timeout(200 * time.Millisecond)):
-		ts.Errorf("Channel %p did not close after 200 ms, last state: %v", ch, ch.State())
+	case <-time.After(timeout):
+		ts.Errorf("Channel %p did not close after %v, last state: %v", ch, timeout, ch.State())
 
 		// The introspected state might help debug why the channel isn't closing.
-		introspected := ch.IntrospectState(&tchannel.IntrospectionOptions{IncludeExchanges: true, IncludeTombstones: true})
-		ts.Logf("Introspected state: %s", spew.Sdump(introspected))
+		ts.Logf("Introspected state:\n%s", IntrospectJSON(ch, &tchannel.IntrospectionOptions{
+			IncludeExchanges:  true,
+			IncludeTombstones: true,
+		}))
 	case <-ch.ClosedChan():
 	}
 }
