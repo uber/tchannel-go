@@ -42,6 +42,13 @@ const (
 	_defaultRelayMaxTimeout = 2 * time.Minute
 )
 
+// Error strings.
+const (
+	_relayErrorNotFound       = "relay-not-found"
+	_relayErrorDestConnSlow   = "relay-dest-conn-slow"
+	_relayErrorSourceConnSlow = "relay-source-conn-slow"
+)
+
 var (
 	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
 	errFrameNotSent          = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
@@ -243,7 +250,7 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		r.logger.WithFields(
 			LogField{"id", id},
 		).Warn("Received a frame without a RelayItem.")
-		return false, "relay-not-found"
+		return false, _relayErrorNotFound
 	}
 
 	finished := finishesCall(f)
@@ -270,11 +277,18 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		// Buffer is full, so drop this frame and cancel the call.
 		r.logger.WithFields(
 			LogField{"id", id},
-		).Warn("Dropping call due to slow connection to destination.")
+		).Warn("Dropping call due to slow connection.")
 
 		items := r.receiverItems(fType)
-		r.failRelayItem(items, id, "relay-dest-conn-slow")
-		return false, "relay-dest-conn-slow"
+
+		err := _relayErrorDestConnSlow
+		// If we're dealing with a response frame, then the client is slow.
+		if fType == responseFrame {
+			err = _relayErrorSourceConnSlow
+		}
+
+		r.failRelayItem(items, id, err)
+		return false, err
 	}
 
 	if finished {
@@ -514,7 +528,10 @@ func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
 		return
 	}
 	if item.call != nil {
-		r.conn.SendSystemError(id, item.span, errFrameNotSent)
+		// If the client is too slow, then there's no point sending an error frame.
+		if failure != _relayErrorSourceConnSlow {
+			r.conn.SendSystemError(id, item.span, errFrameNotSent)
+		}
 		item.call.Failed(failure)
 		item.call.End()
 	}
