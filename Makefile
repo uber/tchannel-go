@@ -9,7 +9,6 @@ BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release
 THRIFT_GEN_RELEASE_LINUX := $(THRIFT_GEN_RELEASE)/linux-x86_64
 THRIFT_GEN_RELEASE_DARWIN := $(THRIFT_GEN_RELEASE)/darwin-x86_64
-SRCS := $(foreach pkg,$(PKGS),$(wildcard $(pkg)/*.go))
 
 PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
@@ -49,7 +48,7 @@ install:
 
 install_lint:
 	@echo "Installing golint, since we expect to lint"
-	GOPATH=$(OLD_GOPATH) go get -u -f github.com/golang/lint/golint
+	GOPATH=$(OLD_GOPATH) go get -u -f golang.org/x/lint/golint
 
 install_glide:
 	# all we want is: GOPATH=$(OLD_GOPATH) go get -u github.com/Masterminds/glide
@@ -118,7 +117,7 @@ lint:
 	@echo "Running golint"
 	-golint $(ALL_PKGS) | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go vet $(PKGS) 2>&1 | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
+	-go vet $(ALL_PKGS) 2>&1 | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
 	@echo "Verifying files are gofmt'd"
 	-gofmt -l . | $(FILTER) | tee -a lint.log
 	@echo "Checking for unresolved FIXMEs"

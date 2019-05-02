@@ -400,7 +400,7 @@ func (ri *relayItems) IntrospectState(opts *IntrospectionOptions, name string) R
 				ID:                      k,
 				RemapID:                 v.remapID,
 				DestinationConnectionID: v.destination.conn.connID,
-				Tomb: v.tomb,
+				Tomb:                    v.tomb,
 			}
 			setState.Items[strconv.Itoa(int(k))] = state
 		}
