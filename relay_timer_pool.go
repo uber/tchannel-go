@@ -39,6 +39,7 @@ type relayTimer struct {
 	timer *time.Timer     // const
 
 	active   bool // mutated on Start/Stop
+	stopped  bool // mutated on Stop
 	released bool // mutated on Get/Release.
 
 	// Per-timer parameters passed back when the timer is triggered.
@@ -102,6 +103,7 @@ func (rt *relayTimer) Start(d time.Duration, items *relayItems, id uint32, isOri
 	}
 
 	rt.active = true
+	rt.stopped = false
 	rt.items = items
 	rt.id = id
 	rt.isOriginator = isOriginator
@@ -119,16 +121,22 @@ func (rt *relayTimer) markTimerInactive() {
 	rt.isOriginator = false
 }
 
-// Stop stops the timer and returns whether the timer was stopped. It returns
-// the same behaviour as https://golang.org/pkg/time/#Timer.Stop.
-// This method is safe for concurrent use, and is typically used to check whether
-// a timer was stopped, possibly with other goroutines or when the timer fires.
+// Stop stops the timer and returns whether the timer was stopped.
+// If the timer has been executed, it returns false, but in all other
+// cases, it returns true (even if the timer was stopped previously).
 func (rt *relayTimer) Stop() bool {
 	rt.verifyNotReleased()
+
+	if rt.stopped {
+		return true
+	}
+
 	stopped := rt.timer.Stop()
 	if stopped {
+		rt.stopped = true
 		rt.markTimerInactive()
 	}
+
 	return stopped
 }
 
