@@ -974,7 +974,6 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		AddLogFilter("simpleHandler OnError.", numCalls).
-		// DisableLogVerification().
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
