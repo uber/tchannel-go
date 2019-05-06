@@ -968,3 +968,36 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 		wg.Wait()
 	})
 }
+
+func TestRelayRaceCompletionAndTimeout(t *testing.T) {
+	const numCalls = 10
+
+	opts := testutils.NewOpts().
+		AddLogFilter("simpleHandler OnError.", numCalls).
+		SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		client := ts.NewClient(nil)
+		started := time.Now()
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		callTime := time.Since(started)
+
+		// Make many calls with the same timeout, with the goal of
+		// timing out right as we process the response frame.
+		var wg sync.WaitGroup
+		for i := 0; i < numCalls; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				ctx, cancel := NewContext(callTime)
+				raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+				cancel()
+			}()
+		}
+
+		// Some of those calls should triger the race.
+		wg.Wait()
+	})
+}

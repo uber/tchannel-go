@@ -124,7 +124,6 @@ func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 	}
 	r.Unlock()
 
-	item.timeout.Stop()
 	item.timeout.Release()
 	return item, !item.tomb
 }
@@ -257,6 +256,13 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 	if item.tomb {
 		// Call timed out, ignore this frame. (We've already handled stats.)
 		// TODO: metrics for late-arriving frames.
+		return true, ""
+	}
+
+	// If the call is finished, we stop the timeout to ensure
+	// we don't have concurrent calls to end the call.
+	if finished && !item.timeout.Stop() {
+		// Timeout goroutine is already ending this call.
 		return true, ""
 	}
 
@@ -454,6 +460,13 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	if item.tomb {
 		// Call timed out, ignore this frame. (We've already handled stats.)
 		// TODO: metrics for late-arriving frames.
+		return nil
+	}
+
+	// If the call is finished, we stop the timeout to ensure
+	// we don't have concurrent calls to end the call.
+	if finished && !item.timeout.Stop() {
+		// Timeout goroutine is already ending this call.
 		return nil
 	}
 
