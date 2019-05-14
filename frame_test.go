@@ -256,18 +256,21 @@ func TestFrameReadIn(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		f := DefaultFramePool.Get()
-		r := bytes.NewReader(tt.bs)
-		err := f.ReadIn(r)
-		if tt.wantErr != "" {
-			require.Error(t, err, tt.msg)
-			assert.Contains(t, err.Error(), tt.wantErr, tt.msg)
-			continue
-		}
+		t.Run(tt.msg, func(t *testing.T) {
+			f := DefaultFramePool.Get()
+			r := bytes.NewReader(tt.bs)
+			err := f.ReadIn(r)
+			if tt.wantErr != "" {
+				require.Error(t, err, tt.msg)
+				assert.Contains(t, err.Error(), tt.wantErr, tt.msg)
+				return
+			}
 
-		require.NoError(t, err, tt.msg)
-		assert.Equal(t, tt.wantFrameHeader, f.Header, "%v: header mismatch", tt.msg)
-		assert.Equal(t, tt.wantFramePayload, f.SizedPayload(), "%v: unexpected payload")
+			require.NoError(t, err, tt.msg)
+			assert.Equal(t, tt.wantFrameHeader, f.Header, "%v: header mismatch", tt.msg)
+			assert.Equal(t, tt.wantFramePayload, f.SizedPayload(), "%v: unexpected payload")
+
+		})
 	}
 }
 

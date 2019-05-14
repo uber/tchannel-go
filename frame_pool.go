@@ -20,7 +20,9 @@
 
 package tchannel
 
-import "sync"
+import (
+	"sync"
+)
 
 // A FramePool is a pool for managing and re-using frames
 type FramePool interface {
@@ -31,8 +33,14 @@ type FramePool interface {
 	Release(f *Frame)
 }
 
+type SizedFramePool interface {
+	FramePool
+
+	GetSized(size int) *Frame
+}
+
 // DefaultFramePool uses the SyncFramePool.
-var DefaultFramePool = NewSyncFramePool()
+var DefaultFramePool FramePool = NewSizedPool(NewSizedSyncFramePool)
 
 // DisabledFramePool is a pool that uses the heap and relies on GC.
 var DisabledFramePool = disabledFramePool{}
@@ -43,13 +51,19 @@ func (p disabledFramePool) Get() *Frame      { return NewFrame(MaxFramePayloadSi
 func (p disabledFramePool) Release(f *Frame) {}
 
 type syncFramePool struct {
-	pool *sync.Pool
+	frameSize int
+	pool      *sync.Pool
 }
 
 // NewSyncFramePool returns a frame pool that uses a sync.Pool.
 func NewSyncFramePool() FramePool {
+	return NewSizedSyncFramePool(MaxFramePayloadSize)
+}
+
+// NewSizedSyncFramePool returns a frame pool that uses a sync.Pool.
+func NewSizedSyncFramePool(size int) FramePool {
 	return &syncFramePool{
-		pool: &sync.Pool{New: func() interface{} { return NewFrame(MaxFramePayloadSize) }},
+		pool: &sync.Pool{New: func() interface{} { return NewFrame(size) }},
 	}
 }
 

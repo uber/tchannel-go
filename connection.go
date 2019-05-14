@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -605,6 +606,15 @@ func (c *Connection) readState() connectionState {
 	return state
 }
 
+func (c *Connection) getFrame(size int) *Frame {
+	pool := c.opts.FramePool
+	if sizedPool, ok := pool.(SizedFramePool); ok {
+		return sizedPool.GetSized(size)
+	}
+
+	return c.opts.FramePool.Get()
+}
+
 // readFrames is the loop that reads frames from the network connection and
 // dispatches to the appropriate handler. Run within its own goroutine to
 // prevent overlapping reads on the socket.  Most handlers simply send the
@@ -629,7 +639,8 @@ func (c *Connection) readFrames(_ uint32) {
 			return
 		}
 
-		frame := c.opts.FramePool.Get()
+		size := binary.BigEndian.Uint16(headerBuf)
+		frame := c.getFrame(int(size))
 		if err := frame.ReadBody(headerBuf, c.conn); err != nil {
 			handleErr(err)
 			c.opts.FramePool.Release(frame)
