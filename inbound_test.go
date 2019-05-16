@@ -154,12 +154,11 @@ func TestCallOptionsPropogated(t *testing.T) {
 		RoutingDelegate: "test-routing-delegate",
 	}
 
-	var gotCallOptions *CallOptions
+	var gotCallOpts *CallOptions
 
 	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
-			gotCallOptions = inbound.CallOptions()
-			require.NotNil(t, gotCallOptions)
+			gotCallOpts = inbound.CallOptions()
 
 			err := raw.WriteResponse(inbound.Response(), &raw.Res{})
 			assert.NoError(t, err, "write response failed")
@@ -174,7 +173,7 @@ func TestCallOptionsPropogated(t *testing.T) {
 		_, _, _, err = raw.WriteArgs(call, nil, nil)
 		require.NoError(t, err, "could not write args")
 
-		assert.Equal(t, giveCallOpts, *gotCallOptions)
+		assert.Equal(t, &giveCallOpts, gotCallOpts)
 	})
 }
 

@@ -56,9 +56,9 @@ type CallOptions struct {
 	// to an instance of the intended service.
 	RoutingDelegate string
 
-	// CallerName is the name of the service issuing the call. It can also be used
-	// to support transparent proxying when the inbound caller name varies across
-	// calls.
+	// CallerName defaults to the channel's service name for an outbound call.
+	// Optionally override this field to support transparent proxying when inbound
+	// caller names vary across calls.
 	CallerName string
 }
 
