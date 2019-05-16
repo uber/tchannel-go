@@ -261,7 +261,7 @@ func (call *InboundCall) RemotePeer() PeerInfo {
 // CallOptions returns a CallOptions struct suitable for forwarding a request.
 func (call *InboundCall) CallOptions() *CallOptions {
 	return &CallOptions{
-		callerName:      call.CallerName(),
+		CallerName:      call.CallerName(),
 		Format:          call.Format(),
 		ShardKey:        call.ShardKey(),
 		RoutingDelegate: call.RoutingDelegate(),

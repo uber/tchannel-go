@@ -56,9 +56,10 @@ type CallOptions struct {
 	// to an instance of the intended service.
 	RoutingDelegate string
 
-	// callerName can only be used when forwarding a request. It can only be set internally,
-	// e.g. by calling (*InboundCall).CallOptions() when forwarding a request
-	callerName string
+	// CallerName defaults to the channel's service name for an outbound call.
+	// Optionally override this field to support transparent proxying when inbound
+	// caller names vary across calls.
+	CallerName string
 }
 
 var defaultCallOptions = &CallOptions{}
@@ -82,8 +83,8 @@ func (c *CallOptions) overrideHeaders(headers transportHeaders) {
 	if c.RoutingDelegate != "" {
 		headers[RoutingDelegate] = c.RoutingDelegate
 	}
-	if c.callerName != "" {
-		headers[CallerName] = c.callerName
+	if c.CallerName != "" {
+		headers[CallerName] = c.CallerName
 	}
 }
 
