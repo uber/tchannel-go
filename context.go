@@ -68,9 +68,8 @@ type IncomingCall interface {
 	// connections to the caller.
 	RemotePeer() PeerInfo
 
-	// CallOptions returns the call options set for the incoming call. It can be useful
-	// if you are forwarding a request and wish to retain the CallerName(), which is not
-	// possible to set manually.
+	// CallOptions returns the call options set for the incoming call. It can be
+	// useful for forwarding requests.
 	CallOptions() *CallOptions
 }
 

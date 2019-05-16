@@ -31,6 +31,7 @@ func TestSetHeaders(t *testing.T) {
 		format          Format
 		routingDelegate string
 		routingKey      string
+		callerName      string
 		expectedHeaders transportHeaders
 	}{
 		{
@@ -41,6 +42,13 @@ func TestSetHeaders(t *testing.T) {
 		{
 			format:          Thrift,
 			expectedHeaders: transportHeaders{ArgScheme: Thrift.String()},
+		},
+		{
+			callerName: "foo-caller",
+			expectedHeaders: transportHeaders{
+				ArgScheme:  Raw.String(),
+				CallerName: "foo-caller",
+			},
 		},
 		{
 			format:          JSON,
@@ -65,6 +73,7 @@ func TestSetHeaders(t *testing.T) {
 			Format:          tt.format,
 			RoutingDelegate: tt.routingDelegate,
 			RoutingKey:      tt.routingKey,
+			CallerName:      tt.callerName,
 		}
 		headers := make(transportHeaders)
 		callOpts.setHeaders(headers)

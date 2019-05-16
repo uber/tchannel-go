@@ -143,6 +143,41 @@ func TestInboundConnection_CallOptions(t *testing.T) {
 	})
 }
 
+func TestCallOptionsPropogated(t *testing.T) {
+	const handler = "handler"
+
+	giveCallOpts := CallOptions{
+		Format:          JSON,
+		CallerName:      "test-caller-name",
+		ShardKey:        "test-shard-key",
+		RoutingKey:      "test-routing-key",
+		RoutingDelegate: "test-routing-delegate",
+	}
+
+	var gotCallOptions *CallOptions
+
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+		ts.Register(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			gotCallOptions = inbound.CallOptions()
+			require.NotNil(t, gotCallOptions)
+
+			err := raw.WriteResponse(inbound.Response(), &raw.Res{})
+			assert.NoError(t, err, "write response failed")
+		}), handler)
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+
+		call, err := ts.Server().BeginCall(ctx, ts.HostPort(), ts.ServiceName(), handler, &giveCallOpts)
+		require.NoError(t, err, "could not call test server")
+
+		_, _, _, err = raw.WriteArgs(call, nil, nil)
+		require.NoError(t, err, "could not write args")
+
+		assert.Equal(t, giveCallOpts, *gotCallOptions)
+	})
+}
+
 func TestBlackhole(t *testing.T) {
 	ctx, cancel := NewContext(testutils.Timeout(time.Hour))
 
