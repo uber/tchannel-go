@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.14.0] - 2019-05-20
+### Added
+ * Expose `CallOptions` caller name for transparent proxying (#741)
+
 ## [1.13.0] - 2019-04-04
 ### Added
  * Add `MaxCloseTime` which sets a timeout for graceful connection close. (#724)
@@ -258,6 +262,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.14.0]: https://github.com/uber/tchannel-go/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/uber/tchannel-go/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/uber/tchannel-go/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/uber/tchannel-go/compare/v1.10.0...v1.11.0
