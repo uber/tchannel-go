@@ -21,6 +21,7 @@
 package thrift
 
 import (
+	"bytes"
 	"log"
 	"strings"
 	"sync"
@@ -185,6 +186,17 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
+	// Buffer the response write so we can send a system error to the client.
+	// It's too late to send a system error by the time we write Arg3.
+	var respStruct bytes.Buffer // XXX should we make a buffer pool?
+	wp = getProtocolWriter(&respStruct)
+	if err := resp.Write(wp.protocol); err != nil {
+		call.Response().SendSystemError(err)
+		thriftProtocolPool.Put(wp)
+		return err
+	}
+	thriftProtocolPool.Put(wp)
+
 	if !success {
 		call.Response().SetApplicationError()
 	}
@@ -201,13 +213,14 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
+	// Write buffered response.
 	writer, err = call.Response().Arg3Writer()
-	wp = getProtocolWriter(writer)
-	resp.Write(wp.protocol)
-	thriftProtocolPool.Put(wp)
-	err = writer.Close()
+	if _, err := writer.Write(respStruct.Bytes()); err != nil {
+		writer.Close() // XXX wrap this error?
+		return err
+	}
 
-	return err
+	return writer.Close()
 }
 
 func getServiceMethod(method string) (string, string, bool) {
