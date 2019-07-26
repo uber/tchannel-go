@@ -79,7 +79,16 @@ func (cr testCallReq) req() lazyCallReq {
 		payload.WriteUint32(0)                            // checksum contents
 	}
 	payload.WriteLen16String("moneys") // method
+
+	// add Arg2 into frame
+	arg2Buf := buildArg2Buffer()
+	payload.WriteUint16(uint16(len(arg2Buf)))
+	payload.WriteBytes(arg2Buf)
 	return newLazyCallReq(f)
+}
+
+func buildArg2Buffer() []byte {
+	return []byte("test arg2 buf")
 }
 
 func withLazyCallReqCombinations(f func(cr testCallReq)) {
@@ -269,6 +278,16 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 		cr := crt.req()
 		cr.SetTTL(time.Second)
 		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
+	})
+}
+
+func TestLazyCallArg2EndOffset(t *testing.T) {
+	wantArg2Buf := buildArg2Buffer()
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req()
+		arg2EndOffset := cr.Arg2EndOffset()
+		arg2Payload := cr.Payload[arg2EndOffset-len(wantArg2Buf) : arg2EndOffset]
+		assert.Equal(t, wantArg2Buf, arg2Payload)
 	})
 }
 

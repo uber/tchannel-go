@@ -94,6 +94,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
 	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
+	Arg2EndOffsetVal                                          int
 }
 
 var _ relay.CallFrame = FakeCallFrame{}
@@ -121,4 +122,9 @@ func (f FakeCallFrame) RoutingKey() []byte {
 // RoutingDelegate returns the routing delegate field.
 func (f FakeCallFrame) RoutingDelegate() []byte {
 	return []byte(f.RoutingDelegateF)
+}
+
+// Arg2EndOffset returns the offset from start of frame to the end of Arg2.
+func (f FakeCallFrame) Arg2EndOffset() int {
+	return f.Arg2EndOffsetVal
 }

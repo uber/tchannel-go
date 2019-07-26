@@ -88,6 +88,8 @@ type lazyCallReq struct {
 	*Frame
 
 	caller, method, delegate, key []byte
+
+	arg2EndOffset int
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -132,6 +134,10 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
 	cur += 2
 	cr.method = f.Payload[cur : cur+arg1Len]
+
+	// arg2~2
+	cur += arg1Len
+	cr.arg2EndOffset = cur + 2 /*arg2 len*/ + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
 	return cr
 }
 
@@ -181,6 +187,12 @@ func (f lazyCallReq) Span() Span {
 // HasMoreFragments returns whether the callReq has more fragments.
 func (f lazyCallReq) HasMoreFragments() bool {
 	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
+}
+
+// Arg2EndOffset returns the offset from start of frame to the end of Arg2
+// in bytes.
+func (f lazyCallReq) Arg2EndOffset() int {
+	return f.arg2EndOffset
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
