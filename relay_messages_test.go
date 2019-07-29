@@ -286,24 +286,46 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 }
 
 func TestLazyCallArg2Offset(t *testing.T) {
-	t.Run("arg2 is fully contained in frame", func(t *testing.T) {
-		wantArg2Buf := []byte("test arg2 buf")
-		withLazyCallReqCombinations(func(crt testCallReq) {
-			cr := crt.reqWithParams(testCallReqParams{arg2Buf: wantArg2Buf})
-			arg2EndOffset, hasMore := cr.Arg2EndOffset()
-			assert.False(t, hasMore)
-			arg2Payload := cr.Payload[cr.Arg2StartOffset():arg2EndOffset]
-			assert.Equal(t, wantArg2Buf, arg2Payload)
+	wantArg2Buf := []byte("test arg2 buf")
+	tests := []struct {
+		msg     string
+		flags   byte
+		arg2Buf []byte
+	}{
+		{
+			msg:     "arg2 is fully contained in frame",
+			arg2Buf: wantArg2Buf,
+		},
+		{
+			msg: "has no arg2",
+		},
+		{
+			msg:     "frame fragmented but arg2 is fully contained",
+			flags:   hasMoreFragmentsFlag,
+			arg2Buf: wantArg2Buf,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			withLazyCallReqCombinations(func(crt testCallReq) {
+				cr := crt.reqWithParams(testCallReqParams{
+					flags:   tt.flags,
+					arg2Buf: tt.arg2Buf,
+				})
+				arg2EndOffset, hasMore := cr.Arg2EndOffset()
+				assert.False(t, hasMore)
+				if len(tt.arg2Buf) == 0 {
+					assert.Zero(t, arg2EndOffset-cr.Arg2StartOffset())
+					return
+				}
+
+				arg2Payload := cr.Payload[cr.Arg2StartOffset():arg2EndOffset]
+				assert.Equal(t, tt.arg2Buf, arg2Payload)
+			})
 		})
-	})
-	t.Run("has no arg2", func(t *testing.T) {
-		withLazyCallReqCombinations(func(crt testCallReq) {
-			cr := crt.req()
-			endOffset, hasMore := cr.Arg2EndOffset()
-			assert.False(t, hasMore)
-			assert.Zero(t, endOffset-cr.Arg2StartOffset())
-		})
-	})
+	}
+
 	t.Run("arg2 has been fragmented", func(t *testing.T) {
 		withLazyCallReqCombinations(func(crt testCallReq) {
 			// For each CallReq, we first get the remaining space left, and
