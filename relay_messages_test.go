@@ -41,17 +41,27 @@ const (
 	reqHasAll testCallReq = reqTotalCombinations - 1
 )
 
+type testCallReqParams struct {
+	flags   byte
+	arg2Buf []byte
+}
+
 func (cr testCallReq) req() lazyCallReq {
+	return cr.reqWithParams(testCallReqParams{})
+}
+
+func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
 	f := NewFrame(200)
 	fh := fakeHeader()
+	fh.size = 0xD8 // 200 + 16 bytes of header = 216 (0xD8)
 	f.Header = fh
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
 
 	payload := typed.NewWriteBuffer(f.Payload)
-	payload.WriteSingleByte(0)           // flags
+	payload.WriteSingleByte(p.flags)     // flags
 	payload.WriteUint32(42)              // TTL
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
@@ -80,10 +90,8 @@ func (cr testCallReq) req() lazyCallReq {
 	}
 	payload.WriteLen16String("moneys") // method
 
-	// add Arg2 into frame
-	arg2Buf := buildArg2Buffer()
-	payload.WriteUint16(uint16(len(arg2Buf)))
-	payload.WriteBytes(arg2Buf)
+	payload.WriteUint16(uint16(len(p.arg2Buf)))
+	payload.WriteBytes(p.arg2Buf)
 	return newLazyCallReq(f)
 }
 
@@ -281,13 +289,39 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 	})
 }
 
-func TestLazyCallArg2EndOffset(t *testing.T) {
-	wantArg2Buf := buildArg2Buffer()
-	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
-		arg2EndOffset := cr.Arg2EndOffset()
-		arg2Payload := cr.Payload[arg2EndOffset-len(wantArg2Buf) : arg2EndOffset]
-		assert.Equal(t, wantArg2Buf, arg2Payload)
+func TestLazyCallArg2Offset(t *testing.T) {
+	t.Run("arg2 is fully contained in frame", func(t *testing.T) {
+		wantArg2Buf := buildArg2Buffer()
+		withLazyCallReqCombinations(func(crt testCallReq) {
+			cr := crt.reqWithParams(testCallReqParams{arg2Buf: wantArg2Buf})
+			arg2EndOffset, isFragmented := cr.Arg2EndOffset()
+			assert.False(t, isFragmented)
+			arg2Payload := cr.Payload[cr.Arg2StartOffset():arg2EndOffset]
+			assert.Equal(t, wantArg2Buf, arg2Payload)
+		})
+	})
+	t.Run("has no arg2", func(t *testing.T) {
+		withLazyCallReqCombinations(func(crt testCallReq) {
+			cr := crt.req()
+			endOffset, isFragmented := cr.Arg2EndOffset()
+			assert.False(t, isFragmented)
+			assert.Zero(t, endOffset-cr.Arg2StartOffset())
+		})
+	})
+	t.Run("arg2 has been fragmented", func(t *testing.T) {
+		withLazyCallReqCombinations(func(crt testCallReq) {
+			// For each CallReq, we first get the remaining space left, and
+			// fill up the remaining space with arg2.
+			crNoArg2 := crt.req()
+			arg2Size := int(crNoArg2.Header.FrameSize()) - crNoArg2.Arg2StartOffset()
+			cr := crt.reqWithParams(testCallReqParams{
+				flags:   hasMoreFragmentsFlag,
+				arg2Buf: make([]byte, arg2Size),
+			})
+			endOffset, isFragmented := cr.Arg2EndOffset()
+			assert.True(t, isFragmented)
+			assert.EqualValues(t, crNoArg2.Header.FrameSize(), endOffset)
+		})
 	})
 }
 

@@ -37,9 +37,13 @@ type CallFrame interface {
 	// RoutingKey may refer to an alternate traffic group instead of the
 	// traffic group identified by the service name.
 	RoutingKey() []byte
-	// Arg2EndOffset returns the offset from start of frame to the end of Arg2
-	// in bytes.
-	Arg2EndOffset() int
+	// Arg2StartOffset returns the offset from start of frame to the
+	// beginning of Arg2 in bytes.
+	Arg2StartOffset() int
+	// Arg2EndOffset returns the offset from start of frame to the end of
+	// Arg2 in bytes, and isFragmented to indicate if Arg2 is fragmented
+	// (i.e. spans multiple frames).
+	Arg2EndOffset() (_ int, isFragmented bool)
 }
 
 // Conn contains information about the underlying connection.
