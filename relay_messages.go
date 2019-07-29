@@ -194,8 +194,8 @@ func (f lazyCallReq) HasMoreFragments() bool {
 }
 
 // Arg2EndOffset returns the offset from start of frame to the end of Arg2
-// in bytes, and whether arg2 is fragmented or not.
-func (f lazyCallReq) Arg2EndOffset() (_ int, isFragmented bool) {
+// in bytes, and whether there are more data from other frames.
+func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
 	return f.arg2EndOffset, f.isArg2Fragmented
 }
 

@@ -41,9 +41,9 @@ type CallFrame interface {
 	// beginning of Arg2 in bytes.
 	Arg2StartOffset() int
 	// Arg2EndOffset returns the offset from start of frame to the end of
-	// Arg2 in bytes, and isFragmented to indicate if Arg2 is fragmented
-	// (i.e. spans multiple frames).
-	Arg2EndOffset() (_ int, isFragmented bool)
+	// Arg2 in bytes, and hasMore to indicate if there are mote data from
+	// other frames (i.e. arg2 is fragmented).
+	Arg2EndOffset() (_ int, hasMore bool)
 }
 
 // Conn contains information about the underlying connection.

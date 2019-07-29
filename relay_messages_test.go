@@ -294,8 +294,8 @@ func TestLazyCallArg2Offset(t *testing.T) {
 		wantArg2Buf := buildArg2Buffer()
 		withLazyCallReqCombinations(func(crt testCallReq) {
 			cr := crt.reqWithParams(testCallReqParams{arg2Buf: wantArg2Buf})
-			arg2EndOffset, isFragmented := cr.Arg2EndOffset()
-			assert.False(t, isFragmented)
+			arg2EndOffset, hasMore := cr.Arg2EndOffset()
+			assert.False(t, hasMore)
 			arg2Payload := cr.Payload[cr.Arg2StartOffset():arg2EndOffset]
 			assert.Equal(t, wantArg2Buf, arg2Payload)
 		})
@@ -303,8 +303,8 @@ func TestLazyCallArg2Offset(t *testing.T) {
 	t.Run("has no arg2", func(t *testing.T) {
 		withLazyCallReqCombinations(func(crt testCallReq) {
 			cr := crt.req()
-			endOffset, isFragmented := cr.Arg2EndOffset()
-			assert.False(t, isFragmented)
+			endOffset, hasMore := cr.Arg2EndOffset()
+			assert.False(t, hasMore)
 			assert.Zero(t, endOffset-cr.Arg2StartOffset())
 		})
 	})
@@ -318,8 +318,8 @@ func TestLazyCallArg2Offset(t *testing.T) {
 				flags:   hasMoreFragmentsFlag,
 				arg2Buf: make([]byte, arg2Size),
 			})
-			endOffset, isFragmented := cr.Arg2EndOffset()
-			assert.True(t, isFragmented)
+			endOffset, hasMore := cr.Arg2EndOffset()
+			assert.True(t, hasMore)
 			assert.EqualValues(t, crNoArg2.Header.FrameSize(), endOffset)
 		})
 	})
