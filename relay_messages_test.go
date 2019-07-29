@@ -95,10 +95,6 @@ func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	return newLazyCallReq(f)
 }
 
-func buildArg2Buffer() []byte {
-	return []byte("test arg2 buf")
-}
-
 func withLazyCallReqCombinations(f func(cr testCallReq)) {
 	for cr := testCallReq(0); cr < reqTotalCombinations; cr++ {
 		f(cr)
@@ -291,7 +287,7 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 
 func TestLazyCallArg2Offset(t *testing.T) {
 	t.Run("arg2 is fully contained in frame", func(t *testing.T) {
-		wantArg2Buf := buildArg2Buffer()
+		wantArg2Buf := []byte("test arg2 buf")
 		withLazyCallReqCombinations(func(crt testCallReq) {
 			cr := crt.reqWithParams(testCallReqParams{arg2Buf: wantArg2Buf})
 			arg2EndOffset, hasMore := cr.Arg2EndOffset()
