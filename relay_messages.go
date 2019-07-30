@@ -139,9 +139,9 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	// arg2~2
 	cur += arg1Len
 	cr.arg2StartOffset = cur + 2
-	cr.arg2EndOffset = cur + 2 /*arg2 len*/ + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
+	cr.arg2EndOffset = cr.arg2StartOffset + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
 	// arg2 is fragmented if we don't see arg3 in this frame.
-	cr.isArg2Fragmented = int(cr.Header.FrameSize()) <= (FrameHeaderSize+cr.arg2EndOffset) && f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
+	cr.isArg2Fragmented = int(cr.Header.PayloadSize()) <= cr.arg2EndOffset && cr.HasMoreFragments()
 	return cr
 }
 
@@ -193,13 +193,13 @@ func (f lazyCallReq) HasMoreFragments() bool {
 	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }
 
-// Arg2EndOffset returns the offset from start of frame to the end of Arg2
+// Arg2EndOffset returns the offset from start of payload to the end of Arg2
 // in bytes, and whether there are more data from other frames.
 func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
 	return f.arg2EndOffset, f.isArg2Fragmented
 }
 
-// Arg2StartOffset returns the offset from start of frame to the beginning
+// Arg2StartOffset returns the offset from start of payload to the beginning
 // of Arg2 in bytes.
 func (f lazyCallReq) Arg2StartOffset() int {
 	return f.arg2StartOffset

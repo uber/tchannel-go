@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -326,20 +327,28 @@ func TestLazyCallArg2Offset(t *testing.T) {
 		})
 	}
 
-	t.Run("arg2 has been fragmented", func(t *testing.T) {
-		withLazyCallReqCombinations(func(crt testCallReq) {
-			// For each CallReq, we first get the remaining space left, and
-			// fill up the remaining space with arg2.
-			crNoArg2 := crt.req()
-			arg2Size := int(crNoArg2.Header.FrameSize()) - crNoArg2.Arg2StartOffset()
-			cr := crt.reqWithParams(testCallReqParams{
-				flags:   hasMoreFragmentsFlag,
-				arg2Buf: make([]byte, arg2Size),
+	t.Run("no arg3 set", func(t *testing.T) {
+		for _, testHasMore := range []bool{true, false} {
+			t.Run(fmt.Sprintf("hasMore flag is set=%v", testHasMore), func(t *testing.T) {
+				withLazyCallReqCombinations(func(crt testCallReq) {
+					// For each CallReq, we first get the remaining space left, and
+					// fill up the remaining space with arg2.
+					crNoArg2 := crt.req()
+					arg2Size := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
+					var flags byte
+					if testHasMore {
+						flags |= hasMoreFragmentsFlag
+					}
+					cr := crt.reqWithParams(testCallReqParams{
+						flags:   flags,
+						arg2Buf: make([]byte, arg2Size),
+					})
+					endOffset, hasMore := cr.Arg2EndOffset()
+					assert.Equal(t, hasMore, testHasMore)
+					assert.EqualValues(t, crNoArg2.Header.PayloadSize(), endOffset)
+				})
 			})
-			endOffset, hasMore := cr.Arg2EndOffset()
-			assert.True(t, hasMore)
-			assert.EqualValues(t, crNoArg2.Header.FrameSize(), endOffset)
-		})
+		}
 	})
 }
 
