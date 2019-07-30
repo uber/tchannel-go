@@ -194,7 +194,8 @@ func (f lazyCallReq) HasMoreFragments() bool {
 }
 
 // Arg2EndOffset returns the offset from start of payload to the end of Arg2
-// in bytes, and whether there are more data from other frames.
+// in bytes, and hasMore to be true if there are more frames and arg3 has
+// not started.
 func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
 	return f.arg2EndOffset, f.isArg2Fragmented
 }

@@ -41,8 +41,8 @@ type CallFrame interface {
 	// beginning of Arg2 in bytes.
 	Arg2StartOffset() int
 	// Arg2EndOffset returns the offset from start of payload to the end of
-	// Arg2 in bytes, and hasMore to indicate if there are mote data from
-	// other frames (i.e. arg2 is fragmented).
+	// Arg2 in bytes, and hasMore to indicate if there are more frames and
+	// Arg3 has not started (i.e. Arg2 is fragmented).
 	Arg2EndOffset() (_ int, hasMore bool)
 }
 
