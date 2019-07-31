@@ -1022,12 +1022,11 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 	exLargeArg2 := make([]byte, MaxFrameSize+100)
 
 	tests := []struct {
-		msg                string
-		arg2Data           []byte
-		arg2Flush          bool
-		arg3Data           []byte
-		wantArg2Fragmented bool
-		wantHasMore        bool
+		msg         string
+		arg2Data    []byte
+		arg2Flush   bool
+		arg3Data    []byte
+		wantHasMore bool
 	}{
 		{
 			msg:      "all within a frame",
@@ -1046,10 +1045,9 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 			arg3Data: arg3Data,
 		},
 		{
-			msg:                "huge arg2",
-			arg2Data:           exLargeArg2,
-			wantHasMore:        true,
-			wantArg2Fragmented: true,
+			msg:         "huge arg2",
+			arg2Data:    exLargeArg2,
+			wantHasMore: true,
 		},
 	}
 
@@ -1067,7 +1065,9 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 			f := <-inspector.received
 			start := f.Arg2StartOffset()
 			end, hasMore := f.Arg2EndOffset()
-			if tt.wantArg2Fragmented {
+			if len(tt.arg2Data) > MaxFrameSize {
+				// Arg2 is larger than max allowed frame size and
+				// should cause fragmentation.
 				assert.True(t, end > start)
 				assert.Equal(t, MaxFrameSize-FrameHeaderSize, end)
 			} else {
