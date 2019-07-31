@@ -1016,130 +1016,159 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 }
 
 func TestRelayArg2OffsetIntegration(t *testing.T) {
-	const (
-		testRK        = "routingkey"
-		testMethod    = "echo"
-		wantArg2Start = len(testRK) + len(testMethod) + 70 /*data before arg1*/
-		payloadLeft   = MaxFramePayloadSize - wantArg2Start
-
-		arg2Data = "moe"
-	)
-
 	ctx, cancel := NewContext(testutils.Timeout(time.Second))
 	defer cancel()
 
-	inspector := newFailedRelayHost()
+	rh := relaytest.NewStubRelayHost()
+	inspector := newFailedRelayHost(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHost(inspector)
 
-	ch := testutils.NewServer(t, opts)
-	defer ch.Close()
+	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
+		const (
+			testMethod = "echo"
+			arg2Data   = "arg2-is"
+			arg3Data   = "arg3-here"
+		)
 
-	client := testutils.NewClient(t, nil /*opts*/)
-	defer client.Close()
+		var (
+			wantArg2Start = len(ts.ServiceName()) + len(testMethod) + 70 /*data before arg1*/
+			payloadLeft   = MaxFramePayloadSize - wantArg2Start
+		)
 
-	tests := []struct {
-		msg               string
-		arg2Data          string
-		arg2Flush         bool
-		arg2PostFlushData string
-		wantEndOffset     int
-		wantHasMore       bool
-	}{
-		{
-			msg:           "all within a frame",
-			arg2Data:      arg2Data,
-			wantEndOffset: wantArg2Start + len(arg2Data),
-		},
-		{
-			msg:           "arg2 flushed",
-			arg2Data:      arg2Data,
-			arg2Flush:     true,
-			wantEndOffset: wantArg2Start + len(arg2Data),
-			wantHasMore:   true,
-		},
-		{
-			msg:               "arg2 flushed called then write again",
-			arg2Data:          arg2Data,
-			arg2Flush:         true,
-			arg2PostFlushData: "more data",
-			wantEndOffset:     wantArg2Start + len(arg2Data),
-			wantHasMore:       true,
-		},
-		{
-			msg:           "no arg2",
-			wantEndOffset: wantArg2Start,
-		},
-		{
-			msg:           "XL arg2 which is fragmented",
-			arg2Data:      string(make([]byte, MaxFrameSize+100)),
-			wantEndOffset: wantArg2Start + payloadLeft,
-			wantHasMore:   true,
-		},
-		{
-			msg:           "large arg2 with 3 bytes left for arg3",
-			arg2Data:      string(make([]byte, payloadLeft-3)),
-			wantEndOffset: wantArg2Start + payloadLeft - 3,
-			wantHasMore:   false,
-		},
-		{
-			msg:           "large arg2, 2 bytes left",
-			arg2Data:      string(make([]byte, payloadLeft-2)),
-			wantEndOffset: wantArg2Start + payloadLeft - 2,
-			wantHasMore:   true, // arg3 is fragmented
-		},
-		{
-			msg:           "large arg2, 1 bytes left",
-			arg2Data:      string(make([]byte, payloadLeft-1)),
-			wantEndOffset: wantArg2Start + payloadLeft - 1,
-			wantHasMore:   true, // arg3 is fragmented
-		},
-	}
+		testutils.RegisterEcho(ts.Server(), nil)
 
-	for _, tt := range tests {
-		t.Run(tt.msg, func(t *testing.T) {
-			call, err := client.BeginCall(ctx, ch.PeerInfo().HostPort, testRK, testMethod, nil)
-			require.NoError(t, err, "BeginCall failed")
-			writer, err := call.Arg2Writer()
-			arg2WriteHelper := NewArgWriter(writer, err)
-			require.NoError(t, arg2WriteHelper.Write([]byte(tt.arg2Data)), "arg3 write failed")
-			if tt.arg2Flush {
-				writer.Flush()
-				// tries to write after flush
-				if tt.arg2PostFlushData != "" {
-					arg2WriteHelper.Write([]byte(tt.arg2PostFlushData))
+		rh.Add(ts.ServiceName(), ts.Server().PeerInfo().HostPort)
+		client := testutils.NewClient(t, nil /*opts*/)
+		defer client.Close()
+
+		tests := []struct {
+			msg               string
+			arg2Data          string
+			arg2Flush         bool
+			arg2PostFlushData string
+			noArg3            bool
+			wantEndOffset     int
+			wantHasMore       bool
+		}{
+			{
+				msg:           "all within a frame",
+				arg2Data:      arg2Data,
+				wantEndOffset: wantArg2Start + len(arg2Data),
+				wantHasMore:   false,
+			},
+			{
+				msg:           "arg2 flushed",
+				arg2Data:      arg2Data,
+				arg2Flush:     true,
+				wantEndOffset: wantArg2Start + len(arg2Data),
+				wantHasMore:   true,
+			},
+			{
+				msg:               "arg2 flushed called then write again",
+				arg2Data:          arg2Data,
+				arg2Flush:         true,
+				arg2PostFlushData: "more data",
+				wantEndOffset:     wantArg2Start + len(arg2Data),
+				wantHasMore:       true,
+			},
+			{
+				msg:           "no arg2",
+				wantEndOffset: wantArg2Start,
+				wantHasMore:   false,
+			},
+			{
+				msg:           "XL arg2 which is fragmented",
+				arg2Data:      string(make([]byte, MaxFrameSize+100)),
+				wantEndOffset: wantArg2Start + payloadLeft,
+				wantHasMore:   true,
+			},
+			{
+				msg:           "large arg2 with 3 bytes left for arg3",
+				arg2Data:      string(make([]byte, payloadLeft-3)),
+				wantEndOffset: wantArg2Start + payloadLeft - 3,
+				wantHasMore:   false,
+			},
+			{
+				msg:           "large arg2, 2 bytes left",
+				arg2Data:      string(make([]byte, payloadLeft-2)),
+				wantEndOffset: wantArg2Start + payloadLeft - 2,
+				wantHasMore:   true, // no arg3
+			},
+			{
+				msg:           "large arg2, 2 bytes left, no arg3",
+				arg2Data:      string(make([]byte, payloadLeft-2)),
+				wantEndOffset: wantArg2Start + payloadLeft - 2,
+				noArg3:        true,
+				wantHasMore:   true, // no arg3 and still got CALL_REQ_CONTINUE
+			},
+			{
+				msg:           "large arg2, 1 bytes left",
+				arg2Data:      string(make([]byte, payloadLeft-1)),
+				wantEndOffset: wantArg2Start + payloadLeft - 1,
+				wantHasMore:   true, // no arg3
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.msg, func(t *testing.T) {
+
+				call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), testMethod, nil)
+				require.NoError(t, err, "BeginCall failed")
+				writer, err := call.Arg2Writer()
+				arg2WriteHelper := NewArgWriter(writer, err)
+				require.NoError(t, arg2WriteHelper.Write([]byte(tt.arg2Data)), "arg3 write failed")
+				if tt.arg2Flush {
 					writer.Flush()
+					// tries to write after flush
+					if tt.arg2PostFlushData != "" {
+						arg2WriteHelper.Write([]byte(tt.arg2PostFlushData))
+						writer.Flush()
+					}
 				}
-			}
-			const arg3Data = "auto-tconfig"
-			require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3Data)), "arg3 write failed")
 
-			f := <-inspector.received
-			start := f.Arg2StartOffset()
-			end, hasMore := f.Arg2EndOffset()
-			assert.Equal(t, wantArg2Start, start)
-			assert.Equal(t, tt.wantEndOffset, end)
-			assert.Equal(t, tt.wantHasMore, hasMore)
-		})
-	}
+				arg3DataToWrite := arg3Data
+				if tt.noArg3 {
+					arg3DataToWrite = ""
+				}
+				require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3DataToWrite)), "arg3 write failed")
+
+				f := <-inspector.received
+				start := f.Arg2StartOffset()
+				end, hasMore := f.Arg2EndOffset()
+				assert.Equal(t, wantArg2Start, start)
+				assert.Equal(t, tt.wantEndOffset, end)
+				assert.Equal(t, tt.wantHasMore, hasMore)
+
+				var resArg []byte
+				assert.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&resArg))
+				assert.Equal(t, tt.arg2Data, string(resArg))
+				assert.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&resArg))
+				assert.Equal(t, arg3DataToWrite, string(resArg))
+			})
+		}
+	})
 }
 
 // failedRelayHost is a RelayHost which always fails RelayCall,
 // but provides way to introspect the received CallFrame.
 type failedRelayHost struct {
+	RelayHost
+
 	received chan relay.CallFrame
 }
 
-func newFailedRelayHost() *failedRelayHost {
+func newFailedRelayHost(r RelayHost) *failedRelayHost {
 	return &failedRelayHost{
-		received: make(chan relay.CallFrame, 1),
+		RelayHost: r,
+		received:  make(chan relay.CallFrame, 1),
 	}
 }
 
-func (r *failedRelayHost) SetChannel(*Channel) {}
+//func (r *failedRelayHost) SetChannel(*Channel) {}
 
 func (r *failedRelayHost) Start(f relay.CallFrame, conn *relay.Conn) (RelayCall, error) {
 	r.received <- testutils.CopyCallFrame(f)
-	return nil, errors.New("relay failed")
+	return r.RelayHost.Start(f, conn)
 }
