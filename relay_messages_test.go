@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -41,17 +42,27 @@ const (
 	reqHasAll testCallReq = reqTotalCombinations - 1
 )
 
+type testCallReqParams struct {
+	flags   byte
+	arg2Buf []byte
+}
+
 func (cr testCallReq) req() lazyCallReq {
+	return cr.reqWithParams(testCallReqParams{})
+}
+
+func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
 	f := NewFrame(200)
 	fh := fakeHeader()
+	fh.size = 0xD8 // 200 + 16 bytes of header = 216 (0xD8)
 	f.Header = fh
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
 
 	payload := typed.NewWriteBuffer(f.Payload)
-	payload.WriteSingleByte(0)           // flags
+	payload.WriteSingleByte(p.flags)     // flags
 	payload.WriteUint32(42)              // TTL
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
@@ -79,6 +90,9 @@ func (cr testCallReq) req() lazyCallReq {
 		payload.WriteUint32(0)                            // checksum contents
 	}
 	payload.WriteLen16String("moneys") // method
+
+	payload.WriteUint16(uint16(len(p.arg2Buf)))
+	payload.WriteBytes(p.arg2Buf)
 	return newLazyCallReq(f)
 }
 
@@ -269,6 +283,72 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 		cr := crt.req()
 		cr.SetTTL(time.Second)
 		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
+	})
+}
+
+func TestLazyCallArg2Offset(t *testing.T) {
+	wantArg2Buf := []byte("test arg2 buf")
+	tests := []struct {
+		msg     string
+		flags   byte
+		arg2Buf []byte
+	}{
+		{
+			msg:     "arg2 is fully contained in frame",
+			arg2Buf: wantArg2Buf,
+		},
+		{
+			msg: "has no arg2",
+		},
+		{
+			msg:     "frame fragmented but arg2 is fully contained",
+			flags:   hasMoreFragmentsFlag,
+			arg2Buf: wantArg2Buf,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			withLazyCallReqCombinations(func(crt testCallReq) {
+				cr := crt.reqWithParams(testCallReqParams{
+					flags:   tt.flags,
+					arg2Buf: tt.arg2Buf,
+				})
+				arg2EndOffset, hasMore := cr.Arg2EndOffset()
+				assert.False(t, hasMore)
+				if len(tt.arg2Buf) == 0 {
+					assert.Zero(t, arg2EndOffset-cr.Arg2StartOffset())
+					return
+				}
+
+				arg2Payload := cr.Payload[cr.Arg2StartOffset():arg2EndOffset]
+				assert.Equal(t, tt.arg2Buf, arg2Payload)
+			})
+		})
+	}
+
+	t.Run("no arg3 set", func(t *testing.T) {
+		for _, testHasMore := range []bool{true, false} {
+			t.Run(fmt.Sprintf("hasMore flag is set=%v", testHasMore), func(t *testing.T) {
+				withLazyCallReqCombinations(func(crt testCallReq) {
+					// For each CallReq, we first get the remaining space left, and
+					// fill up the remaining space with arg2.
+					crNoArg2 := crt.req()
+					arg2Size := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
+					var flags byte
+					if testHasMore {
+						flags |= hasMoreFragmentsFlag
+					}
+					cr := crt.reqWithParams(testCallReqParams{
+						flags:   flags,
+						arg2Buf: make([]byte, arg2Size),
+					})
+					endOffset, hasMore := cr.Arg2EndOffset()
+					assert.Equal(t, hasMore, testHasMore)
+					assert.EqualValues(t, crNoArg2.Header.PayloadSize(), endOffset)
+				})
+			})
+		}
 	})
 }
 
