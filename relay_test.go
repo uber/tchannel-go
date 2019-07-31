@@ -1001,3 +1001,98 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		wg.Wait()
 	})
 }
+
+func TestRelayArg2OffsetIntegration(t *testing.T) {
+	ctx, cancel := NewContext(testutils.Timeout(time.Second))
+	defer cancel()
+
+	inspector := newFailedRelayHost()
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHost(inspector)
+
+	ch := testutils.NewServer(t, opts)
+	defer ch.Close()
+
+	client := testutils.NewClient(t, nil /*opts*/)
+	defer client.Close()
+
+	arg2Data := []byte("moe")
+	arg3Data := []byte("auto-tconfig")
+	exLargeArg2 := make([]byte, MaxFrameSize+100)
+
+	tests := []struct {
+		msg                string
+		arg2Data           []byte
+		arg2Flush          bool
+		arg3Data           []byte
+		wantArg2Fragmented bool
+		wantHasMore        bool
+	}{
+		{
+			msg:      "all within a frame",
+			arg2Data: arg2Data,
+			arg3Data: arg3Data,
+		},
+		{
+			msg:         "arg2 flushed",
+			arg2Data:    arg2Data,
+			arg2Flush:   true,
+			arg3Data:    arg3Data,
+			wantHasMore: true,
+		},
+		{
+			msg:      "no arg2",
+			arg3Data: arg3Data,
+		},
+		{
+			msg:                "huge arg2",
+			arg2Data:           exLargeArg2,
+			wantHasMore:        true,
+			wantArg2Fragmented: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			call, err := client.BeginCall(ctx, ch.PeerInfo().HostPort, "routingkey", "echo", nil)
+			require.NoError(t, err, "BeginCall failed")
+			writer, err := call.Arg2Writer()
+			require.NoError(t, NewArgWriter(writer, err).Write(tt.arg2Data), "arg3 write failed")
+			if tt.arg2Flush {
+				writer.Flush()
+			}
+			require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(tt.arg3Data), "arg3 write failed")
+
+			f := <-inspector.received
+			start := f.Arg2StartOffset()
+			end, hasMore := f.Arg2EndOffset()
+			if tt.wantArg2Fragmented {
+				assert.True(t, end > start)
+				assert.Equal(t, MaxFrameSize-FrameHeaderSize, end)
+			} else {
+				assert.Equal(t, len(tt.arg2Data), end-start)
+			}
+			assert.Equal(t, tt.wantHasMore, hasMore)
+		})
+	}
+}
+
+// failedRelayHost is a RelayHost which always fails RelayCall,
+// but provides way to introspect the received CallFrame.
+type failedRelayHost struct {
+	received chan relay.CallFrame
+}
+
+func newFailedRelayHost() *failedRelayHost {
+	return &failedRelayHost{
+		received: make(chan relay.CallFrame, 1),
+	}
+}
+
+func (r *failedRelayHost) SetChannel(*Channel) {}
+
+func (r *failedRelayHost) Start(f relay.CallFrame, conn *relay.Conn) (RelayCall, error) {
+	r.received <- f
+	return nil, errors.New("relay failed")
+}
