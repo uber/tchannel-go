@@ -37,6 +37,7 @@ import (
 // internalServer represents a benchmark server.
 type internalServer struct {
 	ch          *tchannel.Channel
+	hc          *hyperbahn.Client
 	opts        *options
 	rawCalls    atomic.Int64
 	thriftCalls atomic.Int64
@@ -84,16 +85,20 @@ func (s *internalServer) HostPort() string {
 
 // Advertise advertises with Hyperbahn.
 func (s *internalServer) Advertise(hyperbahnHosts []string) error {
+	var err error
 	config := hyperbahn.Configuration{InitialNodes: hyperbahnHosts}
-	hc, err := hyperbahn.NewClient(s.ch, config, nil)
+	s.hc, err = hyperbahn.NewClient(s.ch, config, nil)
 	if err != nil {
 		panic("failed to setup Hyperbahn client: " + err.Error())
 	}
-	return hc.Advertise()
+	return s.hc.Advertise()
 }
 
 func (s *internalServer) Close() {
 	s.ch.Close()
+	if s.hc != nil {
+		s.hc.Close()
+	}
 }
 
 func (s *internalServer) RawCalls() int {
