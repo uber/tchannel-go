@@ -95,9 +95,7 @@ func (s *internalServer) Advertise(hyperbahnHosts []string) error {
 }
 
 func (s *internalServer) Close() {
-	if s.ch != nil {
-		s.ch.Close()
-	}
+	s.ch.Close()
 	if s.hc != nil {
 		s.hc.Close()
 	}
