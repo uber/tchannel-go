@@ -1061,7 +1061,7 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 		{
 			msg:           "XL arg2 which is fragmented",
 			arg2Data:      string(make([]byte, MaxFrameSize+100)),
-			wantEndOffset: 65519,
+			wantEndOffset: wantArg2Start + payloadLeft,
 			wantHasMore:   true,
 		},
 		{
