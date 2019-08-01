@@ -132,5 +132,10 @@ func (c *Client) initialAdvertise() error {
 }
 
 func (c *Client) sleep(d time.Duration) {
-	c.opts.TimeSleep(d)
+	select {
+	case <-time.After(d):
+		return
+	case <-c.quit:
+		return
+	}
 }
