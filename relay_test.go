@@ -91,6 +91,19 @@ func TestRelay(t *testing.T) {
 	})
 }
 
+func TestRelaySetHost(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	opts := serviceNameOpts("test").SetRelayHost(rh).SetRelayOnly()
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+		rh.Add(ts.Server().ServiceName(), ts.Server().PeerInfo().HostPort)
+
+		client := ts.NewClient(serviceNameOpts("client"))
+		client.Peers().Add(ts.HostPort())
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.Server().ServiceName())
+	})
+}
+
 func TestRelayHandlesClosedPeers(t *testing.T) {
 	opts := serviceNameOpts("test").SetRelayOnly().
 		// Disable logs as we are closing connections that can error in a lot of places.
