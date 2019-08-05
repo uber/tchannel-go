@@ -138,7 +138,7 @@ func (f FakeCallFrame) Arg2EndOffset() (int, bool) {
 	return f.Arg2EndOffsetVal, f.IsArg2Fragmented
 }
 
-// CopyCallFrame copes the relay.CallFrame and returns a FakeCallFrame with
+// CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with
 // corresponding values
 func CopyCallFrame(f relay.CallFrame) FakeCallFrame {
 	endOffset, hasMore := f.Arg2EndOffset()
