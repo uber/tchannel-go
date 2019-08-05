@@ -84,7 +84,11 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 		},
 	}
 
-	ts.NewServer(opts)
+	// Remove any relay options, since those should only be applied to addRelay.
+	serverOpts := opts.Copy()
+	serverOpts.RelayHost = nil
+	ts.NewServer(serverOpts)
+
 	if opts == nil || !opts.DisableRelay {
 		ts.addRelay(opts)
 	}
