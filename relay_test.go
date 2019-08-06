@@ -1074,7 +1074,7 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 				wantHasMore:       true,
 			},
 			{
-				msg:           "no arg2",
+				msg:           "no arg2 but flushed",
 				wantEndOffset: wantArg2Start,
 				wantHasMore:   false,
 			},
@@ -1138,14 +1138,14 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 				f := <-inspector.received
 				start := f.Arg2StartOffset()
 				end, hasMore := f.Arg2EndOffset()
-				assert.Equal(t, wantArg2Start, start)
-				assert.Equal(t, tt.wantEndOffset, end)
-				assert.Equal(t, tt.wantHasMore, hasMore)
+				assert.Equal(t, wantArg2Start, start, "arg2 start offset does not match expectation")
+				assert.Equal(t, tt.wantEndOffset, end, "arg2 end offset does not match expectation")
+				assert.Equal(t, tt.wantHasMore, hasMore, "arg2 hasMore bit does not match expectation")
 
 				gotArg2, gotArg3, err := raw.ReadArgsV2(call.Response())
 				assert.NoError(t, err)
-				assert.Equal(t, tt.arg2Data+tt.arg2PostFlushData, string(gotArg2))
-				assert.Equal(t, arg3DataToWrite, string(gotArg3))
+				assert.Equal(t, tt.arg2Data+tt.arg2PostFlushData, string(gotArg2), "arg2 in response does not meet expectation")
+				assert.Equal(t, arg3DataToWrite, string(gotArg3), "arg3 in response does not meet expectation")
 			})
 		}
 	})
