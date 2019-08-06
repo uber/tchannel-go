@@ -137,3 +137,19 @@ func (f FakeCallFrame) Arg2StartOffset() int {
 func (f FakeCallFrame) Arg2EndOffset() (int, bool) {
 	return f.Arg2EndOffsetVal, f.IsArg2Fragmented
 }
+
+// CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with
+// corresponding values
+func CopyCallFrame(f relay.CallFrame) FakeCallFrame {
+	endOffset, hasMore := f.Arg2EndOffset()
+	return FakeCallFrame{
+		ServiceF:           string(f.Service()),
+		MethodF:            string(f.Method()),
+		CallerF:            string(f.Caller()),
+		RoutingKeyF:        string(f.RoutingKey()),
+		RoutingDelegateF:   string(f.RoutingDelegate()),
+		Arg2StartOffsetVal: f.Arg2StartOffset(),
+		Arg2EndOffsetVal:   endOffset,
+		IsArg2Fragmented:   hasMore,
+	}
+}
