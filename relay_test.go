@@ -1020,7 +1020,7 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 	defer cancel()
 
 	rh := relaytest.NewStubRelayHost()
-	inspector := newFailedRelayHost(rh)
+	inspector := newRelayFrameInspector(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHost(inspector)
@@ -1113,20 +1113,23 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.msg, func(t *testing.T) {
-
 				call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), testMethod, nil)
 				require.NoError(t, err, "BeginCall failed")
 				writer, err := call.Arg2Writer()
-				arg2WriteHelper := NewArgWriter(writer, err)
-				require.NoError(t, arg2WriteHelper.Write([]byte(tt.arg2Data)), "arg3 write failed")
+				require.NoError(t, err)
+				wantArg2Data := tt.arg2Data
+				_, err = writer.Write([]byte(wantArg2Data))
+				require.NoError(t, err)
 				if tt.arg2Flush {
 					writer.Flush()
 					// tries to write after flush
 					if tt.arg2PostFlushData != "" {
-						arg2WriteHelper.Write([]byte(tt.arg2PostFlushData))
-						writer.Flush()
+						wantArg2Data += tt.arg2PostFlushData
+						_, err := writer.Write([]byte(tt.arg2PostFlushData))
+						require.NoError(t, err)
 					}
 				}
+				require.NoError(t, writer.Close())
 
 				arg3DataToWrite := arg3Data
 				if tt.noArg3 {
@@ -1141,34 +1144,31 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 				assert.Equal(t, tt.wantEndOffset, end)
 				assert.Equal(t, tt.wantHasMore, hasMore)
 
-				var resArg []byte
-				assert.NoError(t, NewArgReader(call.Response().Arg2Reader()).Read(&resArg))
-				assert.Equal(t, tt.arg2Data, string(resArg))
-				assert.NoError(t, NewArgReader(call.Response().Arg3Reader()).Read(&resArg))
-				assert.Equal(t, arg3DataToWrite, string(resArg))
+				gotArg2, gotArg3, err := raw.ReadArgsV2(call.Response())
+				assert.NoError(t, err)
+				assert.Equal(t, wantArg2Data, string(gotArg2))
+				assert.Equal(t, arg3DataToWrite, string(gotArg3))
 			})
 		}
 	})
 }
 
-// failedRelayHost is a RelayHost which always fails RelayCall,
-// but provides way to introspect the received CallFrame.
-type failedRelayHost struct {
+// relayFrameInspector is a RelayHost decorator which inspects
+// the relayFrame and returns it via received channel.
+type relayFrameInspector struct {
 	RelayHost
 
 	received chan relay.CallFrame
 }
 
-func newFailedRelayHost(r RelayHost) *failedRelayHost {
-	return &failedRelayHost{
+func newRelayFrameInspector(r RelayHost) *relayFrameInspector {
+	return &relayFrameInspector{
 		RelayHost: r,
 		received:  make(chan relay.CallFrame, 1),
 	}
 }
 
-//func (r *failedRelayHost) SetChannel(*Channel) {}
-
-func (r *failedRelayHost) Start(f relay.CallFrame, conn *relay.Conn) (RelayCall, error) {
+func (r *relayFrameInspector) Start(f relay.CallFrame, conn *relay.Conn) (RelayCall, error) {
 	r.received <- testutils.CopyCallFrame(f)
 	return r.RelayHost.Start(f, conn)
 }
