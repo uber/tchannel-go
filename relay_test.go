@@ -1117,14 +1117,12 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 				require.NoError(t, err, "BeginCall failed")
 				writer, err := call.Arg2Writer()
 				require.NoError(t, err)
-				wantArg2Data := tt.arg2Data
-				_, err = writer.Write([]byte(wantArg2Data))
+				_, err = writer.Write([]byte(tt.arg2Data))
 				require.NoError(t, err)
 				if tt.arg2Flush {
 					writer.Flush()
 					// tries to write after flush
 					if tt.arg2PostFlushData != "" {
-						wantArg2Data += tt.arg2PostFlushData
 						_, err := writer.Write([]byte(tt.arg2PostFlushData))
 						require.NoError(t, err)
 					}
@@ -1146,7 +1144,7 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 
 				gotArg2, gotArg3, err := raw.ReadArgsV2(call.Response())
 				assert.NoError(t, err)
-				assert.Equal(t, wantArg2Data, string(gotArg2))
+				assert.Equal(t, tt.arg2Data+tt.arg2PostFlushData, string(gotArg2))
 				assert.Equal(t, arg3DataToWrite, string(gotArg3))
 			})
 		}
