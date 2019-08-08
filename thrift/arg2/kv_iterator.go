@@ -18,6 +18,10 @@ type KeyValIterator struct {
 // start of Arg2.
 // NOTE: tchannel-thrift Arg Scheme starts with number of key/value pair.
 func InitKeyValIterator(arg2Payload []byte, arg2Len int) (KeyValIterator, bool) {
+	if arg2Len < 2 {
+		return KeyValIterator{}, false
+	}
+
 	nh := int(binary.BigEndian.Uint16(arg2Payload[0:2]))
 	if nh <= 0 {
 		return KeyValIterator{}, false

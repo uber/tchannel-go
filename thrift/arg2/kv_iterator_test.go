@@ -31,6 +31,12 @@ func TestKeyValIterator(t *testing.T) {
 	}
 	assert.False(t, ok)
 
+	t.Run("init iterator w/o Arg2", func(t *testing.T) {
+		var buf []byte
+		_, ok := InitKeyValIterator(buf, 0)
+		assert.False(t, ok)
+	})
+
 	t.Run("init iterator w/o pairs", func(t *testing.T) {
 		buf := make([]byte, 2)
 		wb := typed.NewWriteBuffer(buf)
