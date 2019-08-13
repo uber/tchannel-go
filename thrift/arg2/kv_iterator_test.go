@@ -2,9 +2,11 @@ package arg2
 
 import (
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/typed"
 )
 
@@ -22,27 +24,27 @@ func TestKeyValIterator(t *testing.T) {
 		wb.WriteLen16String(fmt.Sprintf("value%v", i))
 	}
 
-	iter, ok := NewKeyValIterator(buf[:wb.BytesWritten()])
+	iter, err := NewKeyValIterator(buf[:wb.BytesWritten()])
 	for i := 0; i < nh; i++ {
-		assert.True(t, ok)
+		assert.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("key%v", i), string(iter.Key()))
 		assert.Equal(t, fmt.Sprintf("value%v", i), string(iter.Value()))
-		iter, ok = iter.Next()
+		iter, err = iter.Next()
 	}
-	assert.False(t, ok)
+	assert.Equal(t, io.EOF, err)
 
 	t.Run("init iterator w/o Arg2", func(t *testing.T) {
 		var buf []byte
-		_, ok := NewKeyValIterator(buf)
-		assert.False(t, ok)
+		_, err := NewKeyValIterator(buf)
+		assert.Equal(t, io.EOF, err)
 	})
 
 	t.Run("init iterator w/o pairs", func(t *testing.T) {
 		buf := make([]byte, 2)
 		wb := typed.NewWriteBuffer(buf)
 		wb.WriteUint16(0)
-		_, ok := NewKeyValIterator(buf[:wb.BytesWritten()])
-		assert.False(t, ok)
+		_, err := NewKeyValIterator(buf[:wb.BytesWritten()])
+		assert.Equal(t, io.EOF, err)
 	})
 
 	t.Run("bad key value length", func(t *testing.T) {
@@ -54,39 +56,41 @@ func TestKeyValIterator(t *testing.T) {
 		tests := []struct {
 			msg          string
 			arg2Len      int
-			wantIterator bool
+			wantIterator string
 		}{
 			{
-				msg:          "ok",
-				arg2Len:      wb.BytesWritten(),
-				wantIterator: true,
+				msg:     "ok",
+				arg2Len: wb.BytesWritten(),
 			},
 			{
 				msg:          "not enough to read key len",
 				arg2Len:      3, // nh (2) + 1
-				wantIterator: false,
+				wantIterator: "invalid key offset 2 (arg2 len 3)",
 			},
 			{
 				msg:          "not enough to read value len",
 				arg2Len:      8, // nh (2) + 2 + len(key) + 1
-				wantIterator: false,
+				wantIterator: "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
 			},
 			{
-				msg:          "not enough to iterate key",
+				msg:          "not enough to iterate value",
 				arg2Len:      13, // nh (2) + 2 + len(key) + 2 + len(value) = 14
-				wantIterator: false,
+				wantIterator: "value exceeds arg2 range (offset 9, len 5, arg2 len 13)",
 			},
 		}
 
 		for _, tt := range tests {
 			t.Run(tt.msg, func(t *testing.T) {
-				iter, ok := NewKeyValIterator(buf[:tt.arg2Len])
-				assert.Equal(t, tt.wantIterator, ok)
-
-				if tt.wantIterator {
+				iter, err := NewKeyValIterator(buf[:tt.arg2Len])
+				if tt.wantIterator == "" {
+					assert.NoError(t, err)
 					assert.Equal(t, "key", string(iter.Key()))
 					assert.Equal(t, "value", string(iter.Value()))
+					return
 				}
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantIterator)
 			})
 		}
 	})
