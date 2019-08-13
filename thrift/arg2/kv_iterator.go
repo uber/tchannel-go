@@ -29,15 +29,11 @@ func NewKeyValIterator(arg2Payload []byte) (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
-	nh := int(binary.BigEndian.Uint16(arg2Payload[0:2]))
-	if nh <= 0 {
-		return KeyValIterator{}, io.EOF
-	}
-
 	return KeyValIterator{
-		leftPairCount: nh,
+		valueOffset:   2, // nh has 2B offset
+		leftPairCount: int(binary.BigEndian.Uint16(arg2Payload[0:2])),
 		arg2Payload:   arg2Payload,
-	}.next(2 /*nh*/)
+	}.Next()
 }
 
 // Key Returns the key.
@@ -57,13 +53,8 @@ func (i KeyValIterator) Next() (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
-	return i.next(i.valueOffset + i.valueLen)
-}
-
-// cur is the offset from the start of Arg2 payload to next key/value pair
-// we want to iterate to.
-func (i KeyValIterator) next(cur int) (KeyValIterator, error) {
 	arg2Len := len(i.arg2Payload)
+	cur := i.valueOffset + i.valueLen
 	if cur+2 > arg2Len {
 		return KeyValIterator{}, fmt.Errorf("invalid key offset %v (arg2 len %v)", cur, arg2Len)
 	}
