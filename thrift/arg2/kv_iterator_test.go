@@ -27,15 +27,14 @@ func TestKeyValIterator(t *testing.T) {
 	iter, err := NewKeyValIterator(buf[:wb.BytesWritten()])
 	for i := 0; i < nh; i++ {
 		assert.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("key%v", i), string(iter.Key()))
-		assert.Equal(t, fmt.Sprintf("value%v", i), string(iter.Value()))
+		assert.Equal(t, fmt.Sprintf("key%v", i), string(iter.Key()), "unexpected key")
+		assert.Equal(t, fmt.Sprintf("value%v", i), string(iter.Value()), "unexpected value")
 		iter, err = iter.Next()
 	}
 	assert.Equal(t, io.EOF, err)
 
 	t.Run("init iterator w/o Arg2", func(t *testing.T) {
-		var buf []byte
-		_, err := NewKeyValIterator(buf)
+		_, err := NewKeyValIterator(nil)
 		assert.Equal(t, io.EOF, err)
 	})
 
@@ -68,6 +67,11 @@ func TestKeyValIterator(t *testing.T) {
 				wantErr: "invalid key offset 2 (arg2 len 3)",
 			},
 			{
+				msg:     "not enough to hold key value",
+				arg2Len: 6, // nh (2) + 2 + len(key) - 1
+				wantErr: "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+			},
+			{
 				msg:     "not enough to read value len",
 				arg2Len: 8, // nh (2) + 2 + len(key) + 1
 				wantErr: "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
@@ -84,12 +88,12 @@ func TestKeyValIterator(t *testing.T) {
 				iter, err := NewKeyValIterator(buf[:tt.arg2Len])
 				if tt.wantErr == "" {
 					assert.NoError(t, err)
-					assert.Equal(t, "key", string(iter.Key()))
-					assert.Equal(t, "value", string(iter.Value()))
+					assert.Equal(t, "key", string(iter.Key()), "unexpected key")
+					assert.Equal(t, "value", string(iter.Value()), "unexpected value")
 					return
 				}
 
-				require.Error(t, err)
+				require.Error(t, err, "should not create iterator")
 				assert.Contains(t, err.Error(), tt.wantErr)
 			})
 		}
