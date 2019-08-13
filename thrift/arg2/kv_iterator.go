@@ -17,10 +17,10 @@ type KeyValIterator struct {
 	valueOffset, valueLen int
 }
 
-// InitKeyValIterator inits a KeyValIterator with the buffer pointing at
+// NewKeyValIterator inits a KeyValIterator with the buffer pointing at
 // start of Arg2.
 // NOTE: tchannel-thrift Arg Scheme starts with number of key/value pair.
-func InitKeyValIterator(arg2Payload []byte) (KeyValIterator, bool) {
+func NewKeyValIterator(arg2Payload []byte) (KeyValIterator, bool) {
 	if len(arg2Payload) < 2 {
 		return KeyValIterator{}, false
 	}

@@ -22,7 +22,7 @@ func TestKeyValIterator(t *testing.T) {
 		wb.WriteLen16String(fmt.Sprintf("value%v", i))
 	}
 
-	iter, ok := InitKeyValIterator(buf[:wb.BytesWritten()])
+	iter, ok := NewKeyValIterator(buf[:wb.BytesWritten()])
 	for i := 0; i < nh; i++ {
 		assert.True(t, ok)
 		assert.Equal(t, fmt.Sprintf("key%v", i), string(iter.Key()))
@@ -33,7 +33,7 @@ func TestKeyValIterator(t *testing.T) {
 
 	t.Run("init iterator w/o Arg2", func(t *testing.T) {
 		var buf []byte
-		_, ok := InitKeyValIterator(buf)
+		_, ok := NewKeyValIterator(buf)
 		assert.False(t, ok)
 	})
 
@@ -41,7 +41,7 @@ func TestKeyValIterator(t *testing.T) {
 		buf := make([]byte, 2)
 		wb := typed.NewWriteBuffer(buf)
 		wb.WriteUint16(0)
-		_, ok := InitKeyValIterator(buf[:wb.BytesWritten()])
+		_, ok := NewKeyValIterator(buf[:wb.BytesWritten()])
 		assert.False(t, ok)
 	})
 
@@ -80,7 +80,7 @@ func TestKeyValIterator(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.msg, func(t *testing.T) {
-				iter, ok := InitKeyValIterator(buf[:tt.arg2Len])
+				iter, ok := NewKeyValIterator(buf[:tt.arg2Len])
 				assert.Equal(t, tt.wantIterator, ok)
 
 				if tt.wantIterator {
