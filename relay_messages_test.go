@@ -22,12 +22,15 @@ package tchannel
 
 import (
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
+	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/typed"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testCallReq int
@@ -43,8 +46,9 @@ const (
 )
 
 type testCallReqParams struct {
-	flags   byte
-	arg2Buf []byte
+	flags          byte
+	hasTChanThrift bool
+	arg2Buf        []byte
 }
 
 func (cr testCallReq) req() lazyCallReq {
@@ -68,6 +72,9 @@ func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	payload.WriteLen8String("bankmoji")  // service
 
 	headers := make(map[string]string)
+	if p.hasTChanThrift {
+		headers["as"] = "thrift"
+	}
 	if cr&reqHasHeaders != 0 {
 		addRandomHeaders(headers)
 	}
@@ -350,6 +357,87 @@ func TestLazyCallArg2Offset(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
+	tests := []struct {
+		msg            string
+		wantKV         map[string]string
+		overrideBufLen int
+		wantBadErr     string
+	}{
+		{
+			msg: "two key value pairs",
+			wantKV: map[string]string{
+				"key":  "val",
+				"key2": "val2",
+			},
+		},
+		{
+			msg: "length not enough to cover key len",
+			wantKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 3, // 2 (nh) + 2 - 1
+			wantBadErr:     "invalid key offset 2 (arg2 len 3)",
+		},
+		{
+			msg: "length not enough to cover key",
+			wantKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 6, // 2 (nh) + 2 + len(key) - 1
+			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+		},
+		{
+			msg: "length not enough to cover value len",
+			wantKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 8, // 2 (nh) + 2 + len(key) + 2 - 1
+			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
+		},
+		{
+			msg: "length not enough to cover value",
+			wantKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 10, // 2 (nh) + 2 + len(key) + 2 + len(val) - 2
+			wantBadErr:     "value exceeds arg2 range (offset 9, len 3, arg2 len 10)",
+		},
+		{
+			msg:    "no key value pairs",
+			wantKV: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			withLazyCallReqCombinations(func(crt testCallReq) {
+				arg2Buf := thriftarg2test.BuildKVBuffer(tt.wantKV)
+				if tt.overrideBufLen > 0 {
+					arg2Buf = arg2Buf[:tt.overrideBufLen]
+				}
+				cr := crt.reqWithParams(testCallReqParams{
+					hasTChanThrift: true,
+					arg2Buf:        arg2Buf,
+				})
+				gotIter := make(map[string]string)
+				iter, err := cr.Arg2Iterator()
+				for err == nil {
+					gotIter[string(iter.Key())] = string(iter.Value())
+					iter, err = iter.Next()
+				}
+				if tt.wantBadErr != "" {
+					require.NotEqual(t, io.EOF, err)
+					assert.Contains(t, err.Error(), tt.wantBadErr)
+				} else {
+					assert.Equal(t, tt.wantKV, gotIter, "%v", crt)
+					assert.Equal(t, io.EOF, err)
+				}
+			})
+		})
+	}
 }
 
 func TestLazyCallResRejectsOtherFrames(t *testing.T) {
