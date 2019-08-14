@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/thrift/arg2/testutils"
+	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 )
 
 func TestKeyValIterator(t *testing.T) {
@@ -20,7 +20,7 @@ func TestKeyValIterator(t *testing.T) {
 	for i := 0; i < nh; i++ {
 		kv[fmt.Sprintf("key%v", i)] = fmt.Sprintf("value%v", i)
 	}
-	buf := testutils.BuildKVBuffer(kv)
+	buf := thriftarg2test.BuildKVBuffer(kv)
 
 	iter, err := NewKeyValIterator(buf)
 	gotKV := make(map[string]string)
@@ -38,13 +38,13 @@ func TestKeyValIterator(t *testing.T) {
 	})
 
 	t.Run("init iterator w/o pairs", func(t *testing.T) {
-		buf := testutils.BuildKVBuffer(nil /*kv*/)
+		buf := thriftarg2test.BuildKVBuffer(nil /*kv*/)
 		_, err := NewKeyValIterator(buf)
 		assert.Equal(t, io.EOF, err)
 	})
 
 	t.Run("bad key value length", func(t *testing.T) {
-		buf := testutils.BuildKVBuffer(map[string]string{
+		buf := thriftarg2test.BuildKVBuffer(map[string]string{
 			"key": "value",
 		})
 		tests := []struct {

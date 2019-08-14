@@ -1,4 +1,4 @@
-package testutils
+package thriftarg2test
 
 import "github.com/uber/tchannel-go/typed"
 
