@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uber/tchannel-go/typed"
+	"github.com/uber/tchannel-go/thrift/arg2/testutils"
 )
 
 func TestKeyValIterator(t *testing.T) {
@@ -16,22 +16,21 @@ func TestKeyValIterator(t *testing.T) {
 		nh          = 5
 	)
 
-	buf := make([]byte, testBufSize)
-	wb := typed.NewWriteBuffer(buf)
-	wb.WriteUint16(nh)
+	kv := make(map[string]string, nh)
 	for i := 0; i < nh; i++ {
-		wb.WriteLen16String(fmt.Sprintf("key%v", i))
-		wb.WriteLen16String(fmt.Sprintf("value%v", i))
+		kv[fmt.Sprintf("key%v", i)] = fmt.Sprintf("value%v", i)
 	}
+	buf := testutils.BuildKVBuffer(kv)
 
-	iter, err := NewKeyValIterator(buf[:wb.BytesWritten()])
+	iter, err := NewKeyValIterator(buf)
+	gotKV := make(map[string]string)
 	for i := 0; i < nh; i++ {
 		assert.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("key%v", i), string(iter.Key()), "unexpected key")
-		assert.Equal(t, fmt.Sprintf("value%v", i), string(iter.Value()), "unexpected value")
+		gotKV[fmt.Sprintf("key%v", i)] = fmt.Sprintf("value%v", i)
 		iter, err = iter.Next()
 	}
 	assert.Equal(t, io.EOF, err)
+	assert.Equal(t, kv, gotKV)
 
 	t.Run("init iterator w/o Arg2", func(t *testing.T) {
 		_, err := NewKeyValIterator(nil)
@@ -39,19 +38,15 @@ func TestKeyValIterator(t *testing.T) {
 	})
 
 	t.Run("init iterator w/o pairs", func(t *testing.T) {
-		buf := make([]byte, 2)
-		wb := typed.NewWriteBuffer(buf)
-		wb.WriteUint16(0)
-		_, err := NewKeyValIterator(buf[:wb.BytesWritten()])
+		buf := testutils.BuildKVBuffer(nil /*kv*/)
+		_, err := NewKeyValIterator(buf)
 		assert.Equal(t, io.EOF, err)
 	})
 
 	t.Run("bad key value length", func(t *testing.T) {
-		buf := make([]byte, testBufSize)
-		wb := typed.NewWriteBuffer(buf)
-		wb.WriteUint16(1)
-		wb.WriteLen16String("key")
-		wb.WriteLen16String("value")
+		buf := testutils.BuildKVBuffer(map[string]string{
+			"key": "value",
+		})
 		tests := []struct {
 			msg     string
 			arg2Len int
@@ -59,7 +54,7 @@ func TestKeyValIterator(t *testing.T) {
 		}{
 			{
 				msg:     "ok",
-				arg2Len: wb.BytesWritten(),
+				arg2Len: len(buf),
 			},
 			{
 				msg:     "not enough to read key len",
