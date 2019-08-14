@@ -23,6 +23,7 @@ package tchannel
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -36,6 +37,8 @@ var (
 	_routingKeyKeyBytes      = []byte(RoutingKey)
 	_argSchemeKeyBytes       = []byte(ArgScheme)
 	_tchanThriftValueBytes   = []byte(Thrift)
+
+	errBadArg2Len = errors.New("bad Arg2 length")
 )
 
 const (
@@ -217,8 +220,12 @@ func (f lazyCallReq) Arg2StartOffset() int {
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
 func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
-	if !f.hasTChanThrift || f.arg2EndOffset > int(f.Header.PayloadSize()) {
+	if !f.hasTChanThrift {
 		return arg2.KeyValIterator{}, io.EOF
+	}
+
+	if f.arg2EndOffset > int(f.Header.PayloadSize()) {
+		return arg2.KeyValIterator{}, errBadArg2Len
 	}
 
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
