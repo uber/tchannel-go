@@ -218,7 +218,7 @@ func (f lazyCallReq) Arg2StartOffset() int {
 // of TChannel-Thrift Arg Scheme.
 func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
-		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %v", string(f.as))
+		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
 
 	if f.arg2EndOffset > int(f.Header.PayloadSize()) {

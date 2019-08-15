@@ -48,6 +48,7 @@ const (
 type testCallReqParams struct {
 	flags           byte
 	hasTChanThrift  bool
+	argScheme       Format
 	arg2Buf         []byte
 	overrideArg2Len int
 }
@@ -73,8 +74,9 @@ func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	payload.WriteLen8String("bankmoji")  // service
 
 	headers := make(map[string]string)
-	if p.hasTChanThrift {
-		headers["as"] = "thrift"
+	switch p.argScheme {
+	case HTTP, JSON, Raw, Thrift:
+		headers["as"] = p.argScheme.String()
 	}
 	if cr&reqHasHeaders != 0 {
 		addRandomHeaders(headers)
@@ -369,19 +371,21 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 		msg            string
 		bufKV          map[string]string
 		wantKV         map[string]string // if not set, use bufKV
-		rawArgScheme   bool
+		argScheme      Format
 		overrideBufLen int
 		wantBadErr     string
 	}{
 		{
-			msg: "two key value pairs",
+			msg:       "two key value pairs",
+			argScheme: Thrift,
 			bufKV: map[string]string{
 				"key":  "val",
 				"key2": "val2",
 			},
 		},
 		{
-			msg: "length not enough to cover key len",
+			msg:       "length not enough to cover key len",
+			argScheme: Thrift,
 			bufKV: map[string]string{
 				"key": "val",
 			},
@@ -389,7 +393,8 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 			wantBadErr:     "invalid key offset 2 (arg2 len 3)",
 		},
 		{
-			msg: "length not enough to cover key",
+			msg:       "length not enough to cover key",
+			argScheme: Thrift,
 			bufKV: map[string]string{
 				"key": "val",
 			},
@@ -397,7 +402,8 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
 		},
 		{
-			msg: "length not enough to cover value len",
+			msg:       "length not enough to cover value len",
+			argScheme: Thrift,
 			bufKV: map[string]string{
 				"key": "val",
 			},
@@ -405,7 +411,8 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
 		},
 		{
-			msg: "length not enough to cover value",
+			msg:       "length not enough to cover value",
+			argScheme: Thrift,
 			bufKV: map[string]string{
 				"key": "val",
 			},
@@ -413,14 +420,20 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 			wantBadErr:     "value exceeds arg2 range (offset 9, len 3, arg2 len 10)",
 		},
 		{
-			msg:   "no key value pairs",
-			bufKV: map[string]string{},
+			msg:       "no key value pairs",
+			argScheme: Thrift,
+			bufKV:     map[string]string{},
 		},
 		{
-			msg:          "not tchannel thrift",
-			bufKV:        map[string]string{"key": "val"},
-			rawArgScheme: true,
-			wantBadErr:   "non thrift scheme",
+			msg:        "not tchannel thrift",
+			argScheme:  HTTP,
+			bufKV:      map[string]string{"key": "val"},
+			wantBadErr: "non thrift scheme",
+		},
+		{
+			msg:        "not arg scheme",
+			bufKV:      map[string]string{"key": "val"},
+			wantBadErr: "non thrift scheme",
 		},
 	}
 
@@ -432,8 +445,8 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 					arg2Buf = arg2Buf[:tt.overrideBufLen]
 				}
 				cr := crt.reqWithParams(testCallReqParams{
-					hasTChanThrift: !tt.rawArgScheme,
-					arg2Buf:        arg2Buf,
+					arg2Buf:   arg2Buf,
+					argScheme: tt.argScheme,
 				})
 				gotIter := make(map[string]string)
 				iter, err := cr.Arg2Iterator()
@@ -442,15 +455,15 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 					iter, err = iter.Next()
 				}
 				if tt.wantBadErr != "" {
-					require.NotEqual(t, io.EOF, err)
+					require.NotEqual(t, io.EOF, err, "should not return EOF for iterator exit")
 					assert.Contains(t, err.Error(), tt.wantBadErr)
 				} else {
-					assert.Equal(t, io.EOF, err)
+					assert.Equal(t, io.EOF, err, "should return EOF for iterator exit")
 					wantKV := tt.wantKV
 					if wantKV == nil {
 						wantKV = tt.bufKV
 					}
-					assert.Equal(t, wantKV, gotIter, "%v", crt)
+					assert.Equal(t, wantKV, gotIter, "unexpected arg2 keys, call req %+v", crt)
 				}
 			})
 		})
@@ -462,8 +475,8 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 			leftSpace := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
 			cr := crt.reqWithParams(testCallReqParams{
 				arg2Buf:         make([]byte, leftSpace),
-				hasTChanThrift:  true,
-				overrideArg2Len: leftSpace + 5, // bad Arg2 length
+				argScheme:       Thrift,
+				overrideArg2Len: leftSpace + 5, // Arg2 length extends beyond payload
 			})
 			_, err := cr.Arg2Iterator()
 			assert.Equal(t, errBadArg2Len, err)
