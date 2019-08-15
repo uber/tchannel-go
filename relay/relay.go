@@ -24,6 +24,8 @@
 // backwards-compatibility guarantee.
 package relay
 
+import "github.com/uber/tchannel-go/thrift/arg2"
+
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
 	// Caller is the name of the originating service.
@@ -44,6 +46,10 @@ type CallFrame interface {
 	// Arg2 in bytes, and hasMore to indicate if there are more frames and
 	// Arg3 has not started (i.e. Arg2 is fragmented).
 	Arg2EndOffset() (_ int, hasMore bool)
+	// Arg2Iterator returns the iterator for reading Arg2 key value pair
+	// of TChannel-Thrift Arg Scheme. If no iterator is available, return
+	// io.EOF.
+	Arg2Iterator() (arg2.KeyValIterator, error)
 }
 
 // Conn contains information about the underlying connection.

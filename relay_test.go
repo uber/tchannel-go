@@ -38,6 +38,7 @@ import (
 	"github.com/uber/tchannel-go/relay/relaytest"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
+	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1148,6 +1149,57 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 				assert.Equal(t, arg3DataToWrite, string(gotArg3), "arg3 in response does not meet expectation")
 			})
 		}
+	})
+}
+
+func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
+	ctx, cancel := NewContext(testutils.Timeout(time.Second))
+	defer cancel()
+
+	rh := relaytest.NewStubRelayHost()
+	inspector := newRelayFrameInspector(rh)
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHost(inspector)
+
+	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
+		kv := map[string]string{
+			"key":     "val",
+			"key2":    "valval",
+			"longkey": "valvalvalval",
+		}
+		arg2Buf := thriftarg2test.BuildKVBuffer(kv)
+
+		const (
+			testMethod = "echo"
+			arg3Data   = "arg3-here"
+		)
+
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		rh.Add(ts.ServiceName(), ts.Server().PeerInfo().HostPort)
+		client := testutils.NewClient(t, nil /*opts*/)
+		defer client.Close()
+
+		call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), testMethod, &CallOptions{Format: Thrift})
+		require.NoError(t, err, "BeginCall failed")
+		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(arg2Buf), "arg2 write failed")
+		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3Data)), "arg3 write failed")
+
+		f := <-inspector.received
+		iter, err := f.Arg2Iterator()
+		gotKV := make(map[string]string)
+		for err == nil {
+			gotKV[string(iter.Key())] = string(iter.Value())
+			iter, err = iter.Next()
+		}
+		assert.Equal(t, kv, gotKV)
+		assert.Equal(t, io.EOF, err)
+
+		gotArg2, gotArg3, err := raw.ReadArgsV2(call.Response())
+		assert.NoError(t, err)
+		assert.Equal(t, string(arg2Buf), string(gotArg2), "arg2 in response does not meet expectation")
+		assert.Equal(t, arg3Data, string(gotArg3), "arg3 in response does not meet expectation")
 	})
 }
 
