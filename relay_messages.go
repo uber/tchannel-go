@@ -25,7 +25,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/uber/tchannel-go/thrift/arg2"
@@ -91,15 +90,13 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
-// TODO: Use []byte instead of string for caller/method to avoid allocations.
 type lazyCallReq struct {
 	*Frame
 
-	caller, method, delegate, key []byte
+	caller, method, delegate, key, as []byte
 
 	arg2StartOffset, arg2EndOffset int
 	isArg2Fragmented               bool
-	hasTChanThrift                 bool
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -128,7 +125,7 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		cur += valLen
 
 		if bytes.Equal(key, _argSchemeKeyBytes) {
-			cr.hasTChanThrift = bytes.Equal(val, _tchanThriftValueBytes)
+			cr.as = val
 		} else if bytes.Equal(key, _callerNameKeyBytes) {
 			cr.caller = val
 		} else if bytes.Equal(key, _routingDelegateKeyBytes) {
@@ -220,8 +217,8 @@ func (f lazyCallReq) Arg2StartOffset() int {
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
 func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
-	if !f.hasTChanThrift {
-		return arg2.KeyValIterator{}, io.EOF
+	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
+		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %v", string(f.as))
 	}
 
 	if f.arg2EndOffset > int(f.Header.PayloadSize()) {

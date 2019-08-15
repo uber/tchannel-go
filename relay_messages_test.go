@@ -419,8 +419,8 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 		{
 			msg:          "not tchannel thrift",
 			bufKV:        map[string]string{"key": "val"},
-			wantKV:       map[string]string{},
 			rawArgScheme: true,
+			wantBadErr:   "non thrift scheme",
 		},
 	}
 
