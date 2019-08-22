@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"context"
 	"math"
 	"strconv"
 	"testing"
@@ -59,10 +60,14 @@ func TestIntrospection(t *testing.T) {
 		require.NoError(t, err, "Call _gometa_runtime failed")
 
 		if !ts.HasRelay() {
-			// Try making the call on the "tchannel" service which is where meta handlers
-			// are registered. This will only work when we call it directly as the relay
-			// will not forward the tchannel service.
+			// Try making the call on any service name as internal handlers are always registered.
+			// This will only work when we call it directly as the relay will not forward these services.
 			err = json.CallPeer(ctx, peer, "tchannel", "_gometa_runtime", map[string]interface{}{
+				"includeGoStacks": true,
+			}, &resp)
+			require.NoError(t, err, "Call _gometa_runtime failed")
+
+			err = json.CallPeer(ctx, peer, "some-random-service", "_gometa_runtime", map[string]interface{}{
 				"includeGoStacks": true,
 			}, &resp)
 			require.NoError(t, err, "Call _gometa_runtime failed")
@@ -146,5 +151,30 @@ func TestIntrospectClosedConn(t *testing.T) {
 			assert.Equal(t, 1, client.IntrospectNumConnections(), "Client should have single connection")
 			assert.Equal(t, i+1, ts.Server().IntrospectNumConnections(), "Incorrect number of server connections")
 		}
+	})
+}
+
+func TestIntrospectionNotBlocked(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+		subCh := ts.Server().GetSubChannel("service-2")
+		subCh.SetHandler(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			panic("should not be called")
+		}))
+
+		// Ensure that service-2 is also relayed
+		if ts.HasRelay() {
+			ts.RelayHost().Add("service-2", ts.Server().PeerInfo().HostPort)
+		}
+
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		client := ts.NewClient(nil)
+		peer := client.Peers().GetOrAdd(ts.HostPort())
+
+		// Ensure that SetHandler doesn't block introspection.
+		var resp interface{}
+		err := json.CallPeer(Wrap(ctx), peer, "service-2", "_gometa_runtime", nil, &resp)
+		require.NoError(t, err, "Call _gometa_runtime failed")
 	})
 }

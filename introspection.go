@@ -519,7 +519,9 @@ func introspectRuntimeVersion() RuntimeVersion {
 // registerInternal registers the following internal handlers which return runtime state:
 //  _gometa_introspect: TChannel internal state.
 //  _gometa_runtime: Golang runtime stats.
-func (ch *Channel) registerInternal() {
+func (ch *Channel) createInternalHandlers() *handlerMap {
+	internalHandlers := &handlerMap{}
+
 	endpoints := []struct {
 		name    string
 		handler func([]byte) interface{}
@@ -528,7 +530,6 @@ func (ch *Channel) registerInternal() {
 		{"_gometa_runtime", handleInternalRuntime},
 	}
 
-	tchanSC := ch.GetSubChannel("tchannel")
 	for _, ep := range endpoints {
 		// We need ep in our closure.
 		ep := ep
@@ -545,7 +546,9 @@ func (ch *Channel) registerInternal() {
 			}
 			NewArgWriter(call.Response().Arg3Writer()).WriteJSON(ep.handler(arg3))
 		}
-		ch.Register(HandlerFunc(handler), ep.name)
-		tchanSC.Register(HandlerFunc(handler), ep.name)
+
+		internalHandlers.register(HandlerFunc(handler), ep.name)
 	}
+
+	return internalHandlers
 }

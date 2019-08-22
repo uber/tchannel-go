@@ -195,8 +195,7 @@ func TestGetHandlers(t *testing.T) {
 	}{
 		{
 			serviceName: ch.ServiceName(),
-			// Default service name comes with extra introspection methods.
-			wantMethods: []string{"_gometa_introspect", "_gometa_runtime", "method1", "method2"},
+			wantMethods: []string{"method1", "method2"},
 		},
 		{
 			serviceName: "foo",
