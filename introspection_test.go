@@ -21,6 +21,8 @@
 package tchannel_test
 
 import (
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -65,6 +67,36 @@ func TestIntrospection(t *testing.T) {
 			}, &resp)
 			require.NoError(t, err, "Call _gometa_runtime failed")
 		}
+	})
+}
+
+func TestIntrospectByID(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		ctx, cancel := json.NewContext(time.Second)
+		defer cancel()
+
+		clientID := client.IntrospectState(nil).ID
+
+		var resp map[string]interface{}
+		peer := client.Peers().GetOrAdd(ts.HostPort())
+		err := json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", map[string]interface{}{
+			"id": clientID,
+		}, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+
+		// Verify that the response matches the channel ID we expected.
+		assert.EqualValues(t, clientID, resp["id"], "unexpected response channel ID")
+
+		// If use an ID which doesn't exist, we get an error
+		resp = nil
+		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", map[string]interface{}{
+			"id": math.MaxUint32,
+		}, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+		assert.EqualValues(t, `failed to find channel with "id": `+strconv.Itoa(math.MaxUint32), resp["error"])
 	})
 }
 

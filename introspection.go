@@ -22,6 +22,7 @@ package tchannel
 
 import (
 	"encoding/json"
+	"fmt"
 	"runtime"
 	"sort"
 	"strconv"
@@ -446,9 +447,25 @@ func getStacks(all bool) []byte {
 	return buf
 }
 func (ch *Channel) handleIntrospection(arg3 []byte) interface{} {
-	var opts IntrospectionOptions
+	var opts struct {
+		IntrospectionOptions
+
+		// (optional) ID of the channel to introspection. If unspecified, uses ch.
+		ChannelID *uint32 `json:"id"`
+	}
 	json.Unmarshal(arg3, &opts)
-	return ch.IntrospectState(&opts)
+
+	if opts.ChannelID != nil {
+		id := *opts.ChannelID
+
+		var ok bool
+		ch, ok = findChannelByID(id)
+		if !ok {
+			return map[string]string{"error": fmt.Sprintf(`failed to find channel with "id": %v`, id)}
+		}
+	}
+
+	return ch.IntrospectState(&opts.IntrospectionOptions)
 }
 
 // IntrospectList returns the list of peers (hostport, score) in this peer list.
