@@ -67,3 +67,18 @@ func removeClosedChannel(ch *Channel) {
 
 	channelMap.existing[ch.ServiceName()] = channels
 }
+
+func findChannelByID(id uint32) (*Channel, bool) {
+	channelMap.Lock()
+	defer channelMap.Unlock()
+
+	for _, channels := range channelMap.existing {
+		for _, ch := range channels {
+			if ch.chID == id {
+				return ch, true
+			}
+		}
+	}
+
+	return nil, false
+}
