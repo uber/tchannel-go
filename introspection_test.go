@@ -57,8 +57,11 @@ func TestIntrospection(t *testing.T) {
 		}, &resp)
 		require.NoError(t, err, "Call _gometa_introspect failed")
 
+		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", nil /* arg */, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+
 		// Try making the call on any other service name will fail.
-		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_runtime", map[string]interface{}{
+		err = json.CallPeer(ctx, peer, "unknown-service", "_gometa_runtime", map[string]interface{}{
 			"includeGoStacks": true,
 		}, &resp)
 		require.Error(t, err, "_gometa_introspect should only be registered under tchannel")

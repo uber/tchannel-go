@@ -263,7 +263,6 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
 
-	ch.internalHandlers = ch.createInternalHandlers()
 	if opts.Handler != nil {
 		ch.handler = opts.Handler
 	} else {
@@ -286,6 +285,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.mutable.state = ChannelClient
 	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
+	ch.internalHandlers = ch.createInternalHandlers()
 
 	registerNewChannel(ch)
 

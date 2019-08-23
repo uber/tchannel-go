@@ -547,7 +547,11 @@ func (ch *Channel) createInternalHandlers() *handlerMap {
 			NewArgWriter(call.Response().Arg3Writer()).WriteJSON(ep.handler(arg3))
 		}
 
-		internalHandlers.register(HandlerFunc(handler), ep.name)
+		h := HandlerFunc(handler)
+		internalHandlers.register(h, ep.name)
+
+		// Register under the service name of channel as well (for backwards compatibility).
+		ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, ep.name)
 	}
 
 	return internalHandlers
