@@ -191,10 +191,13 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 		}
 	}()
 
-	// Internal handlers (e.g., introspection) trump all other user-registered handlers
-	if h := c.internalHandlers.find(call.Method()); h != nil {
-		h.Handle(call.mex.ctx, call)
-		return
+	// Internal handlers (e.g., introspection) trump all other user-registered handlers on
+	// the "tchannel" name.
+	if call.ServiceName() == "tchannel" {
+		if h := c.internalHandlers.find(call.Method()); h != nil {
+			h.Handle(call.mex.ctx, call)
+			return
+		}
 	}
 
 	c.handler.Handle(call.mex.ctx, call)
