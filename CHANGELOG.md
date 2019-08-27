@@ -1,6 +1,14 @@
 Changelog
 =========
 
+## [1.15.0] - 2019-08-26
+### Added
+ * introspection: Introspect any channel by ID. (#756)
+
+### Fixed
+ * Ensure Introspection endpoints are always available. (#755)
+ * Fix testutils.WithTestServer incorrectly using RelayHost when creating the server. (#750)
+
 ## [1.14.0] - 2019-05-20
 ### Added
  * Expose `CallOptions` caller name for transparent proxying (#741)
@@ -262,6 +270,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.15.0]: https://github.com/uber/tchannel-go/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/uber/tchannel-go/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/uber/tchannel-go/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/uber/tchannel-go/compare/v1.11.0...v1.12.0
