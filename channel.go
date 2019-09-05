@@ -113,6 +113,9 @@ type ChannelOptions struct {
 	// Handler is an alternate handler for all inbound requests, overriding the
 	// default handler that delegates to a subchannel.
 	Handler Handler
+
+
+	Dialer *net.Dialer
 }
 
 // ChannelState is the state of a channel.
@@ -158,6 +161,7 @@ type Channel struct {
 	internalHandlers    *handlerMap
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
+	dialer              *net.Dialer
 	closed              chan struct{}
 
 	// mutable contains all the members of Channel which are mutable.
@@ -259,6 +263,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 		relayTimerVerify:  opts.RelayTimerVerification,
+		dialer:            opts.Dialer,
 		closed:            make(chan struct{}),
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
@@ -563,7 +568,13 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	}
 
 	timeout := getTimeout(ctx)
-	tcpConn, err := dialContext(ctx, hostPort)
+	var tcpConn net.Conn
+	var err error
+	if ch.dialer != nil {
+		tcpConn, err = ch.dialer.DialContext(ctx, "tcp", hostPort)
+	} else {
+		tcpConn, err = dialContext(ctx, hostPort)
+	}
 	if err != nil {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			ch.log.WithFields(
