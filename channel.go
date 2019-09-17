@@ -114,6 +114,8 @@ type ChannelOptions struct {
 	// default handler that delegates to a subchannel.
 	Handler Handler
 
+	// Dialer is optional factory method which can be used for overriding
+	// outbound connections for things like TLS handshake
 	Dialer func(ctx context.Context, hostPort string) (net.Conn, error)
 }
 
