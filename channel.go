@@ -114,8 +114,7 @@ type ChannelOptions struct {
 	// default handler that delegates to a subchannel.
 	Handler Handler
 
-
-	Dialer *net.Dialer
+	Dialer func(ctx context.Context, hostPort string) (net.Conn, error)
 }
 
 // ChannelState is the state of a channel.
@@ -161,7 +160,7 @@ type Channel struct {
 	internalHandlers    *handlerMap
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
-	dialer              *net.Dialer
+	dialer              func(ctx context.Context, hostPort string) (net.Conn, error)
 	closed              chan struct{}
 
 	// mutable contains all the members of Channel which are mutable.
@@ -571,7 +570,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	var tcpConn net.Conn
 	var err error
 	if ch.dialer != nil {
-		tcpConn, err = ch.dialer.DialContext(ctx, "tcp", hostPort)
+		tcpConn, err = ch.dialer(ctx, hostPort)
 	} else {
 		tcpConn, err = dialContext(ctx, hostPort)
 	}
