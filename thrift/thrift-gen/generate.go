@@ -33,6 +33,7 @@ var (
 	thriftBinary       = flag.String("thriftBinary", "thrift", "Command to use for the Apache Thrift binary")
 	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
 	packagePrefix      = flag.String("packagePrefix", "", "The package prefix (will be used similar to how Apache Thrift uses it)")
+	thriftNoRecurse    = flag.Bool("thriftNoRecurse", false, "Indicates if thrift should not generate included files (-r flag)")
 )
 
 func execCmd(name string, args ...string) error {
@@ -78,7 +79,13 @@ func runThrift(inFile string, outDir string) error {
 
 	// Generate the Apache Thrift generated code.
 	goArgs := fmt.Sprintf("go:thrift_import=%s,package_prefix=%s", *apacheThriftImport, *packagePrefix)
-	if err := execThrift("-r", "--gen", goArgs, "-out", outDir, inFile); err != nil {
+	args := []string{
+		"--gen", goArgs, "-out", outDir, inFile,
+	}
+	if !*thriftNoRecurse {
+		args = append(args, "-r")
+	}
+	if err := execThrift(args...); err != nil {
 		return fmt.Errorf("thrift compile failed: %v", err)
 	}
 
