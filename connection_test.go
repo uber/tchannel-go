@@ -1324,26 +1324,25 @@ func TestInvalidTransportHeaders(t *testing.T) {
 }
 
 func TestCustomDialer(t *testing.T) {
-	sopts := testutils.NewOpts().NoRelay()
+	sopts := testutils.NewOpts()
 	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
 		server := ts.Server()
 		testutils.RegisterEcho(server, nil)
-		customDialerCalled := false
+		customDialerCalledCount := 0
 
-		copts := testutils.NewOpts().SetDialer(func(ctx context.Context, hostPort string) (net.Conn, error) {
-			customDialerCalled = true
+		copts := testutils.NewOpts().SetDialer(func(ctx context.Context, network, hostPort string) (net.Conn, error) {
+			customDialerCalledCount++
 			d := net.Dialer{}
-			return d.DialContext(ctx, "tcp", hostPort)
+			return d.DialContext(ctx, network, hostPort)
 		})
 
 		// Induce the creation of a connection from client to server.
 		client := ts.NewClient(copts)
-		require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
-		assert.True(t, customDialerCalled, "custom dialer used for establishing connection")
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
 
 		// Re-use
 		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
-
-		client.Close()
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
 	})
 }

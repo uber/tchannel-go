@@ -116,7 +116,7 @@ type ChannelOptions struct {
 
 	// Dialer is optional factory method which can be used for overriding
 	// outbound connections for things like TLS handshake
-	Dialer func(ctx context.Context, hostPort string) (net.Conn, error)
+	Dialer func(ctx context.Context, network, hostPort string) (net.Conn, error)
 }
 
 // ChannelState is the state of a channel.
@@ -249,6 +249,14 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		return nil, err
 	}
 
+	// Default to dialContext if dialer is not passed in as an option
+	dialCtx := dialContext
+	if opts.Dialer != nil {
+		dialCtx = func (ctx context.Context, hostPort string) (net.Conn, error) {
+			return opts.Dialer(ctx, "tcp", hostPort)
+		}
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger,
@@ -264,7 +272,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayHost:         opts.RelayHost,
 		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 		relayTimerVerify:  opts.RelayTimerVerification,
-		dialer:            opts.Dialer,
+		dialer:            dialCtx,
 		closed:            make(chan struct{}),
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
@@ -569,13 +577,7 @@ func (ch *Channel) Connect(ctx context.Context, hostPort string) (*Connection, e
 	}
 
 	timeout := getTimeout(ctx)
-	var tcpConn net.Conn
-	var err error
-	if ch.dialer != nil {
-		tcpConn, err = ch.dialer(ctx, hostPort)
-	} else {
-		tcpConn, err = dialContext(ctx, hostPort)
-	}
+	tcpConn, err := ch.dialer(ctx, hostPort)
 	if err != nil {
 		if ne, ok := err.(net.Error); ok && ne.Timeout() {
 			ch.log.WithFields(

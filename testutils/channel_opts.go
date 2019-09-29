@@ -236,7 +236,7 @@ func (o *ChannelOpts) SetIdleCheckInterval(d time.Duration) *ChannelOpts {
 }
 
 // SetDialer sets the dialer used for outbound connections
-func (o *ChannelOpts) SetDialer(f func(context.Context, string) (net.Conn, error)) *ChannelOpts {
+func (o *ChannelOpts) SetDialer(f func(context.Context, string, string) (net.Conn, error)) *ChannelOpts {
 	o.ChannelOptions.Dialer = f
 	return o
 }
