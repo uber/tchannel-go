@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"flag"
+	"net"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/uber/tchannel-go/tos"
 
 	"go.uber.org/atomic"
+	"golang.org/x/net/context"
 )
 
 var connectionLog = flag.Bool("connectionLog", false, "Enables connection logging in tests")
@@ -230,6 +232,12 @@ func (o *ChannelOpts) SetMaxIdleTime(d time.Duration) *ChannelOpts {
 // stale connections from the channel.
 func (o *ChannelOpts) SetIdleCheckInterval(d time.Duration) *ChannelOpts {
 	o.ChannelOptions.IdleCheckInterval = d
+	return o
+}
+
+// SetDialer sets the dialer used for outbound connections
+func (o *ChannelOpts) SetDialer(f func(context.Context, string, string) (net.Conn, error)) *ChannelOpts {
+	o.ChannelOptions.Dialer = f
 	return o
 }
 

@@ -1322,3 +1322,27 @@ func TestInvalidTransportHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestCustomDialer(t *testing.T) {
+	sopts := testutils.NewOpts()
+	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		customDialerCalledCount := 0
+
+		copts := testutils.NewOpts().SetDialer(func(ctx context.Context, network, hostPort string) (net.Conn, error) {
+			customDialerCalledCount++
+			d := net.Dialer{}
+			return d.DialContext(ctx, network, hostPort)
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
+	})
+}
