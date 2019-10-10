@@ -21,6 +21,9 @@
 package tchannel_test
 
 import (
+	"context"
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -35,7 +38,10 @@ import (
 // Purpose of this test is to ensure introspection doesn't cause any panics
 // and we have coverage of the introspection code.
 func TestIntrospection(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+	opts := testutils.NewOpts().
+		AddLogFilter("Couldn't find handler", 1). // call with service name fails
+		NoRelay()                                 // "tchannel" service name is not forwarded.
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := testutils.NewClient(t, nil)
 		defer client.Close()
 
@@ -44,27 +50,51 @@ func TestIntrospection(t *testing.T) {
 
 		var resp map[string]interface{}
 		peer := client.Peers().GetOrAdd(ts.HostPort())
-		err := json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", map[string]interface{}{
+		err := json.CallPeer(ctx, peer, "tchannel", "_gometa_introspect", map[string]interface{}{
 			"includeExchanges":  true,
 			"includeEmptyPeers": true,
 			"includeTombstones": true,
 		}, &resp)
 		require.NoError(t, err, "Call _gometa_introspect failed")
 
-		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_runtime", map[string]interface{}{
+		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", nil /* arg */, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+
+		// Try making the call on any other service name will fail.
+		err = json.CallPeer(ctx, peer, "unknown-service", "_gometa_runtime", map[string]interface{}{
 			"includeGoStacks": true,
 		}, &resp)
-		require.NoError(t, err, "Call _gometa_runtime failed")
+		require.Error(t, err, "_gometa_introspect should only be registered under tchannel")
+	})
+}
 
-		if !ts.HasRelay() {
-			// Try making the call on the "tchannel" service which is where meta handlers
-			// are registered. This will only work when we call it directly as the relay
-			// will not forward the tchannel service.
-			err = json.CallPeer(ctx, peer, "tchannel", "_gometa_runtime", map[string]interface{}{
-				"includeGoStacks": true,
-			}, &resp)
-			require.NoError(t, err, "Call _gometa_runtime failed")
-		}
+func TestIntrospectByID(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+		client := testutils.NewClient(t, nil)
+		defer client.Close()
+
+		ctx, cancel := json.NewContext(time.Second)
+		defer cancel()
+
+		clientID := client.IntrospectState(nil).ID
+
+		var resp map[string]interface{}
+		peer := client.Peers().GetOrAdd(ts.HostPort())
+		err := json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", map[string]interface{}{
+			"id": clientID,
+		}, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+
+		// Verify that the response matches the channel ID we expected.
+		assert.EqualValues(t, clientID, resp["id"], "unexpected response channel ID")
+
+		// If use an ID which doesn't exist, we get an error
+		resp = nil
+		err = json.CallPeer(ctx, peer, ts.ServiceName(), "_gometa_introspect", map[string]interface{}{
+			"id": math.MaxUint32,
+		}, &resp)
+		require.NoError(t, err, "Call _gometa_introspect failed")
+		assert.EqualValues(t, `failed to find channel with "id": `+strconv.Itoa(math.MaxUint32), resp["error"])
 	})
 }
 
@@ -114,5 +144,30 @@ func TestIntrospectClosedConn(t *testing.T) {
 			assert.Equal(t, 1, client.IntrospectNumConnections(), "Client should have single connection")
 			assert.Equal(t, i+1, ts.Server().IntrospectNumConnections(), "Incorrect number of server connections")
 		}
+	})
+}
+
+func TestIntrospectionNotBlocked(t *testing.T) {
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+		subCh := ts.Server().GetSubChannel("tchannel")
+		subCh.SetHandler(HandlerFunc(func(ctx context.Context, inbound *InboundCall) {
+			panic("should not be called")
+		}))
+
+		// Ensure that tchannel is also relayed
+		if ts.HasRelay() {
+			ts.RelayHost().Add("tchannel", ts.Server().PeerInfo().HostPort)
+		}
+
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		client := ts.NewClient(nil)
+		peer := client.Peers().GetOrAdd(ts.HostPort())
+
+		// Ensure that SetHandler doesn't block introspection.
+		var resp interface{}
+		err := json.CallPeer(Wrap(ctx), peer, "tchannel", "_gometa_runtime", nil, &resp)
+		require.NoError(t, err, "Call _gometa_runtime failed")
 	})
 }

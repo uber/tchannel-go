@@ -21,12 +21,16 @@
 package tchannel
 
 import (
+	"fmt"
+	"io"
 	"testing"
 	"time"
 
+	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/typed"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testCallReq int
@@ -41,22 +45,39 @@ const (
 	reqHasAll testCallReq = reqTotalCombinations - 1
 )
 
+type testCallReqParams struct {
+	flags           byte
+	hasTChanThrift  bool
+	argScheme       Format
+	arg2Buf         []byte
+	overrideArg2Len int
+}
+
 func (cr testCallReq) req() lazyCallReq {
+	return cr.reqWithParams(testCallReqParams{})
+}
+
+func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
 	f := NewFrame(200)
 	fh := fakeHeader()
+	fh.size = 0xD8 // 200 + 16 bytes of header = 216 (0xD8)
 	f.Header = fh
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
 
 	payload := typed.NewWriteBuffer(f.Payload)
-	payload.WriteSingleByte(0)           // flags
+	payload.WriteSingleByte(p.flags)     // flags
 	payload.WriteUint32(42)              // TTL
 	payload.WriteBytes(make([]byte, 25)) // tracing
 	payload.WriteLen8String("bankmoji")  // service
 
 	headers := make(map[string]string)
+	switch p.argScheme {
+	case HTTP, JSON, Raw, Thrift:
+		headers["as"] = p.argScheme.String()
+	}
 	if cr&reqHasHeaders != 0 {
 		addRandomHeaders(headers)
 	}
@@ -79,6 +100,13 @@ func (cr testCallReq) req() lazyCallReq {
 		payload.WriteUint32(0)                            // checksum contents
 	}
 	payload.WriteLen16String("moneys") // method
+
+	arg2Len := len(p.arg2Buf)
+	if p.overrideArg2Len > 0 {
+		arg2Len = p.overrideArg2Len
+	}
+	payload.WriteUint16(uint16(arg2Len))
+	payload.WriteBytes(p.arg2Buf)
 	return newLazyCallReq(f)
 }
 
@@ -269,6 +297,190 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 		cr := crt.req()
 		cr.SetTTL(time.Second)
 		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
+	})
+}
+
+func TestLazyCallArg2Offset(t *testing.T) {
+	wantArg2Buf := []byte("test arg2 buf")
+	tests := []struct {
+		msg     string
+		flags   byte
+		arg2Buf []byte
+	}{
+		{
+			msg:     "arg2 is fully contained in frame",
+			arg2Buf: wantArg2Buf,
+		},
+		{
+			msg: "has no arg2",
+		},
+		{
+			msg:     "frame fragmented but arg2 is fully contained",
+			flags:   hasMoreFragmentsFlag,
+			arg2Buf: wantArg2Buf,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			withLazyCallReqCombinations(func(crt testCallReq) {
+				cr := crt.reqWithParams(testCallReqParams{
+					flags:   tt.flags,
+					arg2Buf: tt.arg2Buf,
+				})
+				arg2EndOffset, hasMore := cr.Arg2EndOffset()
+				assert.False(t, hasMore)
+				if len(tt.arg2Buf) == 0 {
+					assert.Zero(t, arg2EndOffset-cr.Arg2StartOffset())
+					return
+				}
+
+				arg2Payload := cr.Payload[cr.Arg2StartOffset():arg2EndOffset]
+				assert.Equal(t, tt.arg2Buf, arg2Payload)
+			})
+		})
+	}
+
+	t.Run("no arg3 set", func(t *testing.T) {
+		for _, testHasMore := range []bool{true, false} {
+			t.Run(fmt.Sprintf("hasMore flag is set=%v", testHasMore), func(t *testing.T) {
+				withLazyCallReqCombinations(func(crt testCallReq) {
+					// For each CallReq, we first get the remaining space left, and
+					// fill up the remaining space with arg2.
+					crNoArg2 := crt.req()
+					arg2Size := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
+					var flags byte
+					if testHasMore {
+						flags |= hasMoreFragmentsFlag
+					}
+					cr := crt.reqWithParams(testCallReqParams{
+						flags:   flags,
+						arg2Buf: make([]byte, arg2Size),
+					})
+					endOffset, hasMore := cr.Arg2EndOffset()
+					assert.Equal(t, hasMore, testHasMore)
+					assert.EqualValues(t, crNoArg2.Header.PayloadSize(), endOffset)
+				})
+			})
+		}
+	})
+}
+
+func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
+	tests := []struct {
+		msg            string
+		bufKV          map[string]string
+		wantKV         map[string]string // if not set, use bufKV
+		argScheme      Format
+		overrideBufLen int
+		wantBadErr     string
+	}{
+		{
+			msg:       "two key value pairs",
+			argScheme: Thrift,
+			bufKV: map[string]string{
+				"key":  "val",
+				"key2": "val2",
+			},
+		},
+		{
+			msg:       "length not enough to cover key len",
+			argScheme: Thrift,
+			bufKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 3, // 2 (nh) + 2 - 1
+			wantBadErr:     "invalid key offset 2 (arg2 len 3)",
+		},
+		{
+			msg:       "length not enough to cover key",
+			argScheme: Thrift,
+			bufKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 6, // 2 (nh) + 2 + len(key) - 1
+			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+		},
+		{
+			msg:       "length not enough to cover value len",
+			argScheme: Thrift,
+			bufKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 8, // 2 (nh) + 2 + len(key) + 2 - 1
+			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
+		},
+		{
+			msg:       "length not enough to cover value",
+			argScheme: Thrift,
+			bufKV: map[string]string{
+				"key": "val",
+			},
+			overrideBufLen: 10, // 2 (nh) + 2 + len(key) + 2 + len(val) - 2
+			wantBadErr:     "value exceeds arg2 range (offset 9, len 3, arg2 len 10)",
+		},
+		{
+			msg:       "no key value pairs",
+			argScheme: Thrift,
+			bufKV:     map[string]string{},
+		},
+		{
+			msg:        "not tchannel thrift",
+			argScheme:  HTTP,
+			bufKV:      map[string]string{"key": "val"},
+			wantBadErr: "non thrift scheme",
+		},
+		{
+			msg:        "not arg scheme",
+			bufKV:      map[string]string{"key": "val"},
+			wantBadErr: "non thrift scheme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			withLazyCallReqCombinations(func(crt testCallReq) {
+				arg2Buf := thriftarg2test.BuildKVBuffer(tt.bufKV)
+				if tt.overrideBufLen > 0 {
+					arg2Buf = arg2Buf[:tt.overrideBufLen]
+				}
+				cr := crt.reqWithParams(testCallReqParams{
+					arg2Buf:   arg2Buf,
+					argScheme: tt.argScheme,
+				})
+				gotIter := make(map[string]string)
+				iter, err := cr.Arg2Iterator()
+				for err == nil {
+					gotIter[string(iter.Key())] = string(iter.Value())
+					iter, err = iter.Next()
+				}
+				if tt.wantBadErr != "" {
+					require.NotEqual(t, io.EOF, err, "should not return EOF for iterator exit")
+					assert.Contains(t, err.Error(), tt.wantBadErr)
+				} else {
+					assert.Equal(t, io.EOF, err, "should return EOF for iterator exit")
+					wantKV := tt.wantKV
+					if wantKV == nil {
+						wantKV = tt.bufKV
+					}
+					assert.Equal(t, wantKV, gotIter, "unexpected arg2 keys, call req %+v", crt)
+				}
+			})
+		})
+	}
+
+	t.Run("bad Arg2 length", func(t *testing.T) {
+		withLazyCallReqCombinations(func(crt testCallReq) {
+			crNoArg2 := crt.req()
+			leftSpace := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
+			cr := crt.reqWithParams(testCallReqParams{
+				arg2Buf:         make([]byte, leftSpace),
+				argScheme:       Thrift,
+				overrideArg2Len: leftSpace + 5, // Arg2 length extends beyond payload
+			})
+			_, err := cr.Arg2Iterator()
+			assert.Equal(t, errBadArg2Len, err)
+		})
 	})
 }
 

@@ -155,6 +155,7 @@ type Channel struct {
 	relayHost           RelayHost
 	relayMaxTimeout     time.Duration
 	relayTimerVerify    bool
+	internalHandlers    *handlerMap
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
 	closed              chan struct{}
@@ -284,12 +285,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.mutable.state = ChannelClient
 	ch.mutable.conns = make(map[uint32]*Connection)
 	ch.createCommonStats()
-
-	// Register internal unless the root handler has been overridden, since
-	// Register will panic.
-	if opts.Handler == nil {
-		ch.registerInternal()
-	}
+	ch.internalHandlers = ch.createInternalHandlers()
 
 	registerNewChannel(ch)
 

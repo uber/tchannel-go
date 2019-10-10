@@ -23,14 +23,21 @@ package tchannel
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/uber/tchannel-go/thrift/arg2"
 )
 
 var (
 	_callerNameKeyBytes      = []byte(CallerName)
 	_routingDelegateKeyBytes = []byte(RoutingDelegate)
 	_routingKeyKeyBytes      = []byte(RoutingKey)
+	_argSchemeKeyBytes       = []byte(ArgScheme)
+	_tchanThriftValueBytes   = []byte(Thrift)
+
+	errBadArg2Len = errors.New("bad Arg2 length")
 )
 
 const (
@@ -83,11 +90,13 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
-// TODO: Use []byte instead of string for caller/method to avoid allocations.
 type lazyCallReq struct {
 	*Frame
 
-	caller, method, delegate, key []byte
+	caller, method, delegate, key, as []byte
+
+	arg2StartOffset, arg2EndOffset int
+	isArg2Fragmented               bool
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -115,7 +124,9 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		val := f.Payload[cur : cur+valLen]
 		cur += valLen
 
-		if bytes.Equal(key, _callerNameKeyBytes) {
+		if bytes.Equal(key, _argSchemeKeyBytes) {
+			cr.as = val
+		} else if bytes.Equal(key, _callerNameKeyBytes) {
 			cr.caller = val
 		} else if bytes.Equal(key, _routingDelegateKeyBytes) {
 			cr.delegate = val
@@ -132,6 +143,13 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
 	cur += 2
 	cr.method = f.Payload[cur : cur+arg1Len]
+
+	// arg2~2
+	cur += arg1Len
+	cr.arg2StartOffset = cur + 2
+	cr.arg2EndOffset = cr.arg2StartOffset + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
+	// arg2 is fragmented if we don't see arg3 in this frame.
+	cr.isArg2Fragmented = int(cr.Header.PayloadSize()) <= cr.arg2EndOffset && cr.HasMoreFragments()
 	return cr
 }
 
@@ -181,6 +199,33 @@ func (f lazyCallReq) Span() Span {
 // HasMoreFragments returns whether the callReq has more fragments.
 func (f lazyCallReq) HasMoreFragments() bool {
 	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
+}
+
+// Arg2EndOffset returns the offset from start of payload to the end of Arg2
+// in bytes, and hasMore to be true if there are more frames and arg3 has
+// not started.
+func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
+	return f.arg2EndOffset, f.isArg2Fragmented
+}
+
+// Arg2StartOffset returns the offset from start of payload to the beginning
+// of Arg2 in bytes.
+func (f lazyCallReq) Arg2StartOffset() int {
+	return f.arg2StartOffset
+}
+
+// Arg2Iterator returns the iterator for reading Arg2 key value pair
+// of TChannel-Thrift Arg Scheme.
+func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
+	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
+		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
+	}
+
+	if f.arg2EndOffset > int(f.Header.PayloadSize()) {
+		return arg2.KeyValIterator{}, errBadArg2Len
+	}
+
+	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

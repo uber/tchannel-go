@@ -23,6 +23,8 @@ package testutils
 import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/testutils/thriftarg2test"
+	"github.com/uber/tchannel-go/thrift/arg2"
 )
 
 // FakeIncomingCall implements IncomingCall interface.
@@ -94,6 +96,12 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
 	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
+
+	Arg2StartOffsetVal, Arg2EndOffsetVal int
+	IsArg2Fragmented                     bool
+
+	arg2KVIterator    arg2.KeyValIterator
+	hasArg2KVIterator error
 }
 
 var _ relay.CallFrame = FakeCallFrame{}
@@ -121,4 +129,51 @@ func (f FakeCallFrame) RoutingKey() []byte {
 // RoutingDelegate returns the routing delegate field.
 func (f FakeCallFrame) RoutingDelegate() []byte {
 	return []byte(f.RoutingDelegateF)
+}
+
+// Arg2StartOffset returns the offset from start of payload to
+// the beginning of Arg2.
+func (f FakeCallFrame) Arg2StartOffset() int {
+	return f.Arg2StartOffsetVal
+}
+
+// Arg2EndOffset returns the offset from start of payload to the end
+// of Arg2 and whether Arg2 is fragmented.
+func (f FakeCallFrame) Arg2EndOffset() (int, bool) {
+	return f.Arg2EndOffsetVal, f.IsArg2Fragmented
+}
+
+// Arg2Iterator returns the iterator for reading Arg2 key value pair
+// of TChannel-Thrift Arg Scheme.
+func (f FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
+	return f.arg2KVIterator, f.hasArg2KVIterator
+}
+
+// CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with
+// corresponding values
+func CopyCallFrame(f relay.CallFrame) FakeCallFrame {
+	endOffset, hasMore := f.Arg2EndOffset()
+	copyIterator, err := copyThriftArg2KVIterator(f)
+	return FakeCallFrame{
+		ServiceF:           string(f.Service()),
+		MethodF:            string(f.Method()),
+		CallerF:            string(f.Caller()),
+		RoutingKeyF:        string(f.RoutingKey()),
+		RoutingDelegateF:   string(f.RoutingDelegate()),
+		Arg2StartOffsetVal: f.Arg2StartOffset(),
+		Arg2EndOffsetVal:   endOffset,
+		IsArg2Fragmented:   hasMore,
+		arg2KVIterator:     copyIterator,
+		hasArg2KVIterator:  err,
+	}
+}
+
+// copyThriftArg2KVIterator uses the CallFrame Arg2Iterator to make a
+// deep-copy KeyValIterator.
+func copyThriftArg2KVIterator(f relay.CallFrame) (arg2.KeyValIterator, error) {
+	kv := make(map[string]string)
+	for iter, err := f.Arg2Iterator(); err == nil; iter, err = iter.Next() {
+		kv[string(iter.Key())] = string(iter.Value())
+	}
+	return arg2.NewKeyValIterator(thriftarg2test.BuildKVBuffer(kv))
 }

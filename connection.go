@@ -161,23 +161,24 @@ type connectionEvents struct {
 type Connection struct {
 	channelConnectionCommon
 
-	connID          uint32
-	connDirection   connectionDirection
-	opts            ConnectionOptions
-	conn            net.Conn
-	localPeerInfo   LocalPeerInfo
-	remotePeerInfo  PeerInfo
-	sendCh          chan *Frame
-	stopCh          chan struct{}
-	state           connectionState
-	stateMut        sync.RWMutex
-	inbound         *messageExchangeSet
-	outbound        *messageExchangeSet
-	handler         Handler
-	nextMessageID   atomic.Uint32
-	events          connectionEvents
-	commonStatsTags map[string]string
-	relay           *Relayer
+	connID           uint32
+	connDirection    connectionDirection
+	opts             ConnectionOptions
+	conn             net.Conn
+	localPeerInfo    LocalPeerInfo
+	remotePeerInfo   PeerInfo
+	sendCh           chan *Frame
+	stopCh           chan struct{}
+	state            connectionState
+	stateMut         sync.RWMutex
+	inbound          *messageExchangeSet
+	outbound         *messageExchangeSet
+	internalHandlers *handlerMap
+	handler          Handler
+	nextMessageID    atomic.Uint32
+	events           connectionEvents
+	commonStatsTags  map[string]string
+	relay            *Relayer
 
 	// outboundHP is the host:port we used to create this outbound connection.
 	// It may not match remotePeerInfo.HostPort, in which case the connection is
@@ -311,6 +312,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		outboundHP:         outboundHP,
 		inbound:            newMessageExchangeSet(log, messageExchangeSetInbound),
 		outbound:           newMessageExchangeSet(log, messageExchangeSetOutbound),
+		internalHandlers:   ch.internalHandlers,
 		handler:            ch.handler,
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,

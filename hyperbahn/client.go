@@ -106,7 +106,14 @@ func NewClient(ch *tchannel.Channel, config Configuration, opts *ClientOptions) 
 		client.opts.Handler = nullHandler{}
 	}
 	if client.opts.TimeSleep == nil {
-		client.opts.TimeSleep = time.Sleep
+		client.opts.TimeSleep = func(d time.Duration) {
+			select {
+			case <-time.After(d):
+				return
+			case <-client.quit:
+				return
+			}
+		}
 	}
 
 	if err := parseConfig(&config); err != nil {
