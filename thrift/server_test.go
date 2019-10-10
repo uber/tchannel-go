@@ -1,6 +1,7 @@
 package thrift
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -10,36 +11,45 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 )
 
-type ioerror struct{}
+var errIO = errors.New("IO Error")
 
-func (_ ioerror) Error() string {
-	return "IO Error"
+// badTStruct implements TStruct that always fails with the provided error.
+type badTStruct struct {
+	// If specified, runs the specified function before failing the Write.
+	PreWrite func(athrift.TProtocol)
+
+	Err error
 }
 
-// ioless implements TStruct that always fails with ioerror.
-type ioless struct{}
-
-func (i *ioless) Write(p athrift.TProtocol) error {
-	return ioerror{}
+func (t *badTStruct) Write(p athrift.TProtocol) error {
+	if t.PreWrite != nil {
+		t.PreWrite(p)
+	}
+	return t.Err
 }
 
-func (i *ioless) Read(p athrift.TProtocol) error {
-	return ioerror{}
+func (t *badTStruct) Read(p athrift.TProtocol) error {
+	return t.Err
 }
 
-// null implements TStruct that does nothing at all with no errors.
-type null struct{}
+// nullTStruct implements TStruct that does nothing at all with no errors.
+type nullTStruct struct{}
 
-func (i *null) Write(p athrift.TProtocol) error {
+func (*nullTStruct) Write(p athrift.TProtocol) error {
 	return nil
 }
 
-func (i *null) Read(p athrift.TProtocol) error {
+func (*nullTStruct) Read(p athrift.TProtocol) error {
 	return nil
 }
 
-// thriftStruction is a TChannel service that implements a method that returns
-// success with a TStruct that will always error.
+// thriftStruction is a TChannel service that implements the following
+// methods:
+//
+//   destruct
+//     Returns a TStruct that fails without writing anything.
+//   partialDestruct
+//     Returns a TStruct that fails after writing partial output.
 type thriftStruction struct{}
 
 func (ts *thriftStruction) Handle(
@@ -47,49 +57,69 @@ func (ts *thriftStruction) Handle(
 	methodName string,
 	protocol athrift.TProtocol,
 ) (success bool, resp athrift.TStruct, err error) {
-	// successful call with a TStruct that won't IO
-	return true, &ioless{}, nil
+	var preWrite func(athrift.TProtocol)
+	if methodName == "partialDestruct" {
+		preWrite = func(p athrift.TProtocol) {
+			p.WriteStructBegin("foo")
+			p.WriteFieldBegin("bar", athrift.STRING, 42)
+			p.WriteString("baz")
+		}
+	}
+
+	// successful call with a TStruct that fails while writing.
+	return true, &badTStruct{Err: errIO, PreWrite: preWrite}, nil
 }
 
-func (ts *thriftStruction) Service() string {
-	return "destruct"
-}
+func (ts *thriftStruction) Service() string { return "destruct" }
 
 func (ts *thriftStruction) Methods() []string {
-	return []string{"destruct"}
+	return []string{"destruct", "partialDestruct"}
 }
 
 func TestHandleTStructError(t *testing.T) {
-	// We should see an ioerror on the server side.
-	expectedLog := testutils.LogVerification{
-		Filters: []testutils.LogFilter{{
-			Filter: "Thrift server error.",
-			Count:  1,
-			FieldFilters: map[string]string{
-				"error": "IO Error",
-			},
-		}}}
-	opts := testutils.ChannelOpts{LogVerification: expectedLog}
-
-	server := testutils.NewTestServer(t, &opts)
+	serverOpts := testutils.NewOpts().
+		AddLogFilter(
+			"Thrift server error.", 1,
+			"error", "IO Error",
+			"method", "destruct::destruct").
+		AddLogFilter(
+			"Thrift server error.", 1,
+			"error", "IO Error",
+			"method", "destruct::partialDestruct")
+	server := testutils.NewTestServer(t, serverOpts)
 	defer server.CloseAndVerify()
 
 	// Create a thrift server with a handler that returns success with
 	// TStructs that refuse to do I/O.
 	tchan := server.Server()
-	thriftServer := NewServer(tchan)
-	thriftServer.Register(&thriftStruction{})
+	NewServer(tchan).Register(&thriftStruction{})
 
-	// A client should observe a server error.
 	client := NewClient(
-		server.NewClient(nil),
+		server.NewClient(testutils.NewOpts()),
 		tchan.ServiceName(),
 		&ClientOptions{
 			HostPort: server.HostPort(),
 		})
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-	_, err := client.Call(ctx, "destruct", "destruct", &null{}, &null{})
-	assert.Error(t, err)
-	assert.IsType(t, tchannel.SystemError{}, err)
+
+	t.Run("failing response", func(t *testing.T) {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		_, err := client.Call(ctx, "destruct", "destruct", &nullTStruct{}, &nullTStruct{})
+		assert.Error(t, err)
+		assert.IsType(t, tchannel.SystemError{}, err)
+		assert.Equal(t, tchannel.ErrCodeUnexpected, tchannel.GetSystemErrorCode(err))
+		assert.Equal(t, "IO Error", tchannel.GetSystemErrorMessage(err))
+	})
+
+	t.Run("failing response with partial write", func(t *testing.T) {
+		ctx, cancel := NewContext(time.Second)
+		defer cancel()
+
+		_, err := client.Call(ctx, "destruct", "partialDestruct", &nullTStruct{}, &nullTStruct{})
+		assert.Error(t, err)
+		assert.IsType(t, tchannel.SystemError{}, err)
+		assert.Equal(t, tchannel.ErrCodeUnexpected, tchannel.GetSystemErrorCode(err))
+		assert.Equal(t, "IO Error", tchannel.GetSystemErrorMessage(err))
+	})
 }
