@@ -202,12 +202,16 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	}
 
 	writer, err = call.Response().Arg3Writer()
-	wp = getProtocolWriter(writer)
-	resp.Write(wp.protocol)
-	thriftProtocolPool.Put(wp)
-	err = writer.Close()
 
-	return err
+	wp = getProtocolWriter(writer)
+	defer thriftProtocolPool.Put(wp)
+
+	if err := resp.Write(wp.protocol); err != nil {
+		call.Response().SendSystemError(err)
+		return err
+	}
+
+	return writer.Close()
 }
 
 func getServiceMethod(method string) (string, string, bool) {

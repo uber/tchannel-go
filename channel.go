@@ -252,7 +252,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	// Default to dialContext if dialer is not passed in as an option
 	dialCtx := dialContext
 	if opts.Dialer != nil {
-		dialCtx = func (ctx context.Context, hostPort string) (net.Conn, error) {
+		dialCtx = func(ctx context.Context, hostPort string) (net.Conn, error) {
 			return opts.Dialer(ctx, "tcp", hostPort)
 		}
 	}
