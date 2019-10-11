@@ -97,9 +97,8 @@ func TestHandleTStructError(t *testing.T) {
 	client := NewClient(
 		server.NewClient(testutils.NewOpts()),
 		tchan.ServiceName(),
-		&ClientOptions{
-			HostPort: server.HostPort(),
-		})
+		&ClientOptions{HostPort: server.HostPort()},
+	)
 
 	t.Run("failing response", func(t *testing.T) {
 		ctx, cancel := NewContext(time.Second)
