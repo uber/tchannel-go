@@ -1,6 +1,13 @@
 Changelog
 =========
 
+## [1.16.0] - 2019-10-14
+### Added
+ * Support custom Dialer for outbound connections (#759)
+
+### Fixed
+ * thrift: Handle TStruct serialization failures gracefully (#744)
+
 ## [1.15.0] - 2019-08-26
 ### Added
  * introspection: Introspect any channel by ID. (#756)
@@ -270,6 +277,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.16.0]: https://github.com/uber/tchannel-go/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/uber/tchannel-go/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/uber/tchannel-go/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/uber/tchannel-go/compare/v1.12.0...v1.13.0
