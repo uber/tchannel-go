@@ -21,6 +21,8 @@
 package testutils
 
 import (
+	"time"
+
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
@@ -95,6 +97,8 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
+	TTLF time.Duration
+
 	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
 
 	Arg2StartOffsetVal, Arg2EndOffsetVal int
@@ -105,6 +109,11 @@ type FakeCallFrame struct {
 }
 
 var _ relay.CallFrame = FakeCallFrame{}
+
+// TTL returns the TTL field.
+func (f FakeCallFrame) TTL() time.Duration {
+	return f.TTLF
+}
 
 // Service returns the service name field.
 func (f FakeCallFrame) Service() []byte {
@@ -155,6 +164,7 @@ func CopyCallFrame(f relay.CallFrame) FakeCallFrame {
 	endOffset, hasMore := f.Arg2EndOffset()
 	copyIterator, err := copyThriftArg2KVIterator(f)
 	return FakeCallFrame{
+		TTLF:               f.TTL(),
 		ServiceF:           string(f.Service()),
 		MethodF:            string(f.Method()),
 		CallerF:            string(f.Caller()),
