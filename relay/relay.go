@@ -24,10 +24,16 @@
 // backwards-compatibility guarantee.
 package relay
 
-import "github.com/uber/tchannel-go/thrift/arg2"
+import (
+	"time"
+
+	"github.com/uber/tchannel-go/thrift/arg2"
+)
 
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
+	// TTL is the TTL of the underlying frame
+	TTL() time.Duration
 	// Caller is the name of the originating service.
 	Caller() []byte
 	// Service is the name of the destination service.
