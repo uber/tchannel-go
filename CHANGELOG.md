@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.17.0] - 2020-02-18
+### Added
+ * Internal API changes related to relaying.
+
 ## [1.16.0] - 2019-10-14
 ### Added
  * Support custom Dialer for outbound connections (#759)
@@ -277,6 +281,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.17.0]: https://github.com/uber/tchannel-go/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/uber/tchannel-go/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/uber/tchannel-go/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/uber/tchannel-go/compare/v1.13.0...v1.14.0
