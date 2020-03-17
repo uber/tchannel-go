@@ -156,7 +156,8 @@ type ConnectionRuntimeState struct {
 	Relayer          RelayerRuntimeState     `json:"relayer"`
 	HealthChecks     []bool                  `json:"healthChecks,omitempty"`
 	LastActivity     int64                   `json:"lastActivity"`
-	SendChSize       int                     `json:"sendChSize"`
+	SendChQueued     int                     `json:"sendChQueued"`
+	SendChCapacity   int                     `json:"sendChCapacity"`
 	SendBufferUsage  int                     `json:"sendBufferUsage"`
 	SendBufferSize   int                     `json:"sendBufferSize"`
 }
@@ -370,7 +371,8 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		OutboundExchange: c.outbound.IntrospectState(opts),
 		HealthChecks:     c.healthCheckHistory.asBools(),
 		LastActivity:     c.lastActivity.Load(),
-		SendChSize:       len(c.sendCh),
+		SendChQueued:     len(c.sendCh),
+		SendChCapacity:   cap(c.sendCh),
 		SendBufferUsage:  sendBufUsage,
 		SendBufferSize:   sendBufSize,
 	}

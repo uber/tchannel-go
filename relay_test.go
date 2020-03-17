@@ -722,7 +722,7 @@ func TestRelayRateLimitDrop(t *testing.T) {
 // from that server, and we have stats to capture that this is happening.
 func TestRelayStalledConnection(t *testing.T) {
 	opts := testutils.NewOpts().
-		AddLogFilter("Dropping call due to slow connection.", 1).
+		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
 		SetRelayOnly()
@@ -773,7 +773,8 @@ func TestRelayStalledConnection(t *testing.T) {
 		// Verify the sendCh is full, and the buffers are utilized.
 		state := ts.Relay().IntrospectState(&IntrospectionOptions{})
 		connState := state.RootPeers[ts.Server().PeerInfo().HostPort].OutboundConnections[0]
-		assert.NotZero(t, connState.SendChSize, "unexpected SendChSize")
+		assert.Equal(t, 32, connState.SendChCapacity, "unexpected SendChCapacity")
+		assert.NotZero(t, connState.SendChQueued, "unexpected SendChQueued")
 		assert.NotZero(t, connState.SendBufferUsage, "unexpected SendBufferUsage")
 		assert.NotZero(t, connState.SendBufferSize, "unexpected SendBufferSize")
 

@@ -289,6 +289,8 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 			{"id", id},
 			{"destConnSendBufferCurrent", sendBuf},
 			{"destConnSendBufferLimit", sendBufLimit},
+			{"sendChQueued", len(r.conn.sendCh)},
+			{"sendChCapacity", cap(r.conn.sendCh)},
 		}
 		if sendBufErr != nil {
 			logFields = append(logFields, LogField{"destConnSendBufferError", sendBufErr.Error()})
