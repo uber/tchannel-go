@@ -146,6 +146,11 @@ type ConnectionOptions struct {
 	// MaxCloseTime controls how long we allow a connection to complete pending
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
+
+	// RelaySendTimeout is only for relays, and is the timeout to wait if the
+	// send buffer is full.
+	// This is an unstable API - breaking changes are likely.
+	RelaySendTimeout time.Duration
 }
 
 // connectionEvents are the events that can be triggered by a connection.

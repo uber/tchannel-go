@@ -277,9 +277,8 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 			item.call.Failed(failMsg)
 		}
 	}
-	select {
-	case r.conn.sendCh <- f:
-	default:
+
+	if !r.sendFrameTimeout(f, r.conn.opts.RelaySendTimeout) {
 		// Buffer is full, so drop this frame and cancel the call.
 
 		// Since this is typically due to the send buffer being full, get send buffer
@@ -313,6 +312,23 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 	}
 
 	return true, ""
+}
+
+func (r *Relayer) sendFrameTimeout(f *Frame, timeout time.Duration) bool {
+	select {
+	case r.conn.sendCh <- f:
+		return true
+	default:
+	}
+
+	// If the buffer is full, retry with the timeout.
+	select {
+	case r.conn.sendCh <- f:
+		return true
+	case <-time.After(timeout):
+	}
+
+	return false
 }
 
 func (r *Relayer) canHandleNewCall() (bool, connectionState) {
