@@ -26,14 +26,17 @@ import (
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/uber/tchannel-go/tos"
 
 	"go.uber.org/atomic"
+	"go.uber.org/multierr"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -165,6 +168,7 @@ type Connection struct {
 	connDirection    connectionDirection
 	opts             ConnectionOptions
 	conn             net.Conn
+	sysConn          syscall.RawConn // may be nil if conn cannot be converted
 	localPeerInfo    LocalPeerInfo
 	remotePeerInfo   PeerInfo
 	sendCh           chan *Frame
@@ -301,6 +305,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 		connID:             connID,
 		conn:               conn,
+		sysConn:            getSysConn(conn, log),
 		connDirection:      connDirection,
 		opts:               opts,
 		state:              connectionActive,
@@ -872,4 +877,50 @@ func (c *Connection) closeNetwork() {
 // this connection was created.
 func (c *Connection) getLastActivityTime() time.Time {
 	return time.Unix(0, c.lastActivity.Load())
+}
+
+func (c *Connection) sendBufSize() (int, int, error) {
+	if c.sysConn == nil {
+		return 0, 0, fmt.Errorf("no sys call conn")
+	}
+
+	var (
+		// current send buffer usage
+		ioctlErr error
+		sendBuf  = -1
+
+		// current send buffer limit
+		sockoptErr   error
+		sendBufLimit = -1
+	)
+
+	errs := c.sysConn.Control(func(fd uintptr) {
+		sendBuf, ioctlErr = unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
+		sendBufLimit, sockoptErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
+	})
+
+	errs = multierr.Append(errs, sockoptErr)
+	errs = multierr.Append(errs, ioctlErr)
+	return sendBuf, sendBufLimit, errs
+}
+
+func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
+	type syscallConner interface {
+		SyscallConn() (syscall.RawConn, error)
+	}
+
+	connSyscall, ok := conn.(syscallConner)
+	if !ok {
+		log.WithFields(LogField{"connectionType", fmt.Sprintf("%T", conn)}).
+			Error("Connection does not implement SyscallConn.")
+		return nil
+	}
+
+	sysConn, err := connSyscall.SyscallConn()
+	if err != nil {
+		log.WithFields(ErrField(err)).Error("Could not get SyscallConn.")
+		return nil
+	}
+
+	return sysConn
 }

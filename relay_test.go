@@ -722,8 +722,8 @@ func TestRelayRateLimitDrop(t *testing.T) {
 // from that server, and we have stats to capture that this is happening.
 func TestRelayStalledConnection(t *testing.T) {
 	opts := testutils.NewOpts().
-		DisableLogVerification(). // we expect warnings due to removed relay item.
-		SetSendBufferSize(10).    // We want to hit the buffer size earlier.
+		AddLogFilter("Dropping call due to slow connection.", 1).
+		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
@@ -765,12 +765,21 @@ func TestRelayStalledConnection(t *testing.T) {
 		case <-time.After(testutils.Timeout(10 * time.Second)):
 			t.Fatalf("Test timed out waiting for reader to fail")
 		case <-readDone:
-			cancel()
-			close(stall)
 		}
 
 		// We should be able to make calls to s2 even if s1 is stalled.
 		testutils.AssertEcho(t, client, ts.HostPort(), "s2")
+
+		// Verify the sendCh is full, and the buffers are utilized.
+		state := ts.Relay().IntrospectState(&IntrospectionOptions{})
+		connState := state.RootPeers[ts.Server().PeerInfo().HostPort].OutboundConnections[0]
+		assert.NotZero(t, connState.SendChSize, "unexpected SendChSize")
+		assert.NotZero(t, connState.SendBufferUsage, "unexpected SendBufferUsage")
+		assert.NotZero(t, connState.SendBufferSize, "unexpected SendBufferSize")
+
+		// Cancel the call and unblock the stall handler.
+		cancel()
+		close(stall)
 
 		// The server channel will not close until the stall handler receives
 		// an error. Since we don't propagate cancels, the handler will keep
