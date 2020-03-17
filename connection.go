@@ -908,11 +908,7 @@ func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) 
 }
 
 func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
-	type syscallConner interface {
-		SyscallConn() (syscall.RawConn, error)
-	}
-
-	connSyscall, ok := conn.(syscallConner)
+	connSyscall, ok := conn.(syscall.Conn)
 	if !ok {
 		log.WithFields(LogField{"connectionType", fmt.Sprintf("%T", conn)}).
 			Error("Connection does not implement SyscallConn.")
