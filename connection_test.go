@@ -1165,20 +1165,28 @@ func TestLastActivityTime(t *testing.T) {
 		responseReceived := make(chan struct{})
 
 		// Helper function that checks the last activity time on client, server and relay.
-		validateLastActivityTime := func(expected time.Time) {
+		validateLastActivityTime := func(expectedReq time.Time, expectedResp time.Time) {
 			clientConn := getConnection(t, client, outbound)
 			serverConn := getConnection(t, server, inbound)
-			now := expected.UnixNano()
+			reqTime := expectedReq.UnixNano()
+			respTime := expectedResp.UnixNano()
 
-			assert.Equal(t, now, clientConn.LastActivity)
-			assert.Equal(t, now, serverConn.LastActivity)
+			assert.Equal(t, reqTime, clientConn.LastActivityWrite)
+			assert.Equal(t, reqTime, serverConn.LastActivityRead)
+
+			assert.Equal(t, respTime, clientConn.LastActivityRead)
+			assert.Equal(t, respTime, serverConn.LastActivityWrite)
 
 			// Relays should act like both clients and servers.
 			if ts.HasRelay() {
 				relayInbound := getConnection(t, ts.Relay(), inbound)
 				relayOutbound := getConnection(t, ts.Relay(), outbound)
-				assert.Equal(t, now, relayInbound.LastActivity)
-				assert.Equal(t, now, relayOutbound.LastActivity)
+
+				assert.Equal(t, reqTime, relayInbound.LastActivityRead)
+				assert.Equal(t, reqTime, relayOutbound.LastActivityWrite)
+
+				assert.Equal(t, respTime, relayInbound.LastActivityWrite)
+				assert.Equal(t, respTime, relayOutbound.LastActivityRead)
 			}
 		}
 
@@ -1191,6 +1199,7 @@ func TestLastActivityTime(t *testing.T) {
 			clock.Elapse(1 * time.Second)
 		})
 
+		initTime := clock.Now()
 		// Run the test twice, because the first call will also establish a connection.
 		for i := 0; i < 2; i++ {
 			beforeCallSent := clock.Now()
@@ -1202,15 +1211,19 @@ func TestLastActivityTime(t *testing.T) {
 
 			// Verify that the last activity time was updated before a response is received.
 			<-callReceived
-			validateLastActivityTime(beforeCallSent)
+			validateLastActivityTime(beforeCallSent, initTime)
 
 			// Let the server respond.
 			blockResponse <- struct{}{}
 
-			// After a response was received, time should be +1s. Validate again that
-			// the last activity time was updated.
+			// After a response was received, time of the response should be +1s,
+			// without a change to the requet time.  Validate again that the last
+			// activity time was updated.
 			<-responseReceived
-			validateLastActivityTime(beforeCallSent.Add(1 * time.Second))
+			validateLastActivityTime(beforeCallSent, beforeCallSent.Add(1*time.Second))
+
+			// Set the initTime as the time of the last response.
+			initTime = beforeCallSent.Add(1 * time.Second)
 
 			// Elapse the clock for our next iteration.
 			clock.Elapse(1 * time.Minute)
@@ -1244,16 +1257,19 @@ func TestLastActivityTimePings(t *testing.T) {
 
 			// Verify last activity time.
 			clientConn := getConnection(t, client, outbound)
-			assert.Equal(t, timeAtStart, clientConn.LastActivity)
+			assert.Equal(t, timeAtStart, clientConn.LastActivityRead)
+			assert.Equal(t, timeAtStart, clientConn.LastActivityWrite)
 
 			// Relays do not pass pings on to the server.
 			if ts.HasRelay() {
 				relayInbound := getConnection(t, ts.Relay(), inbound)
-				assert.Equal(t, timeAtStart, relayInbound.LastActivity)
+				assert.Equal(t, timeAtStart, relayInbound.LastActivityRead)
+				assert.Equal(t, timeAtStart, relayInbound.LastActivityWrite)
 			}
 
 			serverConn := getConnection(t, ts.Server(), inbound)
-			assert.Equal(t, timeAtStart, serverConn.LastActivity)
+			assert.Equal(t, timeAtStart, serverConn.LastActivityRead)
+			assert.Equal(t, timeAtStart, serverConn.LastActivityWrite)
 
 			clock.Elapse(1 * time.Second)
 		}

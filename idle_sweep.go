@@ -95,7 +95,12 @@ func (is *idleSweep) checkIdleConnections() {
 	idleConnections := make([]*Connection, 0, 10)
 	is.ch.mutable.RLock()
 	for _, conn := range is.ch.mutable.conns {
-		if idleTime := now.Sub(conn.getLastActivityTime()); idleTime >= is.maxIdleTime {
+		lastActivityTime := conn.getLastActivityReadTime()
+		if sendActivityTime := conn.getLastActivityWriteTime(); lastActivityTime.Before(sendActivityTime) {
+			lastActivityTime = sendActivityTime
+		}
+
+		if idleTime := now.Sub(lastActivityTime); idleTime >= is.maxIdleTime {
 			idleConnections = append(idleConnections, conn)
 		}
 	}
@@ -116,7 +121,8 @@ func (is *idleSweep) checkIdleConnections() {
 
 		is.ch.log.WithFields(
 			LogField{"remotePeer", conn.remotePeerInfo},
-			LogField{"lastActivityTime", conn.getLastActivityTime()},
+			LogField{"lastActivityTimeRead", conn.getLastActivityReadTime()},
+			LogField{"lastActivityTimeWrite", conn.getLastActivityWriteTime()},
 		).Info("Closing idle inbound connection.")
 		conn.close(LogField{"reason", "Idle connection closed"})
 	}

@@ -145,21 +145,22 @@ type SubPeerScore struct {
 
 // ConnectionRuntimeState is the runtime state for a single connection.
 type ConnectionRuntimeState struct {
-	ID               uint32                  `json:"id"`
-	ConnectionState  string                  `json:"connectionState"`
-	LocalHostPort    string                  `json:"localHostPort"`
-	RemoteHostPort   string                  `json:"remoteHostPort"`
-	OutboundHostPort string                  `json:"outboundHostPort"`
-	RemotePeer       PeerInfo                `json:"remotePeer"`
-	InboundExchange  ExchangeSetRuntimeState `json:"inboundExchange"`
-	OutboundExchange ExchangeSetRuntimeState `json:"outboundExchange"`
-	Relayer          RelayerRuntimeState     `json:"relayer"`
-	HealthChecks     []bool                  `json:"healthChecks,omitempty"`
-	LastActivity     int64                   `json:"lastActivity"`
-	SendChQueued     int                     `json:"sendChQueued"`
-	SendChCapacity   int                     `json:"sendChCapacity"`
-	SendBufferUsage  int                     `json:"sendBufferUsage"`
-	SendBufferSize   int                     `json:"sendBufferSize"`
+	ID                uint32                  `json:"id"`
+	ConnectionState   string                  `json:"connectionState"`
+	LocalHostPort     string                  `json:"localHostPort"`
+	RemoteHostPort    string                  `json:"remoteHostPort"`
+	OutboundHostPort  string                  `json:"outboundHostPort"`
+	RemotePeer        PeerInfo                `json:"remotePeer"`
+	InboundExchange   ExchangeSetRuntimeState `json:"inboundExchange"`
+	OutboundExchange  ExchangeSetRuntimeState `json:"outboundExchange"`
+	Relayer           RelayerRuntimeState     `json:"relayer"`
+	HealthChecks      []bool                  `json:"healthChecks,omitempty"`
+	LastActivityRead  int64                   `json:"lastActivityRead"`
+	LastActivityWrite int64                   `json:"lastActivityWrite"`
+	SendChQueued      int                     `json:"sendChQueued"`
+	SendChCapacity    int                     `json:"sendChCapacity"`
+	SendBufferUsage   int                     `json:"sendBufferUsage"`
+	SendBufferSize    int                     `json:"sendBufferSize"`
 }
 
 // RelayerRuntimeState is the runtime state for a single relayer.
@@ -361,20 +362,21 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 
 	// TODO(prashantv): Add total number of health checks, and health check options.
 	state := ConnectionRuntimeState{
-		ID:               c.connID,
-		ConnectionState:  c.state.String(),
-		LocalHostPort:    c.conn.LocalAddr().String(),
-		RemoteHostPort:   c.conn.RemoteAddr().String(),
-		OutboundHostPort: c.outboundHP,
-		RemotePeer:       c.remotePeerInfo,
-		InboundExchange:  c.inbound.IntrospectState(opts),
-		OutboundExchange: c.outbound.IntrospectState(opts),
-		HealthChecks:     c.healthCheckHistory.asBools(),
-		LastActivity:     c.lastActivity.Load(),
-		SendChQueued:     len(c.sendCh),
-		SendChCapacity:   cap(c.sendCh),
-		SendBufferUsage:  sendBufUsage,
-		SendBufferSize:   sendBufSize,
+		ID:                c.connID,
+		ConnectionState:   c.state.String(),
+		LocalHostPort:     c.conn.LocalAddr().String(),
+		RemoteHostPort:    c.conn.RemoteAddr().String(),
+		OutboundHostPort:  c.outboundHP,
+		RemotePeer:        c.remotePeerInfo,
+		InboundExchange:   c.inbound.IntrospectState(opts),
+		OutboundExchange:  c.outbound.IntrospectState(opts),
+		HealthChecks:      c.healthCheckHistory.asBools(),
+		LastActivityRead:  c.lastActivityRead.Load(),
+		LastActivityWrite: c.lastActivityWrite.Load(),
+		SendChQueued:      len(c.sendCh),
+		SendChCapacity:    cap(c.sendCh),
+		SendBufferUsage:   sendBufUsage,
+		SendBufferSize:    sendBufSize,
 	}
 	if c.relay != nil {
 		state.Relayer = c.relay.IntrospectState(opts)

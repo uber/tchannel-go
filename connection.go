@@ -218,9 +218,10 @@ type Connection struct {
 	healthCheckDone    chan struct{}
 	healthCheckHistory *healthHistory
 
-	// lastActivity is used to track how long the connection has been idle.
-	// (unix time, nano)
-	lastActivity atomic.Int64
+	// lastActivity{Read,Write} is used to track how long the connection has been
+	// idle for the recieve and send connections respectively. (unix time, nano)
+	lastActivityRead  atomic.Int64
+	lastActivityWrite atomic.Int64
 }
 
 type peerAddressComponents struct {
@@ -322,6 +323,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 	log = log.WithFields(LogField{"connectionDirection", connDirection})
 	peerInfo := ch.PeerInfo()
+	timeNow := ch.timeNow().UnixNano()
 
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
@@ -345,7 +347,8 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
-		lastActivity:       *atomic.NewInt64(ch.timeNow().UnixNano()),
+		lastActivityRead:   *atomic.NewInt64(timeNow),
+		lastActivityWrite:  *atomic.NewInt64(timeNow),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
@@ -666,7 +669,7 @@ func (c *Connection) readFrames(_ uint32) {
 			return
 		}
 
-		c.updateLastActivity(frame)
+		c.updateLastActivityRead(frame)
 
 		var releaseFrame bool
 		if c.relay == nil {
@@ -736,7 +739,7 @@ func (c *Connection) writeFrames(_ uint32) {
 				c.log.Debugf("Writing frame %s", f.Header)
 			}
 
-			c.updateLastActivity(f)
+			c.updateLastActivityWrite(f)
 			err := f.WriteOut(c.conn)
 			c.opts.FramePool.Release(f)
 			if err != nil {
@@ -755,13 +758,19 @@ func (c *Connection) writeFrames(_ uint32) {
 	}
 }
 
-// updateLastActivity marks when the last message was received/sent on the channel.
+// updateLastActivityRead marks when the last message was received on the channel.
 // This is used for monitoring idle connections and timing them out.
-func (c *Connection) updateLastActivity(frame *Frame) {
-	// Pings are ignored for last activity.
-	switch frame.Header.messageType {
-	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
-		c.lastActivity.Store(c.timeNow().UnixNano())
+func (c *Connection) updateLastActivityRead(frame *Frame) {
+	if isMessageTypeCall(frame) {
+		c.lastActivityRead.Store(c.timeNow().UnixNano())
+	}
+}
+
+// updateLastActivityWrite marks when the last message was sent on the channel.
+// This is used for monitoring idle connections and timing them out.
+func (c *Connection) updateLastActivityWrite(frame *Frame) {
+	if isMessageTypeCall(frame) {
+		c.lastActivityWrite.Store(c.timeNow().UnixNano())
 	}
 }
 
@@ -895,11 +904,18 @@ func (c *Connection) closeNetwork() {
 	}
 }
 
-// getLastActivityTime returns the timestamp of the last frame read or written,
+// getLastActivityReadTime returns the timestamp of the last frame read,
 // excluding pings. If no frames were transmitted yet, it will return the time
 // this connection was created.
-func (c *Connection) getLastActivityTime() time.Time {
-	return time.Unix(0, c.lastActivity.Load())
+func (c *Connection) getLastActivityReadTime() time.Time {
+	return time.Unix(0, c.lastActivityRead.Load())
+}
+
+// getLastActivityWriteTime returns the timestamp of the last frame written,
+// excluding pings. If no frames were transmitted yet, it will return the time
+// this connection was created.
+func (c *Connection) getLastActivityWriteTime() time.Time {
+	return time.Unix(0, c.lastActivityWrite.Load())
 }
 
 func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) {
@@ -936,4 +952,14 @@ func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
 	}
 
 	return sysConn
+}
+
+func isMessageTypeCall(frame *Frame) bool {
+	// Pings are ignored for last activity.
+	switch frame.Header.messageType {
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
+		return true
+	}
+
+	return false
 }
