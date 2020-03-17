@@ -879,29 +879,30 @@ func (c *Connection) getLastActivityTime() time.Time {
 	return time.Unix(0, c.lastActivity.Load())
 }
 
-func (c *Connection) sendBufSize() (int, int, error) {
+func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) {
+	sendBufSize = -1
+	sendBufUsage = -1
+
 	if c.sysConn == nil {
-		return 0, 0, fmt.Errorf("no sys call conn")
+		return sendBufUsage, sendBufSize, fmt.Errorf("no sys call conn")
 	}
 
 	var (
 		// current send buffer usage
 		ioctlErr error
-		sendBuf  = -1
 
 		// current send buffer limit
-		sockoptErr   error
-		sendBufLimit = -1
+		sockoptErr error
 	)
 
 	errs := c.sysConn.Control(func(fd uintptr) {
-		sendBuf, ioctlErr = unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
-		sendBufLimit, sockoptErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
+		sendBufUsage, ioctlErr = unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
+		sendBufSize, sockoptErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
 	})
 
 	errs = multierr.Append(errs, sockoptErr)
 	errs = multierr.Append(errs, ioctlErr)
-	return sendBuf, sendBufLimit, errs
+	return sendBufUsage, sendBufSize, errs
 }
 
 func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
