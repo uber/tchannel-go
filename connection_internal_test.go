@@ -62,4 +62,21 @@ func TestGetSysConn(t *testing.T) {
 		assert.Contains(t, loggerBuf.String(), "Could not get SyscallConn", "missing log")
 		assert.Contains(t, loggerBuf.String(), assert.AnError.Error(), "missing error in log")
 	})
+
+	t.Run("SyscallConn is successful", func(t *testing.T) {
+		loggerBuf := &bytes.Buffer{}
+		logger := NewLogger(loggerBuf)
+
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err, "Failed to listen")
+		defer ln.Close()
+
+		conn, err := net.Dial("tcp", ln.Addr().String())
+		require.NoError(t, err, "failed to dial")
+		defer conn.Close()
+
+		sysConn := getSysConn(conn, logger)
+		require.NotNil(t, sysConn)
+		assert.Empty(t, loggerBuf.String(), "expected no logs on success")
+	})
 }
