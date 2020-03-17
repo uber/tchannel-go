@@ -110,6 +110,8 @@ var (
 
 	// ErrConnectionNotReady is no longer used.
 	ErrConnectionNotReady = errors.New("connection is not yet ready")
+
+	errNoSyscallConn = errors.New("no syscall.RawConn available")
 )
 
 // errConnectionInvalidState is returned when the connection is in an unknown state.
@@ -884,7 +886,7 @@ func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) 
 	sendBufUsage = -1
 
 	if c.sysConn == nil {
-		return sendBufUsage, sendBufSize, fmt.Errorf("no sys call conn")
+		return sendBufUsage, sendBufSize, errNoSyscallConn
 	}
 
 	var (
