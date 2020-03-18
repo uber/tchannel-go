@@ -281,9 +281,22 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 	case r.conn.sendCh <- f:
 	default:
 		// Buffer is full, so drop this frame and cancel the call.
-		r.logger.WithFields(
-			LogField{"id", id},
-		).Warn("Dropping call due to slow connection.")
+
+		// Since this is typically due to the send buffer being full, get send buffer
+		// usage + limit and add that to the log.
+		sendBuf, sendBufLimit, sendBufErr := r.conn.sendBufSize()
+		logFields := []LogField{
+			{"id", id},
+			{"destConnSendBufferCurrent", sendBuf},
+			{"destConnSendBufferLimit", sendBufLimit},
+			{"sendChQueued", len(r.conn.sendCh)},
+			{"sendChCapacity", cap(r.conn.sendCh)},
+		}
+		if sendBufErr != nil {
+			logFields = append(logFields, LogField{"destConnSendBufferError", sendBufErr.Error()})
+		}
+
+		r.logger.WithFields(logFields...).Warn("Dropping call due to slow connection.")
 
 		items := r.receiverItems(fType)
 

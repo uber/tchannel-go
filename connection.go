@@ -26,14 +26,17 @@ import (
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/uber/tchannel-go/tos"
 
 	"go.uber.org/atomic"
+	"go.uber.org/multierr"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -107,6 +110,8 @@ var (
 
 	// ErrConnectionNotReady is no longer used.
 	ErrConnectionNotReady = errors.New("connection is not yet ready")
+
+	errNoSyscallConn = errors.New("no syscall.RawConn available")
 )
 
 // errConnectionInvalidState is returned when the connection is in an unknown state.
@@ -165,6 +170,7 @@ type Connection struct {
 	connDirection    connectionDirection
 	opts             ConnectionOptions
 	conn             net.Conn
+	sysConn          syscall.RawConn // may be nil if conn cannot be converted
 	localPeerInfo    LocalPeerInfo
 	remotePeerInfo   PeerInfo
 	sendCh           chan *Frame
@@ -301,6 +307,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 
 		connID:             connID,
 		conn:               conn,
+		sysConn:            getSysConn(conn, log),
 		connDirection:      connDirection,
 		opts:               opts,
 		state:              connectionActive,
@@ -872,4 +879,47 @@ func (c *Connection) closeNetwork() {
 // this connection was created.
 func (c *Connection) getLastActivityTime() time.Time {
 	return time.Unix(0, c.lastActivity.Load())
+}
+
+func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) {
+	sendBufSize = -1
+	sendBufUsage = -1
+
+	if c.sysConn == nil {
+		return sendBufUsage, sendBufSize, errNoSyscallConn
+	}
+
+	var (
+		// current send buffer usage
+		ioctlErr error
+
+		// current send buffer limit
+		sockoptErr error
+	)
+
+	errs := c.sysConn.Control(func(fd uintptr) {
+		sendBufUsage, ioctlErr = unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
+		sendBufSize, sockoptErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
+	})
+
+	errs = multierr.Append(errs, sockoptErr)
+	errs = multierr.Append(errs, ioctlErr)
+	return sendBufUsage, sendBufSize, errs
+}
+
+func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
+	connSyscall, ok := conn.(syscall.Conn)
+	if !ok {
+		log.WithFields(LogField{"connectionType", fmt.Sprintf("%T", conn)}).
+			Error("Connection does not implement SyscallConn.")
+		return nil
+	}
+
+	sysConn, err := connSyscall.SyscallConn()
+	if err != nil {
+		log.WithFields(ErrField(err)).Error("Could not get SyscallConn.")
+		return nil
+	}
+
+	return sysConn
 }

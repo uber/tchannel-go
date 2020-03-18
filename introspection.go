@@ -156,6 +156,10 @@ type ConnectionRuntimeState struct {
 	Relayer          RelayerRuntimeState     `json:"relayer"`
 	HealthChecks     []bool                  `json:"healthChecks,omitempty"`
 	LastActivity     int64                   `json:"lastActivity"`
+	SendChQueued     int                     `json:"sendChQueued"`
+	SendChCapacity   int                     `json:"sendChCapacity"`
+	SendBufferUsage  int                     `json:"sendBufferUsage"`
+	SendBufferSize   int                     `json:"sendBufferSize"`
 }
 
 // RelayerRuntimeState is the runtime state for a single relayer.
@@ -352,6 +356,9 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 	c.stateMut.RLock()
 	defer c.stateMut.RUnlock()
 
+	// Ignore errors getting send buffer sizes.
+	sendBufUsage, sendBufSize, _ := c.sendBufSize()
+
 	// TODO(prashantv): Add total number of health checks, and health check options.
 	state := ConnectionRuntimeState{
 		ID:               c.connID,
@@ -364,6 +371,10 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 		OutboundExchange: c.outbound.IntrospectState(opts),
 		HealthChecks:     c.healthCheckHistory.asBools(),
 		LastActivity:     c.lastActivity.Load(),
+		SendChQueued:     len(c.sendCh),
+		SendChCapacity:   cap(c.sendCh),
+		SendBufferUsage:  sendBufUsage,
+		SendBufferSize:   sendBufSize,
 	}
 	if c.relay != nil {
 		state.Relayer = c.relay.IntrospectState(opts)
