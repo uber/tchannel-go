@@ -889,21 +889,14 @@ func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) 
 		return sendBufUsage, sendBufSize, errNoSyscallConn
 	}
 
-	var (
-		// current send buffer usage
-		ioctlErr error
-
-		// current send buffer limit
-		sockoptErr error
-	)
-
+	var sendBufLenErr, sendBufLimErr error
 	errs := c.sysConn.Control(func(fd uintptr) {
-		sendBufUsage, ioctlErr = unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
-		sendBufSize, sockoptErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
+		sendBufUsage, sendBufLenErr = getSendQueueLen(fd)
+		sendBufSize, sendBufLimErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
 	})
 
-	errs = multierr.Append(errs, sockoptErr)
-	errs = multierr.Append(errs, ioctlErr)
+	errs = multierr.Append(errs, sendBufLimErr)
+	errs = multierr.Append(errs, sendBufLenErr)
 	return sendBufUsage, sendBufSize, errs
 }
 
