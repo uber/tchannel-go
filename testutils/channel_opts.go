@@ -133,6 +133,12 @@ func (o *ChannelOpts) SetSendBufferSize(bufSize int) *ChannelOpts {
 	return o
 }
 
+// SetSendBufferSizeOverrides sets the SendBufferOverrides in DefaultConnectionOptions.
+func (o *ChannelOpts) SetSendBufferSizeOverrides(overrides []tchannel.SendBufferSizeOverride) *ChannelOpts {
+	o.DefaultConnectionOptions.SendBufferSizeOverrides = overrides
+	return o
+}
+
 // SetTosPriority set TosPriority in DefaultConnectionOptions.
 func (o *ChannelOpts) SetTosPriority(tosPriority tos.ToS) *ChannelOpts {
 	o.DefaultConnectionOptions.TosPriority = tosPriority
