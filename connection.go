@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -48,9 +49,9 @@ const (
 	// is specified in the context.
 	DefaultConnectTimeout = 5 * time.Second
 
-	// defaultConnectionBufferSize is the default size for the connection's
-	// read and write channels.
-	defaultConnectionBufferSize = 512
+	// DefaultConnectionBufferSize is the default size for the connection's read
+	//and write channels.
+	DefaultConnectionBufferSize = 512
 )
 
 // PeerVersion contains version related information for a specific peer.
@@ -124,6 +125,13 @@ func (e errConnectionUnknownState) Error() string {
 	return fmt.Sprintf("connection is in unknown state: %v at %v", e.state, e.site)
 }
 
+// SendBufferSizeOverride is used for overriding per-process send buffer channel size for a
+// connection, using process name prefix matching.
+type SendBufferSizeOverride struct {
+	ProcessNamePrefix string
+	SendBufferSize    int
+}
+
 // ConnectionOptions are options that control the behavior of a Connection
 type ConnectionOptions struct {
 	// The frame pool, allowing better management of frame buffers. Defaults to using raw heap.
@@ -134,6 +142,10 @@ type ConnectionOptions struct {
 
 	// The size of send channel buffers. Defaults to 512.
 	SendBufferSize int
+
+	// Per-process name prefix override for SendBufferSize
+	// Note that order matters, if there are multiple matches, the first one is used.
+	SendBufferSizeOverrides []SendBufferSizeOverride
 
 	// The type of checksum to use when sending messages.
 	ChecksumType ChecksumType
@@ -258,10 +270,19 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.FramePool = DefaultFramePool
 	}
 	if co.SendBufferSize <= 0 {
-		co.SendBufferSize = defaultConnectionBufferSize
+		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
 	return co
+}
+
+func (co ConnectionOptions) getSendBufferSize(processName string) int {
+	for _, override := range co.SendBufferSizeOverrides {
+		if strings.HasPrefix(processName, override.ProcessNamePrefix) {
+			return override.SendBufferSize
+		}
+	}
+	return co.SendBufferSize
 }
 
 func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) error {
@@ -311,7 +332,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		connDirection:      connDirection,
 		opts:               opts,
 		state:              connectionActive,
-		sendCh:             make(chan *Frame, opts.SendBufferSize),
+		sendCh:             make(chan *Frame, opts.getSendBufferSize(remotePeer.ProcessName)),
 		stopCh:             make(chan struct{}),
 		localPeerInfo:      peerInfo,
 		remotePeerInfo:     remotePeer,

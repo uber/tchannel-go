@@ -1260,6 +1260,66 @@ func TestLastActivityTimePings(t *testing.T) {
 	})
 }
 
+func TestSendBufferSize(t *testing.T) {
+	opts := testutils.NewOpts().SetSendBufferSize(512).SetSendBufferSizeOverrides([]SendBufferSizeOverride{
+		{"abc", 1024},
+		{"abcd", 2048}, // This should never match, since we match the list in order.
+		{"xyz", 3072},
+	})
+	tests := []struct {
+		processName          string
+		expectSendChCapacity int
+	}{
+		{
+			processName:          "abc",
+			expectSendChCapacity: 1024,
+		},
+		{
+			processName:          "abcd",
+			expectSendChCapacity: 1024,
+		},
+		{
+			processName:          "bcd",
+			expectSendChCapacity: DefaultConnectionBufferSize,
+		},
+		{
+			processName:          "dabc",
+			expectSendChCapacity: DefaultConnectionBufferSize,
+		},
+		{
+			processName:          "dabcd",
+			expectSendChCapacity: DefaultConnectionBufferSize,
+		},
+		{
+			processName:          "abcde",
+			expectSendChCapacity: 1024,
+		},
+		{
+			processName:          "xyzabc",
+			expectSendChCapacity: 3072,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.processName, func(t *testing.T) {
+			testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
+				client := ts.NewClient(opts.SetProcessName(tt.processName))
+
+				// Send an 'echo' to establish the connection.
+				testutils.RegisterEcho(ts.Server(), nil)
+				require.NoError(t, testutils.CallEcho(client, ts.HostPort(), ts.ServiceName(), nil))
+
+				// WithTestSever will test with and without relay.
+				if ts.HasRelay() {
+					assert.Equal(t, tt.expectSendChCapacity, getConnection(t, ts.Relay(), inbound).SendChCapacity)
+				} else {
+					assert.Equal(t, tt.expectSendChCapacity, getConnection(t, ts.Server(), inbound).SendChCapacity)
+				}
+			})
+		})
+	}
+}
+
 func TestInvalidTransportHeaders(t *testing.T) {
 	long100 := strings.Repeat("0123456789", 10)
 	long300 := strings.Repeat("0123456789", 30)
