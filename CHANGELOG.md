@@ -1,6 +1,15 @@
 Changelog
 =========
 
+## [1.18.0] - 2020-03-20
+### Changed
+
+ * Add options to allow overriding SendBufferSize pre process name prefix
+ * Add separate Linux and Darwin build files for socket information
+ * relay: Log send buffer usage and size when dropping calls (#768)
+ * Remove Go versions 1.11, 1.12 and add versions 1.13, 1.14
+ * Back to development
+
 ## [1.17.0] - 2020-02-18
 ### Added
  * Internal API changes related to relaying.
@@ -281,6 +290,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.18.0]: https://github.com/uber/tchannel-go/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/uber/tchannel-go/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/uber/tchannel-go/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/uber/tchannel-go/compare/v1.14.0...v1.15.0
