@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.18.0] - 2020-03-30
+### Added
+ * Introspection now tracks last activity for reads and writes separately (#770)
+ * Add options to allow overriding SendBufferSize per process name prefix (#772)
+
 ## [1.17.0] - 2020-02-18
 ### Added
  * Internal API changes related to relaying.
@@ -281,6 +286,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.18.0]: https://github.com/uber/tchannel-go/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/uber/tchannel-go/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/uber/tchannel-go/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/uber/tchannel-go/compare/v1.14.0...v1.15.0
