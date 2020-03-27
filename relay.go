@@ -292,8 +292,10 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 			{"destConnSendBufferLimit", sendBufLimit},
 			{"sendChQueued", len(r.conn.sendCh)},
 			{"sendChCapacity", cap(r.conn.sendCh)},
-			{"nanosSinceLastActivityRead", now - r.conn.lastActivityRead.Load()},
-			{"nanosSinceLastActivityWrite", now - r.conn.lastActivityWrite.Load()},
+			{"lastActivityRead", r.conn.lastActivityRead.Load()},
+			{"lastActivityWrite", r.conn.lastActivityRead.Load()},
+			{"sinceLastActivityRead", time.Duration(now - r.conn.lastActivityRead.Load()).String()},
+			{"sinceLastActivityWrite", time.Duration(now - r.conn.lastActivityWrite.Load()).String()},
 		}
 		if sendBufErr != nil {
 			logFields = append(logFields, LogField{"destConnSendBufferError", sendBufErr.Error()})
