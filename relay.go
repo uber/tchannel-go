@@ -285,12 +285,15 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 		// Since this is typically due to the send buffer being full, get send buffer
 		// usage + limit and add that to the log.
 		sendBuf, sendBufLimit, sendBufErr := r.conn.sendBufSize()
+		now := r.conn.timeNow().UnixNano()
 		logFields := []LogField{
 			{"id", id},
 			{"destConnSendBufferCurrent", sendBuf},
 			{"destConnSendBufferLimit", sendBufLimit},
 			{"sendChQueued", len(r.conn.sendCh)},
 			{"sendChCapacity", cap(r.conn.sendCh)},
+			{"nanosSinceLastActivityRead", now - r.conn.lastActivityRead.Load()},
+			{"nanosSinceLastActivityWrite", now - r.conn.lastActivityWrite.Load()},
 		}
 		if sendBufErr != nil {
 			logFields = append(logFields, LogField{"destConnSendBufferError", sendBufErr.Error()})
