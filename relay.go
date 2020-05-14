@@ -362,7 +362,6 @@ func (r *Relayer) getDestination(f lazyCallReq, call RelayCall) (*Connection, bo
 		return nil, false, errBadRelayHost
 	}
 
-	// TODO: Should connections use the call timeout? Or a separate timeout?
 	remoteConn, err := peer.getConnectionRelay(f.TTL(), r.maxConnTimeout)
 	if err != nil {
 		r.logger.WithFields(
