@@ -25,7 +25,6 @@ package tchannel
 
 import (
 	"net"
-	"time"
 
 	"golang.org/x/net/context"
 )
@@ -39,11 +38,6 @@ func (p *Peer) SetOnUpdate(f func(*Peer)) {
 	p.Lock()
 	p.onUpdate = f
 	p.Unlock()
-}
-
-// GetConnectionRelay exports the getConnectionRelay for tests.
-func (p *Peer) GetConnectionRelay(timeout time.Duration) (*Connection, error) {
-	return p.getConnectionRelay(timeout)
 }
 
 // SetRandomSeed seeds all the random number generators in the channel so that

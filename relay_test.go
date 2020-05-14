@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -1213,6 +1214,73 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 		assert.Equal(t, string(arg2Buf), string(gotArg2), "arg2 in response does not meet expectation")
 		assert.Equal(t, arg3Data, string(gotArg3), "arg3 in response does not meet expectation")
 	})
+}
+
+func TestRelayConnectionTimeout(t *testing.T) {
+	var (
+		minTimeout = testutils.Timeout(10 * time.Millisecond)
+		maxTimeout = testutils.Timeout(time.Minute)
+	)
+	tests := []struct {
+		msg            string
+		callTimeout    time.Duration
+		maxConnTimeout time.Duration
+		minTime        time.Duration
+	}{
+		{
+			msg:         "only call timeout is set",
+			callTimeout: 2 * minTimeout,
+		},
+		{
+			msg:            "call timeout < relay timeout",
+			callTimeout:    2 * minTimeout,
+			maxConnTimeout: 2 * maxTimeout,
+		},
+		{
+			msg:            "relay timeout < call timeout",
+			callTimeout:    2 * maxTimeout,
+			maxConnTimeout: 2 * minTimeout,
+		},
+		{
+			msg:            "relay timeout == call timeout",
+			callTimeout:    2 * minTimeout,
+			maxConnTimeout: 2 * minTimeout,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			opts := testutils.NewOpts().
+				SetRelayOnly().
+				SetRelayMaxConnectionTimeout(tt.maxConnTimeout).
+				AddLogFilter("Failed during connection handshake.", 1).
+				AddLogFilter("Failed to connect to relay host.", 1)
+			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+				ln, err := net.Listen("tcp", "127.0.0.1:0")
+				require.NoError(t, err, "Failed to listen")
+				defer ln.Close()
+
+				// TCP listener will never complete the handshake and always timeout.
+				ts.RelayHost().Add("blocked", ln.Addr().String())
+
+				start := time.Now()
+
+				ctx, cancel := NewContext(testutils.Timeout(tt.callTimeout))
+				defer cancel()
+
+				// We expect connection error logs from the client.
+				client := ts.NewClient(nil /* opts */)
+				_, _, _, err = raw.Call(ctx, client, ts.HostPort(), "blocked", "echo", nil, nil)
+				assert.Equal(t, ErrTimeout, err)
+
+				taken := time.Since(start)
+				if taken < minTimeout || taken > maxTimeout {
+					t.Errorf("Took %v, expected [%v, %v]", taken, minTimeout, maxTimeout)
+				}
+			})
+		})
+	}
+
 }
 
 // relayFrameInspector is a RelayHost decorator which inspects
