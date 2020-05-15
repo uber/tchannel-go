@@ -33,6 +33,7 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
@@ -45,8 +46,9 @@ var _leakedGoroutine atomic.Bool
 type TestServer struct {
 	testing.TB
 
-	// relayIdx is the index of the relay channel, if any, in the channels slice.
-	relayIdx int
+	// References to specific channels (if any, as they can be disabled)
+	relayCh  *tchannel.Channel
+	serverCh *tchannel.Channel
 
 	// relayHost is the relayer's StubRelayHost (if any).
 	relayHost *relaytest.StubRelayHost
@@ -84,10 +86,12 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 		},
 	}
 
-	// Remove any relay options, since those should only be applied to addRelay.
-	serverOpts := opts.Copy()
-	serverOpts.RelayHost = nil
-	ts.NewServer(serverOpts)
+	if !opts.DisableServer {
+		// Remove any relay options, since those should only be applied to addRelay.
+		serverOpts := opts.Copy()
+		serverOpts.RelayHost = nil
+		ts.serverCh = ts.NewServer(serverOpts)
+	}
 
 	if opts == nil || !opts.DisableRelay {
 		ts.addRelay(opts)
@@ -160,6 +164,12 @@ func (ts *TestServer) SetVerifyOpts(opts *goroutines.VerifyOpts) {
 	ts.verifyOpts = opts
 }
 
+// HasServer returns whether this TestServer has a TChannel server, as
+// the server may have been disabled with the DisableServer option.
+func (ts *TestServer) HasServer() bool {
+	return ts.serverCh != nil
+}
+
 // Server returns the underlying TChannel for the server (i.e., the channel on
 // which we're registering handlers).
 //
@@ -167,15 +177,20 @@ func (ts *TestServer) SetVerifyOpts(opts *goroutines.VerifyOpts) {
 // callers should use the Client(), HostPort(), ServiceName(), and Register()
 // methods instead of accessing the server channel explicitly.
 func (ts *TestServer) Server() *tchannel.Channel {
-	return ts.channels[0]
+	require.True(ts, ts.HasServer(), "Cannot use Server as it was disabled")
+	return ts.serverCh
+}
+
+// HasRelay indicates whether this TestServer has a relay interposed between the
+// server and clients.
+func (ts *TestServer) HasRelay() bool {
+	return ts.relayCh != nil
 }
 
 // Relay returns the relay channel, if one is present.
 func (ts *TestServer) Relay() *tchannel.Channel {
-	if ts.HasRelay() {
-		return ts.channels[ts.relayIdx]
-	}
-	return nil
+	require.True(ts, ts.HasRelay(), "Cannot use Relay, not present in current test")
+	return ts.relayCh
 }
 
 // RelayHost returns the stub RelayHost for mapping service names to peers.
@@ -277,22 +292,14 @@ func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
 	opts.ServiceName = "relay"
 	opts.ChannelOptions.RelayHost = relayHost
 
-	ts.addChannel(newServer, opts)
-	if ts.relayHost != nil {
+	ts.relayCh = ts.addChannel(newServer, opts)
+	if ts.relayHost != nil && ts.HasServer() {
 		ts.relayHost.Add(ts.Server().ServiceName(), ts.Server().PeerInfo().HostPort)
 	}
 
 	if statter, ok := relayHost.(relayStatter); ok {
 		ts.relayStats = statter.Stats()
 	}
-
-	ts.relayIdx = len(ts.channels) - 1
-}
-
-// HasRelay indicates whether this TestServer has a relay interposed between the
-// server and clients.
-func (ts *TestServer) HasRelay() bool {
-	return ts.relayIdx > 0
 }
 
 func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelOpts) *tchannel.Channel, opts *ChannelOpts) *tchannel.Channel {
@@ -472,6 +479,8 @@ func withServer(t testing.TB, chanOpts *ChannelOpts, f func(testing.TB, *TestSer
 	defer ts.post()
 
 	f(t, ts)
-	ts.Server().Logger().Debugf("TEST: Test function complete")
+	if ts.HasServer() {
+		ts.Server().Logger().Debugf("TEST: Test function complete")
+	}
 	ts.CloseAndVerify()
 }

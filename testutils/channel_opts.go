@@ -55,6 +55,10 @@ type ChannelOpts struct {
 	// By default, all tests are run with a relay interposed.
 	DisableRelay bool
 
+	// DisableServer disables creation of the TChannel server.
+	// This is typically only used in relay tests when a custom server is required.
+	DisableServer bool
+
 	// OnlyRelay instructs TestServer the test must only be run with a relay.
 	OnlyRelay bool
 
@@ -172,6 +176,13 @@ func (o *ChannelOpts) NoRelay() *ChannelOpts {
 // SetRelayOnly instructs TestServer to only run with a relay in front of this channel.
 func (o *ChannelOpts) SetRelayOnly() *ChannelOpts {
 	o.OnlyRelay = true
+	return o
+}
+
+// SetDisableServer disables creation of the TChannel server.
+// This is typically only used in relay tests when a custom server is required.
+func (o *ChannelOpts) SetDisableServer() *ChannelOpts {
+	o.DisableServer = true
 	return o
 }
 

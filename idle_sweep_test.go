@@ -184,9 +184,6 @@ func TestClientBasedSweep(t *testing.T) {
 // outbound.
 func TestRelayBasedSweep(t *testing.T) {
 	listener := newPeerStatusListener()
-	ctx, cancel := NewContext(time.Second)
-	defer cancel()
-
 	relayTicker := testutils.NewFakeTicker()
 	clock := testutils.NewStubClock(time.Now())
 
@@ -199,20 +196,16 @@ func TestRelayBasedSweep(t *testing.T) {
 		SetMaxIdleTime(3 * time.Minute).
 		SetIdleCheckInterval(30 * time.Second).
 		SetOnPeerStatusChanged(listener.onStatusChange).
+		SetDisableServer(). // We create our own server without the idle sweeper.
 		SetRelayOnly()
-
 	testutils.WithTestServer(t, relayOpts, func(t testing.TB, ts *testutils.TestServer) {
-		// Replace the auto-created server with a new one that doesn't have
-		// an idle-connection poller.
-		ts.Relay().GetSubChannel(ts.ServiceName()).Peers().Remove(
-			ts.Server().PeerInfo().HostPort)
 		server := ts.NewServer(opts)
 		testutils.RegisterEcho(server, nil)
 
 		// Make a call to the server via relay, which will establish connections:
 		// Client -> Relay -> Server
 		client := ts.NewClient(opts)
-		raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), "echo", nil, nil)
+		testutils.AssertEcho(t, client, ts.HostPort(), server.ServiceName())
 
 		relayTicker.Tick()
 
@@ -341,7 +334,8 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 			},
 		}
 
-		if relay := ts.Relay(); relay != nil {
+		if ts.HasRelay() {
+			relay := ts.Relay()
 			check.ch = relay
 			check.preCloseConns++
 			oldTick := check.tick
