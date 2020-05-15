@@ -165,10 +165,11 @@ type ConnectionRuntimeState struct {
 
 // RelayerRuntimeState is the runtime state for a single relayer.
 type RelayerRuntimeState struct {
-	Count         int               `json:"count"`
-	InboundItems  RelayItemSetState `json:"inboundItems"`
-	OutboundItems RelayItemSetState `json:"outboundItems"`
-	MaxTimeout    time.Duration     `json:"maxTimeout"`
+	Count                int               `json:"count"`
+	InboundItems         RelayItemSetState `json:"inboundItems"`
+	OutboundItems        RelayItemSetState `json:"outboundItems"`
+	MaxTimeout           time.Duration     `json:"maxTimeout"`
+	MaxConnectionTimeout time.Duration     `json:"maxConnectionTimeout"`
 }
 
 // ExchangeSetRuntimeState is the runtime state for a message exchange set.
@@ -388,10 +389,11 @@ func (c *Connection) IntrospectState(opts *IntrospectionOptions) ConnectionRunti
 func (r *Relayer) IntrospectState(opts *IntrospectionOptions) RelayerRuntimeState {
 	count := r.inbound.Count() + r.outbound.Count()
 	return RelayerRuntimeState{
-		Count:         count,
-		InboundItems:  r.inbound.IntrospectState(opts, "inbound"),
-		OutboundItems: r.outbound.IntrospectState(opts, "outbound"),
-		MaxTimeout:    r.maxTimeout,
+		Count:                count,
+		InboundItems:         r.inbound.IntrospectState(opts, "inbound"),
+		OutboundItems:        r.outbound.IntrospectState(opts, "outbound"),
+		MaxTimeout:           r.maxTimeout,
+		MaxConnectionTimeout: r.maxConnTimeout,
 	}
 }
 
