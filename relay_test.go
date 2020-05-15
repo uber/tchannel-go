@@ -955,7 +955,9 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 		concurrentClients = 15
 		callsPerClient    = 100
 	)
-	opts := testutils.NewOpts().SetRelayOnly()
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetSendBufferSize(concurrentClients * callsPerClient) // Avoid dropped frames causing unexpected logs.
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 		// Create clients and ensure we can make a successful request.
