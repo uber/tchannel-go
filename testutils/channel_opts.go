@@ -231,6 +231,12 @@ func (o *ChannelOpts) SetRelayMaxTimeout(d time.Duration) *ChannelOpts {
 	return o
 }
 
+// SetRelayMaxConnectionTimeout sets the maximum timeout for connection attempts.
+func (o *ChannelOpts) SetRelayMaxConnectionTimeout(d time.Duration) *ChannelOpts {
+	o.ChannelOptions.RelayMaxConnectionTimeout = d
+	return o
+}
+
 // SetOnPeerStatusChanged sets the callback for channel status change
 // noficiations.
 func (o *ChannelOpts) SetOnPeerStatusChanged(f func(*tchannel.Peer)) *ChannelOpts {

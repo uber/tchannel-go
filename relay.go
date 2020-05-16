@@ -169,8 +169,9 @@ const (
 
 // A Relayer forwards frames.
 type Relayer struct {
-	relayHost  RelayHost
-	maxTimeout time.Duration
+	relayHost      RelayHost
+	maxTimeout     time.Duration
+	maxConnTimeout time.Duration
 
 	// localHandlers is the set of service names that are handled by the local
 	// channel.
@@ -200,13 +201,14 @@ type Relayer struct {
 // NewRelayer constructs a Relayer.
 func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 	r := &Relayer{
-		relayHost:    ch.RelayHost(),
-		maxTimeout:   ch.relayMaxTimeout,
-		localHandler: ch.relayLocal,
-		outbound:     newRelayItems(conn.log.WithFields(LogField{"relayItems", "outbound"})),
-		inbound:      newRelayItems(conn.log.WithFields(LogField{"relayItems", "inbound"})),
-		peers:        ch.RootPeers(),
-		conn:         conn,
+		relayHost:      ch.RelayHost(),
+		maxTimeout:     ch.relayMaxTimeout,
+		maxConnTimeout: ch.relayMaxConnTimeout,
+		localHandler:   ch.relayLocal,
+		outbound:       newRelayItems(conn.log.WithFields(LogField{"relayItems", "outbound"})),
+		inbound:        newRelayItems(conn.log.WithFields(LogField{"relayItems", "inbound"})),
+		peers:          ch.RootPeers(),
+		conn:           conn,
 		relayConn: &relay.Conn{
 			RemoteAddr:        conn.conn.RemoteAddr().String(),
 			RemoteProcessName: conn.RemotePeerInfo().ProcessName,
@@ -360,8 +362,7 @@ func (r *Relayer) getDestination(f lazyCallReq, call RelayCall) (*Connection, bo
 		return nil, false, errBadRelayHost
 	}
 
-	// TODO: Should connections use the call timeout? Or a separate timeout?
-	remoteConn, err := peer.getConnectionRelay(f.TTL())
+	remoteConn, err := peer.getConnectionRelay(f.TTL(), r.maxConnTimeout)
 	if err != nil {
 		r.logger.WithFields(
 			ErrField(err),

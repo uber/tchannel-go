@@ -79,6 +79,10 @@ type ChannelOptions struct {
 	// This is an unstable API - breaking changes are likely.
 	RelayMaxTimeout time.Duration
 
+	// If the relay needs to connect while processing a frame, this specifies
+	// the max connection timeout used.
+	RelayMaxConnectionTimeout time.Duration
+
 	// RelayTimerVerification will disable pooling of relay timers, and instead
 	// verify that timers are not used once they are released.
 	// This is an unstable API - breaking changes are likely.
@@ -158,6 +162,7 @@ type Channel struct {
 	peers               *PeerList
 	relayHost           RelayHost
 	relayMaxTimeout     time.Duration
+	relayMaxConnTimeout time.Duration
 	relayTimerVerify    bool
 	internalHandlers    *handlerMap
 	handler             Handler
@@ -267,13 +272,14 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 			timeTicker:    timeTicker,
 			tracer:        opts.Tracer,
 		},
-		chID:              chID,
-		connectionOptions: opts.DefaultConnectionOptions.withDefaults(),
-		relayHost:         opts.RelayHost,
-		relayMaxTimeout:   validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
-		relayTimerVerify:  opts.RelayTimerVerification,
-		dialer:            dialCtx,
-		closed:            make(chan struct{}),
+		chID:                chID,
+		connectionOptions:   opts.DefaultConnectionOptions.withDefaults(),
+		relayHost:           opts.RelayHost,
+		relayMaxTimeout:     validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
+		relayMaxConnTimeout: opts.RelayMaxConnectionTimeout,
+		relayTimerVerify:    opts.RelayTimerVerification,
+		dialer:              dialCtx,
+		closed:              make(chan struct{}),
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
 

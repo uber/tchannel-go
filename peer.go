@@ -419,7 +419,7 @@ func (p *Peer) GetConnection(ctx context.Context) (*Connection, error) {
 
 // getConnectionRelay gets a connection, and uses the given timeout to lazily
 // create a context if a new connection is required.
-func (p *Peer) getConnectionRelay(timeout time.Duration) (*Connection, error) {
+func (p *Peer) getConnectionRelay(callTimeout, relayMaxConnTimeout time.Duration) (*Connection, error) {
 	if conn, ok := p.getActiveConn(); ok {
 		return conn, nil
 	}
@@ -431,6 +431,12 @@ func (p *Peer) getConnectionRelay(timeout time.Duration) (*Connection, error) {
 	// Check active connections again in case someone else got ahead of us.
 	if activeConn, ok := p.getActiveConn(); ok {
 		return activeConn, nil
+	}
+
+	// Use the lower timeout value of the call timeout and the relay connection timeout.
+	timeout := callTimeout
+	if timeout > relayMaxConnTimeout && relayMaxConnTimeout > 0 {
+		timeout = relayMaxConnTimeout
 	}
 
 	// When the relay creates outbound connections, we don't want those services
