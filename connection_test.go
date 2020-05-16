@@ -920,7 +920,7 @@ func TestConnectionIDs(t *testing.T) {
 
 		// We want to reuse the same connection for the rest of the test which
 		// only makes sense when the relay is not used.
-		if ts.Relay() != nil {
+		if ts.HasRelay() {
 			return
 		}
 
