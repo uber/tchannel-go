@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.19.0] - 2020-05-21
+### Fixed
+ * Internal API changes related to relaying.
+
 ## [1.18.0] - 2020-03-30
 ### Added
  * Introspection now tracks last activity for reads and writes separately (#770)
