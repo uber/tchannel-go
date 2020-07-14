@@ -18,13 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build linux
+// Match the golang/sys unix file, https://github.com/golang/sys/blob/master/unix/syscall_unix.go#L5
+// +build aix darwin dragonfly freebsd linux netbsd openbsd solaris
 
 package tchannel
 
-import "golang.org/x/sys/unix"
+import (
+	"go.uber.org/multierr"
+	"golang.org/x/sys/unix"
+)
 
-func getSendQueueLen(fd uintptr) (int, error) {
-	// https://linux.die.net/man/7/tcp
-	return unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
+func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) {
+	sendBufSize = -1
+	sendBufUsage = -1
+
+	if c.sysConn == nil {
+		return sendBufUsage, sendBufSize, errNoSyscallConn
+	}
+
+	var sendBufLenErr, sendBufLimErr error
+	errs := c.sysConn.Control(func(fd uintptr) {
+		sendBufUsage, sendBufLenErr = getSendQueueLen(fd)
+		sendBufSize, sendBufLimErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
+	})
+
+	errs = multierr.Append(errs, sendBufLimErr)
+	errs = multierr.Append(errs, sendBufLenErr)
+	return sendBufUsage, sendBufSize, errs
 }
