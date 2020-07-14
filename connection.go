@@ -33,11 +33,9 @@ import (
 	"github.com/uber/tchannel-go/tos"
 
 	"go.uber.org/atomic"
-	"go.uber.org/multierr"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -916,25 +914,6 @@ func (c *Connection) getLastActivityReadTime() time.Time {
 // this connection was created.
 func (c *Connection) getLastActivityWriteTime() time.Time {
 	return time.Unix(0, c.lastActivityWrite.Load())
-}
-
-func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) {
-	sendBufSize = -1
-	sendBufUsage = -1
-
-	if c.sysConn == nil {
-		return sendBufUsage, sendBufSize, errNoSyscallConn
-	}
-
-	var sendBufLenErr, sendBufLimErr error
-	errs := c.sysConn.Control(func(fd uintptr) {
-		sendBufUsage, sendBufLenErr = getSendQueueLen(fd)
-		sendBufSize, sendBufLimErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
-	})
-
-	errs = multierr.Append(errs, sendBufLimErr)
-	errs = multierr.Append(errs, sendBufLenErr)
-	return sendBufUsage, sendBufSize, errs
 }
 
 func getSysConn(conn net.Conn, log Logger) syscall.RawConn {

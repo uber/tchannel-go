@@ -18,13 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-// +build linux
+// Opposite of sockio_unix.go
+// +build !aix,!darwin,!dragonfly,!freebsd,!linux,!netbsd,!openbsd,!solaris
 
 package tchannel
 
-import "golang.org/x/sys/unix"
-
-func getSendQueueLen(fd uintptr) (int, error) {
-	// https://linux.die.net/man/7/tcp
-	return unix.IoctlGetInt(int(fd), unix.SIOCOUTQ)
+func (c *Connection) sendBufSize() (sendBufUsage int, sendBufSize int, _ error) {
+	return -1, -1, errNoSyscallConn
 }
