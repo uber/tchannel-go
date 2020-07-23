@@ -517,3 +517,29 @@ func TestLazyErrorCodes(t *testing.T) {
 		assert.Equal(t, ec, f.Code(), "Mismatch between error code and lazy frame's Code() method.")
 	})
 }
+
+func TestLazyAppendArg2(t *testing.T) {
+	withLazyCallReqCombinations(func(cr testCallReq) {
+		t.Run(fmt.Sprintf("%v", cr), func(t *testing.T) {
+			req := cr.reqWithParams(testCallReqParams{
+				argScheme:       Thrift,
+				arg2Buf:         thriftarg2test.BuildKVBuffer(map[string]string{
+					"foo": "bar",
+				}),
+			})
+			require.NoError(t, req.Arg2Append([]byte("baz"), []byte("qux")))
+
+			gotKeyVals := make(map[string]string)
+			for i, err := req.Arg2Iterator(); err == nil; i, err = i.Next() {
+				gotKeyVals[string(i.Key())] = string(i.Value())
+			}
+
+			wantKeyVals := map[string]string{
+				"foo": "bar",
+				"baz": "qux",
+			}
+
+			assert.Equal(t, wantKeyVals, gotKeyVals, "Got unexpected key/val pairs")
+		})
+	})
+}

@@ -25,6 +25,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/uber/tchannel-go/thrift/arg2"
@@ -88,6 +89,15 @@ func newLazyCallRes(f *Frame) lazyCallRes {
 
 func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
+}
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		// The Pool's New function should generally only return pointer
+		// types, since a pointer can be put into the return interface
+		// value without an allocation:
+		return new(bytes.Buffer)
+	},
 }
 
 type lazyCallReq struct {
@@ -154,23 +164,23 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 }
 
 // Caller returns the name of the originator of this callReq.
-func (f lazyCallReq) Caller() []byte {
+func (f *lazyCallReq) Caller() []byte {
 	return f.caller
 }
 
 // Service returns the name of the destination service for this callReq.
-func (f lazyCallReq) Service() []byte {
+func (f *lazyCallReq) Service() []byte {
 	l := f.Payload[_serviceLenIndex]
 	return f.Payload[_serviceNameIndex : _serviceNameIndex+l]
 }
 
 // Method returns the name of the method being called.
-func (f lazyCallReq) Method() []byte {
+func (f *lazyCallReq) Method() []byte {
 	return f.method
 }
 
 // RoutingDelegate returns the routing delegate for this call req, if any.
-func (f lazyCallReq) RoutingDelegate() []byte {
+func (f *lazyCallReq) RoutingDelegate() []byte {
 	return f.delegate
 }
 
@@ -180,43 +190,43 @@ func (f lazyCallReq) RoutingKey() []byte {
 }
 
 // TTL returns the time to live for this callReq.
-func (f lazyCallReq) TTL() time.Duration {
+func (f *lazyCallReq) TTL() time.Duration {
 	ttl := binary.BigEndian.Uint32(f.Payload[_ttlIndex : _ttlIndex+_ttlLen])
 	return time.Duration(ttl) * time.Millisecond
 }
 
 // SetTTL overwrites the frame's TTL.
-func (f lazyCallReq) SetTTL(d time.Duration) {
+func (f *lazyCallReq) SetTTL(d time.Duration) {
 	ttl := uint32(d / time.Millisecond)
 	binary.BigEndian.PutUint32(f.Payload[_ttlIndex:_ttlIndex+_ttlLen], ttl)
 }
 
 // Span returns the Span
-func (f lazyCallReq) Span() Span {
+func (f *lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)
 }
 
 // HasMoreFragments returns whether the callReq has more fragments.
-func (f lazyCallReq) HasMoreFragments() bool {
+func (f *lazyCallReq) HasMoreFragments() bool {
 	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }
 
 // Arg2EndOffset returns the offset from start of payload to the end of Arg2
 // in bytes, and hasMore to be true if there are more frames and arg3 has
 // not started.
-func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
+func (f *lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
 	return f.arg2EndOffset, f.isArg2Fragmented
 }
 
 // Arg2StartOffset returns the offset from start of payload to the beginning
 // of Arg2 in bytes.
-func (f lazyCallReq) Arg2StartOffset() int {
+func (f *lazyCallReq) Arg2StartOffset() int {
 	return f.arg2StartOffset
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
-func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
+func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
@@ -226,6 +236,40 @@ func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	}
 
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
+}
+
+func (f *lazyCallReq) Arg2Append(key, val []byte) error {
+	arg3 := bufPool.Get().(*bytes.Buffer)
+	arg3.Write(f.Payload[f.arg2EndOffset:])
+
+	// Pointer to arg2 payload
+	arg2Payload := f.Payload[f.arg2StartOffset:f.arg2EndOffset]
+
+	deltaLen := 2 + len(key) + 2 + len(val)
+	if int(f.Header.PayloadSize()) +deltaLen > MaxFramePayloadSize {
+		return fmt.Errorf("frame too large")
+	}
+
+	delta := bufPool.Get().(*bytes.Buffer)
+	writeDataToBuffer(key, delta)
+	writeDataToBuffer(val, delta)
+	f.Payload = append(f.Payload[:f.arg2EndOffset], delta.Bytes()...)
+	f.arg2EndOffset += deltaLen
+
+	arg2PairCount := int(binary.BigEndian.Uint16(arg2Payload[0:2]))
+	binary.BigEndian.PutUint16(arg2Payload[0:2], uint16(arg2PairCount+1))
+
+	f.Payload = append(f.Payload, arg3.Bytes()...)
+
+	return nil
+}
+
+func writeDataToBuffer(data []byte, buffer *bytes.Buffer) int {
+	var dataLen [2]byte
+	binary.BigEndian.PutUint16(dataLen[:], uint16(len(data)))
+	buffer.Write(dataLen[:])
+	buffer.Write(data)
+	return len(data) + 2
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

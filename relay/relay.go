@@ -56,6 +56,8 @@ type CallFrame interface {
 	// of TChannel-Thrift Arg Scheme. If no iterator is available, return
 	// io.EOF.
 	Arg2Iterator() (arg2.KeyValIterator, error)
+	// Arg2Append appends a key/val pair to arg2
+	Arg2Append(key, val []byte) error
 }
 
 // Conn contains information about the underlying connection.
