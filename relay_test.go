@@ -40,6 +40,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
+	"github.com/uber/tchannel-go/thrift"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1301,4 +1302,163 @@ func newRelayFrameInspector(r RelayHost) *relayFrameInspector {
 func (r *relayFrameInspector) Start(f relay.CallFrame, conn *relay.Conn) (RelayCall, error) {
 	r.received <- testutils.CopyCallFrame(f)
 	return r.RelayHost.Start(f, conn)
+}
+
+func TestRelayModifyArg2(t *testing.T) {
+	modifyTests := []struct {
+		msg         string
+		skip        string
+		modifyFrame func(relay.CallFrame, *relay.Conn)
+		modifyArg2  func(arg2 map[string]string)
+	}{
+		{
+			msg:         "no change",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {},
+			modifyArg2: func(arg2 map[string]string) {
+				// no change
+			},
+		},
+		{
+			msg: "add small key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append([]byte("key"), []byte("value"))
+			},
+			modifyArg2: func(m map[string]string) {
+				m["key"] = "value"
+			},
+		},
+	}
+
+	checksumTypes := []struct {
+		msg          string
+		checksumType ChecksumType
+	}{
+		{"none", ChecksumTypeNone},
+		{"crc32", ChecksumTypeCrc32},
+		{"farmhash", ChecksumTypeFarmhash},
+		{"crc32c", ChecksumTypeCrc32C},
+	}
+
+	payloadTests := []struct {
+		msg  string
+		arg2 map[string]string
+		arg3 []byte
+	}{
+		{
+			msg:  "no payload",
+			arg2: map[string]string{},
+			arg3: []byte{},
+		},
+		{
+			msg: "small payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: []byte("hello world"),
+		},
+	}
+
+	for _, mt := range modifyTests {
+		for _, csTest := range checksumTypes {
+			t.Run(mt.msg+"/checksum="+csTest.msg, func(t *testing.T) {
+				// Create a relay that will modify the frame as per the test.
+				relayHost := relaytest.NewStubRelayHost()
+				relayHost.SetFrameFn(mt.modifyFrame)
+				opts := testutils.NewOpts().
+					SetRelayHost(relayHost).
+					SetRelayOnly()
+				testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+					// Create a client that uses a specific checksumType.
+					clientOpts := testutils.NewOpts().SetChecksumType(csTest.checksumType)
+					client := ts.NewClient(clientOpts)
+
+					// Create a server that will echo (with some verification)
+					const (
+						format     = Thrift
+						methodName = "echoVerify"
+					)
+					handler := echoVerifyHandler{
+						t:            t,
+						verifyFormat: format,
+						verifyCaller: client.ServiceName(),
+						verifyMethod: methodName,
+					}
+					server := ts.NewServer(nil)
+					server.Register(raw.Wrap(handler), methodName)
+
+					// Since we are creating our own relay, we need to manually add server.
+					relayHost.Add(server.ServiceName(), server.PeerInfo().HostPort)
+
+					ctx, cancel := NewContextBuilder(testutils.Timeout(time.Second)).
+						SetFormat(format).Build()
+					defer cancel()
+
+					// Make calls with different payloads.
+					for _, tt := range payloadTests {
+						arg2Encoded := mapToArg2(t, tt.arg2)
+
+						resArg2, resArg3, _, err := raw.Call(ctx, client, ts.HostPort(), server.ServiceName(), methodName, arg2Encoded, tt.arg3)
+						require.NoError(t, err, "%v: Received unexpected error", tt.msg)
+
+						wantArg2 := copyMap(tt.arg2)
+						mt.modifyArg2(wantArg2)
+
+						// To match thrift.ReadHeaders behaviour.
+						if len(wantArg2) == 0 {
+							wantArg2 = nil
+						}
+
+						gotArg2Map := mapFromArg2(t, resArg2)
+						assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)
+						assert.Equal(t, resArg3, tt.arg3, "%v: Unexpected arg3", tt.msg)
+					}
+				})
+			})
+		}
+	}
+}
+
+// echoVerifyHandler is an echo handler with some added verification of
+// the call metadata (e.g., caller, format).
+type echoVerifyHandler struct {
+	t testing.TB
+
+	verifyFormat Format
+	verifyCaller string
+	verifyMethod string
+}
+
+func (h echoVerifyHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+	assert.Equal(h.t, h.verifyFormat, args.Format, "Unexpected format")
+	assert.Equal(h.t, h.verifyCaller, args.Caller, "Unexpected caller")
+	assert.Equal(h.t, h.verifyMethod, args.Method, "Unexpected method")
+
+	return &raw.Res{
+		Arg2: args.Arg2,
+		Arg3: args.Arg3,
+	}, nil
+}
+
+func (h echoVerifyHandler) OnError(ctx context.Context, err error) {
+	h.t.Errorf("unexpected OnError: %v", err)
+}
+
+func mapToArg2(t testing.TB, m map[string]string) []byte {
+	var buf bytes.Buffer
+	require.NoError(t, thrift.WriteHeaders(&buf, m), "Failed to write headers")
+	return buf.Bytes()
+}
+
+func mapFromArg2(t testing.TB, bs []byte) map[string]string {
+	m, err := thrift.ReadHeaders(bytes.NewReader(bs))
+	require.NoError(t, err, "Failed to read headers")
+	return m
+}
+
+func copyMap(m map[string]string) map[string]string {
+	copied := make(map[string]string, len(m))
+	for k, v := range m {
+		copied[k] = v
+	}
+	return copied
 }
