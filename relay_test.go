@@ -1371,6 +1371,7 @@ func TestRelayModifyArg2(t *testing.T) {
 					// Create a client that uses a specific checksumType.
 					clientOpts := testutils.NewOpts().SetChecksumType(csTest.checksumType)
 					client := ts.NewClient(clientOpts)
+					defer client.Close()
 
 					// Create a server that will echo (with some verification)
 					const (
@@ -1384,6 +1385,7 @@ func TestRelayModifyArg2(t *testing.T) {
 						verifyMethod: methodName,
 					}
 					server := ts.NewServer(nil)
+					defer server.Close()
 					server.Register(raw.Wrap(handler), methodName)
 
 					// Since we are creating our own relay, we need to manually add server.

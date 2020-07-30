@@ -25,10 +25,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/uber/tchannel-go/thrift/arg2"
+	"github.com/uber/tchannel-go/typed"
 )
 
 var (
@@ -91,13 +91,9 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		return new(bytes.Buffer)
-	},
+type keyVal struct {
+	key []byte
+	val []byte
 }
 
 type lazyCallReq struct {
@@ -105,8 +101,16 @@ type lazyCallReq struct {
 
 	caller, method, delegate, key, as []byte
 
+	bodyOffset                     int
+	checksumType                   ChecksumType
+	checksumSize                   int
+	arg1                           []byte
+	arg2                           []byte
 	arg2StartOffset, arg2EndOffset int
 	isArg2Fragmented               bool
+	arg3                           []byte
+
+	arg2appends []keyVal
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -145,21 +149,45 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		}
 	}
 
+	cr.bodyOffset = cur
+
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
-	checkSumType := ChecksumType(f.Payload[cur])
-	cur += 1 /* checksum */ + checkSumType.ChecksumSize()
+	cr.checksumType = ChecksumType(f.Payload[cur])
+	cr.checksumSize = cr.checksumType.ChecksumSize()
+	cur += 1 /* checksum */ + cr.checksumSize
 
 	// arg1~2
 	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
 	cur += 2
-	cr.method = f.Payload[cur : cur+arg1Len]
+	cr.arg1 = f.Payload[cur : cur+arg1Len]
+	cur += arg1Len
+	cr.method = cr.arg1
 
 	// arg2~2
-	cur += arg1Len
-	cr.arg2StartOffset = cur + 2
-	cr.arg2EndOffset = cr.arg2StartOffset + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
+	arg2Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
+	cur += 2
+	cr.arg2StartOffset = cur
+	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
+
+	if cr.arg2EndOffset >= int(cr.Header.PayloadSize()) {
+		cr.arg2 = f.Payload[cur:cr.Header.PayloadSize()]
+		cr.isArg2Fragmented = cr.HasMoreFragments()
+		return cr
+	}
+
 	// arg2 is fragmented if we don't see arg3 in this frame.
-	cr.isArg2Fragmented = int(cr.Header.PayloadSize()) <= cr.arg2EndOffset && cr.HasMoreFragments()
+	cr.arg2 = f.Payload[cur : cur+arg2Len]
+	cur += arg2Len
+
+	// arg3~2
+	arg3Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
+	cur += 2
+	if cur+arg3Len >= int(f.Header.PayloadSize()) {
+		cr.arg3 = f.Payload[cur:cr.Header.PayloadSize()]
+		return cr
+	}
+	cr.arg3 = f.Payload[cur : cur+arg3Len]
+
 	return cr
 }
 
@@ -238,38 +266,135 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }
 
-func (f *lazyCallReq) Arg2Append(key, val []byte) error {
-	arg3 := bufPool.Get().(*bytes.Buffer)
-	arg3.Write(f.Payload[f.arg2EndOffset:])
-
-	// Pointer to arg2 payload
-	arg2Payload := f.Payload[f.arg2StartOffset:f.arg2EndOffset]
-
-	deltaLen := 2 + len(key) + 2 + len(val)
-	if int(f.Header.PayloadSize()) +deltaLen > MaxFramePayloadSize {
-		return fmt.Errorf("frame too large")
-	}
-
-	delta := bufPool.Get().(*bytes.Buffer)
-	writeDataToBuffer(key, delta)
-	writeDataToBuffer(val, delta)
-	f.Payload = append(f.Payload[:f.arg2EndOffset], delta.Bytes()...)
-	f.arg2EndOffset += deltaLen
-
-	arg2PairCount := int(binary.BigEndian.Uint16(arg2Payload[0:2]))
-	binary.BigEndian.PutUint16(arg2Payload[0:2], uint16(arg2PairCount+1))
-
-	f.Payload = append(f.Payload, arg3.Bytes()...)
-
-	return nil
+func (f *lazyCallReq) Arg2Append(key, val []byte) {
+	f.arg2appends = append(f.arg2appends, keyVal{key, val})
 }
 
-func writeDataToBuffer(data []byte, buffer *bytes.Buffer) int {
-	var dataLen [2]byte
-	binary.BigEndian.PutUint16(dataLen[:], uint16(len(data)))
-	buffer.Write(dataLen[:])
-	buffer.Write(data)
-	return len(data) + 2
+func (f *lazyCallReq) getFrames(fp FramePool) ([]*Frame, error) {
+	var frames []*Frame
+
+	frag, err := f.newFragment(fp)
+	if err != nil {
+		return nil, fmt.Errorf("create fragment: %v", err)
+	}
+
+	frames = append(frames, frag.frame)
+
+	// arg1
+	frag.payloadWriteBuf.WriteUint16(uint16(len(f.arg1)))
+	frag.payloadWriteBuf.WriteBytes(f.arg1)
+	if frag.checksum != nil {
+		frag.checksum.Add(f.arg1)
+	}
+
+	// arg2
+	// Calculate new length
+	arg2Len := len(f.arg2)
+	for _, kv := range f.arg2appends {
+		arg2Len += 2 + len(kv.key) + 2 + len(kv.val)
+	}
+
+	// Write arg2 with optional append
+	frag.payloadWriteBuf.WriteUint16(uint16(arg2Len))
+	if arg2Len > frag.payloadWriteBuf.BytesRemaining() {
+		return nil, fmt.Errorf("arg2 must be within the call req frame")
+	}
+
+	if arg2Len > 0 {
+		arg2Ref := frag.payloadWriteBuf.DeferBytes(arg2Len)
+		arg2wbuf := typed.NewWriteBuffer(arg2Ref)
+		arg2NHRef := arg2wbuf.DeferUint16()
+		arg2NH := binary.BigEndian.Uint16(f.arg2[:2])
+		if arg2NH > 0 {
+			arg2wbuf.WriteBytes(f.arg2[2:])
+		}
+		for _, kv := range f.arg2appends {
+			arg2wbuf.WriteUint16(uint16(len(kv.key)))
+			arg2wbuf.WriteBytes(kv.key)
+			arg2wbuf.WriteUint16(uint16(len(kv.val)))
+			arg2wbuf.WriteBytes(kv.val)
+			arg2NH++
+		}
+		arg2NHRef.Update(arg2NH)
+		if frag.checksum != nil {
+			frag.checksum.Add(arg2Ref)
+		}
+	}
+
+	// if by now we don't have enough space for arg3, move it into the next frame.
+	if len(f.arg3) > frag.payloadWriteBuf.BytesRemaining() {
+		// Write arg3 size and finalize previous frame
+		frag.payloadWriteBuf.WriteUint16(0)
+		frag.finalize()
+
+		// Start new frame
+		frag, err = f.newFragment(fp)
+		if err != nil {
+			return nil, fmt.Errorf("new fragment: %v", err)
+		}
+		// arg1~2
+		frag.payloadWriteBuf.WriteUint16(0)
+		// arg2~2
+		frag.payloadWriteBuf.WriteUint16(0)
+	}
+
+	if !f.isArg2Fragmented {
+		// arg3
+		frag.payloadWriteBuf.WriteUint16(uint16(len(f.arg3)))
+		frag.payloadWriteBuf.WriteBytes(f.arg3)
+		if frag.checksum != nil {
+			frag.checksum.Add(f.arg3)
+		}
+	}
+
+	frag.finalize()
+
+	fp.Release(f.Frame)
+
+	return frames, nil
+}
+
+type fragment struct {
+	frame           *Frame
+	payloadWriteBuf *typed.WriteBuffer
+	checksumType    ChecksumType
+	checksum        Checksum
+	checksumRef     typed.BytesRef
+}
+
+func (f *lazyCallReq) newFragment(fp FramePool) (*fragment, error) {
+	frame := fp.Get()
+	frame.Header = f.Header
+	payloadWBuf := typed.NewWriteBuffer(frame.Payload)
+
+	// payload headers are preserved across fragments
+	payloadWBuf.WriteBytes(f.Payload[:f.bodyOffset])
+
+	// checksumtype~1
+	payloadWBuf.WriteSingleByte(byte(f.checksumType))
+
+	var checksumRef typed.BytesRef
+	var checksum Checksum
+	if f.checksumType != ChecksumTypeNone {
+		checksumRef = payloadWBuf.DeferBytes(f.checksumSize)
+		checksum = f.checksumType.New()
+	}
+
+	return &fragment{
+		frame:           frame,
+		payloadWriteBuf: payloadWBuf,
+		checksumType:    f.checksumType,
+		checksum:        checksum,
+		checksumRef:     checksumRef,
+	}, nil
+}
+
+func (f *fragment) finalize() {
+	if f.checksum != nil && f.checksumRef != nil {
+		f.checksumRef.Update(f.checksum.Sum())
+		f.checksum.Release()
+	}
+	f.frame.Header.SetPayloadSize(uint16(f.payloadWriteBuf.BytesWritten()))
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
