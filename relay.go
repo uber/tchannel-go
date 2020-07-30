@@ -57,13 +57,13 @@ var (
 )
 
 type relayItem struct {
-	remapID     uint32
-	tomb        bool
-	local       bool
-	call        RelayCall
-	destination *Relayer
-	span        Span
-	timeout     *relayTimer
+	remapID      uint32
+	tomb         bool
+	isOriginator bool
+	call         RelayCall
+	destination  *Relayer
+	span         Span
+	timeout      *relayTimer
 }
 
 type relayItems struct {
@@ -507,10 +507,11 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 // addRelayItem adds a relay item to either outbound or inbound.
 func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, call RelayCall) relayItem {
 	item := relayItem{
-		call:        call,
-		remapID:     remapID,
-		destination: destination,
-		span:        span,
+		isOriginator: isOriginator,
+		call:         call,
+		remapID:      remapID,
+		destination:  destination,
+		span:         span,
 	}
 
 	items := r.inbound
@@ -559,7 +560,7 @@ func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
 	if !ok {
 		return
 	}
-	if item.call != nil {
+	if item.isOriginator {
 		// If the client is too slow, then there's no point sending an error frame.
 		if failure != _relayErrorSourceConnSlow {
 			r.conn.SendSystemError(id, item.span, errFrameNotSent)
@@ -576,7 +577,7 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 	if !ok {
 		return
 	}
-	if item.call != nil {
+	if item.isOriginator {
 		item.call.End()
 	}
 	r.decrementPending()
