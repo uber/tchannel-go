@@ -451,10 +451,18 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
 	f.Header.ID = destinationID
-	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
-	if !sent {
-		r.failRelayItem(r.outbound, origID, failure)
-		return nil
+
+	frames, err := f.getFrames()
+	if err != nil {
+		return fmt.Errorf("get call frames: %v", err)
+	}
+
+	for _, frm := range frames {
+		sent, failure := relayToDest.destination.Receive(frm, requestFrame)
+		if !sent {
+			r.failRelayItem(r.outbound, origID, failure)
+			return nil
+		}
 	}
 
 	return nil
