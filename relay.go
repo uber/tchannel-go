@@ -82,6 +82,14 @@ func newRelayItems(logger Logger) *relayItems {
 	}
 }
 
+func (ri *relayItem) reportRelayBytes(fType frameType, frameSize uint16) {
+	if fType == requestFrame {
+		ri.call.SentBytes(frameSize)
+	} else {
+		ri.call.ReceivedBytes(frameSize)
+	}
+}
+
 // Count returns the number of non-tombstone items in the relay.
 func (r *relayItems) Count() int {
 	r.RLock()
@@ -447,10 +455,11 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	}
 	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.
-	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
+	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, call)
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
 	f.Header.ID = destinationID
+	call.SentBytes(f.Frame.Header.FrameSize())
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure)
@@ -488,6 +497,10 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		// Timeout goroutine is already ending this call.
 		return nil
 	}
+
+	// Track sent/received bytes. We don't do this before we check
+	// for timeouts, since this should only be called before call.End().
+	item.reportRelayBytes(frameType, f.Header.FrameSize())
 
 	originalID := f.Header.ID
 	f.Header.ID = item.remapID

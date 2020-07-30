@@ -40,6 +40,8 @@ type MockCallStats struct {
 	succeeded  int
 	failedMsgs []string
 	ended      int
+	sent       int
+	received   int
 	wg         *sync.WaitGroup
 }
 
@@ -51,6 +53,16 @@ func (m *MockCallStats) Succeeded() {
 // Failed marks the RPC as failed for the provided reason.
 func (m *MockCallStats) Failed(reason string) {
 	m.failedMsgs = append(m.failedMsgs, reason)
+}
+
+// SentBytes tracks the sent bytes.
+func (m *MockCallStats) SentBytes(size uint16) {
+	m.sent += int(size)
+}
+
+// ReceivedBytes tracks the received bytes.
+func (m *MockCallStats) ReceivedBytes(size uint16) {
+	m.received += int(size)
 }
 
 // End halts timer and metric collection for the RPC.
@@ -172,7 +184,10 @@ func getEdges(m map[string][]*MockCallStats) []string {
 }
 
 // Map returns all stats as a map of key to int.
+// It waits for any ongoing calls to end first to avoid races.
 func (m *MockStats) Map() map[string]int {
+	m.WaitForEnd()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -192,6 +207,8 @@ func (m *MockStats) Map() map[string]int {
 				failureName := name + ".failed-" + strings.Join(call.failedMsgs, ",")
 				stats[failureName]++
 			}
+			stats[name+".sent-bytes"] = call.sent
+			stats[name+".received-bytes"] = call.received
 		}
 	}
 	return stats
