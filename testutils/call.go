@@ -104,7 +104,7 @@ type FakeCallFrame struct {
 	Arg2StartOffsetVal, Arg2EndOffsetVal int
 	IsArg2Fragmented                     bool
 
-	arg2KVIterator    arg2.KeyValIterator
+	Arg2KVIterator    arg2.KeyValIterator
 	hasArg2KVIterator error
 }
 
@@ -155,7 +155,7 @@ func (f FakeCallFrame) Arg2EndOffset() (int, bool) {
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
 func (f FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
-	return f.arg2KVIterator, f.hasArg2KVIterator
+	return f.Arg2KVIterator, f.hasArg2KVIterator
 }
 
 // CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with
@@ -173,7 +173,7 @@ func CopyCallFrame(f relay.CallFrame) FakeCallFrame {
 		Arg2StartOffsetVal: f.Arg2StartOffset(),
 		Arg2EndOffsetVal:   endOffset,
 		IsArg2Fragmented:   hasMore,
-		arg2KVIterator:     copyIterator,
+		Arg2KVIterator:     copyIterator,
 		hasArg2KVIterator:  err,
 	}
 }
