@@ -477,10 +477,10 @@ func withServer(t testing.TB, chanOpts *ChannelOpts, f func(testing.TB, *TestSer
 	// Note: We use defer, as we want the postFns to run even if the test
 	// goroutine exits (e.g. user calls t.Fatalf).
 	defer ts.post()
+	defer ts.CloseAndVerify()
 
 	f(t, ts)
 	if ts.HasServer() {
 		ts.Server().Logger().Debugf("TEST: Test function complete")
 	}
-	ts.CloseAndVerify()
 }
