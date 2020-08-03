@@ -384,7 +384,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return nil
 	}
 
-	call, err := r.relayHost.Start(&f, r.relayConn)
+	call, err := r.relayHost.Start(f, r.relayConn)
 	if err != nil {
 		// If we have a RateLimitDropError we record the statistic, but
 		// we *don't* send an error frame back to the client.
@@ -451,18 +451,10 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
 	f.Header.ID = destinationID
-
-	frames, err := f.getFrames()
-	if err != nil {
-		return fmt.Errorf("get call frames: %v", err)
-	}
-
-	for _, frm := range frames {
-		sent, failure := relayToDest.destination.Receive(frm, requestFrame)
-		if !sent {
-			r.failRelayItem(r.outbound, origID, failure)
-			return nil
-		}
+	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
+	if !sent {
+		r.failRelayItem(r.outbound, origID, failure)
+		return nil
 	}
 
 	return nil
