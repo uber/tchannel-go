@@ -438,6 +438,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return err
 	}
 
+	origID := f.Header.ID
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
 	if ttl > r.maxTimeout {
@@ -449,16 +450,17 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
-	origID := f.Header.ID
-	f.Header.ID = destinationID
-	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
-	if !sent {
-		r.failRelayItem(r.outbound, origID, failure)
+	if true {
+		f.Header.ID = destinationID
+		sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
+		if !sent {
+			r.failRelayItem(r.outbound, origID, failure)
+			return nil
+		}
 		return nil
 	}
-	return nil
 
-	//return r.fragmentedRelay(f, relayToDest, destinationID)
+	return r.fragmentedRelay(f, relayToDest, origID, destinationID)
 }
 
 // Handle all frames except messageTypeCallReq.
@@ -635,8 +637,8 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	return true
 }
 
-func (r *Relayer) fragmentedRelay(f lazyCallReq, relayToDest relayItem, destID uint32) error {
-	reqFragger := r.newCallReqFragmenter(f, relayToDest, destID)
+func (r *Relayer) fragmentedRelay(f lazyCallReq, relayToDest relayItem, origID, destID uint32) error {
+	reqFragger := r.newCallReqFragmenter(f, relayToDest, origID, destID)
 	fragWriter := newFragmentingWriter(NullLogger, reqFragger, r.conn.opts.ChecksumType.New())
 	defer func() {
 		fragWriter.Close()
@@ -713,12 +715,12 @@ type callReqFragmenter struct {
 	callHeaders   []byte
 }
 
-func (r *Relayer) newCallReqFragmenter(f lazyCallReq, relayToDest relayItem, destID uint32) *callReqFragmenter {
+func (r *Relayer) newCallReqFragmenter(f lazyCallReq, relayToDest relayItem, origID, destID uint32) *callReqFragmenter {
 	return &callReqFragmenter{
 		framePool:     r.conn.opts.FramePool,
 		relayToDest:   relayToDest,
 		relayer:       r,
-		origID:        f.Header.ID,
+		origID:        origID,
 		destinationID: destID,
 		flags:         f.Payload[_flagsIndex],
 		checksumType:  f.checksumType,
