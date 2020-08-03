@@ -447,20 +447,10 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	}
 	span := f.Span()
 	// The remote side of the relay doesn't need to track stats.
-	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
-	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
+	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, origID, r, ttl, span, nil)
+	relayToDest := r.addRelayItem(true /* isOriginator */, origID, destinationID, remoteConn.relay, ttl, span, call)
 
-	//if true {
-	//	f.Header.ID = destinationID
-	//	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
-	//	if !sent {
-	//		r.failRelayItem(r.outbound, origID, failure)
-	//		return nil
-	//	}
-	//	return nil
-	//}
-
-	return r.fragmentedRelay(f, relayToDest, origID, destinationID)
+	return r.fragmentingRelay(f, relayToDest, origID, destinationID)
 }
 
 // Handle all frames except messageTypeCallReq.
@@ -637,13 +627,10 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	return true
 }
 
-func (r *Relayer) fragmentedRelay(f lazyCallReq, relayToDest relayItem, origID, destID uint32) error {
+func (r *Relayer) fragmentingRelay(f lazyCallReq, relayToDest relayItem, origID, destID uint32) error {
 	reqFragger := r.newCallReqFragmenter(f, relayToDest, origID, destID)
 	fragWriter := newFragmentingWriter(NullLogger, reqFragger, r.conn.opts.ChecksumType.New())
-	defer func() {
-		fragWriter.checksum.Release()
-		r.conn.opts.FramePool.Release(f.Frame)
-	}()
+	defer r.conn.opts.FramePool.Release(f.Frame)
 
 	if err := NewArgWriter(fragWriter.ArgWriter(false)).Write(f.arg1); err != nil {
 		return errors.New("arg1 write failed")
@@ -727,10 +714,9 @@ func (rfs *callReqFragmenter) newFragment(initial bool, checksum Checksum) (*wri
 	frame := rfs.framePool.Get()
 	frame.Header.ID = rfs.destinationID
 	payloadBuffer := typed.NewWriteBuffer(frame.Payload[:])
-	flagsRef := payloadBuffer.DeferByte()
 
 	// flags:1
-	flagsRef.Update(rfs.flags)
+	flagsRef := payloadBuffer.DeferByte()
 
 	if initial {
 		// call req headers
@@ -743,7 +729,7 @@ func (rfs *callReqFragmenter) newFragment(initial bool, checksum Checksum) (*wri
 	// checksum type:1
 	payloadBuffer.WriteSingleByte(byte(checksum.TypeCode()))
 
-	// checksum: size from checksumType
+	// checksum: checksum.Size()
 	checksumRef := payloadBuffer.DeferBytes(checksum.Size())
 
 	return &writableFragment{
