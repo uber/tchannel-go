@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go/relay"
-
+	"github.com/uber/tchannel-go/typed"
 	"go.uber.org/atomic"
 )
 
@@ -438,7 +438,6 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return err
 	}
 
-	origID := f.Header.ID
 	destinationID := remoteConn.NextMessageID()
 	ttl := f.TTL()
 	if ttl > r.maxTimeout {
@@ -450,14 +449,16 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
+	origID := f.Header.ID
 	f.Header.ID = destinationID
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure)
 		return nil
 	}
-
 	return nil
+
+	//return r.fragmentedRelay(f, relayToDest, destinationID)
 }
 
 // Handle all frames except messageTypeCallReq.
@@ -634,6 +635,32 @@ func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
 	return true
 }
 
+func (r *Relayer) fragmentedRelay(f lazyCallReq, relayToDest relayItem, destID uint32) error {
+	reqFragger := r.newCallReqFragmenter(f, relayToDest, destID)
+	fragWriter := newFragmentingWriter(NullLogger, reqFragger, r.conn.opts.ChecksumType.New())
+	defer func() {
+		fragWriter.Close()
+		fragWriter.checksum.Release()
+		r.conn.opts.FramePool.Release(f.Frame)
+	}()
+
+	args := [][]byte{f.arg1, f.arg2, f.arg3}
+	for i, arg := range args {
+		argWriter, err := fragWriter.ArgWriter(i == len(args)-1)
+		if err != nil {
+			return fmt.Errorf("get arg%d writer: %v", i+1, err)
+		}
+		if _, err := argWriter.Write(arg); err != nil {
+			return fmt.Errorf("write arg%d: %v", i+1, err)
+		}
+		if err := argWriter.Close(); err != nil {
+			return fmt.Errorf("close arg%d writer: %v", i+1, err)
+		}
+	}
+
+	return nil
+}
+
 func frameTypeFor(f *Frame) frameType {
 	switch t := f.Header.messageType; t {
 	case messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypePingRes:
@@ -674,3 +701,75 @@ func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 	return _defaultRelayMaxTimeout
 }
+
+type callReqFragmenter struct {
+	framePool     FramePool
+	relayToDest   relayItem
+	relayer       *Relayer
+	origID        uint32
+	destinationID uint32
+	flags         byte
+	checksumType  ChecksumType
+	callHeaders   []byte
+}
+
+func (r *Relayer) newCallReqFragmenter(f lazyCallReq, relayToDest relayItem, destID uint32) *callReqFragmenter {
+	return &callReqFragmenter{
+		framePool:     r.conn.opts.FramePool,
+		relayToDest:   relayToDest,
+		relayer:       r,
+		origID:        f.Header.ID,
+		destinationID: destID,
+		flags:         f.Payload[_flagsIndex],
+		checksumType:  f.checksumType,
+		callHeaders:   f.Payload[_flagsIndex+1 : f.bodyOffset],
+	}
+}
+
+func (rfs *callReqFragmenter) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
+	frame := rfs.framePool.Get()
+	frame.Header.ID = rfs.destinationID
+	payloadBuffer := typed.NewWriteBuffer(frame.Payload)
+	flagsRef := payloadBuffer.DeferByte()
+
+	// flags:1
+	flagsRef.Update(rfs.flags)
+
+	if initial {
+		// call req headers
+		frame.Header.messageType = messageTypeCallReq
+		payloadBuffer.WriteBytes(rfs.callHeaders)
+	} else {
+		frame.Header.messageType = messageTypeCallReqContinue
+	}
+
+	// checksum type:1
+	payloadBuffer.WriteSingleByte(byte(rfs.checksumType))
+
+	// checksum: size from checksumType
+	checksumRef := payloadBuffer.DeferBytes(rfs.checksumType.ChecksumSize())
+
+	return &writableFragment{
+		flagsRef:    flagsRef,
+		checksumRef: checksumRef,
+		checksum:    checksum,
+		contents:    payloadBuffer,
+		frame:       frame,
+	}, nil
+}
+
+func (rfs *callReqFragmenter) flushFragment(f *writableFragment) error {
+	frame, ok := f.frame.(*Frame)
+	if !ok {
+		return fmt.Errorf("got unexpected frame type: %t", f.frame)
+	}
+	frame.Header.SetPayloadSize(uint16(f.contents.BytesWritten()))
+	sent, failure := rfs.relayToDest.destination.Receive(frame, requestFrame)
+	if !sent {
+		rfs.relayer.failRelayItem(rfs.relayer.outbound, rfs.origID, failure)
+		return nil
+	}
+	return nil
+}
+
+func (rfs *callReqFragmenter) doneSending() {}
