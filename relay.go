@@ -450,15 +450,15 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, nil)
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
-	if true {
-		f.Header.ID = destinationID
-		sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
-		if !sent {
-			r.failRelayItem(r.outbound, origID, failure)
-			return nil
-		}
-		return nil
-	}
+	//if true {
+	//	f.Header.ID = destinationID
+	//	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
+	//	if !sent {
+	//		r.failRelayItem(r.outbound, origID, failure)
+	//		return nil
+	//	}
+	//	return nil
+	//}
 
 	return r.fragmentedRelay(f, relayToDest, origID, destinationID)
 }
@@ -641,23 +641,18 @@ func (r *Relayer) fragmentedRelay(f lazyCallReq, relayToDest relayItem, origID, 
 	reqFragger := r.newCallReqFragmenter(f, relayToDest, origID, destID)
 	fragWriter := newFragmentingWriter(NullLogger, reqFragger, r.conn.opts.ChecksumType.New())
 	defer func() {
-		fragWriter.Close()
 		fragWriter.checksum.Release()
 		r.conn.opts.FramePool.Release(f.Frame)
 	}()
 
-	args := [][]byte{f.arg1, f.arg2, f.arg3}
-	for i, arg := range args {
-		argWriter, err := fragWriter.ArgWriter(i == len(args)-1)
-		if err != nil {
-			return fmt.Errorf("get arg%d writer: %v", i+1, err)
-		}
-		if _, err := argWriter.Write(arg); err != nil {
-			return fmt.Errorf("write arg%d: %v", i+1, err)
-		}
-		if err := argWriter.Close(); err != nil {
-			return fmt.Errorf("close arg%d writer: %v", i+1, err)
-		}
+	if err := NewArgWriter(fragWriter.ArgWriter(false)).Write(f.arg1); err != nil {
+		return errors.New("arg1 write failed")
+	}
+	if err := NewArgWriter(fragWriter.ArgWriter(false)).Write(f.arg2); err != nil {
+		return errors.New("arg2 write failed")
+	}
+	if err := NewArgWriter(fragWriter.ArgWriter(true)).Write(f.arg3); err != nil {
+		return errors.New("arg3 write failed")
 	}
 
 	return nil
@@ -731,7 +726,7 @@ func (r *Relayer) newCallReqFragmenter(f lazyCallReq, relayToDest relayItem, ori
 func (rfs *callReqFragmenter) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
 	frame := rfs.framePool.Get()
 	frame.Header.ID = rfs.destinationID
-	payloadBuffer := typed.NewWriteBuffer(frame.Payload)
+	payloadBuffer := typed.NewWriteBuffer(frame.Payload[:])
 	flagsRef := payloadBuffer.DeferByte()
 
 	// flags:1
@@ -746,10 +741,10 @@ func (rfs *callReqFragmenter) newFragment(initial bool, checksum Checksum) (*wri
 	}
 
 	// checksum type:1
-	payloadBuffer.WriteSingleByte(byte(rfs.checksumType))
+	payloadBuffer.WriteSingleByte(byte(checksum.TypeCode()))
 
 	// checksum: size from checksumType
-	checksumRef := payloadBuffer.DeferBytes(rfs.checksumType.ChecksumSize())
+	checksumRef := payloadBuffer.DeferBytes(checksum.Size())
 
 	return &writableFragment{
 		flagsRef:    flagsRef,
@@ -757,7 +752,7 @@ func (rfs *callReqFragmenter) newFragment(initial bool, checksum Checksum) (*wri
 		checksum:    checksum,
 		contents:    payloadBuffer,
 		frame:       frame,
-	}, nil
+	}, payloadBuffer.Err()
 }
 
 func (rfs *callReqFragmenter) flushFragment(f *writableFragment) error {
