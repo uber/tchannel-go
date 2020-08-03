@@ -90,13 +90,26 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
+type keyVal struct {
+	key []byte
+	val []byte
+}
+
 type lazyCallReq struct {
 	*Frame
 
 	caller, method, delegate, key, as []byte
 
+	bodyOffset                     int
+	checksumType                   ChecksumType
+	checksumSize                   int
+	arg1                           []byte
+	arg2                           []byte
 	arg2StartOffset, arg2EndOffset int
 	isArg2Fragmented               bool
+	arg3                           []byte
+
+	arg2appends []keyVal
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -135,42 +148,66 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		}
 	}
 
+	cr.bodyOffset = cur
+
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
-	checkSumType := ChecksumType(f.Payload[cur])
-	cur += 1 /* checksum */ + checkSumType.ChecksumSize()
+	cr.checksumType = ChecksumType(f.Payload[cur])
+	cr.checksumSize = cr.checksumType.ChecksumSize()
+	cur += 1 /* checksum */ + cr.checksumSize
 
 	// arg1~2
 	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
 	cur += 2
-	cr.method = f.Payload[cur : cur+arg1Len]
+	cr.arg1 = f.Payload[cur : cur+arg1Len]
+	cur += arg1Len
+	cr.method = cr.arg1
 
 	// arg2~2
-	cur += arg1Len
-	cr.arg2StartOffset = cur + 2
-	cr.arg2EndOffset = cr.arg2StartOffset + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
+	arg2Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
+	cur += 2
+	cr.arg2StartOffset = cur
+	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
+
+	if cr.arg2EndOffset >= int(cr.Header.PayloadSize()) {
+		cr.arg2 = f.Payload[cur:cr.Header.PayloadSize()]
+		cr.isArg2Fragmented = cr.HasMoreFragments()
+		return cr
+	}
+
 	// arg2 is fragmented if we don't see arg3 in this frame.
-	cr.isArg2Fragmented = int(cr.Header.PayloadSize()) <= cr.arg2EndOffset && cr.HasMoreFragments()
+	cr.arg2 = f.Payload[cur : cur+arg2Len]
+	cur += arg2Len
+
+	// arg3~2
+	arg3Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
+	cur += 2
+	if cur+arg3Len >= int(f.Header.PayloadSize()) {
+		cr.arg3 = f.Payload[cur:cr.Header.PayloadSize()]
+		return cr
+	}
+	cr.arg3 = f.Payload[cur : cur+arg3Len]
+
 	return cr
 }
 
 // Caller returns the name of the originator of this callReq.
-func (f lazyCallReq) Caller() []byte {
+func (f *lazyCallReq) Caller() []byte {
 	return f.caller
 }
 
 // Service returns the name of the destination service for this callReq.
-func (f lazyCallReq) Service() []byte {
+func (f *lazyCallReq) Service() []byte {
 	l := f.Payload[_serviceLenIndex]
 	return f.Payload[_serviceNameIndex : _serviceNameIndex+l]
 }
 
 // Method returns the name of the method being called.
-func (f lazyCallReq) Method() []byte {
+func (f *lazyCallReq) Method() []byte {
 	return f.method
 }
 
 // RoutingDelegate returns the routing delegate for this call req, if any.
-func (f lazyCallReq) RoutingDelegate() []byte {
+func (f *lazyCallReq) RoutingDelegate() []byte {
 	return f.delegate
 }
 
@@ -180,43 +217,43 @@ func (f lazyCallReq) RoutingKey() []byte {
 }
 
 // TTL returns the time to live for this callReq.
-func (f lazyCallReq) TTL() time.Duration {
+func (f *lazyCallReq) TTL() time.Duration {
 	ttl := binary.BigEndian.Uint32(f.Payload[_ttlIndex : _ttlIndex+_ttlLen])
 	return time.Duration(ttl) * time.Millisecond
 }
 
 // SetTTL overwrites the frame's TTL.
-func (f lazyCallReq) SetTTL(d time.Duration) {
+func (f *lazyCallReq) SetTTL(d time.Duration) {
 	ttl := uint32(d / time.Millisecond)
 	binary.BigEndian.PutUint32(f.Payload[_ttlIndex:_ttlIndex+_ttlLen], ttl)
 }
 
 // Span returns the Span
-func (f lazyCallReq) Span() Span {
+func (f *lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)
 }
 
 // HasMoreFragments returns whether the callReq has more fragments.
-func (f lazyCallReq) HasMoreFragments() bool {
+func (f *lazyCallReq) HasMoreFragments() bool {
 	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }
 
 // Arg2EndOffset returns the offset from start of payload to the end of Arg2
 // in bytes, and hasMore to be true if there are more frames and arg3 has
 // not started.
-func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
+func (f *lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
 	return f.arg2EndOffset, f.isArg2Fragmented
 }
 
 // Arg2StartOffset returns the offset from start of payload to the beginning
 // of Arg2 in bytes.
-func (f lazyCallReq) Arg2StartOffset() int {
+func (f *lazyCallReq) Arg2StartOffset() int {
 	return f.arg2StartOffset
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
-func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
+func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
@@ -228,9 +265,8 @@ func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }
 
-// Arg2Append appends a key/val pair to arg2
-func (f lazyCallReq) Arg2Append(key, val []byte) {
-
+func (f *lazyCallReq) Arg2Append(key, val []byte) {
+	f.arg2appends = append(f.arg2appends, keyVal{key, val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
