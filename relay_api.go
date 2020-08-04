@@ -43,6 +43,12 @@ type RelayCall interface {
 	// Destination returns the selected peer (if there was no error from Start).
 	Destination() (peer *Peer, ok bool)
 
+	// SentBytes is called when a frame is sent to the destination peer.
+	SentBytes(uint16)
+
+	// ReceivedBytes is called when a frame is received from the destination peer.
+	ReceivedBytes(uint16)
+
 	// The call succeeded (possibly after retrying).
 	Succeeded()
 

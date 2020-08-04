@@ -23,6 +23,7 @@ package tchannel_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"runtime"
@@ -1280,7 +1281,84 @@ func TestRelayConnectionTimeout(t *testing.T) {
 			})
 		})
 	}
+}
 
+func TestRelayTransferredBytes(t *testing.T) {
+	const (
+		kb = 1024
+
+		// The maximum delta between the payload size and the bytes on wire.
+		protocolBuffer = kb
+	)
+
+	rh := relaytest.NewStubRelayHost()
+	opts := testutils.NewOpts().
+		SetRelayHost(rh).
+		SetRelayOnly()
+
+	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
+		// Note: Upcast to testing.T so we can use t.Run.
+		t := tb.(*testing.T)
+
+		s1 := ts.NewServer(testutils.NewOpts().SetServiceName("s1"))
+		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
+		testutils.RegisterEcho(s1, nil)
+		testutils.RegisterEcho(s2, nil)
+
+		// Add a handler that always returns an empty payload.
+		testutils.RegisterFunc(s2, "swallow", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			fmt.Println("swallog got", len(args.Arg2)+len(args.Arg3))
+			return &raw.Res{}, nil
+		})
+
+		// Add to the relay host explicitly, since we override the default relay host.
+		rh.Add(s1.ServiceName(), s1.PeerInfo().HostPort)
+		rh.Add(s2.ServiceName(), s2.PeerInfo().HostPort)
+
+		// Helper to make calls with specific payload sizes.
+		makeCall := func(src, dst *Channel, method string, arg2Size, arg3Size int) {
+			ctx, cancel := NewContext(testutils.Timeout(time.Second))
+			defer cancel()
+
+			arg2 := testutils.RandBytes(arg2Size)
+			arg3 := testutils.RandBytes(arg3Size)
+
+			_, _, _, err := raw.Call(ctx, src, ts.HostPort(), dst.ServiceName(), method, arg2, arg3)
+			require.NoError(t, err)
+		}
+
+		t.Run("verify sent vs received", func(t *testing.T) {
+			makeCall(s1, s2, "swallow", 4*1024, 4*1024)
+
+			statsMap := rh.Stats().Map()
+			assert.InDelta(t, 8*kb, statsMap["s1->s2::swallow.sent-bytes"], protocolBuffer, "Unexpected sent bytes")
+			assert.InDelta(t, 0, statsMap["s1->s2::swallow.received-bytes"], protocolBuffer, "Unexpected sent bytes")
+		})
+
+		t.Run("verify sent and received", func(t *testing.T) {
+			makeCall(s1, s2, "echo", 4*kb, 4*kb)
+
+			statsMap := rh.Stats().Map()
+			assert.InDelta(t, 8*kb, statsMap["s1->s2::echo.sent-bytes"], protocolBuffer, "Unexpected sent bytes")
+			assert.InDelta(t, 8*kb, statsMap["s1->s2::echo.received-bytes"], protocolBuffer, "Unexpected sent bytes")
+		})
+
+		t.Run("verify large payload", func(t *testing.T) {
+			makeCall(s1, s2, "echo", 128*1024, 128*1024)
+
+			statsMap := rh.Stats().Map()
+			assert.InDelta(t, 256*kb, statsMap["s1->s2::echo.sent-bytes"], protocolBuffer, "Unexpected sent bytes")
+			assert.InDelta(t, 256*kb, statsMap["s1->s2::echo.received-bytes"], protocolBuffer, "Unexpected sent bytes")
+		})
+
+		t.Run("verify reverse call", func(t *testing.T) {
+			makeCall(s2, s1, "echo", 0, 64*kb)
+
+			statsMap := rh.Stats().Map()
+			assert.InDelta(t, 64*kb, statsMap["s2->s1::echo.sent-bytes"], protocolBuffer, "Unexpected sent bytes")
+			assert.InDelta(t, 64*kb, statsMap["s2->s1::echo.received-bytes"], protocolBuffer, "Unexpected sent bytes")
+		})
+	})
 }
 
 // relayFrameInspector is a RelayHost decorator which inspects
