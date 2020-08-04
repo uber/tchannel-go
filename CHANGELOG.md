@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.19.1] - 2020-08-03
+### Fixed
+ * Move OS-specific logic into OS-specific files to avoid compile issues on
+   non-Unix platforms.
+
 ## [1.19.0] - 2020-05-21
 ### Fixed
  * Internal API changes related to relaying.
