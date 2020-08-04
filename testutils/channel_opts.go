@@ -149,6 +149,12 @@ func (o *ChannelOpts) SetTosPriority(tosPriority tos.ToS) *ChannelOpts {
 	return o
 }
 
+// SetChecksumType sets the ChecksumType in DefaultConnectionOptions.
+func (o *ChannelOpts) SetChecksumType(checksumType tchannel.ChecksumType) *ChannelOpts {
+	o.DefaultConnectionOptions.ChecksumType = checksumType
+	return o
+}
+
 // SetTimeNow sets TimeNow in ChannelOptions.
 func (o *ChannelOpts) SetTimeNow(timeNow func() time.Time) *ChannelOpts {
 	o.TimeNow = timeNow

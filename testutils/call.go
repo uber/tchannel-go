@@ -21,8 +21,10 @@
 package testutils
 
 import (
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
@@ -97,6 +99,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
+	tb   testing.TB
 	TTLF time.Duration
 
 	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
@@ -108,62 +111,78 @@ type FakeCallFrame struct {
 	hasArg2KVIterator error
 }
 
-var _ relay.CallFrame = FakeCallFrame{}
+var _ relay.CallFrame = &FakeCallFrame{}
 
 // TTL returns the TTL field.
-func (f FakeCallFrame) TTL() time.Duration {
+func (f *FakeCallFrame) TTL() time.Duration {
 	return f.TTLF
 }
 
 // Service returns the service name field.
-func (f FakeCallFrame) Service() []byte {
+func (f *FakeCallFrame) Service() []byte {
 	return []byte(f.ServiceF)
 }
 
 // Method returns the method field.
-func (f FakeCallFrame) Method() []byte {
+func (f *FakeCallFrame) Method() []byte {
 	return []byte(f.MethodF)
 }
 
 // Caller returns the caller field.
-func (f FakeCallFrame) Caller() []byte {
+func (f *FakeCallFrame) Caller() []byte {
 	return []byte(f.CallerF)
 }
 
 // RoutingKey returns the routing delegate field.
-func (f FakeCallFrame) RoutingKey() []byte {
+func (f *FakeCallFrame) RoutingKey() []byte {
 	return []byte(f.RoutingKeyF)
 }
 
 // RoutingDelegate returns the routing delegate field.
-func (f FakeCallFrame) RoutingDelegate() []byte {
+func (f *FakeCallFrame) RoutingDelegate() []byte {
 	return []byte(f.RoutingDelegateF)
 }
 
 // Arg2StartOffset returns the offset from start of payload to
 // the beginning of Arg2.
-func (f FakeCallFrame) Arg2StartOffset() int {
+func (f *FakeCallFrame) Arg2StartOffset() int {
 	return f.Arg2StartOffsetVal
 }
 
 // Arg2EndOffset returns the offset from start of payload to the end
 // of Arg2 and whether Arg2 is fragmented.
-func (f FakeCallFrame) Arg2EndOffset() (int, bool) {
+func (f *FakeCallFrame) Arg2EndOffset() (int, bool) {
 	return f.Arg2EndOffsetVal, f.IsArg2Fragmented
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
-func (f FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
+func (f *FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
 	return f.arg2KVIterator, f.hasArg2KVIterator
+}
+
+// Arg2Append appends a key value pair to Arg2
+func (f *FakeCallFrame) Arg2Append(key, val []byte) {
+	kv := make(map[string]string)
+	for iter, err := f.Arg2Iterator(); err == nil; iter, err = iter.Next() {
+		kv[string(iter.Key())] = string(iter.Value())
+	}
+	kv[string(key)] = string(val)
+
+	iterator, err := arg2.NewKeyValIterator(thriftarg2test.BuildKVBuffer(kv))
+	require.NoError(f.tb, err)
+
+	f.arg2KVIterator = iterator
+
+	return
 }
 
 // CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with
 // corresponding values
-func CopyCallFrame(f relay.CallFrame) FakeCallFrame {
+func CopyCallFrame(f relay.CallFrame) *FakeCallFrame {
 	endOffset, hasMore := f.Arg2EndOffset()
 	copyIterator, err := copyThriftArg2KVIterator(f)
-	return FakeCallFrame{
+	return &FakeCallFrame{
 		TTLF:               f.TTL(),
 		ServiceF:           string(f.Service()),
 		MethodF:            string(f.Method()),
