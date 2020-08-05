@@ -38,7 +38,10 @@ var (
 	_argSchemeKeyBytes       = []byte(ArgScheme)
 	_tchanThriftValueBytes   = []byte(Thrift)
 
-	errBadArg2Len = errors.New("bad Arg2 length")
+	errBadHeaderLen   = errors.New("bad header length")
+	errBadChecksumLen = errors.New("bad checksum length")
+	errBadArg1Len     = errors.New("bad Arg1 length")
+	errBadArg2Len     = errors.New("bad Arg2 length")
 )
 
 const (
@@ -103,7 +106,7 @@ type lazyCallReq struct {
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
 
-func newLazyCallReq(f *Frame) lazyCallReq {
+func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 	if msgType := f.Header.messageType; msgType != messageTypeCallReq {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
@@ -134,13 +137,25 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 		}
 	}
 
+	if rbuf.Err() != nil {
+		return lazyCallReq{}, errBadHeaderLen
+	}
+
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
 	checkSumType := ChecksumType(rbuf.ReadSingleByte())
 	rbuf.ReadBytes(checkSumType.ChecksumSize())
 
+	if rbuf.Err() != nil {
+		return lazyCallReq{}, errBadChecksumLen
+	}
+
 	// arg1~2
 	arg1Len := int(rbuf.ReadUint16())
 	cr.method = rbuf.ReadBytes(arg1Len)
+
+	if rbuf.Err() != nil {
+		return lazyCallReq{}, errBadArg1Len
+	}
 
 	// arg2~2
 	arg2Len := int(rbuf.ReadUint16())
@@ -150,7 +165,11 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	// arg2 is fragmented if we don't see arg3 in this frame.
 	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
 
-	return cr
+	if rbuf.Err() != nil {
+		return lazyCallReq{}, errBadArg2Len
+	}
+
+	return cr, nil
 }
 
 // Caller returns the name of the originator of this callReq.
