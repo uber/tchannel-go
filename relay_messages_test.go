@@ -399,7 +399,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 6, // 2 (nh) + 2 + len(key) - 1
-			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+			wantBadErr:     "key exceeds arg2 range (key offset 4, key len 3, arg2 len 6)",
 		},
 		{
 			msg:       "length not enough to cover value len",

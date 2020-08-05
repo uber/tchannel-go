@@ -64,7 +64,7 @@ func TestKeyValIterator(t *testing.T) {
 			{
 				msg:     "not enough to hold key value",
 				arg2Len: 6, // nh (2) + 2 + len(key) - 1
-				wantErr: "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+				wantErr: "key exceeds arg2 range (key offset 4, key len 3, arg2 len 6)",
 			},
 			{
 				msg:     "not enough to read value len",
