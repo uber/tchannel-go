@@ -38,10 +38,7 @@ var (
 	_argSchemeKeyBytes       = []byte(ArgScheme)
 	_tchanThriftValueBytes   = []byte(Thrift)
 
-	errBadHeaderLen   = errors.New("bad header length")
-	errBadChecksumLen = errors.New("bad checksum length")
-	errBadArg1Len     = errors.New("bad Arg1 length")
-	errBadArg2Len     = errors.New("bad Arg2 length")
+	errBadArg2Len = errors.New("bad Arg2 length")
 )
 
 const (
