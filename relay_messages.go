@@ -100,7 +100,6 @@ type lazyCallReq struct {
 	caller, method, delegate, key, as []byte
 
 	arg2StartOffset, arg2EndOffset int
-	arg2                           []byte
 	isArg2Fragmented               bool
 }
 
@@ -160,7 +159,9 @@ func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 	// arg2~2
 	arg2Len := int(rbuf.ReadUint16())
 	cr.arg2StartOffset = int(headerStartIndex) + rbuf.BytesRead()
-	cr.arg2 = rbuf.ReadBytes(arg2Len)
+	// TODO(echung): deprecate the arg2 offsets and store just the arg2 slice instead
+	// Read pass arg2
+	rbuf.ReadBytes(arg2Len)
 	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
 	// arg2 is fragmented if we don't see arg3 in this frame.
 	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
