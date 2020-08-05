@@ -24,17 +24,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkCallReqFrame(b *testing.B) {
-	cr := reqHasAll.req()
+	cr := reqHasAll.req(b)
 	f := cr.Frame
 
 	var service, caller, method []byte
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cr := newLazyCallReq(f)
+		cr, err := newLazyCallReq(f)
+		require.NoError(b, err)
 
 		// Multiple calls due to peer selection, stats, etc.
 		for i := 0; i < 3; i++ {

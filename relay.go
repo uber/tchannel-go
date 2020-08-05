@@ -242,7 +242,13 @@ func (r *Relayer) Relay(f *Frame) error {
 		}
 		return err
 	}
-	return r.handleCallReq(newLazyCallReq(f))
+
+	cr, err := newLazyCallReq(f)
+	if err != nil {
+		return err
+	}
+
+	return r.handleCallReq(cr)
 }
 
 // Receive receives frames intended for this connection.

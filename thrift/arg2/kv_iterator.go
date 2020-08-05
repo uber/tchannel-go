@@ -5,9 +5,9 @@
 package arg2
 
 import (
-	"encoding/binary"
-	"fmt"
 	"io"
+
+	"github.com/uber/tchannel-go/typed"
 )
 
 // KeyValIterator is a iterator for reading tchannel-thrift Arg2 Scheme,
@@ -15,10 +15,11 @@ import (
 // NOTE: to be optimized for performance, we try to limit the allocation
 // done in the process of iteration.
 type KeyValIterator struct {
-	arg2Payload           []byte
-	leftPairCount         int
-	keyOffset             int
-	valueOffset, valueLen int
+	arg2Len       int
+	remaining     []byte
+	leftPairCount int
+	key           []byte
+	val           []byte
 }
 
 // NewKeyValIterator inits a KeyValIterator with the buffer pointing at
@@ -29,21 +30,25 @@ func NewKeyValIterator(arg2Payload []byte) (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
+	// We don't hold on to rbuf to avoid the associated alloc
+	rbuf := typed.NewReadBuffer(arg2Payload)
+	leftPairCount := rbuf.ReadUint16()
+
 	return KeyValIterator{
-		valueOffset:   2, // nh has 2B offset
-		leftPairCount: int(binary.BigEndian.Uint16(arg2Payload[0:2])),
-		arg2Payload:   arg2Payload,
+		arg2Len:       len(arg2Payload),
+		leftPairCount: int(leftPairCount),
+		remaining:     arg2Payload[rbuf.BytesRead():],
 	}.Next()
 }
 
 // Key Returns the key.
 func (i KeyValIterator) Key() []byte {
-	return i.arg2Payload[i.keyOffset : i.valueOffset-2 /*2B length*/]
+	return i.key
 }
 
 // Value returns value.
 func (i KeyValIterator) Value() []byte {
-	return i.arg2Payload[i.valueOffset : i.valueOffset+i.valueLen]
+	return i.val
 }
 
 // Next returns next iterator. Return io.EOF if no more key/value pair is
@@ -53,32 +58,22 @@ func (i KeyValIterator) Next() (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
-	arg2Len := len(i.arg2Payload)
-	cur := i.valueOffset + i.valueLen
-	if cur+2 > arg2Len {
-		return KeyValIterator{}, fmt.Errorf("invalid key offset %v (arg2 len %v)", cur, arg2Len)
+	rbuf := typed.NewReadBuffer(i.remaining)
+	keyLen := int(rbuf.ReadUint16())
+	key := rbuf.ReadBytes(keyLen)
+	valLen := int(rbuf.ReadUint16())
+	val := rbuf.ReadBytes(valLen)
+	if rbuf.Err() != nil {
+		return KeyValIterator{}, rbuf.Err()
 	}
-	keyLen := int(binary.BigEndian.Uint16(i.arg2Payload[cur : cur+2]))
-	cur += 2
-	keyOffset := cur
-	cur += keyLen
 
-	if cur+2 > arg2Len {
-		return KeyValIterator{}, fmt.Errorf("invalid value offset %v (key offset %v, key len %v, arg2 len %v)", cur, keyOffset, keyLen, arg2Len)
-	}
-	valueLen := int(binary.BigEndian.Uint16(i.arg2Payload[cur : cur+2]))
-	cur += 2
-	valueOffset := cur
-
-	if valueOffset+valueLen > arg2Len {
-		return KeyValIterator{}, fmt.Errorf("value exceeds arg2 range (offset %v, len %v, arg2 len %v)", valueOffset, valueLen, arg2Len)
-	}
+	leftPairCount := i.leftPairCount - 1
 
 	return KeyValIterator{
-		arg2Payload:   i.arg2Payload,
-		leftPairCount: i.leftPairCount - 1,
-		keyOffset:     keyOffset,
-		valueOffset:   valueOffset,
-		valueLen:      valueLen,
+		arg2Len:       i.arg2Len,
+		remaining:     i.remaining[rbuf.BytesRead():],
+		leftPairCount: leftPairCount,
+		key:           key,
+		val:           val,
 	}, nil
 }

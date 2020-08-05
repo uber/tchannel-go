@@ -59,22 +59,22 @@ func TestKeyValIterator(t *testing.T) {
 			{
 				msg:     "not enough to read key len",
 				arg2Len: 3, // nh (2) + 1
-				wantErr: "invalid key offset 2 (arg2 len 3)",
+				wantErr: "buffer is too small",
 			},
 			{
 				msg:     "not enough to hold key value",
 				arg2Len: 6, // nh (2) + 2 + len(key) - 1
-				wantErr: "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+				wantErr: "buffer is too small",
 			},
 			{
 				msg:     "not enough to read value len",
 				arg2Len: 8, // nh (2) + 2 + len(key) + 1
-				wantErr: "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
+				wantErr: "buffer is too small",
 			},
 			{
 				msg:     "not enough to iterate value",
 				arg2Len: 13, // nh (2) + 2 + len(key) + 2 + len(value) = 14
-				wantErr: "value exceeds arg2 range (offset 9, len 5, arg2 len 13)",
+				wantErr: "buffer is too small",
 			},
 		}
 
@@ -93,4 +93,19 @@ func TestKeyValIterator(t *testing.T) {
 			})
 		}
 	})
+}
+
+func BenchmarkKeyValIterator(b *testing.B) {
+	kvBuffer := thriftarg2test.BuildKVBuffer(map[string]string{
+		"foo":  "bar",
+		"baz":  "qux",
+		"quux": "corge",
+	})
+
+	for i := 0; i < b.N; i++ {
+		iter, err := NewKeyValIterator(kvBuffer)
+		for err == nil {
+			iter, err = iter.Next()
+		}
+	}
 }

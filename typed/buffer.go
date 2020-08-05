@@ -155,6 +155,11 @@ func (r *ReadBuffer) BytesRemaining() int {
 	return len(r.remaining)
 }
 
+// BytesRead returns the number of bytes consumed
+func (r *ReadBuffer) BytesRead() int {
+	return len(r.buffer) - len(r.remaining)
+}
+
 // FillFrom fills the buffer from a reader
 func (r *ReadBuffer) FillFrom(ior io.Reader, n int) (int, error) {
 	if len(r.buffer) < n {
