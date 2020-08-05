@@ -5,7 +5,6 @@
 package arg2
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/uber/tchannel-go/typed"
@@ -58,27 +57,13 @@ func (i KeyValIterator) Next() (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
-	if i.rbuf.BytesRemaining() < 2 {
-		return KeyValIterator{}, fmt.Errorf("invalid key offset %v (arg2 len %v)", i.rbuf.BytesRead(), i.arg2Len)
-	}
 	keyLen := int(i.rbuf.ReadUint16())
-
-	keyOffset := i.rbuf.BytesRead()
-	if i.rbuf.BytesRemaining() < keyLen {
-		return KeyValIterator{}, fmt.Errorf("key exceeds arg2 range (key offset %v, key len %v, arg2 len %v)", keyOffset, keyLen, i.arg2Len)
-	}
 	key := i.rbuf.ReadBytes(keyLen)
-
-	if i.rbuf.BytesRemaining() < 2 {
-		return KeyValIterator{}, fmt.Errorf("invalid value offset %v (key offset %v, key len %v, arg2 len %v)", i.rbuf.BytesRead(), keyOffset, keyLen, i.arg2Len)
-	}
 	valLen := int(i.rbuf.ReadUint16())
-
-	valOffset := i.rbuf.BytesRead()
-	if i.rbuf.BytesRemaining() < valLen {
-		return KeyValIterator{}, fmt.Errorf("value exceeds arg2 range (offset %v, len %v, arg2 len %v)", valOffset, valLen, i.arg2Len)
-	}
 	val := i.rbuf.ReadBytes(valLen)
+	if i.rbuf.Err() != nil {
+		return KeyValIterator{}, i.rbuf.Err()
+	}
 
 	leftPairCount := i.leftPairCount - 1
 

@@ -397,7 +397,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 3, // 2 (nh) + 2 - 1
-			wantBadErr:     "invalid key offset 2 (arg2 len 3)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "length not enough to cover key",
@@ -406,7 +406,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 6, // 2 (nh) + 2 + len(key) - 1
-			wantBadErr:     "key exceeds arg2 range (key offset 4, key len 3, arg2 len 6)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "length not enough to cover value len",
@@ -415,7 +415,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 8, // 2 (nh) + 2 + len(key) + 2 - 1
-			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "length not enough to cover value",
@@ -424,7 +424,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 10, // 2 (nh) + 2 + len(key) + 2 + len(val) - 2
-			wantBadErr:     "value exceeds arg2 range (offset 9, len 3, arg2 len 10)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "no key value pairs",
