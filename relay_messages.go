@@ -136,25 +136,13 @@ func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 		}
 	}
 
-	if rbuf.Err() != nil {
-		return lazyCallReq{}, errBadHeaderLen
-	}
-
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
 	checkSumType := ChecksumType(rbuf.ReadSingleByte())
 	rbuf.ReadBytes(checkSumType.ChecksumSize())
 
-	if rbuf.Err() != nil {
-		return lazyCallReq{}, errBadChecksumLen
-	}
-
 	// arg1~2
 	arg1Len := int(rbuf.ReadUint16())
 	cr.method = rbuf.ReadBytes(arg1Len)
-
-	if rbuf.Err() != nil {
-		return lazyCallReq{}, errBadArg1Len
-	}
 
 	// arg2~2
 	arg2Len := int(rbuf.ReadUint16())
@@ -167,7 +155,7 @@ func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
 
 	if rbuf.Err() != nil {
-		return lazyCallReq{}, errBadArg2Len
+		return lazyCallReq{}, rbuf.Err()
 	}
 
 	return cr, nil

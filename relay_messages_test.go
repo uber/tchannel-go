@@ -486,7 +486,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				overrideArg2Len: leftSpace + 5, // Arg2 length extends beyond payload
 			})
 			_, err := newLazyCallReq(frm)
-			assert.Equal(t, errBadArg2Len, err)
+			assert.EqualError(t, err, "buffer is too small")
 		})
 	})
 }
