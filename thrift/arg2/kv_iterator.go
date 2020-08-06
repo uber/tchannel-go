@@ -16,7 +16,7 @@ import (
 // done in the process of iteration.
 type KeyValIterator struct {
 	arg2Len       int
-	rbuf          *typed.ReadBuffer
+	remaining     []byte
 	leftPairCount int
 	key           []byte
 	val           []byte
@@ -30,13 +30,14 @@ func NewKeyValIterator(arg2Payload []byte) (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
+	// We don't hold on to rbuf to avoid the associated alloc
 	rbuf := typed.NewReadBuffer(arg2Payload)
 	leftPairCount := rbuf.ReadUint16()
 
 	return KeyValIterator{
 		arg2Len:       len(arg2Payload),
 		leftPairCount: int(leftPairCount),
-		rbuf:          rbuf,
+		remaining:     arg2Payload[rbuf.BytesRead():],
 	}.Next()
 }
 
@@ -57,19 +58,20 @@ func (i KeyValIterator) Next() (KeyValIterator, error) {
 		return KeyValIterator{}, io.EOF
 	}
 
-	keyLen := int(i.rbuf.ReadUint16())
-	key := i.rbuf.ReadBytes(keyLen)
-	valLen := int(i.rbuf.ReadUint16())
-	val := i.rbuf.ReadBytes(valLen)
-	if i.rbuf.Err() != nil {
-		return KeyValIterator{}, i.rbuf.Err()
+	rbuf := typed.NewReadBuffer(i.remaining)
+	keyLen := int(rbuf.ReadUint16())
+	key := rbuf.ReadBytes(keyLen)
+	valLen := int(rbuf.ReadUint16())
+	val := rbuf.ReadBytes(valLen)
+	if rbuf.Err() != nil {
+		return KeyValIterator{}, rbuf.Err()
 	}
 
 	leftPairCount := i.leftPairCount - 1
 
 	return KeyValIterator{
 		arg2Len:       i.arg2Len,
-		rbuf:          i.rbuf,
+		remaining:     i.remaining[rbuf.BytesRead():],
 		leftPairCount: leftPairCount,
 		key:           key,
 		val:           val,

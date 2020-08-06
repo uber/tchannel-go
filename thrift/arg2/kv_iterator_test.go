@@ -94,3 +94,18 @@ func TestKeyValIterator(t *testing.T) {
 		}
 	})
 }
+
+func BenchmarkKeyValIterator(b *testing.B) {
+	kvBuffer := thriftarg2test.BuildKVBuffer(map[string]string{
+		"foo":  "bar",
+		"baz":  "qux",
+		"quux": "corge",
+	})
+
+	for i := 0; i < b.N; i++ {
+		iter, err := NewKeyValIterator(kvBuffer)
+		for err == nil {
+			iter, err = iter.Next()
+		}
+	}
+}
