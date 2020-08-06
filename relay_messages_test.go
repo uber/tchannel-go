@@ -53,11 +53,17 @@ type testCallReqParams struct {
 	overrideArg2Len int
 }
 
-func (cr testCallReq) req() lazyCallReq {
-	return cr.reqWithParams(testCallReqParams{})
+func (cr testCallReq) req(tb testing.TB) lazyCallReq {
+	return cr.reqWithParams(tb, testCallReqParams{})
 }
 
-func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
+func (cr testCallReq) reqWithParams(tb testing.TB, p testCallReqParams) lazyCallReq {
+	lcr, err := newLazyCallReq(cr.frameWithParams(p))
+	require.NoError(tb, err)
+	return lcr
+}
+
+func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
@@ -107,7 +113,8 @@ func (cr testCallReq) reqWithParams(p testCallReqParams) lazyCallReq {
 	}
 	payload.WriteUint16(uint16(arg2Len))
 	payload.WriteBytes(p.arg2Buf)
-	return newLazyCallReq(f)
+
+	return f
 }
 
 func withLazyCallReqCombinations(f func(cr testCallReq)) {
@@ -240,14 +247,14 @@ func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 
 func TestLazyCallReqService(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		assert.Equal(t, "bankmoji", string(cr.Service()), "Service name mismatch")
 	})
 }
 
 func TestLazyCallReqCaller(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		if crt&reqHasCaller == 0 {
 			assert.Equal(t, []byte(nil), cr.Caller(), "Unexpected caller name.")
 		} else {
@@ -258,7 +265,7 @@ func TestLazyCallReqCaller(t *testing.T) {
 
 func TestLazyCallReqRoutingDelegate(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		if crt&reqHasDelegate == 0 {
 			assert.Equal(t, []byte(nil), cr.RoutingDelegate(), "Unexpected routing delegate.")
 		} else {
@@ -269,7 +276,7 @@ func TestLazyCallReqRoutingDelegate(t *testing.T) {
 
 func TestLazyCallReqRoutingKey(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		if crt&reqHasRoutingKey == 0 {
 			assert.Equal(t, []byte(nil), cr.RoutingKey(), "Unexpected routing key.")
 		} else {
@@ -280,21 +287,21 @@ func TestLazyCallReqRoutingKey(t *testing.T) {
 
 func TestLazyCallReqMethod(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		assert.Equal(t, "moneys", string(cr.Method()), "Method name mismatch")
 	})
 }
 
 func TestLazyCallReqTTL(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		assert.Equal(t, 42*time.Millisecond, cr.TTL(), "Failed to parse TTL from frame.")
 	})
 }
 
 func TestLazyCallReqSetTTL(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
-		cr := crt.req()
+		cr := crt.req(t)
 		cr.SetTTL(time.Second)
 		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
 	})
@@ -324,7 +331,7 @@ func TestLazyCallArg2Offset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
 			withLazyCallReqCombinations(func(crt testCallReq) {
-				cr := crt.reqWithParams(testCallReqParams{
+				cr := crt.reqWithParams(t, testCallReqParams{
 					flags:   tt.flags,
 					arg2Buf: tt.arg2Buf,
 				})
@@ -347,13 +354,13 @@ func TestLazyCallArg2Offset(t *testing.T) {
 				withLazyCallReqCombinations(func(crt testCallReq) {
 					// For each CallReq, we first get the remaining space left, and
 					// fill up the remaining space with arg2.
-					crNoArg2 := crt.req()
+					crNoArg2 := crt.req(t)
 					arg2Size := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
 					var flags byte
 					if testHasMore {
 						flags |= hasMoreFragmentsFlag
 					}
-					cr := crt.reqWithParams(testCallReqParams{
+					cr := crt.reqWithParams(t, testCallReqParams{
 						flags:   flags,
 						arg2Buf: make([]byte, arg2Size),
 					})
@@ -390,7 +397,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 3, // 2 (nh) + 2 - 1
-			wantBadErr:     "invalid key offset 2 (arg2 len 3)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "length not enough to cover key",
@@ -399,7 +406,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 6, // 2 (nh) + 2 + len(key) - 1
-			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 6)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "length not enough to cover value len",
@@ -408,7 +415,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 8, // 2 (nh) + 2 + len(key) + 2 - 1
-			wantBadErr:     "invalid value offset 7 (key offset 4, key len 3, arg2 len 8)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "length not enough to cover value",
@@ -417,7 +424,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				"key": "val",
 			},
 			overrideBufLen: 10, // 2 (nh) + 2 + len(key) + 2 + len(val) - 2
-			wantBadErr:     "value exceeds arg2 range (offset 9, len 3, arg2 len 10)",
+			wantBadErr:     "buffer is too small",
 		},
 		{
 			msg:       "no key value pairs",
@@ -444,7 +451,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 				if tt.overrideBufLen > 0 {
 					arg2Buf = arg2Buf[:tt.overrideBufLen]
 				}
-				cr := crt.reqWithParams(testCallReqParams{
+				cr := crt.reqWithParams(t, testCallReqParams{
 					arg2Buf:   arg2Buf,
 					argScheme: tt.argScheme,
 				})
@@ -471,15 +478,15 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 
 	t.Run("bad Arg2 length", func(t *testing.T) {
 		withLazyCallReqCombinations(func(crt testCallReq) {
-			crNoArg2 := crt.req()
+			crNoArg2 := crt.req(t)
 			leftSpace := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
-			cr := crt.reqWithParams(testCallReqParams{
+			frm := crt.frameWithParams(testCallReqParams{
 				arg2Buf:         make([]byte, leftSpace),
 				argScheme:       Thrift,
 				overrideArg2Len: leftSpace + 5, // Arg2 length extends beyond payload
 			})
-			_, err := cr.Arg2Iterator()
-			assert.Equal(t, errBadArg2Len, err)
+			_, err := newLazyCallReq(frm)
+			assert.EqualError(t, err, "buffer is too small")
 		})
 	})
 }
@@ -487,7 +494,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 func TestLazyCallResRejectsOtherFrames(t *testing.T) {
 	assertWrappingPanics(
 		t,
-		reqHasHeaders.req().Frame,
+		reqHasHeaders.req(t).Frame,
 		func(f *Frame) { newLazyCallRes(f) },
 	)
 }
@@ -506,7 +513,7 @@ func TestLazyCallResOK(t *testing.T) {
 func TestLazyErrorRejectsOtherFrames(t *testing.T) {
 	assertWrappingPanics(
 		t,
-		reqHasHeaders.req().Frame,
+		reqHasHeaders.req(t).Frame,
 		func(f *Frame) { newLazyError(f) },
 	)
 }

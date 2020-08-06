@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go/thrift/arg2"
+	"github.com/uber/tchannel-go/typed"
 )
 
 var (
@@ -101,7 +102,7 @@ type lazyCallReq struct {
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
 
-func newLazyCallReq(f *Frame) lazyCallReq {
+func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 	if msgType := f.Header.messageType; msgType != messageTypeCallReq {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
@@ -110,19 +111,16 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 
 	serviceLen := f.Payload[_serviceLenIndex]
 	// nh:1 (hk~1 hv~1){nh}
-	headerStart := _serviceLenIndex + 1 /* length byte */ + serviceLen
-	numHeaders := int(f.Payload[headerStart])
-	cur := int(headerStart) + 1
-	for i := 0; i < numHeaders; i++ {
-		keyLen := int(f.Payload[cur])
-		cur++
-		key := f.Payload[cur : cur+keyLen]
-		cur += keyLen
+	headerStartIndex := _serviceLenIndex + 1 /* length byte */ + serviceLen
 
-		valLen := int(f.Payload[cur])
-		cur++
-		val := f.Payload[cur : cur+valLen]
-		cur += valLen
+	rbuf := typed.NewReadBuffer(f.SizedPayload()[headerStartIndex:])
+
+	numHeaders := int(rbuf.ReadSingleByte())
+	for i := 0; i < numHeaders; i++ {
+		keyLen := int(rbuf.ReadSingleByte())
+		key := rbuf.ReadBytes(keyLen)
+		valLen := int(rbuf.ReadSingleByte())
+		val := rbuf.ReadBytes(valLen)
 
 		if bytes.Equal(key, _argSchemeKeyBytes) {
 			cr.as = val
@@ -136,21 +134,28 @@ func newLazyCallReq(f *Frame) lazyCallReq {
 	}
 
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
-	checkSumType := ChecksumType(f.Payload[cur])
-	cur += 1 /* checksum */ + checkSumType.ChecksumSize()
+	checkSumType := ChecksumType(rbuf.ReadSingleByte())
+	rbuf.ReadBytes(checkSumType.ChecksumSize())
 
 	// arg1~2
-	arg1Len := int(binary.BigEndian.Uint16(f.Payload[cur : cur+2]))
-	cur += 2
-	cr.method = f.Payload[cur : cur+arg1Len]
+	arg1Len := int(rbuf.ReadUint16())
+	cr.method = rbuf.ReadBytes(arg1Len)
 
 	// arg2~2
-	cur += arg1Len
-	cr.arg2StartOffset = cur + 2
-	cr.arg2EndOffset = cr.arg2StartOffset + int(binary.BigEndian.Uint16(f.Payload[cur:cur+2]))
+	arg2Len := int(rbuf.ReadUint16())
+	cr.arg2StartOffset = int(headerStartIndex) + rbuf.BytesRead()
+	// TODO(echung): deprecate the arg2 offsets and store just the arg2 slice instead
+	// Read past arg2
+	rbuf.ReadBytes(arg2Len)
+	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
 	// arg2 is fragmented if we don't see arg3 in this frame.
-	cr.isArg2Fragmented = int(cr.Header.PayloadSize()) <= cr.arg2EndOffset && cr.HasMoreFragments()
-	return cr
+	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
+
+	if rbuf.Err() != nil {
+		return lazyCallReq{}, rbuf.Err()
+	}
+
+	return cr, nil
 }
 
 // Caller returns the name of the originator of this callReq.
