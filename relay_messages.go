@@ -145,7 +145,7 @@ func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 	arg2Len := int(rbuf.ReadUint16())
 	cr.arg2StartOffset = int(headerStartIndex) + rbuf.BytesRead()
 	// TODO(echung): deprecate the arg2 offsets and store just the arg2 slice instead
-	// Read pass arg2
+	// Read past arg2
 	rbuf.ReadBytes(arg2Len)
 	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
 	// arg2 is fragmented if we don't see arg3 in this frame.
