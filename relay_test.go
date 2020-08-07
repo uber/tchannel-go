@@ -99,7 +99,6 @@ func TestRelaySetHost(t *testing.T) {
 	opts := serviceNameOpts("test").SetRelayHost(rh).SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
-		rh.Add(ts.Server().ServiceName(), ts.Server().PeerInfo().HostPort)
 
 		client := ts.NewClient(serviceNameOpts("client"))
 		client.Peers().Add(ts.HostPort())
@@ -1054,7 +1053,6 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 
 		testutils.RegisterEcho(ts.Server(), nil)
 
-		rh.Add(ts.ServiceName(), ts.Server().PeerInfo().HostPort)
 		client := testutils.NewClient(t, nil /*opts*/)
 		defer client.Close()
 
@@ -1191,7 +1189,6 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 
 		testutils.RegisterEcho(ts.Server(), nil)
 
-		rh.Add(ts.ServiceName(), ts.Server().PeerInfo().HostPort)
 		client := testutils.NewClient(t, nil /*opts*/)
 		defer client.Close()
 
@@ -1310,10 +1307,6 @@ func TestRelayTransferredBytes(t *testing.T) {
 			fmt.Println("swallog got", len(args.Arg2)+len(args.Arg3))
 			return &raw.Res{}, nil
 		})
-
-		// Add to the relay host explicitly, since we override the default relay host.
-		rh.Add(s1.ServiceName(), s1.PeerInfo().HostPort)
-		rh.Add(s2.ServiceName(), s2.PeerInfo().HostPort)
 
 		// Helper to make calls with specific payload sizes.
 		makeCall := func(src, dst *Channel, method string, arg2Size, arg3Size int) {
