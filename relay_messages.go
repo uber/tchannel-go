@@ -102,12 +102,12 @@ type lazyCallReq struct {
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
 
-func newLazyCallReq(f *Frame) (lazyCallReq, error) {
+func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	if msgType := f.Header.messageType; msgType != messageTypeCallReq {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
 
-	cr := lazyCallReq{Frame: f}
+	cr := &lazyCallReq{Frame: f}
 
 	serviceLen := f.Payload[_serviceLenIndex]
 	// nh:1 (hk~1 hv~1){nh}
@@ -152,7 +152,7 @@ func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
 
 	if rbuf.Err() != nil {
-		return lazyCallReq{}, rbuf.Err()
+		return nil, rbuf.Err()
 	}
 
 	return cr, nil
