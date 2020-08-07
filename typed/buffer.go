@@ -42,19 +42,14 @@ var (
 // A ReadBuffer is a wrapper around an underlying []byte with methods to read from
 // that buffer in big-endian format.
 type ReadBuffer struct {
-	buffer    []byte
-	remaining []byte
-	err       error
+	initialLength int
+	remaining     []byte
+	err           error
 }
 
 // NewReadBuffer returns a ReadBuffer wrapping a byte slice
 func NewReadBuffer(buffer []byte) *ReadBuffer {
-	return &ReadBuffer{buffer: buffer, remaining: buffer}
-}
-
-// NewReadBufferWithSize returns a ReadBuffer with a given capacity
-func NewReadBufferWithSize(size int) *ReadBuffer {
-	return &ReadBuffer{buffer: make([]byte, size), remaining: nil}
+	return &ReadBuffer{initialLength: len(buffer), remaining: buffer}
 }
 
 // ReadSingleByte reads the next byte from the buffer
@@ -64,6 +59,8 @@ func (r *ReadBuffer) ReadSingleByte() byte {
 }
 
 // ReadByte returns the next byte from the buffer.
+//
+// This method implements the ByteReader interface.
 func (r *ReadBuffer) ReadByte() (byte, error) {
 	if r.err != nil {
 		return 0, r.err
@@ -150,30 +147,24 @@ func (r *ReadBuffer) ReadLen16String() string {
 	return r.ReadString(int(n))
 }
 
-// BytesRemaining returns the number of unconsumed bytes remaining in the buffer
+// Remaining returns the unconsumed bytes.
+func (r *ReadBuffer) Remaining() []byte {
+	return r.remaining
+}
+
+// BytesRemaining returns the length of Remaining.
 func (r *ReadBuffer) BytesRemaining() int {
-	return len(r.remaining)
+	return len(r.Remaining())
 }
 
 // BytesRead returns the number of bytes consumed
 func (r *ReadBuffer) BytesRead() int {
-	return len(r.buffer) - len(r.remaining)
-}
-
-// FillFrom fills the buffer from a reader
-func (r *ReadBuffer) FillFrom(ior io.Reader, n int) (int, error) {
-	if len(r.buffer) < n {
-		return 0, ErrEOF
-	}
-
-	r.err = nil
-	r.remaining = r.buffer[:n]
-	return io.ReadFull(ior, r.remaining)
+	return r.initialLength - len(r.remaining)
 }
 
 // Wrap initializes the buffer to read from the given byte slice
 func (r *ReadBuffer) Wrap(b []byte) {
-	r.buffer = b
+	r.initialLength = len(b)
 	r.remaining = b
 	r.err = nil
 }
@@ -348,7 +339,7 @@ func (w *WriteBuffer) BytesRemaining() int {
 	return len(w.remaining)
 }
 
-// FlushTo flushes the written buffer to the given writer
+// FlushTo flushes the written buffer to the given writer.
 func (w *WriteBuffer) FlushTo(iow io.Writer) (int, error) {
 	dirty := w.buffer[0:w.BytesWritten()]
 	return iow.Write(dirty)
