@@ -81,27 +81,44 @@ func TestReadWrite(t *testing.T) {
 	w.WriteLen8String("hello")
 	w.WriteLen16String("This is a much larger string")
 	require.NoError(t, w.Err())
+}
 
-	var b bytes.Buffer
-	w.FlushTo(&b)
+func TestReadBufferTracking(t *testing.T) {
+	bs := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
-	r := NewReadBufferWithSize(1024)
-	r.FillFrom(bytes.NewReader(b.Bytes()), len(b.Bytes()))
+	// Run twice, once on the original buffer, and once after wrapping.
+	rbuf := NewReadBuffer(bs)
+	for _, wrap := range []bool{false, true} {
+		if wrap {
+			rbuf.Wrap(bs)
+		}
 
-	assert.Equal(t, uint64(0x0123456789ABCDEF), r.ReadUint64())
-	assert.Equal(t, uint32(0xABCDEF01), r.ReadUint32())
-	assert.Equal(t, uint16(0x2345), r.ReadUint16())
-	assert.Equal(t, uint64(1), r.ReadUvarint())
-	assert.Equal(t, uint64(math.MaxInt16), r.ReadUvarint())
-	assert.Equal(t, uint64(math.MaxInt32), r.ReadUvarint())
-	assert.Equal(t, uint64(math.MaxInt64), r.ReadUvarint())
-	assert.Equal(t, byte(0xFF), r.ReadSingleByte())
-	assert.Equal(t, s, r.ReadString(len(s)))
-	assert.Equal(t, bslice, r.ReadBytes(len(bslice)))
-	assert.Equal(t, "hello", r.ReadLen8String())
-	assert.Equal(t, "This is a much larger string", r.ReadLen16String())
+		t.Run("nothing read", func(t *testing.T) {
+			assert.Equal(t, len(bs), rbuf.BytesRemaining(), "BytesRemaining")
+			assert.Equal(t, bs, rbuf.Remaining(), "Remaining")
+			assert.Zero(t, rbuf.BytesRead(), "BytesRead")
+		})
 
-	require.NoError(t, r.Err())
+		t.Run("partially consumed", func(t *testing.T) {
+			rbuf.ReadByte()
+			rbuf.ReadUint32()
+
+			assert.Equal(t, 5, rbuf.BytesRemaining(), "BytesRemaining")
+			assert.Equal(t, bs[5:], rbuf.Remaining(), "Remaining")
+			assert.Equal(t, 5, rbuf.BytesRead(), "BytesRead")
+		})
+
+		t.Run("fully consumed", func(t *testing.T) {
+			rbuf.ReadByte()
+			rbuf.ReadUint32()
+
+			assert.Zero(t, rbuf.BytesRemaining(), "BytesRemaining")
+			assert.Empty(t, rbuf.Remaining(), "Remaining")
+			assert.Equal(t, len(bs), rbuf.BytesRead(), "BytesRead")
+		})
+
+		require.NoError(t, rbuf.Err())
+	}
 }
 
 func TestDeferredWrites(t *testing.T) {

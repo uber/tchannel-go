@@ -27,7 +27,11 @@ func TestKeyValIterator(t *testing.T) {
 	for i := 0; i < nh; i++ {
 		assert.NoError(t, err)
 		gotKV[fmt.Sprintf("key%v", i)] = fmt.Sprintf("value%v", i)
+
+		remaining := iter.Remaining()
 		iter, err = iter.Next()
+
+		assert.Equal(t, err == nil, remaining, "Expect remaining to be true if there's no errors")
 	}
 	assert.Equal(t, io.EOF, err)
 	assert.Equal(t, kv, gotKV)
@@ -104,8 +108,15 @@ func BenchmarkKeyValIterator(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		iter, err := NewKeyValIterator(kvBuffer)
-		for err == nil {
+		if err != nil {
+			b.Fatalf("unexpected err %v", err)
+		}
+
+		for iter.Remaining() {
 			iter, err = iter.Next()
+			if err != nil {
+				b.Fatalf("unexpected err %v", err)
+			}
 		}
 	}
 }
