@@ -35,8 +35,9 @@ var _ tchannel.RelayHost = (*StubRelayHost)(nil)
 // StubRelayHost is a stub RelayHost for tests that backs peer selection to an
 // underlying channel using isolated subchannels and the default peer selection.
 type StubRelayHost struct {
-	ch    *tchannel.Channel
-	stats *MockStats
+	ch      *tchannel.Channel
+	stats   *MockStats
+	frameFn func(relay.CallFrame, *relay.Conn)
 }
 
 type stubCall struct {
@@ -47,7 +48,12 @@ type stubCall struct {
 
 // NewStubRelayHost creates a new stub RelayHost for tests.
 func NewStubRelayHost() *StubRelayHost {
-	return &StubRelayHost{nil, NewMockStats()}
+	return &StubRelayHost{stats: NewMockStats()}
+}
+
+// SetFrameFn sets a function to run on every frame.
+func (rh *StubRelayHost) SetFrameFn(f func(relay.CallFrame, *relay.Conn)) {
+	rh.frameFn = f
 }
 
 // SetChannel is called by the channel after creation so we can
@@ -57,7 +63,11 @@ func (rh *StubRelayHost) SetChannel(ch *tchannel.Channel) {
 }
 
 // Start starts a new RelayCall for the given call on a specific connection.
-func (rh *StubRelayHost) Start(cf relay.CallFrame, _ *relay.Conn) (tchannel.RelayCall, error) {
+func (rh *StubRelayHost) Start(cf relay.CallFrame, conn *relay.Conn) (tchannel.RelayCall, error) {
+	if rh.frameFn != nil {
+		rh.frameFn(cf, conn)
+	}
+
 	// Get a peer from the subchannel.
 	peer, err := rh.ch.GetSubChannel(string(cf.Service())).Peers().Get(nil)
 	return &stubCall{rh.stats.Begin(cf), peer}, err

@@ -1035,10 +1035,10 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 	defer cancel()
 
 	rh := relaytest.NewStubRelayHost()
-	inspector := newRelayFrameInspector(rh)
+	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(inspector)
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		const (
@@ -1150,7 +1150,7 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 				}
 				require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3DataToWrite)), "arg3 write failed")
 
-				f := <-inspector.received
+				f := <-frameCh
 				start := f.Arg2StartOffset()
 				end, hasMore := f.Arg2EndOffset()
 				assert.Equal(t, wantArg2Start, start, "arg2 start offset does not match expectation")
@@ -1171,10 +1171,10 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 	defer cancel()
 
 	rh := relaytest.NewStubRelayHost()
-	inspector := newRelayFrameInspector(rh)
+	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(inspector)
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		kv := map[string]string{
@@ -1200,7 +1200,7 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(arg2Buf), "arg2 write failed")
 		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3Data)), "arg3 write failed")
 
-		f := <-inspector.received
+		f := <-frameCh
 		iter, err := f.Arg2Iterator()
 		gotKV := make(map[string]string)
 		for err == nil {
@@ -1361,22 +1361,10 @@ func TestRelayTransferredBytes(t *testing.T) {
 	})
 }
 
-// relayFrameInspector is a RelayHost decorator which inspects
-// the relayFrame and returns it via received channel.
-type relayFrameInspector struct {
-	RelayHost
-
-	received chan relay.CallFrame
-}
-
-func newRelayFrameInspector(r RelayHost) *relayFrameInspector {
-	return &relayFrameInspector{
-		RelayHost: r,
-		received:  make(chan relay.CallFrame, 1),
-	}
-}
-
-func (r *relayFrameInspector) Start(f relay.CallFrame, conn *relay.Conn) (RelayCall, error) {
-	r.received <- testutils.CopyCallFrame(f)
-	return r.RelayHost.Start(f, conn)
+func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
+	frameCh := make(chan relay.CallFrame, 1)
+	rh.SetFrameFn(func(f relay.CallFrame, _ *relay.Conn) {
+		frameCh <- testutils.CopyCallFrame(f)
+	})
+	return frameCh
 }
