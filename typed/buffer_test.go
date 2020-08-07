@@ -96,7 +96,7 @@ func TestReadBufferTracking(t *testing.T) {
 		t.Run("nothing read", func(t *testing.T) {
 			assert.Equal(t, len(bs), rbuf.BytesRemaining(), "BytesRemaining")
 			assert.Equal(t, bs, rbuf.Remaining(), "Remaining")
-			assert.Zero(t, rbuf.BytesRead()m "BytesRead")
+			assert.Zero(t, rbuf.BytesRead(), "BytesRead")
 		})
 
 		t.Run("partially consumed", func(t *testing.T) {
