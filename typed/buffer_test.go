@@ -88,8 +88,8 @@ func TestReadBufferTracking(t *testing.T) {
 
 	// Run twice, once on the original buffer, and once after wrapping.
 	rbuf := NewReadBuffer(bs)
-	for i := 0; i < 2; i++ {
-		if i == 1 {
+	for _, wrap := range []bool{false, true} {
+		if wrap {
 			rbuf.Wrap(bs)
 		}
 
