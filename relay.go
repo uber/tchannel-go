@@ -398,7 +398,7 @@ func (r *Relayer) handleCallReq(f lazyCallReq) error {
 		return nil
 	}
 
-	call, err := r.relayHost.Start(f, r.relayConn)
+	call, err := r.relayHost.Start(&f, r.relayConn)
 	if err != nil {
 		// If we have a RateLimitDropError we record the statistic, but
 		// we *don't* send an error frame back to the client.

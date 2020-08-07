@@ -159,69 +159,69 @@ func newLazyCallReq(f *Frame) (lazyCallReq, error) {
 }
 
 // Caller returns the name of the originator of this callReq.
-func (f lazyCallReq) Caller() []byte {
+func (f *lazyCallReq) Caller() []byte {
 	return f.caller
 }
 
 // Service returns the name of the destination service for this callReq.
-func (f lazyCallReq) Service() []byte {
+func (f *lazyCallReq) Service() []byte {
 	l := f.Payload[_serviceLenIndex]
 	return f.Payload[_serviceNameIndex : _serviceNameIndex+l]
 }
 
 // Method returns the name of the method being called.
-func (f lazyCallReq) Method() []byte {
+func (f *lazyCallReq) Method() []byte {
 	return f.method
 }
 
 // RoutingDelegate returns the routing delegate for this call req, if any.
-func (f lazyCallReq) RoutingDelegate() []byte {
+func (f *lazyCallReq) RoutingDelegate() []byte {
 	return f.delegate
 }
 
 // RoutingKey returns the routing delegate for this call req, if any.
-func (f lazyCallReq) RoutingKey() []byte {
+func (f *lazyCallReq) RoutingKey() []byte {
 	return f.key
 }
 
 // TTL returns the time to live for this callReq.
-func (f lazyCallReq) TTL() time.Duration {
+func (f *lazyCallReq) TTL() time.Duration {
 	ttl := binary.BigEndian.Uint32(f.Payload[_ttlIndex : _ttlIndex+_ttlLen])
 	return time.Duration(ttl) * time.Millisecond
 }
 
 // SetTTL overwrites the frame's TTL.
-func (f lazyCallReq) SetTTL(d time.Duration) {
+func (f *lazyCallReq) SetTTL(d time.Duration) {
 	ttl := uint32(d / time.Millisecond)
 	binary.BigEndian.PutUint32(f.Payload[_ttlIndex:_ttlIndex+_ttlLen], ttl)
 }
 
 // Span returns the Span
-func (f lazyCallReq) Span() Span {
+func (f *lazyCallReq) Span() Span {
 	return callReqSpan(f.Frame)
 }
 
 // HasMoreFragments returns whether the callReq has more fragments.
-func (f lazyCallReq) HasMoreFragments() bool {
+func (f *lazyCallReq) HasMoreFragments() bool {
 	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }
 
 // Arg2EndOffset returns the offset from start of payload to the end of Arg2
 // in bytes, and hasMore to be true if there are more frames and arg3 has
 // not started.
-func (f lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
+func (f *lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
 	return f.arg2EndOffset, f.isArg2Fragmented
 }
 
 // Arg2StartOffset returns the offset from start of payload to the beginning
 // of Arg2 in bytes.
-func (f lazyCallReq) Arg2StartOffset() int {
+func (f *lazyCallReq) Arg2StartOffset() int {
 	return f.arg2StartOffset
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
 // of TChannel-Thrift Arg Scheme.
-func (f lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
+func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
