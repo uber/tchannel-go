@@ -287,6 +287,8 @@ func (ts *TestServer) addRelay(parentOpts *ChannelOpts) {
 	if relayHost == nil {
 		ts.relayHost = relaytest.NewStubRelayHost()
 		relayHost = ts.relayHost
+	} else if relayHost, ok := relayHost.(*relaytest.StubRelayHost); ok {
+		ts.relayHost = relayHost
 	}
 
 	opts.ServiceName = "relay"
