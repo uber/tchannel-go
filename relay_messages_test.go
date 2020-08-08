@@ -60,7 +60,7 @@ func (cr testCallReq) req(tb testing.TB) lazyCallReq {
 func (cr testCallReq) reqWithParams(tb testing.TB, p testCallReqParams) lazyCallReq {
 	lcr, err := newLazyCallReq(cr.frameWithParams(p))
 	require.NoError(tb, err)
-	return lcr
+	return *lcr
 }
 
 func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {

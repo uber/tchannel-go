@@ -355,7 +355,7 @@ func (r *Relayer) canHandleNewCall() (bool, connectionState) {
 	return canHandle, curState
 }
 
-func (r *Relayer) getDestination(f lazyCallReq, call RelayCall) (*Connection, bool, error) {
+func (r *Relayer) getDestination(f *lazyCallReq, call RelayCall) (*Connection, bool, error) {
 	if _, ok := r.outbound.Get(f.Header.ID); ok {
 		r.logger.WithFields(
 			LogField{"id", f.Header.ID},
@@ -393,7 +393,7 @@ func (r *Relayer) getDestination(f lazyCallReq, call RelayCall) (*Connection, bo
 	return remoteConn, true, nil
 }
 
-func (r *Relayer) handleCallReq(f lazyCallReq) error {
+func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 	if handled := r.handleLocalCallReq(f); handled {
 		return nil
 	}
@@ -625,7 +625,7 @@ func (r *Relayer) receiverItems(fType frameType) *relayItems {
 	return r.outbound
 }
 
-func (r *Relayer) handleLocalCallReq(cr lazyCallReq) bool {
+func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
 	// Check whether this is a service we want to handle locally.
 	if _, ok := r.localHandler[string(cr.Service())]; !ok {
 		return false
