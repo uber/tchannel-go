@@ -1364,8 +1364,6 @@ func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
 }
 
 func TestRelayModifyArg2(t *testing.T) {
-	// largeKey := testutils.RandString(378)
-	// largeVal := testutils.RandString(65000)
 	largePayload := testutils.RandString(1024)
 
 	modifyTests := []struct {
@@ -1381,7 +1379,8 @@ func TestRelayModifyArg2(t *testing.T) {
 				// no change
 			},
 		},
-		// TODO(echung): Enable once we have frame modification.
+		// Example test showing how modifications should be tested.
+		// TODO(echung): Enable and add more modification tests.
 		// {
 		// 	msg: "add small key/value",
 		// 	modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
@@ -1389,15 +1388,6 @@ func TestRelayModifyArg2(t *testing.T) {
 		// 	},
 		// 	modifyArg2: func(m map[string]string) {
 		// 		m["key"] = "value"
-		// 	},
-		// },
-		// {
-		// 	msg: "add large key/value",
-		// 	modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-		// 		cf.Arg2Append([]byte(largeKey), []byte(largeVal))
-		// 	},
-		// 	modifyArg2: func(m map[string]string) {
-		// 		m[largeKey] = largeVal
 		// 	},
 		// },
 	}
@@ -1495,19 +1485,21 @@ func TestRelayModifyArg2(t *testing.T) {
 					// Make calls with different payloads and expected errors.
 					for _, aet := range appErrTests {
 						for _, tt := range payloadTests {
-							arg2Encoded := encodeThriftHeaders(t, tt.arg2)
+							t.(*testing.T).Run(aet.msg+","+tt.msg, func(t *testing.T) {
+								arg2Encoded := encodeThriftHeaders(t, tt.arg2)
 
-							resArg2, resArg3, resp, err := raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), aet.method, arg2Encoded, tt.arg3)
-							require.NoError(t, err, "%v: Received unexpected error", tt.msg)
-							assert.Equal(t, format, resp.Format(), "%v: Unexpected error format")
-							assert.Equal(t, aet.wantAppErr, resp.ApplicationError(), "%v: Unexpected app error")
+								resArg2, resArg3, resp, err := raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), aet.method, arg2Encoded, tt.arg3)
+								require.NoError(t, err, "%v: Received unexpected error", tt.msg)
+								assert.Equal(t, format, resp.Format(), "%v: Unexpected error format")
+								assert.Equal(t, aet.wantAppErr, resp.ApplicationError(), "%v: Unexpected app error")
 
-							wantArg2 := copyHeaders(tt.arg2)
-							mt.modifyArg2(wantArg2)
+								wantArg2 := copyHeaders(tt.arg2)
+								mt.modifyArg2(wantArg2)
 
-							gotArg2Map := decodeThriftHeaders(t, resArg2)
-							assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)
-							assert.Equal(t, resArg3, tt.arg3, "%v: Unexpected arg3", tt.msg)
+								gotArg2Map := decodeThriftHeaders(t, resArg2)
+								assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)
+								assert.Equal(t, resArg3, tt.arg3, "%v: Unexpected arg3", tt.msg)
+							})
 						}
 					}
 				})
