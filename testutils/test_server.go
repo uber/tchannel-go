@@ -270,6 +270,8 @@ func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
 }
 
 // NewServer returns a server with log and channel state verification.
+//
+// Note: The same default service name is used if one isn't specified.
 func (ts *TestServer) NewServer(opts *ChannelOpts) *tchannel.Channel {
 	ch := ts.addChannel(newServer, opts.Copy())
 	if ts.relayHost != nil {
