@@ -310,21 +310,7 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 	})
 }
 
-func byteKeyValToMap(tb testing.TB, buffer []byte) map[string]string {
-	rbuf := typed.NewReadBuffer(buffer)
-	nh := int(rbuf.ReadSingleByte())
-	retMap := make(map[string]string, nh)
-	for i := 0; i < nh; i++ {
-		keyLen := int(rbuf.ReadSingleByte())
-		key := rbuf.ReadBytes(keyLen)
-		valLen := int(rbuf.ReadSingleByte())
-		val := rbuf.ReadBytes(valLen)
-		retMap[string(key)] = string(val)
-	}
-	require.NoError(tb, rbuf.Err())
-	return retMap
-}
-
+// TODO(cinchurge): replace with e.g. decodeThriftHeader once we've resolved the import cycle
 func uint16KeyValToMap(tb testing.TB, buffer []byte) map[string]string {
 	rbuf := typed.NewReadBuffer(buffer)
 	nh := int(rbuf.ReadUint16())
@@ -350,14 +336,16 @@ func TestLazyCallReqContents(t *testing.T) {
 	})
 
 	t.Run(".header()", func(t *testing.T) {
-		assert.Equal(t, map[string]string{
+		gotTP := make(transportHeaders)
+		gotTP.read(typed.NewReadBuffer(cr.transportHeader()))
+		assert.Equal(t, transportHeaders{
 			"cn":      "fake-caller",
 			"k1":      "v1",
 			"k222222": "",
 			"k3":      "thisisalonglongkey",
 			"rd":      "fake-delegate",
 			"rk":      "fake-routingkey",
-		}, byteKeyValToMap(t, cr.header()))
+		}, gotTP)
 	})
 
 	t.Run(".arg2()", func(t *testing.T) {

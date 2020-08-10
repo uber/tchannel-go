@@ -101,11 +101,12 @@ type lazyCallReq struct {
 
 	caller, method, delegate, key, as []byte
 
-	headerStartOffset              int
-	headerEndOffset                int
-	checksumType                   ChecksumType
+	checksumType     ChecksumType
+	isArg2Fragmented bool
+
+	transportHeaderStartOffset     int
+	transportHeaderEndOffset       int
 	arg2StartOffset, arg2EndOffset int
-	isArg2Fragmented               bool
 	arg3StartOffset, arg3EndOffset int
 }
 
@@ -126,13 +127,12 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	rbuf.ReadBytes(serviceLen)
 
 	// nh:1 (hk~1 hv~1){nh}
-	cr.headerStartOffset = rbufOffset()
+	cr.transportHeaderStartOffset = rbufOffset()
 	numHeaders := int(rbuf.ReadSingleByte())
 
 	for i := 0; i < numHeaders; i++ {
 		keyLen := int(rbuf.ReadSingleByte())
 		key := rbuf.ReadBytes(keyLen)
-
 		valLen := int(rbuf.ReadSingleByte())
 		val := rbuf.ReadBytes(valLen)
 
@@ -146,7 +146,7 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 			cr.key = val
 		}
 	}
-	cr.headerEndOffset = rbufOffset()
+	cr.transportHeaderEndOffset = rbufOffset()
 
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
 	cr.checksumType = ChecksumType(rbuf.ReadSingleByte())
@@ -249,8 +249,8 @@ func (f *lazyCallReq) Arg2StartOffset() int {
 	return f.arg2StartOffset
 }
 
-func (f *lazyCallReq) header() []byte {
-	return f.Payload[f.headerStartOffset:f.headerEndOffset]
+func (f *lazyCallReq) transportHeader() []byte {
+	return f.Payload[f.transportHeaderStartOffset:f.transportHeaderEndOffset]
 }
 
 func (f *lazyCallReq) arg2() []byte {
