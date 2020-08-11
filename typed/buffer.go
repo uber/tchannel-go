@@ -92,7 +92,10 @@ func (r *ReadBuffer) ReadBytes(n int) []byte {
 	return b
 }
 
+<<<<<<< HEAD
 // SkipBytes skips the next n bytes from the buffer
+=======
+>>>>>>> 9e863b5... use ReadBuffer.SkipBytes()
 func (r *ReadBuffer) SkipBytes(n int) {
 	if r.err != nil {
 		return
@@ -104,6 +107,10 @@ func (r *ReadBuffer) SkipBytes(n int) {
 	}
 
 	r.remaining = r.remaining[n:]
+<<<<<<< HEAD
+=======
+	return
+>>>>>>> 9e863b5... use ReadBuffer.SkipBytes()
 }
 
 // ReadString returns a string of size n from the buffer
