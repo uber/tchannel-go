@@ -103,7 +103,6 @@ type lazyCallReq struct {
 
 	checksumTypeOffset             uint16
 	arg2StartOffset, arg2EndOffset uint16
-	arg2appends                    []keyVal
 	arg3StartOffset, arg3EndOffset uint16
 
 	checksumType     ChecksumType
@@ -171,7 +170,6 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	if !cr.isArg2Fragmented {
 		// arg3~2
 		arg3Len := rbuf.ReadUint16()
-		fmt.Println("arg3Len=", arg3Len)
 		cr.arg3StartOffset = rbufOffset()
 
 		if uint16(rbuf.BytesRemaining()) < arg3Len {
@@ -269,10 +267,6 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	}
 
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
-}
-
-func (f *lazyCallReq) Arg2Append(key, val []byte) {
-	f.arg2appends = append(f.arg2appends, keyVal{key, val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
