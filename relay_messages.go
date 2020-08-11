@@ -91,17 +91,22 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
+type keyVal struct {
+	key []byte
+	val []byte
+}
+
 type lazyCallReq struct {
 	*Frame
-
-	caller, method, delegate, key, as []byte
 
 	checksumTypeOffset             uint16
 	arg2StartOffset, arg2EndOffset uint16
 	arg3StartOffset                uint16
 
-	checksumType     ChecksumType
-	isArg2Fragmented bool
+	caller, method, delegate, key, as []byte
+	arg2appends                       []keyVal
+	checksumType                      ChecksumType
+	isArg2Fragmented                  bool
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -247,6 +252,10 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
+}
+
+func (f *lazyCallReq) Arg2Append(key, val []byte) {
+	f.arg2appends = append(f.arg2appends, keyVal{key, val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
