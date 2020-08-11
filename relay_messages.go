@@ -98,7 +98,7 @@ type lazyCallReq struct {
 
 	checksumTypeOffset             uint16
 	arg2StartOffset, arg2EndOffset uint16
-	arg3StartOffset, arg3EndOffset uint16
+	arg3StartOffset                uint16
 
 	checksumType     ChecksumType
 	isArg2Fragmented bool
@@ -155,12 +155,8 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
 
 	// arg2 is fragmented if we don't see arg3 in this frame.
-	if uint16(rbuf.BytesRemaining()) <= arg2Len {
-		rbuf.SkipBytes(rbuf.BytesRemaining())
-		cr.isArg2Fragmented = cr.HasMoreFragments()
-	} else {
-		rbuf.SkipBytes(int(arg2Len))
-	}
+	rbuf.SkipBytes(int(arg2Len))
+	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
 
 	if !cr.isArg2Fragmented {
 		// arg3~2
