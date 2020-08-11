@@ -1412,32 +1412,42 @@ func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
 }
 
 func TestRelayModifyArg2(t *testing.T) {
+	largeKey := testutils.RandString(378)
+	largeVal := testutils.RandString(65000)
 	largePayload := testutils.RandString(1024)
 
 	modifyTests := []struct {
 		msg         string
 		skip        string
 		modifyFrame func(relay.CallFrame, *relay.Conn)
-		modifyArg2  func(arg2 map[string]string)
+		modifyArg2  func(arg2 map[string]string) map[string]string
 	}{
 		{
 			msg:         "no change",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {},
-			modifyArg2: func(arg2 map[string]string) {
-				// no change
-			},
 		},
 		// Example test showing how modifications should be tested.
 		// TODO(echung): Enable and add more modification tests.
-		// {
-		// 	msg: "add small key/value",
-		// 	modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-		// 		cf.Arg2Append([]byte("key"), []byte("value"))
-		// 	},
-		// 	modifyArg2: func(m map[string]string) {
-		// 		m["key"] = "value"
-		// 	},
-		// },
+		{
+			msg: "add small key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append([]byte("key"), []byte("value"))
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m["key"] = "value"
+				return m
+			},
+		},
+		{
+			msg: "add large key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append([]byte(largeKey), []byte(largeVal))
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m[largeKey] = largeVal
+				return m
+			},
+		},
 	}
 
 	checksumTypes := []struct {
@@ -1542,7 +1552,12 @@ func TestRelayModifyArg2(t *testing.T) {
 								assert.Equal(t, aet.wantAppErr, resp.ApplicationError(), "%v: Unexpected app error")
 
 								wantArg2 := copyHeaders(tt.arg2)
-								mt.modifyArg2(wantArg2)
+								if mt.modifyArg2 != nil {
+									if wantArg2 == nil {
+										wantArg2 = make(map[string]string)
+									}
+									wantArg2 = mt.modifyArg2(wantArg2)
+								}
 
 								gotArg2Map := decodeThriftHeaders(t, resArg2)
 								assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)

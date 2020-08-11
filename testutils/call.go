@@ -21,8 +21,10 @@
 package testutils
 
 import (
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
@@ -97,6 +99,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
+	tb   testing.TB
 	TTLF time.Duration
 
 	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
@@ -156,6 +159,22 @@ func (f *FakeCallFrame) Arg2EndOffset() (int, bool) {
 // of TChannel-Thrift Arg Scheme.
 func (f *FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
 	return f.arg2KVIterator, f.hasArg2KVIterator
+}
+
+// Arg2Append appends a key value pair to Arg2
+func (f *FakeCallFrame) Arg2Append(key, val []byte) {
+	kv := make(map[string]string)
+	for iter, err := f.Arg2Iterator(); err == nil; iter, err = iter.Next() {
+		kv[string(iter.Key())] = string(iter.Value())
+	}
+	kv[string(key)] = string(val)
+
+	iterator, err := arg2.NewKeyValIterator(thriftarg2test.BuildKVBuffer(kv))
+	require.NoError(f.tb, err)
+
+	f.arg2KVIterator = iterator
+
+	return
 }
 
 // CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with

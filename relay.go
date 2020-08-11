@@ -21,14 +21,16 @@
 package tchannel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/uber/tchannel-go/relay"
-
+	"github.com/uber/tchannel-go/typed"
 	"go.uber.org/atomic"
 )
 
@@ -73,6 +75,10 @@ type relayItems struct {
 	timeouts *relayTimerPool
 	tombs    uint64
 	items    map[uint32]relayItem
+}
+
+type frameReceiver interface {
+	Receive(f *Frame, fType frameType) (sent bool, failureReason string)
 }
 
 func newRelayItems(logger Logger) *relayItems {
@@ -467,12 +473,16 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 
 	f.Header.ID = destinationID
 	call.SentBytes(f.Frame.Header.FrameSize())
+
+	if len(f.arg2appends) > 0 {
+		return r.fragmentingSend(f, relayToDest, origID)
+	}
+
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure)
 		return nil
 	}
-
 	return nil
 }
 
@@ -654,6 +664,73 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
 	return true
 }
 
+func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID uint32) error {
+	fragWriter := newFragmentingWriter(
+		NullLogger, r.newFragmentSender(relayToDest.destination, f, origID),
+		f.checksumType.New(),
+	)
+	defer r.conn.opts.FramePool.Release(f.Frame)
+
+	arg2Writer, err := fragWriter.ArgWriter(f.isArg2Fragmented)
+	if err != nil {
+		return fmt.Errorf("get arg2 writer: %v", err)
+	}
+
+	arg2 := f.arg2()
+	if len(arg2) == 0 {
+		if _, err := arg2Writer.Write(nil); err != nil {
+			return fmt.Errorf("write empty arg2")
+		}
+	} else {
+		nh := binary.BigEndian.Uint16(arg2[:2]) + uint16(len(f.arg2appends))
+		if err := writeUint16(arg2Writer, nh); err != nil {
+			return fmt.Errorf("write arg2 nh: %v", err)
+		}
+		if _, err := arg2Writer.Write(arg2[2:]); err != nil {
+			return fmt.Errorf("write arg2: %v", err)
+		}
+		for _, kv := range f.arg2appends {
+			if err := writeDataWithSize(arg2Writer, kv.key); err != nil {
+				return fmt.Errorf("append arg2 key: %v", err)
+			}
+			if err := writeDataWithSize(arg2Writer, kv.val); err != nil {
+				return fmt.Errorf("append arg2 val: %v", err)
+			}
+		}
+	}
+	if err := arg2Writer.Close(); err != nil {
+		return fmt.Errorf("close arg2 writer")
+	}
+	if f.isArg2Fragmented {
+		return nil
+	}
+
+	if err := NewArgWriter(fragWriter.ArgWriter(true)).Write(f.arg3()); err != nil {
+		return errors.New("arg3 write failed")
+	}
+
+	return nil
+}
+
+func writeUint16(w io.Writer, n uint16) error {
+	var sizeBuf [2]byte
+	binary.BigEndian.PutUint16(sizeBuf[:], n)
+	if _, err := w.Write(sizeBuf[:]); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeDataWithSize(w io.Writer, b []byte) error {
+	if err := writeUint16(w, uint16(len(b))); err != nil {
+		return fmt.Errorf("write data length: %v", err)
+	}
+	if _, err := w.Write(b); err != nil {
+		return fmt.Errorf("write data: %v", err)
+	}
+	return nil
+}
+
 func frameTypeFor(f *Frame) frameType {
 	switch t := f.Header.messageType; t {
 	case messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypePingRes:
@@ -694,3 +771,82 @@ func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 	return _defaultRelayMaxTimeout
 }
+
+type relayFragmentSender struct {
+	callReq            *lazyCallReq
+	framePool          FramePool
+	frameReceiver      frameReceiver
+	failRelayItemFunc  func(items *relayItems, id uint32, failure string)
+	outboundRelayItems *relayItems
+	origID             uint32
+}
+
+func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32) *relayFragmentSender {
+	return &relayFragmentSender{
+		callReq:            cr,
+		framePool:          r.conn.opts.FramePool,
+		frameReceiver:      dstRelay,
+		failRelayItemFunc:  r.failRelayItem,
+		outboundRelayItems: r.outbound,
+		origID:             origID,
+	}
+}
+
+func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
+	frame := rfs.framePool.Get()
+	frame.Header.ID = rfs.callReq.Header.ID
+	if initial {
+		frame.Header.messageType = messageTypeCallReq
+	} else {
+		frame.Header.messageType = messageTypeCallReqContinue
+	}
+
+	contents := typed.NewWriteBuffer(frame.Payload[:])
+
+	// flags:1
+	flagsRef := contents.DeferByte()
+	flagsRef.Update(rfs.callReq.Payload[_flagsIndex])
+
+	if initial {
+		// Copy all data before the checksum for the initial frame
+		contents.WriteBytes(rfs.callReq.Payload[_flagsIndex+1 : rfs.callReq.checksumTypeOffset])
+	}
+
+	// checksumType:1
+	contents.WriteSingleByte(byte(checksum.TypeCode()))
+
+	// checksum: checksum.Size()
+	checksumRef := contents.DeferBytes(checksum.Size())
+
+	if initial {
+		// arg1~1: write arg1 to the initial frame
+		contents.WriteUint16(uint16(len(rfs.callReq.method)))
+		contents.WriteBytes(rfs.callReq.method)
+		checksum.Add(rfs.callReq.method)
+	}
+
+	return &writableFragment{
+		flagsRef:    flagsRef,
+		checksumRef: checksumRef,
+		checksum:    checksum,
+		contents:    contents,
+		frame:       frame,
+	}, contents.Err()
+}
+
+func (rfs *relayFragmentSender) flushFragment(f *writableFragment) error {
+	frame, ok := f.frame.(*Frame)
+	if !ok {
+		return fmt.Errorf("got unexpected frame type: %t", f.frame)
+	}
+	frame.Header.SetPayloadSize(uint16(f.contents.BytesWritten()))
+
+	sent, failure := rfs.frameReceiver.Receive(frame, requestFrame)
+	if !sent {
+		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure)
+		return nil
+	}
+	return nil
+}
+
+func (rfs *relayFragmentSender) doneSending() {}
