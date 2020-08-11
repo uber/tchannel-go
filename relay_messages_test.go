@@ -587,10 +587,4 @@ func TestLazyCallReqContents(t *testing.T) {
 			"foo": "bar",
 		}, uint16KeyValToMap(t, cr.arg2()))
 	})
-
-	fmt.Println(cr.isArg2Fragmented)
-
-	t.Run(".arg3()", func(t *testing.T) {
-		assert.Equal(t, "some arg3 data", string(cr.arg3()))
-	})
 }

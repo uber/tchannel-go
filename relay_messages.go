@@ -164,14 +164,8 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 
 	if !cr.isArg2Fragmented {
 		// arg3~2
-		arg3Len := rbuf.ReadUint16()
+		rbuf.SkipBytes(2)
 		cr.arg3StartOffset = uint16(rbuf.BytesRead())
-
-		if uint16(rbuf.BytesRemaining()) < arg3Len {
-			cr.arg3EndOffset = cr.arg3StartOffset + uint16(rbuf.BytesRemaining())
-		} else {
-			cr.arg3EndOffset = cr.arg3StartOffset + arg3Len
-		}
 	}
 
 	if rbuf.Err() != nil {
@@ -247,7 +241,7 @@ func (f *lazyCallReq) arg2() []byte {
 }
 
 func (f *lazyCallReq) arg3() []byte {
-	return f.Payload[f.arg3StartOffset:f.arg3EndOffset]
+	return f.Payload[f.arg3StartOffset:f.Header.PayloadSize()]
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
