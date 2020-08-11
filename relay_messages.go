@@ -113,12 +113,12 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 
 	cr := &lazyCallReq{Frame: f}
 
-	rbuf := typed.NewReadBuffer(f.SizedPayload()[_serviceLenIndex:])
-	rbufOffset := func() uint16 { return _serviceLenIndex + uint16(rbuf.BytesRead()) }
+	rbuf := typed.NewReadBuffer(f.SizedPayload())
+	rbuf.SkipBytes(_serviceLenIndex)
 
 	// service~1
 	serviceLen := rbuf.ReadSingleByte()
-	rbuf.ReadBytes(int(serviceLen))
+	rbuf.SkipBytes(int(serviceLen))
 
 	// nh:1 (hk~1 hv~1){nh}
 	numHeaders := rbuf.ReadSingleByte()
@@ -141,9 +141,9 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	}
 
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
-	cr.checksumTypeOffset = rbufOffset()
+	cr.checksumTypeOffset = uint16(rbuf.BytesRead())
 	cr.checksumType = ChecksumType(rbuf.ReadSingleByte())
-	rbuf.ReadBytes(cr.checksumType.ChecksumSize())
+	rbuf.SkipBytes(cr.checksumType.ChecksumSize())
 
 	// arg1~2
 	arg1Len := int(rbuf.ReadUint16())
@@ -151,21 +151,21 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 
 	// arg2~2
 	arg2Len := rbuf.ReadUint16()
-	cr.arg2StartOffset = rbufOffset()
+	cr.arg2StartOffset = uint16(rbuf.BytesRead())
 	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
 
 	// arg2 is fragmented if we don't see arg3 in this frame.
 	if uint16(rbuf.BytesRemaining()) <= arg2Len {
-		rbuf.ReadBytes(rbuf.BytesRemaining())
+		rbuf.SkipBytes(rbuf.BytesRemaining())
 		cr.isArg2Fragmented = cr.HasMoreFragments()
 	} else {
-		rbuf.ReadBytes(int(arg2Len))
+		rbuf.SkipBytes(int(arg2Len))
 	}
 
 	if !cr.isArg2Fragmented {
 		// arg3~2
 		arg3Len := rbuf.ReadUint16()
-		cr.arg3StartOffset = rbufOffset()
+		cr.arg3StartOffset = uint16(rbuf.BytesRead())
 
 		if uint16(rbuf.BytesRemaining()) < arg3Len {
 			cr.arg3EndOffset = cr.arg3StartOffset + uint16(rbuf.BytesRemaining())

@@ -92,6 +92,20 @@ func (r *ReadBuffer) ReadBytes(n int) []byte {
 	return b
 }
 
+func (r *ReadBuffer) SkipBytes(n int) {
+	if r.err != nil {
+		return
+	}
+
+	if len(r.remaining) < n {
+		r.err = ErrEOF
+		return
+	}
+
+	r.remaining = r.remaining[n:]
+	return
+}
+
 // ReadString returns a string of size n from the buffer
 func (r *ReadBuffer) ReadString(n int) string {
 	if b := r.ReadBytes(n); b != nil {
