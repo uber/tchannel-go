@@ -101,13 +101,13 @@ type lazyCallReq struct {
 
 	caller, method, delegate, key, as []byte
 
+	checksumTypeOffset             uint16
+	arg2StartOffset, arg2EndOffset uint16
+	arg2appends                    []keyVal
+	arg3StartOffset, arg3EndOffset uint16
+
 	checksumType     ChecksumType
 	isArg2Fragmented bool
-
-	transportHeaderStartOffset     int
-	transportHeaderEndOffset       int
-	arg2StartOffset, arg2EndOffset int
-	arg3StartOffset, arg3EndOffset int
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -120,19 +120,18 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	cr := &lazyCallReq{Frame: f}
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload()[_serviceLenIndex:])
-	rbufOffset := func() int { return _serviceLenIndex + rbuf.BytesRead() }
+	rbufOffset := func() uint16 { return _serviceLenIndex + uint16(rbuf.BytesRead()) }
 
 	// service~1
-	serviceLen := int(rbuf.ReadSingleByte())
-	rbuf.ReadBytes(serviceLen)
+	serviceLen := rbuf.ReadSingleByte()
+	rbuf.ReadBytes(int(serviceLen))
 
 	// nh:1 (hk~1 hv~1){nh}
-	cr.transportHeaderStartOffset = rbufOffset()
-	numHeaders := int(rbuf.ReadSingleByte())
-
-	for i := 0; i < numHeaders; i++ {
+	numHeaders := rbuf.ReadSingleByte()
+	for i := byte(0); i < numHeaders; i++ {
 		keyLen := int(rbuf.ReadSingleByte())
 		key := rbuf.ReadBytes(keyLen)
+
 		valLen := int(rbuf.ReadSingleByte())
 		val := rbuf.ReadBytes(valLen)
 
@@ -146,9 +145,9 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 			cr.key = val
 		}
 	}
-	cr.transportHeaderEndOffset = rbufOffset()
 
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
+	cr.checksumTypeOffset = rbufOffset()
 	cr.checksumType = ChecksumType(rbuf.ReadSingleByte())
 	rbuf.ReadBytes(cr.checksumType.ChecksumSize())
 
@@ -157,25 +156,26 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	cr.method = rbuf.ReadBytes(arg1Len)
 
 	// arg2~2
-	arg2Len := int(rbuf.ReadUint16())
+	arg2Len := rbuf.ReadUint16()
 	cr.arg2StartOffset = rbufOffset()
 	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
 
 	// arg2 is fragmented if we don't see arg3 in this frame.
-	if rbuf.BytesRemaining() <= arg2Len {
+	if uint16(rbuf.BytesRemaining()) <= arg2Len {
 		rbuf.ReadBytes(rbuf.BytesRemaining())
 		cr.isArg2Fragmented = cr.HasMoreFragments()
 	} else {
-		rbuf.ReadBytes(arg2Len)
+		rbuf.ReadBytes(int(arg2Len))
 	}
 
 	if !cr.isArg2Fragmented {
 		// arg3~2
-		arg3Len := int(rbuf.ReadUint16())
+		arg3Len := rbuf.ReadUint16()
+		fmt.Println("arg3Len=", arg3Len)
 		cr.arg3StartOffset = rbufOffset()
 
-		if rbuf.BytesRemaining() < arg3Len {
-			cr.arg3EndOffset = cr.arg3StartOffset + rbuf.BytesRemaining()
+		if uint16(rbuf.BytesRemaining()) < arg3Len {
+			cr.arg3EndOffset = cr.arg3StartOffset + uint16(rbuf.BytesRemaining())
 		} else {
 			cr.arg3EndOffset = cr.arg3StartOffset + arg3Len
 		}
@@ -240,17 +240,13 @@ func (f *lazyCallReq) HasMoreFragments() bool {
 // in bytes, and hasMore to be true if there are more frames and arg3 has
 // not started.
 func (f *lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
-	return f.arg2EndOffset, f.isArg2Fragmented
+	return int(f.arg2EndOffset), f.isArg2Fragmented
 }
 
 // Arg2StartOffset returns the offset from start of payload to the beginning
 // of Arg2 in bytes.
 func (f *lazyCallReq) Arg2StartOffset() int {
-	return f.arg2StartOffset
-}
-
-func (f *lazyCallReq) transportHeader() []byte {
-	return f.Payload[f.transportHeaderStartOffset:f.transportHeaderEndOffset]
+	return int(f.arg2StartOffset)
 }
 
 func (f *lazyCallReq) arg2() []byte {
@@ -268,11 +264,15 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
 
-	if f.arg2EndOffset > int(f.Header.PayloadSize()) {
+	if f.arg2EndOffset > f.Header.PayloadSize() {
 		return arg2.KeyValIterator{}, errBadArg2Len
 	}
 
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
+}
+
+func (f *lazyCallReq) Arg2Append(key, val []byte) {
+	f.arg2appends = append(f.arg2appends, keyVal{key, val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

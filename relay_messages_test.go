@@ -114,7 +114,9 @@ func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	}
 	payload.WriteUint16(uint16(arg2Len))
 	payload.WriteBytes(p.arg2Buf)
-	payload.WriteUint16(uint16(len(p.arg3Buf)))
+
+	arg3Len := len(p.arg3Buf)
+	payload.WriteUint16(uint16(arg3Len))
 	payload.WriteBytes(p.arg3Buf)
 
 	return f
@@ -307,56 +309,6 @@ func TestLazyCallReqSetTTL(t *testing.T) {
 		cr := crt.req(t)
 		cr.SetTTL(time.Second)
 		assert.Equal(t, time.Second, cr.TTL(), "Failed to write TTL to frame.")
-	})
-}
-
-// TODO(cinchurge): replace with e.g. decodeThriftHeader once we've resolved the import cycle
-func uint16KeyValToMap(tb testing.TB, buffer []byte) map[string]string {
-	rbuf := typed.NewReadBuffer(buffer)
-	nh := int(rbuf.ReadUint16())
-	retMap := make(map[string]string, nh)
-	for i := 0; i < nh; i++ {
-		keyLen := int(rbuf.ReadUint16())
-		key := rbuf.ReadBytes(keyLen)
-		valLen := int(rbuf.ReadUint16())
-		val := rbuf.ReadBytes(valLen)
-		retMap[string(key)] = string(val)
-	}
-	require.NoError(tb, rbuf.Err())
-	return retMap
-}
-
-func TestLazyCallReqContents(t *testing.T) {
-	cr := reqHasAll.reqWithParams(t, testCallReqParams{
-		arg2Buf: thriftarg2test.BuildKVBuffer(map[string]string{
-			"foo": "bar",
-			"baz": "qux",
-		}),
-		arg3Buf: []byte("some arg3 data"),
-	})
-
-	t.Run(".header()", func(t *testing.T) {
-		gotTP := make(transportHeaders)
-		gotTP.read(typed.NewReadBuffer(cr.transportHeader()))
-		assert.Equal(t, transportHeaders{
-			"cn":      "fake-caller",
-			"k1":      "v1",
-			"k222222": "",
-			"k3":      "thisisalonglongkey",
-			"rd":      "fake-delegate",
-			"rk":      "fake-routingkey",
-		}, gotTP)
-	})
-
-	t.Run(".arg2()", func(t *testing.T) {
-		assert.Equal(t, map[string]string{
-			"baz": "qux",
-			"foo": "bar",
-		}, uint16KeyValToMap(t, cr.arg2()))
-	})
-
-	t.Run(".arg3()", func(t *testing.T) {
-		assert.Equal(t, "some arg3 data", string(cr.arg3()))
 	})
 }
 
@@ -596,5 +548,49 @@ func TestLazyErrorCodes(t *testing.T) {
 	withLazyErrorCombinations(func(ec SystemErrCode) {
 		f := ec.fakeErrFrame()
 		assert.Equal(t, ec, f.Code(), "Mismatch between error code and lazy frame's Code() method.")
+	})
+}
+
+// TODO(cinchurge): replace with e.g. decodeThriftHeader once we've resolved the import cycle
+func uint16KeyValToMap(tb testing.TB, buffer []byte) map[string]string {
+	rbuf := typed.NewReadBuffer(buffer)
+	nh := int(rbuf.ReadUint16())
+	retMap := make(map[string]string, nh)
+	for i := 0; i < nh; i++ {
+		keyLen := int(rbuf.ReadUint16())
+		key := rbuf.ReadBytes(keyLen)
+		valLen := int(rbuf.ReadUint16())
+		val := rbuf.ReadBytes(valLen)
+		retMap[string(key)] = string(val)
+	}
+	require.NoError(tb, rbuf.Err())
+	return retMap
+}
+
+func TestLazyCallReqContents(t *testing.T) {
+	cr := reqHasAll.reqWithParams(t, testCallReqParams{
+		arg2Buf: thriftarg2test.BuildKVBuffer(map[string]string{
+			"foo": "bar",
+			"baz": "qux",
+		}),
+		arg3Buf: []byte("some arg3 data"),
+	})
+
+	t.Run("checksum", func(t *testing.T) {
+		assert.Equal(t, ChecksumType(0x3), cr.checksumType)
+		assert.Equal(t, uint16(0x80), cr.checksumTypeOffset)
+	})
+
+	t.Run(".arg2()", func(t *testing.T) {
+		assert.Equal(t, map[string]string{
+			"baz": "qux",
+			"foo": "bar",
+		}, uint16KeyValToMap(t, cr.arg2()))
+	})
+
+	fmt.Println(cr.isArg2Fragmented)
+
+	t.Run(".arg3()", func(t *testing.T) {
+		assert.Equal(t, "some arg3 data", string(cr.arg3()))
 	})
 }
