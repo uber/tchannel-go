@@ -91,11 +91,6 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
-type keyVal struct {
-	key []byte
-	val []byte
-}
-
 type lazyCallReq struct {
 	*Frame
 
