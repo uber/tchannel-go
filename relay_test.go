@@ -554,6 +554,7 @@ func TestRelayConnection(t *testing.T) {
 			RemoteAddr:        getConn(client, true /* outbound */).LocalHostPort,
 			RemoteProcessName: client.PeerInfo().ProcessName,
 			IsOutbound:        false,
+			Context:           context.Background(),
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 
@@ -571,6 +572,7 @@ func TestRelayConnection(t *testing.T) {
 		wantConn = &relay.Conn{
 			RemoteAddr:        connHostPort,
 			RemoteProcessName: listeningC.PeerInfo().ProcessName,
+			Context:           context.Background(),
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 
@@ -597,6 +599,7 @@ func TestRelayConnection(t *testing.T) {
 			RemoteAddr:        connHostPort,
 			RemoteProcessName: listeningHBSvc.PeerInfo().ProcessName,
 			IsOutbound:        true, // outbound connection according to relay.
+			Context:           context.Background(),
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 	})

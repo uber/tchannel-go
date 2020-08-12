@@ -158,6 +158,9 @@ type ConnectionOptions struct {
 	// MaxCloseTime controls how long we allow a connection to complete pending
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
+
+	// ConnContext adds connection specific info to a base context
+	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -273,6 +276,9 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
+	co.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+		return ctx
+	}
 	return co
 }
 
@@ -324,10 +330,6 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 	peerInfo := ch.PeerInfo()
 	timeNow := ch.timeNow().UnixNano()
 
-	if connDirection == inbound && ch.connContext != nil {
-		baseCtx = ch.connContext(baseCtx, conn)
-	}
-
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
@@ -352,7 +354,7 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		healthCheckHistory: newHealthHistory(),
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
-		baseContext:        baseCtx,
+		baseContext:        opts.ConnContext(baseCtx, conn),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {

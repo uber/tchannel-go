@@ -61,7 +61,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 
 	call := new(InboundCall)
 	call.conn = c
-	ctx, cancel := newIncomingContext(call, callReq.TimeToLive)
+	ctx, cancel := newIncomingContext(c.baseContext, call, callReq.TimeToLive)
 
 	mex, err := c.inbound.newExchange(ctx, c.opts.FramePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
 	if err != nil {
