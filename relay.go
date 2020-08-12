@@ -221,6 +221,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 			RemoteAddr:        conn.conn.RemoteAddr().String(),
 			RemoteProcessName: conn.RemotePeerInfo().ProcessName,
 			IsOutbound:        conn.connDirection == outbound,
+			Context:           conn.baseContext,
 		},
 		logger: conn.log,
 	}

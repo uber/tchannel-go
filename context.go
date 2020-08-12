@@ -42,6 +42,7 @@ type tchannelCtxParams struct {
 	options                 *CallOptions
 	retryOptions            *RetryOptions
 	connectTimeout          time.Duration
+	connectBaseContext      context.Context
 }
 
 // IncomingCall exposes properties for incoming calls through the context.

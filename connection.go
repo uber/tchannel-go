@@ -195,6 +195,7 @@ type Connection struct {
 	events           connectionEvents
 	commonStatsTags  map[string]string
 	relay            *Relayer
+	baseContext      context.Context
 
 	// outboundHP is the host:port we used to create this outbound connection.
 	// It may not match remotePeerInfo.HostPort, in which case the connection is
@@ -301,7 +302,7 @@ func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) err
 	return err
 }
 
-func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
+func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
@@ -322,6 +323,10 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 	log = log.WithFields(LogField{"connectionDirection", connDirection})
 	peerInfo := ch.PeerInfo()
 	timeNow := ch.timeNow().UnixNano()
+
+	if connDirection == inbound && ch.connContext != nil {
+		baseCtx = ch.connContext(baseCtx, conn)
+	}
 
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
@@ -347,6 +352,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		healthCheckHistory: newHealthHistory(),
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
+		baseContext:        baseCtx,
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
