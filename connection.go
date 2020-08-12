@@ -276,8 +276,10 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
-	co.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
-		return ctx
+	if co.ConnContext == nil {
+		co.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+			return ctx
+		}
 	}
 	return co
 }
