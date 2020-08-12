@@ -159,7 +159,6 @@ type Channel struct {
 	createdStack        string
 	commonStatsTags     map[string]string
 	connectionOptions   ConnectionOptions
-	connContext         func(ctx context.Context, conn net.Conn) context.Context
 	peers               *PeerList
 	relayHost           RelayHost
 	relayMaxTimeout     time.Duration
