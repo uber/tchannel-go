@@ -69,6 +69,10 @@ type ChannelOpts struct {
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
+
+	// ConnContext runs when a connection is established, which updates
+	// the per-connection base context
+	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // LogVerification contains options to control the log verification.

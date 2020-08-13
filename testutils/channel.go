@@ -54,6 +54,11 @@ func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 		return nil, fmt.Errorf("NewChannel failed: %v", err)
 	}
 
+	connOpts := ch.ConnectionOptions()
+	if opts.ConnContext != nil {
+		connOpts.ConnContext = opts.ConnContext
+	}
+
 	if err := ch.Serve(l); err != nil {
 		return nil, fmt.Errorf("Serve failed: %v", err)
 	}
