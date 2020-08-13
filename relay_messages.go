@@ -121,8 +121,8 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	rbuf.SkipBytes(int(serviceLen))
 
 	// nh:1 (hk~1 hv~1){nh}
-	numHeaders := rbuf.ReadSingleByte()
-	for i := byte(0); i < numHeaders; i++ {
+	numHeaders := int(rbuf.ReadSingleByte())
+	for i := 0; i < numHeaders; i++ {
 		keyLen := int(rbuf.ReadSingleByte())
 		key := rbuf.ReadBytes(keyLen)
 
