@@ -57,6 +57,21 @@ func TestSimple(t *testing.T) {
 	}
 }
 
+func TestSkip(t *testing.T) {
+	buf := make([]byte, 128)
+	for i := 0; i < 128; i++ {
+		buf[i] = byte(i)
+	}
+
+	rbuf := NewReadBuffer(buf)
+	rbuf.SkipBytes(64)
+	gotByte := rbuf.ReadSingleByte()
+	assert.Equal(t, byte(64), gotByte)
+	rbuf.SkipBytes(3)
+	gotByte = rbuf.ReadSingleByte()
+	assert.Equal(t, byte(68), gotByte)
+}
+
 func TestShortBuffer(t *testing.T) {
 	r := NewReadBuffer([]byte{23})
 	assert.EqualValues(t, 0, r.ReadUint16())

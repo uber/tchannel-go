@@ -247,6 +247,7 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
 
+	// TODO(echung): drop this since we already do error checks in the constructor
 	if f.arg2EndOffset > f.Header.PayloadSize() {
 		return arg2.KeyValIterator{}, errBadArg2Len
 	}

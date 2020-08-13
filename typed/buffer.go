@@ -103,7 +103,6 @@ func (r *ReadBuffer) SkipBytes(n int) {
 	}
 
 	r.remaining = r.remaining[n:]
-	return
 }
 
 // ReadString returns a string of size n from the buffer

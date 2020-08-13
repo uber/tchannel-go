@@ -577,14 +577,15 @@ func TestLazyCallReqContents(t *testing.T) {
 	})
 
 	t.Run("checksum", func(t *testing.T) {
-		assert.Equal(t, ChecksumType(0x3), cr.checksumType)
-		assert.Equal(t, uint16(0x80), cr.checksumTypeOffset)
+		assert.Equal(t, ChecksumTypeCrc32C, cr.checksumType, "Got unexpected checksum type")
+		assert.Equal(t, byte(ChecksumTypeCrc32C), cr.Frame.Payload[cr.checksumTypeOffset], "Unexpected value read from checksum offset")
 	})
 
 	t.Run(".arg2()", func(t *testing.T) {
-		assert.Equal(t, map[string]string{
+		wantHeaders := map[string]string{
 			"baz": "qux",
 			"foo": "bar",
-		}, uint16KeyValToMap(t, cr.arg2()))
+		}
+		assert.Equal(t, wantHeaders, uint16KeyValToMap(t, cr.arg2()), "Got unexpected headers")
 	})
 }
