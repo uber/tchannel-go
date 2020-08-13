@@ -69,6 +69,10 @@ type ChannelOpts struct {
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
+
+	// ConnContext runs when a connection is established, which updates
+	// the per-connection base context
+	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // LogVerification contains options to control the log verification.
@@ -267,6 +271,12 @@ func (o *ChannelOpts) SetIdleCheckInterval(d time.Duration) *ChannelOpts {
 // SetDialer sets the dialer used for outbound connections
 func (o *ChannelOpts) SetDialer(f func(context.Context, string, string) (net.Conn, error)) *ChannelOpts {
 	o.ChannelOptions.Dialer = f
+	return o
+}
+
+// SetConnContext sets the connection's ConnContext function
+func (o *ChannelOpts) SetConnContext(f func(context.Context, net.Conn) context.Context) *ChannelOpts {
+	o.ConnContext = f
 	return o
 }
 

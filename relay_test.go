@@ -516,6 +516,26 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 	})
 }
 
+func TestConnContext(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
+	})
+	opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh).SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
+		return context.WithValue(ctx, "foo", "bar")
+	})
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		svr1 := ts.Relay()
+		svr2Opts := testutils.NewOpts().SetServiceName("svc2")
+		svr2 := ts.NewServer(svr2Opts)
+		testutils.RegisterEcho(svr2, nil)
+
+		err := testutils.CallEcho(svr1, ts.HostPort(), "svc2", nil)
+		assert.NoError(t, err, "Echo failed")
+	})
+}
+
 func TestRelayConnection(t *testing.T) {
 	var errTest = errors.New("test")
 	var gotConn *relay.Conn

@@ -63,7 +63,7 @@ func (ch *Channel) outboundHandshake(ctx context.Context, c net.Conn, outboundHP
 	}
 
 	baseCtx := context.Background()
-	if p := getTChannelParams(ctx); p != nil {
+	if p := getTChannelParams(ctx); p != nil && p.connectBaseContext != nil {
 		baseCtx = p.connectBaseContext
 	}
 
