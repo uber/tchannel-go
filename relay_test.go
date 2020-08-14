@@ -516,7 +516,7 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 	})
 }
 
-func TestConnContext(t *testing.T) {
+func TestConnContextInbound(t *testing.T) {
 	rh := relaytest.NewStubRelayHost()
 	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
 		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
@@ -532,6 +532,34 @@ func TestConnContext(t *testing.T) {
 		testutils.RegisterEcho(svr2, nil)
 
 		err := testutils.CallEcho(svr1, ts.HostPort(), "svc2", nil)
+		assert.NoError(t, err, "Echo failed")
+	})
+}
+
+func TestConnContextOutbound(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
+	})
+	opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh)
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		svr1 := ts.Relay()
+		svr2Opts := testutils.NewOpts().SetServiceName("svc2")
+		svr2 := ts.NewServer(svr2Opts)
+		testutils.RegisterEcho(svr2, nil)
+
+		svr3Opts := testutils.NewOpts().SetServiceName("svc3")
+		svr3 := ts.NewServer(svr3Opts)
+		testutils.RegisterEcho(svr3, nil)
+
+		baseCtx := context.WithValue(context.Background(), "foo", "bar")
+		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
+		_, err := svr1.Connect(ctx, svr3.PeerInfo().HostPort)
+		require.NoError(t, err)
+		cancel()
+
+		err = testutils.CallEcho(svr3, ts.HostPort(), "svc2", nil)
 		assert.NoError(t, err, "Echo failed")
 	})
 }
