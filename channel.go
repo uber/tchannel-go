@@ -121,6 +121,10 @@ type ChannelOptions struct {
 	// Dialer is optional factory method which can be used for overriding
 	// outbound connections for things like TLS handshake
 	Dialer func(ctx context.Context, network, hostPort string) (net.Conn, error)
+
+	// ConnContext runs when a connection is established, which updates
+	// the per-connection base context
+	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // ChannelState is the state of a channel.
@@ -311,6 +315,10 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 
 	if opts.RelayHost != nil {
 		opts.RelayHost.SetChannel(ch)
+	}
+
+	if opts.ConnContext != nil {
+		ch.connectionOptions.ConnContext = opts.ConnContext
 	}
 
 	// Start the idle connection timer.

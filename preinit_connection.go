@@ -98,7 +98,7 @@ func (ch *Channel) inboundHandshake(ctx context.Context, c net.Conn, events conn
 		return nil, err
 	}
 
-	return ch.newConnection(context.Background(), c, 0 /* initialID */, "" /* outboundHP */, remotePeer, remotePeerAddress, events), nil
+	return ch.newConnection(ctx, c, 0 /* initialID */, "" /* outboundHP */, remotePeer, remotePeerAddress, events), nil
 }
 
 func (ch *Channel) getInitParams() initParams {
