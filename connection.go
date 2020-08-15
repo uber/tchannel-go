@@ -159,7 +159,8 @@ type ConnectionOptions struct {
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
 
-	// ConnContext adds connection specific info to a base context
+	// ConnContext runs when a connection is established, which updates
+	// the per-connection base context
 	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 

@@ -144,7 +144,7 @@ func (cb *ContextBuilder) SetConnectTimeout(d time.Duration) *ContextBuilder {
 	return cb
 }
 
-// SetConnectBaseContext sets the base context for this connection
+// SetConnectBaseContext sets the base context for any outbound connection created
 func (cb *ContextBuilder) SetConnectBaseContext(ctx context.Context) *ContextBuilder {
 	cb.ConnectBaseContext = ctx
 	return cb
