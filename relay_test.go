@@ -531,7 +531,7 @@ func TestRelayInboundConnContext(t *testing.T) {
 		svr := ts.Server()
 		testutils.RegisterEcho(svr, nil)
 
-		client := testutils.NewClient(t, testutils.NewOpts())
+		client := testutils.NewClient(t, nil)
 		testutils.AssertEcho(t, client, rly.PeerInfo().HostPort, ts.ServiceName())
 	})
 }
