@@ -519,29 +519,27 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 func TestRelayInboundConnContext(t *testing.T) {
 	rh := relaytest.NewStubRelayHost()
 	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
-		// Verify that the relay gets the base context set in ConnContext
+		// Verify that the relay gets the base context set in the server's ConnContext
 		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
 	})
+
 	opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh).SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
 		return context.WithValue(ctx, "foo", "bar")
 	})
-
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		rly := ts.Relay()
-		svrOpts := testutils.NewOpts().SetServiceName("svc").SetConnContext(func(c context.Context, conn net.Conn) context.Context {
-			return context.WithValue(c, "foo", "bar")
-		})
-		svr := ts.NewServer(svrOpts)
+		svr := ts.Server()
 		testutils.RegisterEcho(svr, nil)
 
-		err := testutils.CallEcho(rly, ts.HostPort(), "svc", nil)
-		assert.NoError(t, err, "Echo failed")
+		client := testutils.NewClient(t, testutils.NewOpts())
+		testutils.AssertEcho(t, client, rly.PeerInfo().HostPort, ts.ServiceName())
 	})
 }
 
 func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 	rh := relaytest.NewStubRelayHost()
 	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		// Verify that the relay gets the base context set by the outbound connection to the caller
 		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
 	})
 	opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh)
@@ -551,18 +549,15 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 		callee := ts.Server()
 		testutils.RegisterEcho(callee, nil)
 
-		callerOpts := testutils.NewOpts().SetServiceName("svc3")
-		caller := ts.NewServer(callerOpts)
+		caller := ts.NewServer(testutils.NewOpts())
 		testutils.RegisterEcho(caller, nil)
 
 		baseCtx := context.WithValue(context.Background(), "foo", "bar")
 		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
 		defer cancel()
-		_, err := rly.Connect(ctx, caller.PeerInfo().HostPort)
-		require.NoError(t, err)
 
-		err = testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), nil)
-		assert.NoError(t, err, "Echo failed")
+		require.NoError(t, rly.Ping(ctx, caller.PeerInfo().HostPort))
+		testutils.AssertEcho(t, caller, ts.HostPort(), ts.ServiceName())
 	})
 }
 
