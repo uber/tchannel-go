@@ -532,12 +532,13 @@ func TestRelayInboundConnContext(t *testing.T) {
 			return context.WithValue(c, "foo", "bar")
 		})
 		svr := ts.NewServer(svrOpts)
-		testutils.RegisterFunc(svr, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			// Verify that the context passed into the handler inherits from the base context
-			// set by ConnContext
-			assert.Equal(t, "bar", ctx.Value("foo"), "Value unexpectedly different from base context")
-			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
-		})
+		testutils.RegisterEcho(svr, nil)
+		//testutils.RegisterFunc(svr, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+		//	// Verify that the context passed into the handler inherits from the base context
+		//	// set by ConnContext
+		//	assert.Equal(t, "bar", ctx.Value("foo"), "Value unexpectedly different from base context")
+		//	return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		//})
 
 		err := testutils.CallEcho(rly, ts.HostPort(), "svc", nil)
 		assert.NoError(t, err, "Echo failed")
