@@ -553,8 +553,7 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		rly := ts.Relay()
-		calleeOpts := testutils.NewOpts().SetServiceName("svc2")
-		callee := ts.NewServer(calleeOpts)
+		callee := ts.Server()
 		testutils.RegisterEcho(callee, nil)
 
 		callerOpts := testutils.NewOpts().SetServiceName("svc3")
@@ -567,7 +566,7 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 		_, err := rly.Connect(ctx, caller.PeerInfo().HostPort)
 		require.NoError(t, err)
 
-		err = testutils.CallEcho(caller, ts.HostPort(), "svc2", nil)
+		err = testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), nil)
 		assert.NoError(t, err, "Echo failed")
 	})
 }

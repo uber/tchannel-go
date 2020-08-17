@@ -160,7 +160,8 @@ type ConnectionOptions struct {
 	MaxCloseTime time.Duration
 
 	// ConnContext runs when a connection is established, which updates
-	// the per-connection base context
+	// the per-connection base context. This context is used as the parent context
+	// for incoming calls.
 	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 

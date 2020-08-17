@@ -1439,8 +1439,7 @@ func TestInboundConnContext(t *testing.T) {
 
 		copts := testutils.NewOpts()
 		bob := ts.NewClient(copts)
-		err := testutils.CallEcho(bob, ts.HostPort(), ts.ServiceName(), nil)
-		assert.NoError(t, err, "Echo failed")
+		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
 	})
 }
 
@@ -1460,10 +1459,9 @@ func TestOutboundConnContext(t *testing.T) {
 		baseCtx := context.WithValue(context.Background(), "foo", "bar")
 		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
 		defer cancel()
-		_, err := alice.Connect(ctx, bob.PeerInfo().HostPort)
+		err := alice.Ping(ctx, bob.PeerInfo().HostPort)
 		require.NoError(t, err)
 
-		err = testutils.CallEcho(bob, ts.HostPort(), ts.ServiceName(), nil)
-		assert.NoError(t, err, "Echo failed")
+		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
 	})
 }
