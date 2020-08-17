@@ -1422,3 +1422,46 @@ func TestCustomDialer(t *testing.T) {
 		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
 	})
 }
+
+func TestInboundConnContext(t *testing.T) {
+	opts := testutils.NewOpts().NoRelay().SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
+		return context.WithValue(ctx, "foo", "bar")
+	})
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		alice := ts.Server()
+		testutils.RegisterFunc(alice, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			// Verify that the context passed into the handler inherits from the base context
+			// set by ConnContext
+			assert.Equal(t, "bar", ctx.Value("foo"), "Value unexpectedly different from base context")
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		})
+
+		copts := testutils.NewOpts()
+		bob := ts.NewClient(copts)
+		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
+	})
+}
+
+func TestOutboundConnContext(t *testing.T) {
+	opts := testutils.NewOpts().NoRelay()
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		alice := ts.Server()
+		testutils.RegisterFunc(alice, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			assert.Equal(t, "bar", ctx.Value("foo"), "Base context key unexpectedly absent")
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		})
+
+		bobOpts := testutils.NewOpts().SetServiceName("bob")
+		bob := ts.NewServer(bobOpts)
+		testutils.RegisterEcho(bob, nil)
+
+		baseCtx := context.WithValue(context.Background(), "foo", "bar")
+		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
+		defer cancel()
+		err := alice.Ping(ctx, bob.PeerInfo().HostPort)
+		require.NoError(t, err)
+
+		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
+	})
+}

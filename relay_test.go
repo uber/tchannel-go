@@ -516,6 +516,61 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 	})
 }
 
+func TestRelayInboundConnContext(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		// Verify that the relay gets the base context set in ConnContext
+		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
+	})
+	opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh).SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
+		return context.WithValue(ctx, "foo", "bar")
+	})
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		rly := ts.Relay()
+		svrOpts := testutils.NewOpts().SetServiceName("svc").SetConnContext(func(c context.Context, conn net.Conn) context.Context {
+			return context.WithValue(c, "foo", "bar")
+		})
+		svr := ts.NewServer(svrOpts)
+		testutils.RegisterFunc(svr, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			// Verify that the context passed into the handler inherits from the base context
+			// set by ConnContext
+			assert.Equal(t, "bar", ctx.Value("foo"), "Value unexpectedly different from base context")
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		})
+
+		err := testutils.CallEcho(rly, ts.HostPort(), "svc", nil)
+		assert.NoError(t, err, "Echo failed")
+	})
+}
+
+func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
+	})
+	opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh)
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		rly := ts.Relay()
+		callee := ts.Server()
+		testutils.RegisterEcho(callee, nil)
+
+		callerOpts := testutils.NewOpts().SetServiceName("svc3")
+		caller := ts.NewServer(callerOpts)
+		testutils.RegisterEcho(caller, nil)
+
+		baseCtx := context.WithValue(context.Background(), "foo", "bar")
+		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
+		defer cancel()
+		_, err := rly.Connect(ctx, caller.PeerInfo().HostPort)
+		require.NoError(t, err)
+
+		err = testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), nil)
+		assert.NoError(t, err, "Echo failed")
+	})
+}
+
 func TestRelayConnection(t *testing.T) {
 	var errTest = errors.New("test")
 	var gotConn *relay.Conn
@@ -554,6 +609,7 @@ func TestRelayConnection(t *testing.T) {
 			RemoteAddr:        getConn(client, true /* outbound */).LocalHostPort,
 			RemoteProcessName: client.PeerInfo().ProcessName,
 			IsOutbound:        false,
+			Context:           context.Background(),
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 
@@ -571,6 +627,7 @@ func TestRelayConnection(t *testing.T) {
 		wantConn = &relay.Conn{
 			RemoteAddr:        connHostPort,
 			RemoteProcessName: listeningC.PeerInfo().ProcessName,
+			Context:           context.Background(),
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 
@@ -597,6 +654,7 @@ func TestRelayConnection(t *testing.T) {
 			RemoteAddr:        connHostPort,
 			RemoteProcessName: listeningHBSvc.PeerInfo().ProcessName,
 			IsOutbound:        true, // outbound connection according to relay.
+			Context:           context.Background(),
 		}
 		assert.Equal(t, wantConn, gotConn, "Unexpected remote addr")
 	})

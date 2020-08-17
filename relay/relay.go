@@ -25,6 +25,7 @@
 package relay
 
 import (
+	"context"
 	"time"
 
 	"github.com/uber/tchannel-go/thrift/arg2"
@@ -69,6 +70,10 @@ type Conn struct {
 	// IsOutbound returns whether this connection is an outbound connection
 	// initiated via the relay.
 	IsOutbound bool
+
+	// Context contains connection-specific context which can be accessed via
+	// RelayHost.Start()
+	Context context.Context
 }
 
 // RateLimitDropError is the error that should be returned from

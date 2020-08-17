@@ -56,6 +56,9 @@ type ContextBuilder struct {
 	// ConnectTimeout is the timeout for creating a TChannel connection.
 	ConnectTimeout time.Duration
 
+	// ConnectBaseContext is the base context for all connections
+	ConnectBaseContext context.Context
+
 	// ParentContext to build the new context from. If empty, context.Background() is used.
 	// The new (child) context inherits a number of properties from the parent context:
 	//   - context fields, accessible via `ctx.Value(key)`
@@ -141,6 +144,12 @@ func (cb *ContextBuilder) SetConnectTimeout(d time.Duration) *ContextBuilder {
 	return cb
 }
 
+// SetConnectBaseContext sets the base context for any outbound connection created
+func (cb *ContextBuilder) SetConnectBaseContext(ctx context.Context) *ContextBuilder {
+	cb.ConnectBaseContext = ctx
+	return cb
+}
+
 // HideListeningOnOutbound hides the host:port when creating new outbound
 // connections.
 func (cb *ContextBuilder) HideListeningOnOutbound() *ContextBuilder {
@@ -215,6 +224,7 @@ func (cb *ContextBuilder) Build() (ContextWithHeaders, context.CancelFunc) {
 		connectTimeout:          cb.ConnectTimeout,
 		hideListeningOnOutbound: cb.hideListeningOnOutbound,
 		tracingDisabled:         cb.TracingDisabled,
+		connectBaseContext:      cb.ConnectBaseContext,
 	}
 
 	parent := cb.ParentContext

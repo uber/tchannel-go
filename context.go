@@ -42,6 +42,7 @@ type tchannelCtxParams struct {
 	options                 *CallOptions
 	retryOptions            *RetryOptions
 	connectTimeout          time.Duration
+	connectBaseContext      context.Context
 }
 
 // IncomingCall exposes properties for incoming calls through the context.
@@ -94,8 +95,9 @@ func WrapContextForTest(ctx context.Context, call IncomingCall) context.Context 
 }
 
 // newIncomingContext creates a new context for an incoming call with the given span.
-func newIncomingContext(call IncomingCall, timeout time.Duration) (context.Context, context.CancelFunc) {
+func newIncomingContext(ctx context.Context, call IncomingCall, timeout time.Duration) (context.Context, context.CancelFunc) {
 	return NewContextBuilder(timeout).
+		SetParentContext(ctx).
 		setIncomingCall(call).
 		Build()
 }
