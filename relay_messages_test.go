@@ -45,6 +45,14 @@ const (
 	reqHasAll testCallReq = reqTotalCombinations - 1
 )
 
+var (
+	exampleArg2Map = map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}
+	exampleArg3Data = "some arg3 data"
+)
+
 type testCallReqParams struct {
 	flags           byte
 	hasTChanThrift  bool
@@ -569,11 +577,8 @@ func uint16KeyValToMap(tb testing.TB, buffer []byte) map[string]string {
 
 func TestLazyCallReqContents(t *testing.T) {
 	cr := reqHasAll.reqWithParams(t, testCallReqParams{
-		arg2Buf: thriftarg2test.BuildKVBuffer(map[string]string{
-			"foo": "bar",
-			"baz": "qux",
-		}),
-		arg3Buf: []byte("some arg3 data"),
+		arg2Buf: thriftarg2test.BuildKVBuffer(exampleArg2Map),
+		arg3Buf: []byte(exampleArg3Data),
 	})
 
 	t.Run("checksum", func(t *testing.T) {
@@ -582,15 +587,11 @@ func TestLazyCallReqContents(t *testing.T) {
 	})
 
 	t.Run(".arg2()", func(t *testing.T) {
-		wantHeaders := map[string]string{
-			"baz": "qux",
-			"foo": "bar",
-		}
-		assert.Equal(t, wantHeaders, uint16KeyValToMap(t, cr.arg2()), "Got unexpected headers")
+		assert.Equal(t, exampleArg2Map, uint16KeyValToMap(t, cr.arg2()), "Got unexpected headers")
 	})
 
 	t.Run(".arg3()", func(t *testing.T) {
 		// TODO(echung): switch to assert.Equal once we have more robust test frame generation
-		assert.Contains(t, string(cr.arg3()), "some arg3 data", "Got unexpected headers")
+		assert.Contains(t, string(cr.arg3()), exampleArg3Data, "Got unexpected headers")
 	})
 }

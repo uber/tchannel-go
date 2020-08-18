@@ -237,7 +237,7 @@ func (f *lazyCallReq) arg2() []byte {
 }
 
 func (f *lazyCallReq) arg3() []byte {
-	return f.Payload[f.arg3StartOffset:f.Header.PayloadSize()]
+	return f.SizedPayload()[f.arg3StartOffset:]
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
