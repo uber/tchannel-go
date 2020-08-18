@@ -690,10 +690,10 @@ func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID 
 			return fmt.Errorf("write arg2: %v", err)
 		}
 		for _, kv := range f.arg2appends {
-			if err := writeDataWithSize(arg2Writer, kv.key); err != nil {
+			if err := writeLen16Data(arg2Writer, kv.key); err != nil {
 				return fmt.Errorf("append arg2 key: %v", err)
 			}
-			if err := writeDataWithSize(arg2Writer, kv.val); err != nil {
+			if err := writeLen16Data(arg2Writer, kv.val); err != nil {
 				return fmt.Errorf("append arg2 val: %v", err)
 			}
 		}
@@ -712,21 +712,21 @@ func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID 
 	return nil
 }
 
-func writeUint16(w io.Writer, n uint16) error {
-	var sizeBuf [2]byte
-	binary.BigEndian.PutUint16(sizeBuf[:], n)
-	if _, err := w.Write(sizeBuf[:]); err != nil {
-		return err
-	}
-	return nil
-}
-
-func writeDataWithSize(w io.Writer, b []byte) error {
+func writeLen16Data(w io.Writer, b []byte) error {
 	if err := writeUint16(w, uint16(len(b))); err != nil {
 		return fmt.Errorf("write data length: %v", err)
 	}
 	if _, err := w.Write(b); err != nil {
 		return fmt.Errorf("write data: %v", err)
+	}
+	return nil
+}
+
+func writeUint16(w io.Writer, n uint16) error {
+	var sizeBuf [2]byte
+	binary.BigEndian.PutUint16(sizeBuf[:], n)
+	if _, err := w.Write(sizeBuf[:]); err != nil {
+		return err
 	}
 	return nil
 }
