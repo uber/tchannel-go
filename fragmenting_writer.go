@@ -46,7 +46,7 @@ type writableFragment struct {
 	checksumRef typed.BytesRef
 	checksum    Checksum
 	contents    *typed.WriteBuffer
-	frame       interface{}
+	frame       *Frame
 }
 
 // finish finishes the fragment, updating the final checksum and fragment flags

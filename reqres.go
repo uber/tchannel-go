@@ -141,7 +141,7 @@ func (w *reqResWriter) flushFragment(fragment *writableFragment) error {
 		return w.err
 	}
 
-	frame := fragment.frame.(*Frame)
+	frame := fragment.frame
 	frame.Header.SetPayloadSize(uint16(fragment.contents.BytesWritten()))
 
 	if err := w.mex.checkError(); err != nil {
