@@ -5,6 +5,7 @@ EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examp
 ALL_PKGS := $(shell glide nv)
 PROD_PKGS := . ./http ./hyperbahn ./json ./peers ./pprof ./raw ./relay ./stats ./thrift $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
+COV_PKG ?= ./
 BUILD := ./build
 THRIFT_GEN_RELEASE := ./thrift-gen-release
 THRIFT_GEN_RELEASE_LINUX := $(THRIFT_GEN_RELEASE)/linux-x86_64
@@ -100,7 +101,7 @@ benchmark: clean setup $(BIN)/thrift
 cover_profile: clean setup $(BIN)/thrift
 	@echo Testing packages:
 	mkdir -p $(BUILD)
-	PATH=$(BIN)::$$PATH go test ./ $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
+	PATH=$(BIN)::$$PATH go test $(COV_PKG) $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
 
 cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out

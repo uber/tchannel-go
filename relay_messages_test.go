@@ -45,12 +45,21 @@ const (
 	reqHasAll testCallReq = reqTotalCombinations - 1
 )
 
+var (
+	exampleArg2Map = map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}
+	exampleArg3Data = "some arg3 data"
+)
+
 type testCallReqParams struct {
 	flags           byte
 	hasTChanThrift  bool
 	argScheme       Format
 	arg2Buf         []byte
 	overrideArg2Len int
+	arg3Buf         []byte
 }
 
 func (cr testCallReq) req(tb testing.TB) lazyCallReq {
@@ -113,6 +122,10 @@ func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	}
 	payload.WriteUint16(uint16(arg2Len))
 	payload.WriteBytes(p.arg2Buf)
+
+	arg3Len := len(p.arg3Buf)
+	payload.WriteUint16(uint16(arg3Len))
+	payload.WriteBytes(p.arg3Buf)
 
 	return f
 }
@@ -349,23 +362,44 @@ func TestLazyCallArg2Offset(t *testing.T) {
 	}
 
 	t.Run("no arg3 set", func(t *testing.T) {
-		for _, testHasMore := range []bool{true, false} {
-			t.Run(fmt.Sprintf("hasMore flag is set=%v", testHasMore), func(t *testing.T) {
+		tests := []struct {
+			msg       string
+			hasMore   bool
+			wantError string
+		}{
+			{
+				msg:     "hasMore flag=true",
+				hasMore: true,
+			},
+			{
+				msg:       "hasMore flag=false",
+				wantError: "buffer is too small",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf(tt.msg), func(t *testing.T) {
 				withLazyCallReqCombinations(func(crt testCallReq) {
 					// For each CallReq, we first get the remaining space left, and
 					// fill up the remaining space with arg2.
 					crNoArg2 := crt.req(t)
 					arg2Size := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
 					var flags byte
-					if testHasMore {
+					if tt.hasMore {
 						flags |= hasMoreFragmentsFlag
 					}
-					cr := crt.reqWithParams(t, testCallReqParams{
+					f := crt.frameWithParams(testCallReqParams{
 						flags:   flags,
 						arg2Buf: make([]byte, arg2Size),
 					})
+					cr, err := newLazyCallReq(f)
+					if tt.wantError != "" {
+						require.EqualError(t, err, tt.wantError)
+						return
+					}
+					require.NoError(t, err)
 					endOffset, hasMore := cr.Arg2EndOffset()
-					assert.Equal(t, hasMore, testHasMore)
+					assert.Equal(t, hasMore, tt.hasMore)
 					assert.EqualValues(t, crNoArg2.Header.PayloadSize(), endOffset)
 				})
 			})
@@ -522,5 +556,42 @@ func TestLazyErrorCodes(t *testing.T) {
 	withLazyErrorCombinations(func(ec SystemErrCode) {
 		f := ec.fakeErrFrame()
 		assert.Equal(t, ec, f.Code(), "Mismatch between error code and lazy frame's Code() method.")
+	})
+}
+
+// TODO(cinchurge): replace with e.g. decodeThriftHeader once we've resolved the import cycle
+func uint16KeyValToMap(tb testing.TB, buffer []byte) map[string]string {
+	rbuf := typed.NewReadBuffer(buffer)
+	nh := int(rbuf.ReadUint16())
+	retMap := make(map[string]string, nh)
+	for i := 0; i < nh; i++ {
+		keyLen := int(rbuf.ReadUint16())
+		key := rbuf.ReadBytes(keyLen)
+		valLen := int(rbuf.ReadUint16())
+		val := rbuf.ReadBytes(valLen)
+		retMap[string(key)] = string(val)
+	}
+	require.NoError(tb, rbuf.Err())
+	return retMap
+}
+
+func TestLazyCallReqContents(t *testing.T) {
+	cr := reqHasAll.reqWithParams(t, testCallReqParams{
+		arg2Buf: thriftarg2test.BuildKVBuffer(exampleArg2Map),
+		arg3Buf: []byte(exampleArg3Data),
+	})
+
+	t.Run("checksum", func(t *testing.T) {
+		assert.Equal(t, ChecksumTypeCrc32C, cr.checksumType, "Got unexpected checksum type")
+		assert.Equal(t, byte(ChecksumTypeCrc32C), cr.Frame.Payload[cr.checksumTypeOffset], "Unexpected value read from checksum offset")
+	})
+
+	t.Run(".arg2()", func(t *testing.T) {
+		assert.Equal(t, exampleArg2Map, uint16KeyValToMap(t, cr.arg2()), "Got unexpected headers")
+	})
+
+	t.Run(".arg3()", func(t *testing.T) {
+		// TODO(echung): switch to assert.Equal once we have more robust test frame generation
+		assert.Contains(t, string(cr.arg3()), exampleArg3Data, "Got unexpected headers")
 	})
 }

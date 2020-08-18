@@ -158,6 +158,11 @@ type ConnectionOptions struct {
 	// MaxCloseTime controls how long we allow a connection to complete pending
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
+
+	// ConnContext runs when a connection is established, which updates
+	// the per-connection base context. This context is used as the parent context
+	// for incoming calls.
+	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -195,6 +200,7 @@ type Connection struct {
 	events           connectionEvents
 	commonStatsTags  map[string]string
 	relay            *Relayer
+	baseContext      context.Context
 
 	// outboundHP is the host:port we used to create this outbound connection.
 	// It may not match remotePeerInfo.HostPort, in which case the connection is
@@ -272,6 +278,11 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
+	if co.ConnContext == nil {
+		co.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+			return ctx
+		}
+	}
 	return co
 }
 
@@ -301,7 +312,7 @@ func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) err
 	return err
 }
 
-func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
+func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
 	connID := _nextConnID.Inc()
@@ -347,6 +358,7 @@ func (ch *Channel) newConnection(conn net.Conn, initialID uint32, outboundHP str
 		healthCheckHistory: newHealthHistory(),
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
+		baseContext:        opts.ConnContext(baseCtx, conn),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {

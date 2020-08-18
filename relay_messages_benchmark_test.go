@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkCallReqFrame(b *testing.B) {
@@ -37,7 +35,9 @@ func BenchmarkCallReqFrame(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cr, err := newLazyCallReq(f)
-		require.NoError(b, err)
+		if err != nil {
+			b.Fatal("Unexpected error")
+		}
 
 		// Multiple calls due to peer selection, stats, etc.
 		for i := 0; i < 3; i++ {
