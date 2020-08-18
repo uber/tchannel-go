@@ -22,6 +22,7 @@ func BuildKVBuffer(kv map[string]string) []byte {
 	return buf[:wb.BytesWritten()]
 }
 
+// ReadKVBuffer converts an arg2 buffer to a string map
 func ReadKVBuffer(b []byte) map[string]string {
 	rbuf := typed.NewReadBuffer(b)
 	nh := rbuf.ReadUint16()
