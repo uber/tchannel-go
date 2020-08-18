@@ -588,4 +588,9 @@ func TestLazyCallReqContents(t *testing.T) {
 		}
 		assert.Equal(t, wantHeaders, uint16KeyValToMap(t, cr.arg2()), "Got unexpected headers")
 	})
+
+	t.Run(".arg3()", func(t *testing.T) {
+		// TODO(echung): switch to assert.Equal once we have more robust test frame generation
+		assert.Contains(t, string(cr.arg3()), "some arg3 data", "Got unexpected headers")
+	})
 }

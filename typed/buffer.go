@@ -92,6 +92,7 @@ func (r *ReadBuffer) ReadBytes(n int) []byte {
 	return b
 }
 
+// SkipBytes skips the next n bytes from the buffer
 func (r *ReadBuffer) SkipBytes(n int) {
 	if r.err != nil {
 		return
