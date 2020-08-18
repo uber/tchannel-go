@@ -676,30 +676,8 @@ func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID 
 		return fmt.Errorf("get arg2 writer: %v", err)
 	}
 
-	arg2 := f.arg2()
-	if len(arg2) == 0 {
-		if _, err := arg2Writer.Write(nil); err != nil {
-			return fmt.Errorf("write empty arg2")
-		}
-	} else {
-		nh := binary.BigEndian.Uint16(arg2[:2]) + uint16(len(f.arg2appends))
-		if err := writeUint16(arg2Writer, nh); err != nil {
-			return fmt.Errorf("write arg2 nh: %v", err)
-		}
-		if _, err := arg2Writer.Write(arg2[2:]); err != nil {
-			return fmt.Errorf("write arg2: %v", err)
-		}
-		for _, kv := range f.arg2appends {
-			if err := writeLen16Data(arg2Writer, kv.key); err != nil {
-				return fmt.Errorf("append arg2 key: %v", err)
-			}
-			if err := writeLen16Data(arg2Writer, kv.val); err != nil {
-				return fmt.Errorf("append arg2 val: %v", err)
-			}
-		}
-	}
-	if err := arg2Writer.Close(); err != nil {
-		return fmt.Errorf("close arg2 writer")
+	if err := writeArg2WithAppends(arg2Writer, f.arg2(), f.arg2appends); err != nil {
+		return fmt.Errorf("write arg2: %v", err)
 	}
 	if f.isArg2Fragmented {
 		return nil
@@ -707,6 +685,35 @@ func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID 
 
 	if err := NewArgWriter(fragWriter.ArgWriter(true)).Write(f.arg3()); err != nil {
 		return errors.New("arg3 write failed")
+	}
+
+	return nil
+}
+
+func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []keyVal) (err error) {
+	defer w.Close()
+
+	var nh uint16
+	if len(arg2) > 0 {
+		nh = binary.BigEndian.Uint16(arg2[:2])
+	}
+	nh += uint16(len(appends))
+	if err := writeUint16(w, nh); err != nil {
+		return fmt.Errorf("write arg2 nh: %v", err)
+	}
+
+	if len(arg2) > 0 {
+		if _, err := w.Write(arg2[2:]); err != nil {
+			return fmt.Errorf("write arg2: %v", err)
+		}
+	}
+	for _, kv := range appends {
+		if err := writeLen16Data(w, kv.key); err != nil {
+			return fmt.Errorf("append arg2 key: %v", err)
+		}
+		if err := writeLen16Data(w, kv.val); err != nil {
+			return fmt.Errorf("append arg2 val: %v", err)
+		}
 	}
 
 	return nil

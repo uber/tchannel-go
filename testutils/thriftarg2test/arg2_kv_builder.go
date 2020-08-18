@@ -21,3 +21,15 @@ func BuildKVBuffer(kv map[string]string) []byte {
 	}
 	return buf[:wb.BytesWritten()]
 }
+
+func ReadKVBuffer(b []byte) map[string]string {
+	rbuf := typed.NewReadBuffer(b)
+	nh := rbuf.ReadUint16()
+	retMap := make(map[string]string, nh)
+	for i := uint16(0); i < nh; i++ {
+		key := rbuf.ReadLen16String()
+		val := rbuf.ReadLen16String()
+		retMap[key] = val
+	}
+	return retMap
+}
