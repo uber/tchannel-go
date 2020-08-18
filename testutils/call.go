@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
@@ -97,6 +96,10 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 	return &FakeIncomingCall{CallerNameF: callerName}
 }
 
+type KeyVal struct {
+	Key, Val []byte
+}
+
 // FakeCallFrame is a stub implementation of the CallFrame interface.
 type FakeCallFrame struct {
 	tb   testing.TB
@@ -109,6 +112,8 @@ type FakeCallFrame struct {
 
 	arg2KVIterator    arg2.KeyValIterator
 	hasArg2KVIterator error
+
+	Arg2Appends []KeyVal
 }
 
 var _ relay.CallFrame = &FakeCallFrame{}
@@ -163,18 +168,7 @@ func (f *FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
 
 // Arg2Append appends a key value pair to Arg2
 func (f *FakeCallFrame) Arg2Append(key, val []byte) {
-	kv := make(map[string]string)
-	for iter, err := f.Arg2Iterator(); err == nil; iter, err = iter.Next() {
-		kv[string(iter.Key())] = string(iter.Value())
-	}
-	kv[string(key)] = string(val)
-
-	iterator, err := arg2.NewKeyValIterator(thriftarg2test.BuildKVBuffer(kv))
-	require.NoError(f.tb, err)
-
-	f.arg2KVIterator = iterator
-
-	return
+	f.Arg2Appends = append(f.Arg2Appends, KeyVal{key, val})
 }
 
 // CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with

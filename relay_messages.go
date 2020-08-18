@@ -104,7 +104,7 @@ type lazyCallReq struct {
 	arg3StartOffset                uint16
 
 	caller, method, delegate, key, as []byte
-	arg2appends                       []keyVal
+	arg2Appends                       []keyVal
 	checksumType                      ChecksumType
 	isArg2Fragmented                  bool
 }
@@ -255,7 +255,7 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 }
 
 func (f *lazyCallReq) Arg2Append(key, val []byte) {
-	f.arg2appends = append(f.arg2appends, keyVal{key, val})
+	f.arg2Appends = append(f.arg2Appends, keyVal{key, val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

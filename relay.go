@@ -56,6 +56,7 @@ var (
 	errFrameNotSent          = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
 	errBadRelayHost          = NewSystemError(ErrCodeDeclined, "bad relay host implementation")
 	errUnknownID             = errors.New("non-callReq for inactive ID")
+	errNoNHInArg2            = errors.New("no nh in arg2")
 )
 
 type relayItem struct {
@@ -474,7 +475,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 	f.Header.ID = destinationID
 	call.SentBytes(f.Frame.Header.FrameSize())
 
-	if len(f.arg2appends) > 0 {
+	if len(f.arg2Appends) > 0 {
 		return r.fragmentingSend(f, relayToDest, origID)
 	}
 
@@ -665,8 +666,9 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
 }
 
 func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID uint32) error {
+	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
-		NullLogger, r.newFragmentSender(relayToDest.destination, f, origID),
+		r.logger, r.newFragmentSender(relayToDest.destination, f, origID),
 		f.checksumType.New(),
 	)
 	defer r.conn.opts.FramePool.Release(f.Frame)
@@ -676,7 +678,7 @@ func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID 
 		return fmt.Errorf("get arg2 writer: %v", err)
 	}
 
-	if err := writeArg2WithAppends(arg2Writer, f.arg2(), f.arg2appends); err != nil {
+	if err := writeArg2WithAppends(arg2Writer, f.arg2(), f.arg2Appends); err != nil {
 		return fmt.Errorf("write arg2: %v", err)
 	}
 	if f.isArg2Fragmented {
@@ -693,16 +695,16 @@ func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID 
 func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []keyVal) (err error) {
 	defer w.Close()
 
-	var nh uint16
-	if len(arg2) > 0 {
-		nh = binary.BigEndian.Uint16(arg2[:2])
+	if len(arg2) < 2 {
+		return errNoNHInArg2
 	}
-	nh += uint16(len(appends))
+
+	nh := binary.BigEndian.Uint16(arg2[:2]) + uint16(len(appends))
 	if err := writeUint16(w, nh); err != nil {
 		return fmt.Errorf("write arg2 nh: %v", err)
 	}
 
-	if len(arg2) > 0 {
+	if len(arg2) > 2 {
 		if _, err := w.Write(arg2[2:]); err != nil {
 			return fmt.Errorf("write arg2: %v", err)
 		}

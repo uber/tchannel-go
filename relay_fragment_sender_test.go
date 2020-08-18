@@ -115,12 +115,50 @@ func (w *dummyArgWriter) Close() error {
 
 func TestWriteArg2WithAppends(t *testing.T) {
 	tests := []struct {
-		msg       string
-		writer    *dummyArgWriter
-		arg2Map   map[string]string
-		appends   []keyVal
-		wantError string
+		msg             string
+		writer          *dummyArgWriter
+		arg2Map         map[string]string
+		overrideArg2Buf []byte
+		appends         []keyVal
+		wantError       string
 	}{
+		{
+			msg: "write success without appends",
+			writer: &dummyArgWriter{
+				writeError: []string{
+					"", // nh
+					"", // arg2
+				},
+			},
+			arg2Map: exampleArg2Map,
+		},
+		{
+			msg: "write success with appends",
+			writer: &dummyArgWriter{
+				writeError: []string{
+					"", // nh
+					"", // arg2
+					"", // key length
+					"", // key
+					"", // val length
+					"", // val
+				},
+			},
+			arg2Map: exampleArg2Map,
+			appends: []keyVal{
+				{[]byte("foo"), []byte("bar")},
+			},
+		},
+		{
+			msg: "no nh in data",
+			writer: &dummyArgWriter{
+				writeError: []string{
+					"something went wrong", // nh
+				},
+			},
+			overrideArg2Buf: []byte{0},
+			wantError:       "no nh in arg2",
+		},
 		{
 			msg: "write nh fails",
 			writer: &dummyArgWriter{
@@ -128,6 +166,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 					"something went wrong", // nh
 				},
 			},
+			arg2Map:   exampleArg2Map,
 			wantError: "write arg2 nh: something went wrong",
 		},
 		{
@@ -212,7 +251,9 @@ func TestWriteArg2WithAppends(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
 			var arg2buf []byte
-			if len(tt.arg2Map) > 0 {
+			if tt.overrideArg2Buf != nil {
+				arg2buf = tt.overrideArg2Buf
+			} else if len(tt.arg2Map) > 0 {
 				arg2buf = thriftarg2test.BuildKVBuffer(tt.arg2Map)
 			}
 			err := writeArg2WithAppends(tt.writer, arg2buf, tt.appends)
