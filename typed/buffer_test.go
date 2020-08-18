@@ -22,6 +22,7 @@ package typed
 
 import (
 	"bytes"
+	"errors"
 	"math"
 	"testing"
 
@@ -54,6 +55,60 @@ func TestSimple(t *testing.T) {
 		w.WriteUint32(0xBEEFDEAD)
 		r.Wrap(buf)
 		assert.Equal(t, uint32(0xBEEFDEAD), r.ReadUint32())
+	}
+}
+
+func TestReadBufferSkipBytes(t *testing.T) {
+	exampleBytes := make([]byte, 128)
+	tests := []struct {
+		msg           string
+		buf           *ReadBuffer
+		nSkip         int
+		wantError     string
+		wantRead      int
+		wantRemaining int
+	}{
+		{
+			msg:           "successful skip",
+			buf:           NewReadBuffer(exampleBytes),
+			nSkip:         64,
+			wantRead:      64,
+			wantRemaining: 64,
+		},
+		{
+			msg: "error occurred prior to skip",
+			buf: func() *ReadBuffer {
+				buf := NewReadBuffer(exampleBytes)
+				buf.err = errors.New("something bad happened")
+				return buf
+			}(),
+			nSkip:         64,
+			wantError:     "something bad happened",
+			wantRead:      0,
+			wantRemaining: 128,
+		},
+		{
+			msg: "not enough bytes remain",
+			buf: func() *ReadBuffer {
+				buf := NewReadBuffer(exampleBytes)
+				return buf
+			}(),
+			nSkip:         256,
+			wantError:     "buffer is too small",
+			wantRead:      0,
+			wantRemaining: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			tt.buf.SkipBytes(tt.nSkip)
+			if tt.wantError != "" {
+				require.EqualError(t, tt.buf.Err(), tt.wantError, "Didn't get exepcted error")
+			}
+			assert.Equal(t, tt.wantRead, tt.buf.BytesRead())
+			assert.Equal(t, tt.wantRemaining, tt.buf.BytesRemaining())
+		})
 	}
 }
 

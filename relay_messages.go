@@ -96,8 +96,12 @@ type lazyCallReq struct {
 
 	caller, method, delegate, key, as []byte
 
-	arg2StartOffset, arg2EndOffset int
-	isArg2Fragmented               bool
+	checksumTypeOffset             uint16
+	arg2StartOffset, arg2EndOffset uint16
+	arg3StartOffset                uint16
+
+	checksumType     ChecksumType
+	isArg2Fragmented bool
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -109,16 +113,19 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 
 	cr := &lazyCallReq{Frame: f}
 
-	serviceLen := f.Payload[_serviceLenIndex]
+	rbuf := typed.NewReadBuffer(f.SizedPayload())
+	rbuf.SkipBytes(_serviceLenIndex)
+
+	// service~1
+	serviceLen := rbuf.ReadSingleByte()
+	rbuf.SkipBytes(int(serviceLen))
+
 	// nh:1 (hk~1 hv~1){nh}
-	headerStartIndex := _serviceLenIndex + 1 /* length byte */ + serviceLen
-
-	rbuf := typed.NewReadBuffer(f.SizedPayload()[headerStartIndex:])
-
 	numHeaders := int(rbuf.ReadSingleByte())
 	for i := 0; i < numHeaders; i++ {
 		keyLen := int(rbuf.ReadSingleByte())
 		key := rbuf.ReadBytes(keyLen)
+
 		valLen := int(rbuf.ReadSingleByte())
 		val := rbuf.ReadBytes(valLen)
 
@@ -134,22 +141,28 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	}
 
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
-	checkSumType := ChecksumType(rbuf.ReadSingleByte())
-	rbuf.ReadBytes(checkSumType.ChecksumSize())
+	cr.checksumTypeOffset = uint16(rbuf.BytesRead())
+	cr.checksumType = ChecksumType(rbuf.ReadSingleByte())
+	rbuf.SkipBytes(cr.checksumType.ChecksumSize())
 
 	// arg1~2
 	arg1Len := int(rbuf.ReadUint16())
 	cr.method = rbuf.ReadBytes(arg1Len)
 
 	// arg2~2
-	arg2Len := int(rbuf.ReadUint16())
-	cr.arg2StartOffset = int(headerStartIndex) + rbuf.BytesRead()
-	// TODO(echung): deprecate the arg2 offsets and store just the arg2 slice instead
-	// Read past arg2
-	rbuf.ReadBytes(arg2Len)
+	arg2Len := rbuf.ReadUint16()
+	cr.arg2StartOffset = uint16(rbuf.BytesRead())
 	cr.arg2EndOffset = cr.arg2StartOffset + arg2Len
+
 	// arg2 is fragmented if we don't see arg3 in this frame.
+	rbuf.SkipBytes(int(arg2Len))
 	cr.isArg2Fragmented = rbuf.BytesRemaining() == 0 && cr.HasMoreFragments()
+
+	if !cr.isArg2Fragmented {
+		// arg3~2
+		rbuf.SkipBytes(2)
+		cr.arg3StartOffset = uint16(rbuf.BytesRead())
+	}
 
 	if rbuf.Err() != nil {
 		return nil, rbuf.Err()
@@ -210,13 +223,21 @@ func (f *lazyCallReq) HasMoreFragments() bool {
 // in bytes, and hasMore to be true if there are more frames and arg3 has
 // not started.
 func (f *lazyCallReq) Arg2EndOffset() (_ int, hasMore bool) {
-	return f.arg2EndOffset, f.isArg2Fragmented
+	return int(f.arg2EndOffset), f.isArg2Fragmented
 }
 
 // Arg2StartOffset returns the offset from start of payload to the beginning
 // of Arg2 in bytes.
 func (f *lazyCallReq) Arg2StartOffset() int {
-	return f.arg2StartOffset
+	return int(f.arg2StartOffset)
+}
+
+func (f *lazyCallReq) arg2() []byte {
+	return f.Payload[f.arg2StartOffset:f.arg2EndOffset]
+}
+
+func (f *lazyCallReq) arg3() []byte {
+	return f.SizedPayload()[f.arg3StartOffset:]
 }
 
 // Arg2Iterator returns the iterator for reading Arg2 key value pair
@@ -225,11 +246,6 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
-
-	if f.arg2EndOffset > int(f.Header.PayloadSize()) {
-		return arg2.KeyValIterator{}, errBadArg2Len
-	}
-
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }
 
