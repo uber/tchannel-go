@@ -1426,8 +1426,6 @@ func TestRelayModifyArg2(t *testing.T) {
 			msg:         "no change",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {},
 		},
-		// Example test showing how modifications should be tested.
-		// TODO(echung): Enable and add more modification tests.
 		{
 			msg: "add small key/value",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
