@@ -29,7 +29,7 @@ func TestRelayFragmentSender(t *testing.T) {
 
 	tests := []struct {
 		msg                            string
-		frame                          interface{}
+		frame                          *Frame
 		wantError                      string
 		sent                           bool
 		failure                        string
@@ -39,11 +39,6 @@ func TestRelayFragmentSender(t *testing.T) {
 			msg:   "successful send",
 			frame: f,
 			sent:  true,
-		},
-		{
-			msg:       "unexpected frame type",
-			frame:     "some other object",
-			wantError: "got unexpected frame type: %!t(string=some other object)",
 		},
 		{
 			msg:     "send falure",
@@ -167,7 +162,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 				},
 			},
 			arg2Map:   exampleArg2Map,
-			wantError: "write arg2 nh: something went wrong",
+			wantError: "something went wrong",
 		},
 		{
 			msg: "write arg2 fails",
@@ -178,7 +173,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 				},
 			},
 			arg2Map:   exampleArg2Map,
-			wantError: "write arg2: something went wrong",
+			wantError: "something went wrong",
 		},
 		{
 			msg: "write append key length fails",
@@ -193,7 +188,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			appends: []keyVal{
 				{[]byte("foo"), []byte("bar")},
 			},
-			wantError: "append arg2 key: write data length: something went wrong",
+			wantError: "something went wrong",
 		},
 		{
 			msg: "write append key fails",
@@ -209,7 +204,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			appends: []keyVal{
 				{[]byte("foo"), []byte("bar")},
 			},
-			wantError: "append arg2 key: write data: something went wrong",
+			wantError: "something went wrong",
 		},
 		{
 			msg: "write append val length fails",
@@ -226,7 +221,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			appends: []keyVal{
 				{[]byte("foo"), []byte("bar")},
 			},
-			wantError: "append arg2 val: write data length: something went wrong",
+			wantError: "something went wrong",
 		},
 		{
 			msg: "write append val fails",
@@ -244,7 +239,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			appends: []keyVal{
 				{[]byte("foo"), []byte("bar")},
 			},
-			wantError: "append arg2 val: write data: something went wrong",
+			wantError: "something went wrong",
 		},
 	}
 

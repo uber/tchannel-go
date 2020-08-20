@@ -699,45 +699,25 @@ func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []keyVal) (err 
 		return errNoNHInArg2
 	}
 
+	writer := typed.NewWriter(w)
+
+	// nh:2 is the first two bytes of arg2, which should always be present
 	nh := binary.BigEndian.Uint16(arg2[:2]) + uint16(len(appends))
-	if err := writeUint16(w, nh); err != nil {
-		return fmt.Errorf("write arg2 nh: %v", err)
-	}
+	writer.WriteUint16(nh)
 
+	// arg2[2:] is the existing sequence of key/val pairs, which we can just copy
+	// over verbatim
 	if len(arg2) > 2 {
-		if _, err := w.Write(arg2[2:]); err != nil {
-			return fmt.Errorf("write arg2: %v", err)
-		}
+		writer.WriteBytes(arg2[2:])
 	}
+
+	// append new key/val pairs to end of arg2
 	for _, kv := range appends {
-		if err := writeLen16Data(w, kv.key); err != nil {
-			return fmt.Errorf("append arg2 key: %v", err)
-		}
-		if err := writeLen16Data(w, kv.val); err != nil {
-			return fmt.Errorf("append arg2 val: %v", err)
-		}
+		writer.WriteLen16Bytes(kv.key)
+		writer.WriteLen16Bytes(kv.val)
 	}
 
-	return nil
-}
-
-func writeLen16Data(w io.Writer, b []byte) error {
-	if err := writeUint16(w, uint16(len(b))); err != nil {
-		return fmt.Errorf("write data length: %v", err)
-	}
-	if _, err := w.Write(b); err != nil {
-		return fmt.Errorf("write data: %v", err)
-	}
-	return nil
-}
-
-func writeUint16(w io.Writer, n uint16) error {
-	var sizeBuf [2]byte
-	binary.BigEndian.PutUint16(sizeBuf[:], n)
-	if _, err := w.Write(sizeBuf[:]); err != nil {
-		return err
-	}
-	return nil
+	return writer.Err()
 }
 
 func frameTypeFor(f *Frame) frameType {
@@ -844,13 +824,8 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 }
 
 func (rfs *relayFragmentSender) flushFragment(f *writableFragment) error {
-	frame, ok := f.frame.(*Frame)
-	if !ok {
-		return fmt.Errorf("got unexpected frame type: %t", f.frame)
-	}
-	frame.Header.SetPayloadSize(uint16(f.contents.BytesWritten()))
-
-	sent, failure := rfs.frameReceiver.Receive(frame, requestFrame)
+	f.frame.Header.SetPayloadSize(uint16(f.contents.BytesWritten()))
+	sent, failure := rfs.frameReceiver.Receive(f.frame, requestFrame)
 	if !sent {
 		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure)
 		return nil
