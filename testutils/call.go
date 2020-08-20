@@ -96,6 +96,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 	return &FakeIncomingCall{CallerNameF: callerName}
 }
 
+// KeyVal is a pair of keyword and values which can be appended to arg2
 type KeyVal struct {
 	Key, Val []byte
 }
