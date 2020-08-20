@@ -122,8 +122,6 @@ func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	}
 	payload.WriteUint16(uint16(arg2Len))
 	payload.WriteBytes(p.arg2Buf)
-	payload.WriteUint16(uint16(len(p.arg3Buf)))
-	payload.WriteBytes(p.arg3Buf)
 
 	arg3Len := len(p.arg3Buf)
 	payload.WriteUint16(uint16(arg3Len))

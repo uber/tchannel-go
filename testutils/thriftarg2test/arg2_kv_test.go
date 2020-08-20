@@ -24,3 +24,21 @@ func TestBuildKVBuffer(t *testing.T) {
 	}
 	assert.Equal(t, kv, gotKV)
 }
+
+func TestReadKVBuffer(t *testing.T) {
+	kvMap := map[string]string{
+		"key":  "valval",
+		"key2": "val",
+	}
+
+	var buffer [128]byte
+	wbuf := typed.NewWriteBuffer(buffer[:])
+	wbuf.WriteUint16(uint16(len(kvMap))) // nh
+
+	// the order doesn't matter here since we're comparing maps
+	for k, v := range kvMap {
+		wbuf.WriteLen16String(k)
+		wbuf.WriteLen16String(v)
+	}
+	assert.Equal(t, kvMap, ReadKVBuffer(buffer[:wbuf.BytesWritten()]))
+}
