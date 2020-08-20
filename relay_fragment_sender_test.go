@@ -41,10 +41,10 @@ func TestRelayFragmentSender(t *testing.T) {
 			sent:  true,
 		},
 		{
-			msg:     "send falure",
-			frame:   f,
-			sent:    false,
-			failure: "something bad happened",
+			msg:                            "send falure",
+			frame:                          f,
+			sent:                           false,
+			failure:                        "something bad happened",
 			wantFailureRelayItemFuncCalled: true,
 		},
 	}
@@ -168,7 +168,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write arg2 fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
+					"",                     // write nh
 					"something went wrong", // write arg2
 				},
 			},
@@ -179,8 +179,8 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append key length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
+					"",                     // write nh
+					"",                     // write arg2
 					"something went wrong", // write key length
 				},
 			},
@@ -194,9 +194,9 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append key fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
-					"", // write key length
+					"",                     // write nh
+					"",                     // write arg2
+					"",                     // write key length
 					"something went wrong", // write key
 				},
 			},
@@ -210,10 +210,10 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append val length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
-					"", // write key length
-					"", // write key
+					"",                     // write nh
+					"",                     // write arg2
+					"",                     // write key length
+					"",                     // write key
 					"something went wrong", // write val length
 				},
 			},
@@ -227,11 +227,11 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append val fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
-					"", // write key length
-					"", // write key
-					"", // write val length
+					"",                     // write nh
+					"",                     // write arg2
+					"",                     // write key length
+					"",                     // write key
+					"",                     // write val length
 					"something went wrong", // write val
 				},
 			},
