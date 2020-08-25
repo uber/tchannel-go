@@ -52,11 +52,12 @@ const (
 )
 
 var (
-	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
-	errFrameNotSent          = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
-	errBadRelayHost          = NewSystemError(ErrCodeDeclined, "bad relay host implementation")
-	errUnknownID             = errors.New("non-callReq for inactive ID")
-	errNoNHInArg2            = errors.New("no nh in arg2")
+	errRelayMethodFragmented    = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
+	errFrameNotSent             = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
+	errBadRelayHost             = NewSystemError(ErrCodeDeclined, "bad relay host implementation")
+	errUnknownID                = errors.New("non-callReq for inactive ID")
+	errNoNHInArg2               = errors.New("no nh in arg2")
+	errFragmentedArg2WithAppend = errors.New("fragmented arg2 not supported for appends")
 )
 
 type relayItem struct {
@@ -674,16 +675,17 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 	)
 	defer r.conn.opts.FramePool.Release(f.Frame)
 
-	arg2Writer, err := fragWriter.ArgWriter(f.isArg2Fragmented)
+	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
+		return errFragmentedArg2WithAppend
+	}
+
+	arg2Writer, err := fragWriter.ArgWriter(false)
 	if err != nil {
 		return fmt.Errorf("get arg2 writer: %v", err)
 	}
 
 	if err := writeArg2WithAppends(arg2Writer, f.arg2(), f.arg2Appends); err != nil {
 		return fmt.Errorf("write arg2: %v", err)
-	}
-	if f.isArg2Fragmented {
-		return nil
 	}
 
 	if err := NewArgWriter(fragWriter.ArgWriter(true)).Write(f.arg3()); err != nil {
