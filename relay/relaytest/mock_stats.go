@@ -56,7 +56,7 @@ func (m *MockCallStats) Failed(reason string) {
 }
 
 // SentBytes tracks the sent bytes.
-func (m *MockCallStats) SentBytes(size uint16) {
+func (m *MockCallStats) SentBytes(size uint) {
 	m.sent += int(size)
 }
 

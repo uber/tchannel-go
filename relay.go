@@ -91,7 +91,7 @@ func newRelayItems(logger Logger) *relayItems {
 
 func (ri *relayItem) reportRelayBytes(fType frameType, frameSize uint16) {
 	if fType == requestFrame {
-		ri.call.SentBytes(frameSize)
+		ri.call.SentBytes(uint(frameSize))
 	} else {
 		ri.call.ReceivedBytes(frameSize)
 	}
@@ -473,11 +473,12 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
 	f.Header.ID = destinationID
-	call.SentBytes(f.Frame.Header.FrameSize())
 
 	if len(f.arg2Appends) > 0 {
-		return r.fragmentingSend(f, relayToDest, origID)
+		return r.fragmentingSend(call, f, relayToDest, origID)
 	}
+
+	call.SentBytes(uint(f.Frame.Header.FrameSize()))
 
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
@@ -665,10 +666,10 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
 	return true
 }
 
-func (r *Relayer) fragmentingSend(f *lazyCallReq, relayToDest relayItem, origID uint32) error {
+func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32) error {
 	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
-		r.logger, r.newFragmentSender(relayToDest.destination, f, origID),
+		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call),
 		f.checksumType.New(),
 	)
 	defer r.conn.opts.FramePool.Release(f.Frame)
@@ -768,9 +769,11 @@ type relayFragmentSender struct {
 	failRelayItemFunc  func(items *relayItems, id uint32, failure string)
 	outboundRelayItems *relayItems
 	origID             uint32
+	sentBytes          uint
+	call               RelayCall
 }
 
-func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32) *relayFragmentSender {
+func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, call RelayCall) *relayFragmentSender {
 	return &relayFragmentSender{
 		callReq:            cr,
 		framePool:          r.conn.opts.FramePool,
@@ -778,6 +781,7 @@ func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, ori
 		failRelayItemFunc:  r.failRelayItem,
 		outboundRelayItems: r.outbound,
 		origID:             origID,
+		call:               call,
 	}
 }
 
@@ -825,6 +829,8 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 
 func (rfs *relayFragmentSender) flushFragment(f *writableFragment) error {
 	f.frame.Header.SetPayloadSize(uint16(f.contents.BytesWritten()))
+	rfs.sentBytes += uint(f.frame.Header.FrameSize())
+
 	sent, failure := rfs.frameReceiver.Receive(f.frame, requestFrame)
 	if !sent {
 		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure)
@@ -833,4 +839,6 @@ func (rfs *relayFragmentSender) flushFragment(f *writableFragment) error {
 	return nil
 }
 
-func (rfs *relayFragmentSender) doneSending() {}
+func (rfs *relayFragmentSender) doneSending() {
+	rfs.call.SentBytes(rfs.sentBytes)
+}
