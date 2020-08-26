@@ -18,6 +18,7 @@ import (
 type benchmarkParams struct {
 	servers, clients int
 	requestSize      int
+	appends          []testutils.KeyVal
 }
 
 type workerControl struct {
@@ -93,7 +94,7 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 		services["svc"] = append(services["svc]"], servers[i].HostPort())
 	}
 
-	relay, err := benchmark.NewRealRelay(services)
+	relay, err := benchmark.NewRealRelay(services, p.appends)
 	require.NoError(b, err, "Failed to create relay")
 	defer relay.Close()
 
@@ -174,7 +175,7 @@ func BenchmarkRelayNoLatencies(b *testing.B) {
 	defer server.Close()
 
 	hostMapping := map[string][]string{"svc": {server.HostPort()}}
-	relay, err := benchmark.NewRealRelay(hostMapping)
+	relay, err := benchmark.NewRealRelay(hostMapping, nil)
 	require.NoError(b, err, "NewRealRelay failed")
 	defer relay.Close()
 
@@ -221,5 +222,13 @@ func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 	p.requestSize = 4 * 1024
 	p.clients = 5
 	p.servers = 2
+	benchmarkRelay(b, p)
+}
+
+func BenchmarkRelayWithAppends(b *testing.B) {
+	p := defaultParams()
+	p.appends = []testutils.KeyVal{
+		{[]byte("foo"), []byte("bar")},
+	}
 	benchmarkRelay(b, p)
 }

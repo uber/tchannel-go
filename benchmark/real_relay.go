@@ -24,6 +24,8 @@ import (
 	"errors"
 	"os"
 
+	"github.com/uber/tchannel-go/testutils"
+
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/relay/relaytest"
@@ -32,14 +34,19 @@ import (
 )
 
 type fixedHosts struct {
-	hosts map[string][]string
-	pickI atomic.Int32
+	hosts   map[string][]string
+	appends []testutils.KeyVal
+	pickI   atomic.Int32
 }
 
 func (fh *fixedHosts) Get(cf relay.CallFrame, _ *relay.Conn) (string, error) {
 	peers := fh.hosts[string(cf.Service())]
 	if len(peers) == 0 {
 		return "", errors.New("no peers")
+	}
+
+	for _, kv := range fh.appends {
+		cf.Arg2Append(kv.Key, kv.Val)
 	}
 
 	pickI := int(fh.pickI.Inc()-1) % len(peers)
@@ -52,8 +59,11 @@ type realRelay struct {
 }
 
 // NewRealRelay creates a TChannel relay.
-func NewRealRelay(services map[string][]string) (Relay, error) {
-	hosts := &fixedHosts{hosts: services}
+func NewRealRelay(services map[string][]string, appends []testutils.KeyVal) (Relay, error) {
+	hosts := &fixedHosts{
+		hosts:   services,
+		appends: appends,
+	}
 	ch, err := tchannel.NewChannel("relay", &tchannel.ChannelOptions{
 		RelayHost: relaytest.HostFunc(hosts.Get),
 		Logger:    tchannel.NewLevelLogger(tchannel.NewLogger(os.Stderr), tchannel.LogLevelWarn),
