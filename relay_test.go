@@ -1353,7 +1353,7 @@ func TestRelayTransferredBytes(t *testing.T) {
 
 		// Add a handler that always returns an empty payload.
 		testutils.RegisterFunc(s2, "swallow", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			fmt.Println("swallog got", len(args.Arg2)+len(args.Arg3))
+			fmt.Println("swallow got", len(args.Arg2)+len(args.Arg3))
 			return &raw.Res{}, nil
 		})
 
@@ -1401,6 +1401,72 @@ func TestRelayTransferredBytes(t *testing.T) {
 			assert.InDelta(t, 64*kb, statsMap["s2->s1::echo.received-bytes"], protocolBuffer, "Unexpected sent bytes")
 		})
 	})
+}
+
+func TestRelayAppendArg2SentBytes(t *testing.T) {
+	tests := []struct {
+		msg           string
+		appends       map[string]string
+		arg3          []byte
+		wantSentBytes int
+	}{
+		{
+			msg:           "without appends",
+			arg3:          []byte("hello, world"),
+			wantSentBytes: 127,
+		},
+		{
+			msg:           "with appends",
+			arg3:          []byte("hello, world"),
+			appends:       map[string]string{"baz": "qux"},
+			wantSentBytes: 137, // 127 + 2 bytes size + 3 bytes key + 2 byts size + 3 bytes val = 137
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			rh := relaytest.NewStubRelayHost()
+			rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+				for k, v := range tt.appends {
+					f.Arg2Append([]byte(k), []byte(v))
+				}
+			})
+
+			opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh)
+			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+				rly := ts.Relay()
+				svr := ts.Server()
+				testutils.RegisterEcho(svr, nil)
+
+				client := testutils.NewClient(t, nil)
+				ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
+				defer cancel()
+
+				sendArgs := &raw.Args{
+					Arg2: thriftarg2test.BuildKVBuffer(map[string]string{"foo": "bar"}),
+					Arg3: tt.arg3,
+				}
+
+				recvArg2, recvArg3, _, err := raw.Call(ctx, client, rly.PeerInfo().HostPort, ts.ServiceName(), "echo", sendArgs.Arg2, sendArgs.Arg3)
+				if !assert.NoError(t, err, "Call from %v (%v) to %v (%v) failed", client.ServiceName(), client.PeerInfo().HostPort, ts.ServiceName(), rly.PeerInfo().HostPort) {
+					return
+				}
+
+				wantArg2 := map[string]string{
+					"foo": "bar",
+				}
+				for k, v := range tt.appends {
+					wantArg2[k] = v
+				}
+
+				assert.Equal(t, wantArg2, thriftarg2test.ReadKVBuffer(recvArg2), "Arg2 mismatch")
+				assert.Equal(t, recvArg3, []byte("hello, world"), "Arg3 mismatch")
+
+				sentBytes := rh.Stats().Map()["testService-client->testService::echo.sent-bytes"]
+				assert.Equal(t, tt.wantSentBytes, sentBytes)
+			})
+		})
+	}
 }
 
 func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
