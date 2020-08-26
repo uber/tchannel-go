@@ -687,6 +687,9 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 	if err := writeArg2WithAppends(arg2Writer, f.arg2(), f.arg2Appends); err != nil {
 		return fmt.Errorf("write arg2: %v", err)
 	}
+	if err := arg2Writer.Close(); err != nil {
+		return fmt.Errorf("close arg2 writer: %v", err)
+	}
 
 	if err := NewArgWriter(fragWriter.ArgWriter(true)).Write(f.arg3()); err != nil {
 		return errors.New("arg3 write failed")
@@ -696,8 +699,6 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 }
 
 func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []keyVal) (err error) {
-	defer w.Close()
-
 	if len(arg2) < 2 {
 		return errNoNHInArg2
 	}
