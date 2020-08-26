@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 )
 
 type dummyWriter struct {
 	calls        int
 	bytesWritten []byte
-	retError     []string
+	// retError is a map of call ids to error strings
+	retError map[int]string
 }
 
 func (w *dummyWriter) Write(b []byte) (int, error) {
@@ -36,7 +36,7 @@ func TestWriter(t *testing.T) {
 		{
 			msg: "successful write",
 			w: &dummyWriter{
-				retError: []string{"", "", "", ""},
+				retError: map[int]string{},
 			},
 			wantBytesWritten: []byte{0, 1, 2, 0, 3, 4, 5, 6},
 		},
@@ -49,14 +49,14 @@ func TestWriter(t *testing.T) {
 		{
 			msg: "error writing length",
 			w: &dummyWriter{
-				retError: []string{"something went wrong", ""},
+				retError: map[int]string{0: "something went wrong"},
 			},
 			wantError: "something went wrong",
 		},
 		{
 			msg: "error writing data",
 			w: &dummyWriter{
-				retError: []string{"", "something went wrong"},
+				retError: map[int]string{1: "something went wrong"},
 			},
 			wantError: "something went wrong",
 		},
@@ -64,12 +64,16 @@ func TestWriter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
+			writes := func(w *Writer) {
+				w.WriteUint16(1)
+				w.WriteBytes([]byte{2})
+				w.WriteLen16Bytes([]byte{4, 5, 6})
+			}
+
 			w := NewWriter(tt.w)
 			w.err = tt.previousError
+			writes(w)
 
-			w.WriteUint16(1)
-			w.WriteBytes([]byte{2})
-			w.WriteLen16Bytes([]byte{4, 5, 6})
 			if tt.wantError != "" {
 				require.EqualError(t, w.Err(), tt.wantError, "Got unexpected error")
 				return
