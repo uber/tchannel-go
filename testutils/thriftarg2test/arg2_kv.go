@@ -1,6 +1,13 @@
 package thriftarg2test
 
-import "github.com/uber/tchannel-go/typed"
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/uber/tchannel-go/typed"
+)
 
 // BuildKVBuffer builds an thrift Arg2 KV buffer.
 func BuildKVBuffer(kv map[string]string) []byte {
@@ -23,7 +30,7 @@ func BuildKVBuffer(kv map[string]string) []byte {
 }
 
 // ReadKVBuffer converts an arg2 buffer to a string map
-func ReadKVBuffer(b []byte) map[string]string {
+func ReadKVBuffer(b []byte) (map[string]string, error) {
 	rbuf := typed.NewReadBuffer(b)
 	nh := rbuf.ReadUint16()
 	retMap := make(map[string]string, nh)
@@ -32,5 +39,14 @@ func ReadKVBuffer(b []byte) map[string]string {
 		val := rbuf.ReadLen16String()
 		retMap[key] = val
 	}
-	return retMap
+	if rbuf.BytesRemaining() > 0 {
+		return nil, errors.New("kv buffer wasn't fully consumed")
+	}
+	return retMap, nil
+}
+
+func MustReadKVBuffer(tb testing.TB, b []byte) map[string]string {
+	m, err := ReadKVBuffer(b)
+	require.NoError(tb, err)
+	return m
 }

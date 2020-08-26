@@ -1459,7 +1459,7 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 					wantArg2[k] = v
 				}
 
-				assert.Equal(t, wantArg2, thriftarg2test.ReadKVBuffer(recvArg2), "Arg2 mismatch")
+				assert.Equal(t, wantArg2, thriftarg2test.MustReadKVBuffer(t, recvArg2), "Arg2 mismatch")
 				assert.Equal(t, recvArg3, []byte("hello, world"), "Arg3 mismatch")
 
 				sentBytes := rh.Stats().Map()["testService-client->testService::echo.sent-bytes"]

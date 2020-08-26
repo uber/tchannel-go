@@ -266,7 +266,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 				finalMap[string(kv.key)] = string(kv.val)
 			}
 			require.NoError(t, err)
-			assert.Equal(t, finalMap, thriftarg2test.ReadKVBuffer(tt.writer.bytesWritten))
+			assert.Equal(t, finalMap, thriftarg2test.MustReadKVBuffer(t, tt.writer.bytesWritten))
 		})
 	}
 }

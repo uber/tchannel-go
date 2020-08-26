@@ -40,5 +40,5 @@ func TestReadKVBuffer(t *testing.T) {
 		wbuf.WriteLen16String(k)
 		wbuf.WriteLen16String(v)
 	}
-	assert.Equal(t, kvMap, ReadKVBuffer(buffer[:wbuf.BytesWritten()]))
+	assert.Equal(t, kvMap, MustReadKVBuffer(t, buffer[:wbuf.BytesWritten()]))
 }
