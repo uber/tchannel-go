@@ -47,7 +47,7 @@ type RelayCall interface {
 	SentBytes(uint)
 
 	// ReceivedBytes is called when a frame is received from the destination peer.
-	ReceivedBytes(uint16)
+	ReceivedBytes(uint)
 
 	// The call succeeded (possibly after retrying).
 	Succeeded()

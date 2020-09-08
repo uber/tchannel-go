@@ -24,12 +24,10 @@ import (
 	"errors"
 	"os"
 
-	"github.com/uber/tchannel-go/testutils"
-
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/relay/relaytest"
-
+	"github.com/uber/tchannel-go/testutils"
 	"go.uber.org/atomic"
 )
 

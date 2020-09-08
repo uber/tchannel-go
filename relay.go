@@ -480,7 +480,6 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 	}
 
 	call.SentBytes(uint(f.Frame.Header.FrameSize()))
-
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure)
@@ -679,7 +678,7 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 		return errFragmentedArg2WithAppend
 	}
 
-	arg2Writer, err := fragWriter.ArgWriter(false)
+	arg2Writer, err := fragWriter.ArgWriter(false /* last */)
 	if err != nil {
 		return fmt.Errorf("get arg2 writer: %v", err)
 	}
@@ -691,7 +690,7 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 		return fmt.Errorf("close arg2 writer: %v", err)
 	}
 
-	if err := NewArgWriter(fragWriter.ArgWriter(true)).Write(f.arg3()); err != nil {
+	if err := NewArgWriter(fragWriter.ArgWriter(true /* last */)).Write(f.arg3()); err != nil {
 		return errors.New("arg3 write failed")
 	}
 
