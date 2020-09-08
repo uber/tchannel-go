@@ -94,7 +94,7 @@ func (ri *relayItem) reportRelayBytes(fType frameType, frameSize uint16) {
 	if fType == requestFrame {
 		ri.call.SentBytes(uint(frameSize))
 	} else {
-		ri.call.ReceivedBytes(frameSize)
+		ri.call.ReceivedBytes(uint(frameSize))
 	}
 }
 

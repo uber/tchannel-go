@@ -61,7 +61,7 @@ func (m *MockCallStats) SentBytes(size uint) {
 }
 
 // ReceivedBytes tracks the received bytes.
-func (m *MockCallStats) ReceivedBytes(size uint16) {
+func (m *MockCallStats) ReceivedBytes(size uint) {
 	m.received += int(size)
 }
 
