@@ -1448,9 +1448,7 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 				}
 
 				recvArg2, recvArg3, _, err := raw.Call(ctx, client, rly.PeerInfo().HostPort, ts.ServiceName(), "echo", sendArgs.Arg2, sendArgs.Arg3)
-				if !assert.NoError(t, err, "Call from %v (%v) to %v (%v) failed", client.ServiceName(), client.PeerInfo().HostPort, ts.ServiceName(), rly.PeerInfo().HostPort) {
-					return
-				}
+				require.NoError(t, err, "Call from %v (%v) to %v (%v) failed", client.ServiceName(), client.PeerInfo().HostPort, ts.ServiceName(), rly.PeerInfo().HostPort)
 
 				wantArg2 := map[string]string{
 					"foo": "bar",

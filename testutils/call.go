@@ -98,7 +98,7 @@ func NewIncomingCall(callerName string) tchannel.IncomingCall {
 
 // KeyVal is a pair of keyword and values which can be appended to arg2
 type KeyVal struct {
-	Key, Val []byte
+	Key, Val string
 }
 
 // FakeCallFrame is a stub implementation of the CallFrame interface.
@@ -169,7 +169,7 @@ func (f *FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
 
 // Arg2Append appends a key value pair to Arg2
 func (f *FakeCallFrame) Arg2Append(key, val []byte) {
-	f.Arg2Appends = append(f.Arg2Appends, KeyVal{key, val})
+	f.Arg2Appends = append(f.Arg2Appends, KeyVal{string(key), string(val)})
 }
 
 // CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with

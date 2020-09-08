@@ -44,7 +44,7 @@ func (fh *fixedHosts) Get(cf relay.CallFrame, _ *relay.Conn) (string, error) {
 	}
 
 	for _, kv := range fh.appends {
-		cf.Arg2Append(kv.Key, kv.Val)
+		cf.Arg2Append([]byte(kv.Key), []byte(kv.Val))
 	}
 
 	pickI := int(fh.pickI.Inc()-1) % len(peers)

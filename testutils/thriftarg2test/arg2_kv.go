@@ -1,7 +1,7 @@
 package thriftarg2test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,7 @@ func ReadKVBuffer(b []byte) (map[string]string, error) {
 		retMap[key] = val
 	}
 	if rbuf.BytesRemaining() > 0 {
-		return nil, errors.New("kv buffer wasn't fully consumed")
+		return nil, fmt.Errorf("kv buffer wasn't fully consumed (%d bytes remaining)", rbuf.BytesRemaining())
 	}
 	return retMap, nil
 }

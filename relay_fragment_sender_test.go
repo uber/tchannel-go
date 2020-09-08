@@ -4,10 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/uber/tchannel-go/testutils/thriftarg2test"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/typed"
 )
 

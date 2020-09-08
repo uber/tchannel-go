@@ -228,7 +228,7 @@ func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 func BenchmarkRelayWithAppends(b *testing.B) {
 	p := defaultParams()
 	p.appends = []testutils.KeyVal{
-		{[]byte("foo"), []byte("bar")},
+		{"foo", "bar"},
 	}
 	benchmarkRelay(b, p)
 }
