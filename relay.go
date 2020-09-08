@@ -775,16 +775,18 @@ type relayFragmentSender struct {
 	call               RelayCall
 }
 
+var fragmentSenderPool = sync.Pool{New: func() interface{} { return &relayFragmentSender{} }}
+
 func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, call RelayCall) *relayFragmentSender {
-	return &relayFragmentSender{
-		callReq:            cr,
-		framePool:          r.conn.opts.FramePool,
-		frameReceiver:      dstRelay,
-		failRelayItemFunc:  r.failRelayItem,
-		outboundRelayItems: r.outbound,
-		origID:             origID,
-		call:               call,
-	}
+	fs := fragmentSenderPool.Get().(*relayFragmentSender)
+	fs.callReq = cr
+	fs.framePool = r.conn.opts.FramePool
+	fs.frameReceiver = dstRelay
+	fs.failRelayItemFunc = r.failRelayItem
+	fs.outboundRelayItems = r.outbound
+	fs.origID = origID
+	fs.call = call
+	return fs
 }
 
 func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
@@ -843,4 +845,5 @@ func (rfs *relayFragmentSender) flushFragment(f *writableFragment) error {
 
 func (rfs *relayFragmentSender) doneSending() {
 	rfs.call.SentBytes(rfs.sentBytes)
+	fragmentSenderPool.Put(rfs)
 }

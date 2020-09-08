@@ -232,3 +232,8 @@ func BenchmarkRelayWithAppends(b *testing.B) {
 	}
 	benchmarkRelay(b, p)
 }
+
+func BenchmarkRelayWithoutAppends(b *testing.B) {
+	p := defaultParams()
+	benchmarkRelay(b, p)
+}
