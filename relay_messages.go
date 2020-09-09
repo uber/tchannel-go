@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/uber/tchannel-go/relay"
+
 	"github.com/uber/tchannel-go/thrift/arg2"
 	"github.com/uber/tchannel-go/typed"
 )
@@ -91,11 +93,6 @@ func (cr lazyCallRes) OK() bool {
 	return cr.Payload[_resCodeIndex] == _resCodeOK
 }
 
-type keyVal struct {
-	key []byte
-	val []byte
-}
-
 type lazyCallReq struct {
 	*Frame
 
@@ -104,7 +101,7 @@ type lazyCallReq struct {
 	arg3StartOffset                uint16
 
 	caller, method, delegate, key, as []byte
-	arg2Appends                       []keyVal
+	arg2Appends                       []relay.KeyVal
 	checksumType                      ChecksumType
 	isArg2Fragmented                  bool
 }
@@ -254,8 +251,8 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }
 
-func (f *lazyCallReq) Arg2Append(key, val []byte) {
-	f.arg2Appends = append(f.arg2Appends, keyVal{key, val})
+func (f *lazyCallReq) Arg2Append(keyVals []relay.KeyVal) {
+	f.arg2Appends = keyVals
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

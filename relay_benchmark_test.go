@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uber/tchannel-go/relay"
+
 	. "github.com/uber/tchannel-go"
 
 	"github.com/uber/tchannel-go/benchmark"
@@ -18,7 +20,7 @@ import (
 type benchmarkParams struct {
 	servers, clients int
 	requestSize      int
-	appends          []testutils.KeyVal
+	appends          []relay.KeyVal
 }
 
 type workerControl struct {
@@ -227,9 +229,10 @@ func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 
 func BenchmarkRelayWithAppends(b *testing.B) {
 	p := defaultParams()
-	p.appends = []testutils.KeyVal{
-		{"foo", "bar"},
+	p.appends = []relay.KeyVal{
+		{Key: []byte("foo"), Val: []byte("bar")},
 	}
+	b.ResetTimer()
 	benchmarkRelay(b, p)
 }
 

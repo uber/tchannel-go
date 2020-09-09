@@ -697,7 +697,7 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 	return nil
 }
 
-func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []keyVal) (err error) {
+func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []relay.KeyVal) (err error) {
 	if len(arg2) < 2 {
 		return errNoNHInArg2
 	}
@@ -714,10 +714,17 @@ func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []keyVal) (err 
 		writer.WriteBytes(arg2[2:])
 	}
 
+	var sizeBuf [2]byte
+
 	// append new key/val pairs to end of arg2
 	for _, kv := range appends {
-		writer.WriteLen16Bytes(kv.key)
-		writer.WriteLen16Bytes(kv.val)
+		binary.BigEndian.PutUint16(sizeBuf[:], uint16(len(kv.Key)))
+		writer.WriteBytes(sizeBuf[:])
+		writer.WriteBytes(kv.Key)
+
+		binary.BigEndian.PutUint16(sizeBuf[:], uint16(len(kv.Val)))
+		writer.WriteBytes(sizeBuf[:])
+		writer.WriteBytes(kv.Val)
 	}
 
 	return writer.Err()
@@ -822,20 +829,23 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 		checksum.Add(rfs.callReq.method)
 	}
 
-	return &writableFragment{
-		flagsRef:    flagsRef,
-		checksumRef: checksumRef,
-		checksum:    checksum,
-		contents:    contents,
-		frame:       frame,
-	}, contents.Err()
+	wf := writableFragmentPool.Get().(*writableFragment)
+	wf.flagsRef = flagsRef
+	wf.checksumRef = checksumRef
+	wf.checksum = checksum
+	wf.contents = contents
+	wf.frame = frame
+
+	return wf, contents.Err()
 }
 
-func (rfs *relayFragmentSender) flushFragment(f *writableFragment) error {
-	f.frame.Header.SetPayloadSize(uint16(f.contents.BytesWritten()))
-	rfs.sentBytes += uint(f.frame.Header.FrameSize())
+func (rfs *relayFragmentSender) flushFragment(wf *writableFragment) error {
+	defer writableFragmentPool.Put(wf)
 
-	sent, failure := rfs.frameReceiver.Receive(f.frame, requestFrame)
+	wf.frame.Header.SetPayloadSize(uint16(wf.contents.BytesWritten()))
+	rfs.sentBytes += uint(wf.frame.Header.FrameSize())
+
+	sent, failure := rfs.frameReceiver.Receive(wf.frame, requestFrame)
 	if !sent {
 		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure)
 		return nil

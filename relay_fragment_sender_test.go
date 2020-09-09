@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/typed"
 )
@@ -40,10 +41,10 @@ func TestRelayFragmentSender(t *testing.T) {
 			sent:  true,
 		},
 		{
-			msg:     "send falure",
-			frame:   f,
-			sent:    false,
-			failure: "something bad happened",
+			msg:                            "send falure",
+			frame:                          f,
+			sent:                           false,
+			failure:                        "something bad happened",
 			wantFailureRelayItemFuncCalled: true,
 		},
 	}
@@ -113,7 +114,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 		writer          *dummyArgWriter
 		arg2Map         map[string]string
 		overrideArg2Buf []byte
-		appends         []keyVal
+		appends         []relay.KeyVal
 		wantError       string
 	}{
 		{
@@ -139,8 +140,8 @@ func TestWriteArg2WithAppends(t *testing.T) {
 				},
 			},
 			arg2Map: exampleArg2Map,
-			appends: []keyVal{
-				{[]byte("foo"), []byte("bar")},
+			appends: []relay.KeyVal{
+				{Key: []byte("foo"), Val: []byte("bar")},
 			},
 		},
 		{
@@ -167,7 +168,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write arg2 fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
+					"",                     // write nh
 					"something went wrong", // write arg2
 				},
 			},
@@ -178,14 +179,14 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append key length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
+					"",                     // write nh
+					"",                     // write arg2
 					"something went wrong", // write key length
 				},
 			},
 			arg2Map: exampleArg2Map,
-			appends: []keyVal{
-				{[]byte("foo"), []byte("bar")},
+			appends: []relay.KeyVal{
+				{Key: []byte("foo"), Val: []byte("bar")},
 			},
 			wantError: "something went wrong",
 		},
@@ -193,15 +194,15 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append key fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
-					"", // write key length
+					"",                     // write nh
+					"",                     // write arg2
+					"",                     // write key length
 					"something went wrong", // write key
 				},
 			},
 			arg2Map: exampleArg2Map,
-			appends: []keyVal{
-				{[]byte("foo"), []byte("bar")},
+			appends: []relay.KeyVal{
+				{Key: []byte("foo"), Val: []byte("bar")},
 			},
 			wantError: "something went wrong",
 		},
@@ -209,16 +210,16 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append val length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
-					"", // write key length
-					"", // write key
+					"",                     // write nh
+					"",                     // write arg2
+					"",                     // write key length
+					"",                     // write key
 					"something went wrong", // write val length
 				},
 			},
 			arg2Map: exampleArg2Map,
-			appends: []keyVal{
-				{[]byte("foo"), []byte("bar")},
+			appends: []relay.KeyVal{
+				{Key: []byte("foo"), Val: []byte("bar")},
 			},
 			wantError: "something went wrong",
 		},
@@ -226,17 +227,17 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append val fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"", // write nh
-					"", // write arg2
-					"", // write key length
-					"", // write key
-					"", // write val length
+					"",                     // write nh
+					"",                     // write arg2
+					"",                     // write key length
+					"",                     // write key
+					"",                     // write val length
 					"something went wrong", // write val
 				},
 			},
 			arg2Map: exampleArg2Map,
-			appends: []keyVal{
-				{[]byte("foo"), []byte("bar")},
+			appends: []relay.KeyVal{
+				{Key: []byte("foo"), Val: []byte("bar")},
 			},
 			wantError: "something went wrong",
 		},
@@ -262,7 +263,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 				finalMap[k] = v
 			}
 			for _, kv := range tt.appends {
-				finalMap[string(kv.key)] = string(kv.val)
+				finalMap[string(kv.Key)] = string(kv.Val)
 			}
 			require.NoError(t, err)
 			assert.Equal(t, finalMap, thriftarg2test.MustReadKVBuffer(t, tt.writer.bytesWritten))

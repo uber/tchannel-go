@@ -27,13 +27,12 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/relay/relaytest"
-	"github.com/uber/tchannel-go/testutils"
 	"go.uber.org/atomic"
 )
 
 type fixedHosts struct {
 	hosts   map[string][]string
-	appends []testutils.KeyVal
+	appends []relay.KeyVal
 	pickI   atomic.Int32
 }
 
@@ -43,9 +42,7 @@ func (fh *fixedHosts) Get(cf relay.CallFrame, _ *relay.Conn) (string, error) {
 		return "", errors.New("no peers")
 	}
 
-	for _, kv := range fh.appends {
-		cf.Arg2Append([]byte(kv.Key), []byte(kv.Val))
-	}
+	cf.Arg2Append(fh.appends)
 
 	pickI := int(fh.pickI.Inc()-1) % len(peers)
 	return peers[pickI], nil
@@ -57,7 +54,7 @@ type realRelay struct {
 }
 
 // NewRealRelay creates a TChannel relay.
-func NewRealRelay(services map[string][]string, appends []testutils.KeyVal) (Relay, error) {
+func NewRealRelay(services map[string][]string, appends []relay.KeyVal) (Relay, error) {
 	hosts := &fixedHosts{
 		hosts:   services,
 		appends: appends,

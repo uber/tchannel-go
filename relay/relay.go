@@ -31,6 +31,12 @@ import (
 	"github.com/uber/tchannel-go/thrift/arg2"
 )
 
+// KeyVal is a key, val pair in arg2
+type KeyVal struct {
+	Key []byte
+	Val []byte
+}
+
 // CallFrame is an interface that abstracts access to the call req frame.
 type CallFrame interface {
 	// TTL is the TTL of the underlying frame
@@ -58,7 +64,7 @@ type CallFrame interface {
 	// io.EOF.
 	Arg2Iterator() (arg2.KeyValIterator, error)
 	// Arg2Append appends a key/val pair to arg2
-	Arg2Append(key, val []byte)
+	Arg2Append(keyVals []KeyVal)
 }
 
 // Conn contains information about the underlying connection.

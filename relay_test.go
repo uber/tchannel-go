@@ -1427,9 +1427,11 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 		t.Run(tt.msg, func(t *testing.T) {
 			rh := relaytest.NewStubRelayHost()
 			rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+				appends := make([]relay.KeyVal, 0, len(tt.appends))
 				for k, v := range tt.appends {
-					f.Arg2Append([]byte(k), []byte(v))
+					appends = append(appends, relay.KeyVal{Key: []byte(k), Val: []byte(v)})
 				}
+				f.Arg2Append(appends)
 			})
 
 			opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh)
@@ -1493,7 +1495,7 @@ func TestRelayModifyArg2(t *testing.T) {
 		{
 			msg: "add small key/value",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-				cf.Arg2Append([]byte("key"), []byte("value"))
+				cf.Arg2Append([]relay.KeyVal{{Key: []byte("key"), Val: []byte("value")}})
 			},
 			modifyArg2: func(m map[string]string) map[string]string {
 				m["key"] = "value"
@@ -1503,7 +1505,7 @@ func TestRelayModifyArg2(t *testing.T) {
 		{
 			msg: "add large key/value",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-				cf.Arg2Append([]byte(largeKey), []byte(largeVal))
+				cf.Arg2Append([]relay.KeyVal{{Key: []byte(largeKey), Val: []byte(largeVal)}})
 			},
 			modifyArg2: func(m map[string]string) map[string]string {
 				m[largeKey] = largeVal
