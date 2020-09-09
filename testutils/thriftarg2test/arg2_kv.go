@@ -45,6 +45,7 @@ func ReadKVBuffer(b []byte) (map[string]string, error) {
 	return retMap, nil
 }
 
+// MustReadKVBuffer calls require.NoError on the error returned by ReadKVBuffer
 func MustReadKVBuffer(tb testing.TB, b []byte) map[string]string {
 	m, err := ReadKVBuffer(b)
 	require.NoError(tb, err)
