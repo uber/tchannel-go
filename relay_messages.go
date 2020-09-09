@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/uber/tchannel-go/relay"
-
 	"github.com/uber/tchannel-go/thrift/arg2"
 	"github.com/uber/tchannel-go/typed"
 )
