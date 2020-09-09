@@ -792,6 +792,7 @@ func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, ori
 	fs.failRelayItemFunc = r.failRelayItem
 	fs.outboundRelayItems = r.outbound
 	fs.origID = origID
+	fs.sentBytes = 0
 	fs.call = call
 	return fs
 }
