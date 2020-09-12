@@ -475,6 +475,9 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 
 	f.Header.ID = destinationID
 
+	// If we have appends the size of the frame to be relayed will change, potentially going
+	// over the max frame size. Do a fragmenting send which is slightly more expensive but
+	// will handle fragmenting if it is needed.
 	if len(f.arg2Appends) > 0 {
 		return r.fragmentingSend(call, f, relayToDest, origID)
 	}
@@ -782,19 +785,18 @@ type relayFragmentSender struct {
 	call               RelayCall
 }
 
-var fragmentSenderPool = sync.Pool{New: func() interface{} { return &relayFragmentSender{} }}
-
 func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, call RelayCall) *relayFragmentSender {
-	fs := fragmentSenderPool.Get().(*relayFragmentSender)
-	fs.callReq = cr
-	fs.framePool = r.conn.opts.FramePool
-	fs.frameReceiver = dstRelay
-	fs.failRelayItemFunc = r.failRelayItem
-	fs.outboundRelayItems = r.outbound
-	fs.origID = origID
-	fs.sentBytes = 0
-	fs.call = call
-	return fs
+	// TODO(cinchurge): pool fragment senders
+	return &relayFragmentSender{
+		callReq:            cr,
+		framePool:          r.conn.opts.FramePool,
+		frameReceiver:      dstRelay,
+		failRelayItemFunc:  r.failRelayItem,
+		outboundRelayItems: r.outbound,
+		origID:             origID,
+		sentBytes:          0,
+		call:               call,
+	}
 }
 
 func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
@@ -830,19 +832,17 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 		checksum.Add(rfs.callReq.method)
 	}
 
-	wf := writableFragmentPool.Get().(*writableFragment)
-	wf.flagsRef = flagsRef
-	wf.checksumRef = checksumRef
-	wf.checksum = checksum
-	wf.contents = contents
-	wf.frame = frame
-
-	return wf, contents.Err()
+	// TODO(cinchurge): pool writableFragment
+	return &writableFragment{
+		flagsRef:    flagsRef,
+		checksumRef: checksumRef,
+		checksum:    checksum,
+		contents:    contents,
+		frame:       frame,
+	}, contents.Err()
 }
 
 func (rfs *relayFragmentSender) flushFragment(wf *writableFragment) error {
-	defer writableFragmentPool.Put(wf)
-
 	wf.frame.Header.SetPayloadSize(uint16(wf.contents.BytesWritten()))
 	rfs.sentBytes += uint(wf.frame.Header.FrameSize())
 
@@ -856,5 +856,4 @@ func (rfs *relayFragmentSender) flushFragment(wf *writableFragment) error {
 
 func (rfs *relayFragmentSender) doneSending() {
 	rfs.call.SentBytes(rfs.sentBytes)
-	fragmentSenderPool.Put(rfs)
 }

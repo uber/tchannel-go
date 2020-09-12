@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 	"github.com/uber/tchannel-go/typed"
 )
 
@@ -18,7 +17,6 @@ func BuildKVBuffer(kv map[string]string) []byte {
 		bufSize += 2 + len(k) + 2 + len(v)
 	}
 	bufSize += 2 // nh:2
-
 	buf := make([]byte, bufSize)
 	wb := typed.NewWriteBuffer(buf)
 	wb.WriteUint16(uint16(len(kv)))

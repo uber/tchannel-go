@@ -6,15 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/tchannel-go/relay"
-
-	. "github.com/uber/tchannel-go"
-
-	"github.com/uber/tchannel-go/benchmark"
-	"github.com/uber/tchannel-go/testutils"
-
 	"github.com/bmizerany/perks/quantile"
 	"github.com/stretchr/testify/require"
+	. "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/benchmark"
+	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 type benchmarkParams struct {
