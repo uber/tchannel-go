@@ -64,7 +64,7 @@ type CallFrame interface {
 	// io.EOF.
 	Arg2Iterator() (arg2.KeyValIterator, error)
 	// Arg2Append appends a key/val pair to arg2
-	Arg2Append(keyVals []KeyVal)
+	Arg2Append(key, val []byte)
 }
 
 // Conn contains information about the underlying connection.

@@ -112,7 +112,10 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
 
-	cr := &lazyCallReq{Frame: f}
+	cr := &lazyCallReq{
+		Frame:       f,
+		arg2Appends: make([]relay.KeyVal, 0, 2),
+	}
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(_serviceLenIndex)
@@ -250,8 +253,14 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }
 
-func (f *lazyCallReq) Arg2Append(keyVals []relay.KeyVal) {
-	f.arg2Appends = keyVals
+func (f *lazyCallReq) Arg2Append(key, val []byte) {
+	// TODO(echung): pool the appends buffers
+	if len(f.arg2Appends) == cap(f.arg2Appends) {
+		newArg2Appends := make([]relay.KeyVal, len(f.arg2Appends), 2*cap(f.arg2Appends))
+		copy(newArg2Appends, f.arg2Appends)
+		f.arg2Appends = newArg2Appends
+	}
+	f.arg2Appends = append(f.arg2Appends, relay.KeyVal{Key: key, Val: val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for

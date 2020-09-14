@@ -163,8 +163,8 @@ func (f *FakeCallFrame) Arg2Iterator() (arg2.KeyValIterator, error) {
 }
 
 // Arg2Append appends a key value pair to Arg2
-func (f *FakeCallFrame) Arg2Append(keyVals []relay.KeyVal) {
-	f.Arg2Appends = keyVals
+func (f *FakeCallFrame) Arg2Append(key, val []byte) {
+	f.Arg2Appends = append(f.Arg2Appends, relay.KeyVal{Key: key, Val: val})
 }
 
 // CopyCallFrame copies the relay.CallFrame and returns a FakeCallFrame with

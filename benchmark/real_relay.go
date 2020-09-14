@@ -42,7 +42,9 @@ func (fh *fixedHosts) Get(cf relay.CallFrame, _ *relay.Conn) (string, error) {
 		return "", errors.New("no peers")
 	}
 
-	cf.Arg2Append(fh.appends)
+	for _, kv := range fh.appends {
+		cf.Arg2Append(kv.Key, kv.Val)
+	}
 
 	pickI := int(fh.pickI.Inc()-1) % len(peers)
 	return peers[pickI], nil

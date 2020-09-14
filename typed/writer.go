@@ -65,8 +65,8 @@ func (w *Writer) WriteUint16(n uint16) {
 	sizeBuf := intBufferPool.Get().(*intBuffer)
 	defer intBufferPool.Put(sizeBuf)
 
-	binary.BigEndian.PutUint16(sizeBuf[:], n)
-	if _, err := w.writer.Write(sizeBuf[:]); err != nil {
+	binary.BigEndian.PutUint16(sizeBuf[:2], n)
+	if _, err := w.writer.Write(sizeBuf[:2]); err != nil {
 		w.err = err
 	}
 }
