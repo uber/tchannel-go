@@ -717,17 +717,10 @@ func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []relay.KeyVal)
 		writer.WriteBytes(arg2[2:])
 	}
 
-	var sizeBuf [2]byte
-
 	// append new key/val pairs to end of arg2
 	for _, kv := range appends {
-		binary.BigEndian.PutUint16(sizeBuf[:], uint16(len(kv.Key)))
-		writer.WriteBytes(sizeBuf[:])
-		writer.WriteBytes(kv.Key)
-
-		binary.BigEndian.PutUint16(sizeBuf[:], uint16(len(kv.Val)))
-		writer.WriteBytes(sizeBuf[:])
-		writer.WriteBytes(kv.Val)
+		writer.WriteLen16Bytes(kv.Key)
+		writer.WriteLen16Bytes(kv.Val)
 	}
 
 	return writer.Err()

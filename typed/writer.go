@@ -23,7 +23,14 @@ package typed
 import (
 	"encoding/binary"
 	"io"
+	"sync"
 )
+
+type intBuffer [8]byte
+
+var intBufferPool = sync.Pool{New: func() interface{} {
+	return new(intBuffer)
+}}
 
 // Writer is a writer that writes typed values to an io.Writer
 type Writer struct {
@@ -55,7 +62,9 @@ func (w *Writer) WriteUint16(n uint16) {
 		return
 	}
 
-	var sizeBuf [2]byte
+	sizeBuf := intBufferPool.Get().(*intBuffer)
+	defer intBufferPool.Put(sizeBuf)
+
 	binary.BigEndian.PutUint16(sizeBuf[:], n)
 	if _, err := w.writer.Write(sizeBuf[:]); err != nil {
 		w.err = err
