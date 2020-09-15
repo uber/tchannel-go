@@ -1633,6 +1633,42 @@ func TestRelayModifyArg2(t *testing.T) {
 	}
 }
 
+func TestRelayFragmentedArg2ShouldFail(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		f.Arg2Append([]byte("foo"), []byte("bar"))
+	})
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHost(rh).
+		AddLogFilter("Failed to relay frame.", 1, "error", "fragmented arg2 not supported for appends")
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		rly := ts.Relay()
+		callee := ts.Server()
+		testutils.RegisterEcho(callee, nil)
+
+		caller := ts.NewServer(testutils.NewOpts())
+		testutils.RegisterEcho(caller, nil)
+
+		baseCtx := context.WithValue(context.Background(), "foo", "bar")
+		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
+		defer cancel()
+
+		require.NoError(t, rly.Ping(ctx, caller.PeerInfo().HostPort))
+
+		err := testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), &raw.Args{
+			Arg2: thriftarg2test.BuildKVBuffer(map[string]string{
+				"fee": testutils.RandString(16 * 1024),
+				"fi":  testutils.RandString(16 * 1024),
+				"fo":  testutils.RandString(16 * 1024),
+				"fum": testutils.RandString(16 * 1024),
+			}),
+		})
+		assert.EqualError(t, err, "tchannel error ErrCodeTimeout: timeout")
+	})
+}
+
 // echoVerifyHandler is an echo handler with some added verification of
 // the call metadata (e.g., caller, format).
 type echoVerifyHandler struct {
