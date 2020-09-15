@@ -1476,8 +1476,10 @@ func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
 }
 
 func TestRelayModifyArg2(t *testing.T) {
-	largeKey := testutils.RandString(378)
-	largeVal := testutils.RandString(65000)
+	largeVal1 := testutils.RandString(16 * 1024)
+	largeVal2 := testutils.RandString(16 * 1024)
+	largeVal3 := testutils.RandString(16 * 1024)
+	largeVal4 := testutils.RandString(16 * 1024)
 	largePayload := testutils.RandString(1024)
 
 	modifyTests := []struct {
@@ -1493,20 +1495,28 @@ func TestRelayModifyArg2(t *testing.T) {
 		{
 			msg: "add small key/value",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-				cf.Arg2Append([]byte("key"), []byte("value"))
+				cf.Arg2Append([]byte("foo"), []byte("bar"))
+				cf.Arg2Append([]byte("baz"), []byte("qux"))
 			},
 			modifyArg2: func(m map[string]string) map[string]string {
-				m["key"] = "value"
+				m["foo"] = "bar"
+				m["baz"] = "qux"
 				return m
 			},
 		},
 		{
 			msg: "add large key/value",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-				cf.Arg2Append([]byte(largeKey), []byte(largeVal))
+				cf.Arg2Append([]byte("fee"), []byte(largeVal1))
+				cf.Arg2Append([]byte("fi"), []byte(largeVal2))
+				cf.Arg2Append([]byte("fo"), []byte(largeVal3))
+				cf.Arg2Append([]byte("fum"), []byte(largeVal4))
 			},
 			modifyArg2: func(m map[string]string) map[string]string {
-				m[largeKey] = largeVal
+				m["fee"] = largeVal1
+				m["fi"] = largeVal2
+				m["fo"] = largeVal3
+				m["fum"] = largeVal4
 				return m
 			},
 		},
@@ -1633,7 +1643,7 @@ func TestRelayModifyArg2(t *testing.T) {
 	}
 }
 
-func TestRelayFragmentedArg2ShouldFail(t *testing.T) {
+func TestRelayModifyArg2OnFrameWithFragmentedArg2ShouldFail(t *testing.T) {
 	rh := relaytest.NewStubRelayHost()
 	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
 		f.Arg2Append([]byte("foo"), []byte("bar"))
