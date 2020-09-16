@@ -2,6 +2,8 @@ package tchannel_test
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -225,9 +227,12 @@ func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 }
 
 func BenchmarkRelayWithAppends(b *testing.B) {
+	n, err := strconv.Atoi(os.Getenv("BENCH_RELAY_APPENDS_N"))
+	require.NoError(b, err)
+
 	p := defaultParams()
-	p.appends = []relay.KeyVal{
-		{Key: []byte("foo"), Val: []byte("bar")},
+	for i := 0; i < n; i++ {
+		p.appends = append(p.appends, relay.KeyVal{Key: []byte("foo"), Val: []byte("bar")})
 	}
 	b.ResetTimer()
 	benchmarkRelay(b, p)

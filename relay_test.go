@@ -1421,6 +1421,20 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 			appends:       map[string]string{"baz": "qux"},
 			wantSentBytes: 137, // 127 + 2 bytes size + 3 bytes key + 2 byts size + 3 bytes val = 137
 		},
+		{
+			msg:  "with large appends that result in fragments",
+			arg3: []byte("hello, world"),
+			appends: map[string]string{
+				"fee": testutils.RandString(16 * 1024),
+				"fii": testutils.RandString(16 * 1024),
+				"foo": testutils.RandString(16 * 1024),
+				"fum": testutils.RandString(16 * 1024),
+			},
+			// original data size = 127
+			// appended arg2 size = 4 * (2 bytes key size + 3 bytes key + 2 bytes val size + 16 * 1024 bytes val)
+			// additional frame preamble = 1 byte flag + 4 bytes ttl + 25 bytes span + 2 bytes size of remaining arg2
+			wantSentBytes: 127 + (2+3+2+16*1024)*4 + 1 + 4 + 25 + 2,
+		},
 	}
 
 	for _, tt := range tests {

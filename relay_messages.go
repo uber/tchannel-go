@@ -103,6 +103,10 @@ type lazyCallReq struct {
 	arg2Appends                       []relay.KeyVal
 	checksumType                      ChecksumType
 	isArg2Fragmented                  bool
+
+	// Intentionally an array to combine allocations with that of lazyCallReq
+	// TODO(echung): pool the appends buffers
+	arg2InitialBuf [2]relay.KeyVal
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -113,9 +117,9 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	}
 
 	cr := &lazyCallReq{
-		Frame:       f,
-		arg2Appends: make([]relay.KeyVal, 0, 2),
+		Frame: f,
 	}
+	cr.arg2Appends = cr.arg2InitialBuf[:]
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(_serviceLenIndex)
@@ -254,12 +258,6 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 }
 
 func (f *lazyCallReq) Arg2Append(key, val []byte) {
-	// TODO(echung): pool the appends buffers
-	if len(f.arg2Appends) == cap(f.arg2Appends) {
-		newArg2Appends := make([]relay.KeyVal, len(f.arg2Appends), 2*cap(f.arg2Appends))
-		copy(newArg2Appends, f.arg2Appends)
-		f.arg2Appends = newArg2Appends
-	}
 	f.arg2Appends = append(f.arg2Appends, relay.KeyVal{Key: key, Val: val})
 }
 

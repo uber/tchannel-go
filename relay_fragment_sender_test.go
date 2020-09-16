@@ -41,10 +41,10 @@ func TestRelayFragmentSender(t *testing.T) {
 			sent:  true,
 		},
 		{
-			msg:                            "send falure",
-			frame:                          f,
-			sent:                           false,
-			failure:                        "something bad happened",
+			msg:     "send falure",
+			frame:   f,
+			sent:    false,
+			failure: "something bad happened",
 			wantFailureRelayItemFuncCalled: true,
 		},
 	}
@@ -73,7 +73,6 @@ func TestRelayFragmentSender(t *testing.T) {
 			}
 
 			err := rfs.flushFragment(wf)
-
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 				return
@@ -148,7 +147,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "no nh in data",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"something went wrong", // nh
+					assert.AnError.Error(), // nh
 				},
 			},
 			overrideArg2Buf: []byte{0},
@@ -158,88 +157,88 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write nh fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"something went wrong", // nh
+					assert.AnError.Error(), // nh
 				},
 			},
 			arg2Map:   exampleArg2Map,
-			wantError: "something went wrong",
+			wantError: assert.AnError.Error(),
 		},
 		{
 			msg: "write arg2 fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"something went wrong", // write arg2
+					"", // write nh
+					assert.AnError.Error(), // write arg2
 				},
 			},
 			arg2Map:   exampleArg2Map,
-			wantError: "something went wrong",
+			wantError: assert.AnError.Error(),
 		},
 		{
 			msg: "write append key length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"something went wrong", // write key length
+					"", // write nh
+					"", // write arg2
+					assert.AnError.Error(), // write key length
 				},
 			},
 			arg2Map: exampleArg2Map,
 			appends: []relay.KeyVal{
 				{Key: []byte("foo"), Val: []byte("bar")},
 			},
-			wantError: "something went wrong",
+			wantError: assert.AnError.Error(),
 		},
 		{
 			msg: "write append key fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"",                     // write key length
-					"something went wrong", // write key
+					"", // write nh
+					"", // write arg2
+					"", // write key length
+					assert.AnError.Error(), // write key
 				},
 			},
 			arg2Map: exampleArg2Map,
 			appends: []relay.KeyVal{
 				{Key: []byte("foo"), Val: []byte("bar")},
 			},
-			wantError: "something went wrong",
+			wantError: assert.AnError.Error(),
 		},
 		{
 			msg: "write append val length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"",                     // write key length
-					"",                     // write key
-					"something went wrong", // write val length
+					"", // write nh
+					"", // write arg2
+					"", // write key length
+					"", // write key
+					assert.AnError.Error(), // write val length
 				},
 			},
 			arg2Map: exampleArg2Map,
 			appends: []relay.KeyVal{
 				{Key: []byte("foo"), Val: []byte("bar")},
 			},
-			wantError: "something went wrong",
+			wantError: assert.AnError.Error(),
 		},
 		{
 			msg: "write append val fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"",                     // write key length
-					"",                     // write key
-					"",                     // write val length
-					"something went wrong", // write val
+					"", // write nh
+					"", // write arg2
+					"", // write key length
+					"", // write key
+					"", // write val length
+					assert.AnError.Error(), // write val
 				},
 			},
 			arg2Map: exampleArg2Map,
 			appends: []relay.KeyVal{
 				{Key: []byte("foo"), Val: []byte("bar")},
 			},
-			wantError: "something went wrong",
+			wantError: assert.AnError.Error(),
 		},
 	}
 
