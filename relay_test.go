@@ -1507,6 +1507,28 @@ func TestRelayModifyArg2(t *testing.T) {
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {},
 		},
 		{
+			msg: "add zero-length key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append(nil, nil)
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m[""] = ""
+				return m
+			},
+		},
+		{
+			msg: "add multiple zero-length key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append(nil, nil)
+				cf.Arg2Append(nil, nil)
+				cf.Arg2Append(nil, nil)
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m[""] = ""
+				return m
+			},
+		},
+		{
 			msg: "add small key/value",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
 				cf.Arg2Append([]byte("foo"), []byte("bar"))
