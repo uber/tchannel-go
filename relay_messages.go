@@ -105,7 +105,7 @@ type lazyCallReq struct {
 	isArg2Fragmented                  bool
 
 	// Intentionally an array to combine allocations with that of lazyCallReq
-	arg2InitialBuf [2]relay.KeyVal
+	arg2InitialBuf [1]relay.KeyVal
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
