@@ -238,7 +238,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 }
 
 // Relay is called for each frame that is read on the connection.
-func (r *Relayer) Relay(f *Frame) error {
+func (r *Relayer) Relay(f *Frame) (bool, error) {
 	if f.messageType() != messageTypeCallReq {
 		err := r.handleNonCallReq(f)
 		if err == errUnknownID {
@@ -246,15 +246,15 @@ func (r *Relayer) Relay(f *Frame) error {
 			// message exchange, and if it succeeds, then the frame has been
 			// handled successfully.
 			if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
-				return nil
+				return false, nil
 			}
 		}
-		return err
+		return false, err
 	}
 
 	cr, err := newLazyCallReq(f)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	return r.handleCallReq(cr)
@@ -402,9 +402,9 @@ func (r *Relayer) getDestination(f *lazyCallReq, call RelayCall) (*Connection, b
 	return remoteConn, true, nil
 }
 
-func (r *Relayer) handleCallReq(f *lazyCallReq) error {
+func (r *Relayer) handleCallReq(f *lazyCallReq) (bool, error) {
 	if handled := r.handleLocalCallReq(f); handled {
-		return nil
+		return false, nil
 	}
 
 	call, err := r.relayHost.Start(f, r.relayConn)
@@ -416,7 +416,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 				call.Failed("relay-dropped")
 				call.End()
 			}
-			return nil
+			return false, nil
 		}
 		if _, ok := err.(SystemError); !ok {
 			err = NewSystemError(ErrCodeDeclined, err.Error())
@@ -429,9 +429,9 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 
 		// If the RelayHost returns a protocol error, close the connection.
 		if GetSystemErrorCode(err) == ErrCodeProtocol {
-			return r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
+			return false, r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
 		}
-		return nil
+		return false, nil
 	}
 
 	// Check that the current connection is in a valid state to handle a new call.
@@ -440,7 +440,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 		call.End()
 		err := errConnNotActive{"incoming", state}
 		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
-		return err
+		return false, err
 	}
 
 	// Get a remote connection and check whether it can handle this call.
@@ -458,7 +458,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 		// the current relay, we need to decrement it.
 		r.decrementPending()
 		call.End()
-		return err
+		return false, err
 	}
 
 	origID := f.Header.ID
@@ -475,20 +475,22 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 
 	f.Header.ID = destinationID
 
-	// If we have appends the size of the frame to be relayed will change, potentially going
+	// If we have appends, the size of the frame to be relayed will change, potentially going
 	// over the max frame size. Do a fragmenting send which is slightly more expensive but
 	// will handle fragmenting if it is needed.
 	if len(f.arg2Appends) > 0 {
-		return r.fragmentingSend(call, f, relayToDest, origID)
+		// fragmentingSend always sends new frames in place of the old frame so we must
+		// release it separately
+		return true, r.fragmentingSend(call, f, relayToDest, origID)
 	}
 
 	call.SentBytes(uint(f.Frame.Header.FrameSize()))
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure)
-		return nil
+		return false, nil
 	}
-	return nil
+	return false, nil
 }
 
 // Handle all frames except messageTypeCallReq.
@@ -675,7 +677,6 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call),
 		f.checksumType.New(),
 	)
-	defer r.conn.opts.FramePool.Release(f.Frame)
 
 	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
 		return errFragmentedArg2WithAppend

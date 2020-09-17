@@ -696,14 +696,16 @@ func (c *Connection) readFrames(_ uint32) {
 func (c *Connection) handleFrameRelay(frame *Frame) bool {
 	switch frame.Header.messageType {
 	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
-		if err := c.relay.Relay(frame); err != nil {
+		var shouldRelease bool
+		var err error
+		if shouldRelease, err = c.relay.Relay(frame); err != nil {
 			c.log.WithFields(
 				ErrField(err),
 				LogField{"header", frame.Header},
 				LogField{"remotePeer", c.remotePeerInfo},
 			).Error("Failed to relay frame.")
 		}
-		return false
+		return shouldRelease
 	default:
 		return c.handleFrameNoRelay(frame)
 	}

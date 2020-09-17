@@ -119,7 +119,8 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	cr := &lazyCallReq{
 		Frame: f,
 	}
-	cr.arg2Appends = cr.arg2InitialBuf[:]
+	//cr.arg2Appends = cr.arg2InitialBuf[:0]
+	cr.arg2Appends = make([]relay.KeyVal, 0, 2)
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(_serviceLenIndex)
