@@ -105,7 +105,6 @@ type lazyCallReq struct {
 	isArg2Fragmented                  bool
 
 	// Intentionally an array to combine allocations with that of lazyCallReq
-	// TODO(echung): pool the appends buffers
 	arg2InitialBuf [2]relay.KeyVal
 }
 
@@ -116,11 +115,8 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 		panic(fmt.Errorf("newLazyCallReq called for wrong messageType: %v", msgType))
 	}
 
-	cr := &lazyCallReq{
-		Frame: f,
-	}
-	//cr.arg2Appends = cr.arg2InitialBuf[:0]
-	cr.arg2Appends = make([]relay.KeyVal, 0, 2)
+	cr := &lazyCallReq{Frame: f}
+	cr.arg2Appends = cr.arg2InitialBuf[:0]
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(_serviceLenIndex)
