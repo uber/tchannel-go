@@ -1431,9 +1431,9 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 				"fum": testutils.RandString(16 * 1024),
 			},
 			// original data size = 127
-			// appended arg2 size = 4 * (2 bytes key size + 3 bytes key + 2 bytes val size + 16 * 1024 bytes val)
-			// additional frame preamble = 1 byte flag + 4 bytes ttl + 25 bytes span + 2 bytes size of remaining arg2
-			wantSentBytes: 127 + (2+3+2+16*1024)*4 + 1 + 4 + 25 + 2,
+			// appended arg2 size = 2 bytes number of keys + 4 * (2 bytes key size + 3 bytes key + 2 bytes val size + 16 * 1024 bytes val)
+			// additional frame preamble = 16 bytes header + 1 byte flag + 1 byte checksum type + 4 bytes checksum size + 2 bytes size of remaining arg2
+			wantSentBytes: 127 + (2+3+2+16*1024)*4 + 16 + 1 + 1 + 4 + 2,
 		},
 	}
 
