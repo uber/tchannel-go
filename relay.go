@@ -672,15 +672,15 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
 }
 
 func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32) error {
+	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
+		return errFragmentedArg2WithAppend
+	}
+
 	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
 		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call),
 		f.checksumType.New(),
 	)
-
-	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
-		return errFragmentedArg2WithAppend
-	}
 
 	arg2Writer, err := fragWriter.ArgWriter(false /* last */)
 	if err != nil {
