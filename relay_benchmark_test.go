@@ -233,22 +233,10 @@ func benchmarkRelayWithAppends(b *testing.B, n int) {
 	benchmarkRelay(b, p)
 }
 
-func BenchmarkRelayAppends0(b *testing.B) {
-	benchmarkRelayWithAppends(b, 0)
-}
-
-func BenchmarkRelayAppends1(b *testing.B) {
-	benchmarkRelayWithAppends(b, 1)
-}
-
-func BenchmarkRelayAppends2(b *testing.B) {
-	benchmarkRelayWithAppends(b, 2)
-}
-
-func BenchmarkRelayAppends5(b *testing.B) {
-	benchmarkRelayWithAppends(b, 5)
-}
-
-func BenchmarkRelayAppends10(b *testing.B) {
-	benchmarkRelayWithAppends(b, 10)
+func BenchmarkRelayAppends(b *testing.B) {
+	for _, n := range []int{0, 1, 2, 5, 10} {
+		b.Run(fmt.Sprintf("%v appends", n), func(b *testing.B) {
+			benchmarkRelayWithAppends(b, n)
+		})
+	}
 }

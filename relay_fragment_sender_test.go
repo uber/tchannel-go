@@ -12,20 +12,27 @@ import (
 )
 
 type dummyFrameReceiver struct {
+	t                *testing.T
 	retSent          bool
 	retFailureReason string
+	wantPayload      []byte
 }
 
 func (d *dummyFrameReceiver) Receive(f *Frame, fType frameType) (sent bool, failureReason string) {
+	if d.wantPayload != nil {
+		assert.Equal(d.t, d.wantPayload, f.SizedPayload())
+	}
 	return d.retSent, d.retFailureReason
 }
 
+type noopSentReporter struct{}
+
+func (r *noopSentReporter) SentBytes(_ uint16) {}
+
 func TestRelayFragmentSender(t *testing.T) {
 	f := NewFrame(MaxFramePayloadSize)
-
 	wbuf := typed.NewWriteBuffer(f.Payload)
-
-	wbuf.WriteBytes([]byte("foo"))
+	wbuf.WriteBytes([]byte("hello, world"))
 
 	tests := []struct {
 		msg                            string
@@ -34,17 +41,19 @@ func TestRelayFragmentSender(t *testing.T) {
 		sent                           bool
 		failure                        string
 		wantFailureRelayItemFuncCalled bool
+		wantPayload                    []byte
 	}{
 		{
-			msg:   "successful send",
-			frame: f,
-			sent:  true,
+			msg:         "successful send",
+			frame:       f,
+			sent:        true,
+			wantPayload: []byte("hello, world"),
 		},
 		{
-			msg:                            "send falure",
-			frame:                          f,
-			sent:                           false,
-			failure:                        "something bad happened",
+			msg:     "send falure",
+			frame:   f,
+			sent:    false,
+			failure: "something bad happened",
 			wantFailureRelayItemFuncCalled: true,
 		},
 	}
@@ -61,15 +70,18 @@ func TestRelayFragmentSender(t *testing.T) {
 			rfs := relayFragmentSender{
 				framePool: DefaultFramePool,
 				frameReceiver: &dummyFrameReceiver{
+					t:                t,
 					retSent:          tt.sent,
 					retFailureReason: tt.failure,
+					wantPayload:      tt.wantPayload,
 				},
 				failRelayItemFunc: func(items *relayItems, id uint32, failure string) {
 					failRelayItemFuncCalled = true
 					assert.Equal(t, uint32(123), id, "got unexpected id")
 					assert.Equal(t, tt.failure, failure, "got unexpected failure string")
 				},
-				origID: 123,
+				origID:       123,
+				sentReporter: &noopSentReporter{},
 			}
 
 			err := rfs.flushFragment(wf)
@@ -167,7 +179,7 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write arg2 fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
+					"", // write nh
 					assert.AnError.Error(), // write arg2
 				},
 			},
@@ -178,8 +190,8 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append key length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
+					"", // write nh
+					"", // write arg2
 					assert.AnError.Error(), // write key length
 				},
 			},
@@ -193,9 +205,9 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append key fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"",                     // write key length
+					"", // write nh
+					"", // write arg2
+					"", // write key length
 					assert.AnError.Error(), // write key
 				},
 			},
@@ -209,10 +221,10 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append val length fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"",                     // write key length
-					"",                     // write key
+					"", // write nh
+					"", // write arg2
+					"", // write key length
+					"", // write key
 					assert.AnError.Error(), // write val length
 				},
 			},
@@ -226,11 +238,11 @@ func TestWriteArg2WithAppends(t *testing.T) {
 			msg: "write append val fails",
 			writer: &dummyArgWriter{
 				writeError: []string{
-					"",                     // write nh
-					"",                     // write arg2
-					"",                     // write key length
-					"",                     // write key
-					"",                     // write val length
+					"", // write nh
+					"", // write arg2
+					"", // write key length
+					"", // write key
+					"", // write val length
 					assert.AnError.Error(), // write val
 				},
 			},
