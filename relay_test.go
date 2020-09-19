@@ -1353,7 +1353,7 @@ func TestRelayTransferredBytes(t *testing.T) {
 
 		// Add a handler that always returns an empty payload.
 		testutils.RegisterFunc(s2, "swallow", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			fmt.Println("swallog got", len(args.Arg2)+len(args.Arg3))
+			fmt.Println("swallow got", len(args.Arg2)+len(args.Arg3))
 			return &raw.Res{}, nil
 		})
 
@@ -1403,6 +1403,84 @@ func TestRelayTransferredBytes(t *testing.T) {
 	})
 }
 
+func TestRelayAppendArg2SentBytes(t *testing.T) {
+	tests := []struct {
+		msg           string
+		appends       map[string]string
+		arg3          []byte
+		wantSentBytes int
+	}{
+		{
+			msg:           "without appends",
+			arg3:          []byte("hello, world"),
+			wantSentBytes: 127,
+		},
+		{
+			msg:           "with appends",
+			arg3:          []byte("hello, world"),
+			appends:       map[string]string{"baz": "qux"},
+			wantSentBytes: 137, // 127 + 2 bytes size + 3 bytes key + 2 byts size + 3 bytes val = 137
+		},
+		{
+			msg:  "with large appends that result in fragments",
+			arg3: []byte("hello, world"),
+			appends: map[string]string{
+				"fee": testutils.RandString(16 * 1024),
+				"fii": testutils.RandString(16 * 1024),
+				"foo": testutils.RandString(16 * 1024),
+				"fum": testutils.RandString(16 * 1024),
+			},
+			// original data size = 127
+			// appended arg2 size = 2 bytes number of keys + 4 * (2 bytes key size + 3 bytes key + 2 bytes val size + 16 * 1024 bytes val)
+			// additional frame preamble = 16 bytes header + 1 byte flag + 1 byte checksum type + 4 bytes checksum size + 2 bytes size of remaining arg2
+			wantSentBytes: 127 + (2+3+2+16*1024)*4 + 16 + 1 + 1 + 4 + 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			rh := relaytest.NewStubRelayHost()
+			rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+				for k, v := range tt.appends {
+					f.Arg2Append([]byte(k), []byte(v))
+				}
+			})
+
+			opts := testutils.NewOpts().SetRelayOnly().SetRelayHost(rh)
+			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+				rly := ts.Relay()
+				svr := ts.Server()
+				testutils.RegisterEcho(svr, nil)
+
+				client := testutils.NewClient(t, nil)
+				ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
+				defer cancel()
+
+				sendArgs := &raw.Args{
+					Arg2: thriftarg2test.BuildKVBuffer(map[string]string{"foo": "bar"}),
+					Arg3: tt.arg3,
+				}
+
+				recvArg2, recvArg3, _, err := raw.Call(ctx, client, rly.PeerInfo().HostPort, ts.ServiceName(), "echo", sendArgs.Arg2, sendArgs.Arg3)
+				require.NoError(t, err, "Call from %v (%v) to %v (%v) failed", client.ServiceName(), client.PeerInfo().HostPort, ts.ServiceName(), rly.PeerInfo().HostPort)
+
+				wantArg2 := map[string]string{
+					"foo": "bar",
+				}
+				for k, v := range tt.appends {
+					wantArg2[k] = v
+				}
+
+				assert.Equal(t, wantArg2, thriftarg2test.MustReadKVBuffer(t, recvArg2), "Arg2 mismatch")
+				assert.Equal(t, recvArg3, []byte("hello, world"), "Arg3 mismatch")
+
+				sentBytes := rh.Stats().Map()["testService-client->testService::echo.sent-bytes"]
+				assert.Equal(t, tt.wantSentBytes, sentBytes)
+			})
+		})
+	}
+}
+
 func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
 	frameCh := make(chan relay.CallFrame, 1)
 	rh.SetFrameFn(func(f relay.CallFrame, _ *relay.Conn) {
@@ -1412,32 +1490,72 @@ func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
 }
 
 func TestRelayModifyArg2(t *testing.T) {
+	largeVal1 := testutils.RandString(16 * 1024)
+	largeVal2 := testutils.RandString(16 * 1024)
+	largeVal3 := testutils.RandString(16 * 1024)
+	largeVal4 := testutils.RandString(16 * 1024)
 	largePayload := testutils.RandString(1024)
 
 	modifyTests := []struct {
 		msg         string
 		skip        string
 		modifyFrame func(relay.CallFrame, *relay.Conn)
-		modifyArg2  func(arg2 map[string]string)
+		modifyArg2  func(arg2 map[string]string) map[string]string
 	}{
 		{
 			msg:         "no change",
 			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {},
-			modifyArg2: func(arg2 map[string]string) {
-				// no change
+		},
+		{
+			msg: "add zero-length key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append(nil, nil)
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m[""] = ""
+				return m
 			},
 		},
-		// Example test showing how modifications should be tested.
-		// TODO(echung): Enable and add more modification tests.
-		// {
-		// 	msg: "add small key/value",
-		// 	modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
-		// 		cf.Arg2Append([]byte("key"), []byte("value"))
-		// 	},
-		// 	modifyArg2: func(m map[string]string) {
-		// 		m["key"] = "value"
-		// 	},
-		// },
+		{
+			msg: "add multiple zero-length key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append(nil, nil)
+				cf.Arg2Append(nil, nil)
+				cf.Arg2Append(nil, nil)
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m[""] = ""
+				return m
+			},
+		},
+		{
+			msg: "add small key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append([]byte("foo"), []byte("bar"))
+				cf.Arg2Append([]byte("baz"), []byte("qux"))
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m["foo"] = "bar"
+				m["baz"] = "qux"
+				return m
+			},
+		},
+		{
+			msg: "add large key/value",
+			modifyFrame: func(cf relay.CallFrame, _ *relay.Conn) {
+				cf.Arg2Append([]byte("fee"), []byte(largeVal1))
+				cf.Arg2Append([]byte("fi"), []byte(largeVal2))
+				cf.Arg2Append([]byte("fo"), []byte(largeVal3))
+				cf.Arg2Append([]byte("fum"), []byte(largeVal4))
+			},
+			modifyArg2: func(m map[string]string) map[string]string {
+				m["fee"] = largeVal1
+				m["fi"] = largeVal2
+				m["fo"] = largeVal3
+				m["fum"] = largeVal4
+				return m
+			},
+		},
 	}
 
 	checksumTypes := []struct {
@@ -1542,7 +1660,12 @@ func TestRelayModifyArg2(t *testing.T) {
 								assert.Equal(t, aet.wantAppErr, resp.ApplicationError(), "%v: Unexpected app error")
 
 								wantArg2 := copyHeaders(tt.arg2)
-								mt.modifyArg2(wantArg2)
+								if mt.modifyArg2 != nil {
+									if wantArg2 == nil {
+										wantArg2 = make(map[string]string)
+									}
+									wantArg2 = mt.modifyArg2(wantArg2)
+								}
 
 								gotArg2Map := decodeThriftHeaders(t, resArg2)
 								assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)
@@ -1554,6 +1677,42 @@ func TestRelayModifyArg2(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestRelayModifyArg2OnFrameWithFragmentedArg2ShouldFail(t *testing.T) {
+	rh := relaytest.NewStubRelayHost()
+	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+		f.Arg2Append([]byte("foo"), []byte("bar"))
+	})
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHost(rh).
+		AddLogFilter("Failed to relay frame.", 1, "error", "fragmented arg2 not supported for appends")
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		rly := ts.Relay()
+		callee := ts.Server()
+		testutils.RegisterEcho(callee, nil)
+
+		caller := ts.NewServer(testutils.NewOpts())
+		testutils.RegisterEcho(caller, nil)
+
+		baseCtx := context.WithValue(context.Background(), "foo", "bar")
+		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
+		defer cancel()
+
+		require.NoError(t, rly.Ping(ctx, caller.PeerInfo().HostPort))
+
+		err := testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), &raw.Args{
+			Arg2: thriftarg2test.BuildKVBuffer(map[string]string{
+				"fee": testutils.RandString(16 * 1024),
+				"fi":  testutils.RandString(16 * 1024),
+				"fo":  testutils.RandString(16 * 1024),
+				"fum": testutils.RandString(16 * 1024),
+			}),
+		})
+		assert.EqualError(t, err, "tchannel error ErrCodeTimeout: timeout")
+	})
 }
 
 // echoVerifyHandler is an echo handler with some added verification of

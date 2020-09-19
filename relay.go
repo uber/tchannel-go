@@ -21,14 +21,16 @@
 package tchannel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/uber/tchannel-go/relay"
-
+	"github.com/uber/tchannel-go/typed"
 	"go.uber.org/atomic"
 )
 
@@ -47,13 +49,22 @@ const (
 	_relayErrorNotFound       = "relay-not-found"
 	_relayErrorDestConnSlow   = "relay-dest-conn-slow"
 	_relayErrorSourceConnSlow = "relay-source-conn-slow"
+
+	// _relayNoRelease indicates that the relayed frame should not be released immediately, since
+	// relayed frames normally end up in a send queue where it is released afterward. However in some
+	// cases, such as frames that are fragmented due to being mutated, we need to release the original
+	// frame as it won't be relayed.
+	_relayNoRelease     = false
+	_relayShouldRelease = true
 )
 
 var (
-	errRelayMethodFragmented = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
-	errFrameNotSent          = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
-	errBadRelayHost          = NewSystemError(ErrCodeDeclined, "bad relay host implementation")
-	errUnknownID             = errors.New("non-callReq for inactive ID")
+	errRelayMethodFragmented    = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
+	errFrameNotSent             = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
+	errBadRelayHost             = NewSystemError(ErrCodeDeclined, "bad relay host implementation")
+	errUnknownID                = errors.New("non-callReq for inactive ID")
+	errNoNHInArg2               = errors.New("no nh in arg2")
+	errFragmentedArg2WithAppend = errors.New("fragmented arg2 not supported for appends")
 )
 
 type relayItem struct {
@@ -73,6 +84,10 @@ type relayItems struct {
 	timeouts *relayTimerPool
 	tombs    uint64
 	items    map[uint32]relayItem
+}
+
+type frameReceiver interface {
+	Receive(f *Frame, fType frameType) (sent bool, failureReason string)
 }
 
 func newRelayItems(logger Logger) *relayItems {
@@ -230,7 +245,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 }
 
 // Relay is called for each frame that is read on the connection.
-func (r *Relayer) Relay(f *Frame) error {
+func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 	if f.messageType() != messageTypeCallReq {
 		err := r.handleNonCallReq(f)
 		if err == errUnknownID {
@@ -238,15 +253,15 @@ func (r *Relayer) Relay(f *Frame) error {
 			// message exchange, and if it succeeds, then the frame has been
 			// handled successfully.
 			if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
-				return nil
+				return _relayNoRelease, nil
 			}
 		}
-		return err
+		return _relayNoRelease, err
 	}
 
 	cr, err := newLazyCallReq(f)
 	if err != nil {
-		return err
+		return _relayNoRelease, err
 	}
 
 	return r.handleCallReq(cr)
@@ -394,9 +409,9 @@ func (r *Relayer) getDestination(f *lazyCallReq, call RelayCall) (*Connection, b
 	return remoteConn, true, nil
 }
 
-func (r *Relayer) handleCallReq(f *lazyCallReq) error {
+func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	if handled := r.handleLocalCallReq(f); handled {
-		return nil
+		return _relayNoRelease, nil
 	}
 
 	call, err := r.relayHost.Start(f, r.relayConn)
@@ -408,7 +423,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 				call.Failed("relay-dropped")
 				call.End()
 			}
-			return nil
+			return _relayNoRelease, nil
 		}
 		if _, ok := err.(SystemError); !ok {
 			err = NewSystemError(ErrCodeDeclined, err.Error())
@@ -421,9 +436,9 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 
 		// If the RelayHost returns a protocol error, close the connection.
 		if GetSystemErrorCode(err) == ErrCodeProtocol {
-			return r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
+			return _relayNoRelease, r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
 		}
-		return nil
+		return _relayNoRelease, nil
 	}
 
 	// Check that the current connection is in a valid state to handle a new call.
@@ -432,7 +447,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 		call.End()
 		err := errConnNotActive{"incoming", state}
 		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
-		return err
+		return _relayNoRelease, err
 	}
 
 	// Get a remote connection and check whether it can handle this call.
@@ -450,7 +465,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 		// the current relay, we need to decrement it.
 		r.decrementPending()
 		call.End()
-		return err
+		return _relayNoRelease, err
 	}
 
 	origID := f.Header.ID
@@ -466,14 +481,23 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) error {
 	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call)
 
 	f.Header.ID = destinationID
+
+	// If we have appends, the size of the frame to be relayed will change, potentially going
+	// over the max frame size. Do a fragmenting send which is slightly more expensive but
+	// will handle fragmenting if it is needed.
+	if len(f.arg2Appends) > 0 {
+		// fragmentingSend always sends new frames in place of the old frame so we must
+		// release it separately
+		return _relayShouldRelease, r.fragmentingSend(call, f, relayToDest, origID)
+	}
+
 	call.SentBytes(f.Frame.Header.FrameSize())
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure)
-		return nil
+		return _relayNoRelease, nil
 	}
-
-	return nil
+	return _relayNoRelease, nil
 }
 
 // Handle all frames except messageTypeCallReq.
@@ -626,10 +650,10 @@ func (r *Relayer) receiverItems(fType frameType) *relayItems {
 	return r.outbound
 }
 
-func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
+func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) (shouldRelease bool) {
 	// Check whether this is a service we want to handle locally.
 	if _, ok := r.localHandler[string(cr.Service())]; !ok {
-		return false
+		return _relayNoRelease
 	}
 
 	f := cr.Frame
@@ -645,13 +669,69 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) bool {
 			LogField{"method", string(cr.Method())},
 		).Error("Received fragmented callReq intended for local relay channel, can only handle unfragmented calls.")
 		r.conn.SendSystemError(f.Header.ID, cr.Span(), errRelayMethodFragmented)
-		return true
+		return _relayShouldRelease
 	}
 
 	if release := r.conn.handleFrameNoRelay(f); release {
 		r.conn.opts.FramePool.Release(f)
 	}
-	return true
+	return _relayShouldRelease
+}
+
+func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32) error {
+	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
+		return errFragmentedArg2WithAppend
+	}
+
+	// TODO(echung): should we pool the writers?
+	fragWriter := newFragmentingWriter(
+		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call),
+		f.checksumType.New(),
+	)
+
+	arg2Writer, err := fragWriter.ArgWriter(false /* last */)
+	if err != nil {
+		return fmt.Errorf("get arg2 writer: %v", err)
+	}
+
+	if err := writeArg2WithAppends(arg2Writer, f.arg2(), f.arg2Appends); err != nil {
+		return fmt.Errorf("write arg2: %v", err)
+	}
+	if err := arg2Writer.Close(); err != nil {
+		return fmt.Errorf("close arg2 writer: %v", err)
+	}
+
+	if err := NewArgWriter(fragWriter.ArgWriter(true /* last */)).Write(f.arg3()); err != nil {
+		return errors.New("arg3 write failed")
+	}
+
+	return nil
+}
+
+func writeArg2WithAppends(w io.WriteCloser, arg2 []byte, appends []relay.KeyVal) (err error) {
+	if len(arg2) < 2 {
+		return errNoNHInArg2
+	}
+
+	writer := typed.NewWriter(w)
+
+	// nh:2 is the first two bytes of arg2, which should always be present
+	nh := binary.BigEndian.Uint16(arg2[:2]) + uint16(len(appends))
+	writer.WriteUint16(nh)
+
+	// arg2[2:] is the existing sequence of key/val pairs, which we can just copy
+	// over verbatim
+	if len(arg2) > 2 {
+		writer.WriteBytes(arg2[2:])
+	}
+
+	// append new key/val pairs to end of arg2
+	for _, kv := range appends {
+		writer.WriteLen16Bytes(kv.Key)
+		writer.WriteLen16Bytes(kv.Val)
+	}
+
+	return writer.Err()
 }
 
 func frameTypeFor(f *Frame) frameType {
@@ -694,3 +774,87 @@ func validateRelayMaxTimeout(d time.Duration, logger Logger) time.Duration {
 	).Warn("Configured RelayMaxTimeout is invalid, using default instead.")
 	return _defaultRelayMaxTimeout
 }
+
+type sentBytesReporter interface {
+	SentBytes(size uint16)
+}
+
+type relayFragmentSender struct {
+	callReq            *lazyCallReq
+	framePool          FramePool
+	frameReceiver      frameReceiver
+	failRelayItemFunc  func(items *relayItems, id uint32, failure string)
+	outboundRelayItems *relayItems
+	origID             uint32
+	sentReporter       sentBytesReporter
+}
+
+func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, sentReporter sentBytesReporter) *relayFragmentSender {
+	// TODO(cinchurge): pool fragment senders
+	return &relayFragmentSender{
+		callReq:            cr,
+		framePool:          r.conn.opts.FramePool,
+		frameReceiver:      dstRelay,
+		failRelayItemFunc:  r.failRelayItem,
+		outboundRelayItems: r.outbound,
+		origID:             origID,
+		sentReporter:       sentReporter,
+	}
+}
+
+func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*writableFragment, error) {
+	frame := rfs.framePool.Get()
+	frame.Header.ID = rfs.callReq.Header.ID
+	if initial {
+		frame.Header.messageType = messageTypeCallReq
+	} else {
+		frame.Header.messageType = messageTypeCallReqContinue
+	}
+
+	contents := typed.NewWriteBuffer(frame.Payload[:])
+
+	// flags:1
+	flagsRef := contents.DeferByte()
+	flagsRef.Update(rfs.callReq.Payload[_flagsIndex])
+
+	if initial {
+		// Copy all data before the checksum for the initial frame
+		contents.WriteBytes(rfs.callReq.Payload[_flagsIndex+1 : rfs.callReq.checksumTypeOffset])
+	}
+
+	// checksumType:1
+	contents.WriteSingleByte(byte(checksum.TypeCode()))
+
+	// checksum: checksum.Size()
+	checksumRef := contents.DeferBytes(checksum.Size())
+
+	if initial {
+		// arg1~1: write arg1 to the initial frame
+		contents.WriteUint16(uint16(len(rfs.callReq.method)))
+		contents.WriteBytes(rfs.callReq.method)
+		checksum.Add(rfs.callReq.method)
+	}
+
+	// TODO(cinchurge): pool writableFragment
+	return &writableFragment{
+		flagsRef:    flagsRef,
+		checksumRef: checksumRef,
+		checksum:    checksum,
+		contents:    contents,
+		frame:       frame,
+	}, contents.Err()
+}
+
+func (rfs *relayFragmentSender) flushFragment(wf *writableFragment) error {
+	wf.frame.Header.SetPayloadSize(uint16(wf.contents.BytesWritten()))
+	rfs.sentReporter.SentBytes(wf.frame.Header.FrameSize())
+
+	sent, failure := rfs.frameReceiver.Receive(wf.frame, requestFrame)
+	if !sent {
+		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure)
+		return nil
+	}
+	return nil
+}
+
+func (rfs *relayFragmentSender) doneSending() {}

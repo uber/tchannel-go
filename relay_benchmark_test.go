@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/uber/tchannel-go"
-
-	"github.com/uber/tchannel-go/benchmark"
-	"github.com/uber/tchannel-go/testutils"
-
 	"github.com/bmizerany/perks/quantile"
 	"github.com/stretchr/testify/require"
+	. "github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/benchmark"
+	"github.com/uber/tchannel-go/relay"
+	"github.com/uber/tchannel-go/testutils"
 )
 
 type benchmarkParams struct {
 	servers, clients int
 	requestSize      int
+	appends          []relay.KeyVal
 }
 
 type workerControl struct {
@@ -93,7 +93,7 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 		services["svc"] = append(services["svc]"], servers[i].HostPort())
 	}
 
-	relay, err := benchmark.NewRealRelay(services)
+	relay, err := benchmark.NewRealRelay(services, p.appends)
 	require.NoError(b, err, "Failed to create relay")
 	defer relay.Close()
 
@@ -174,7 +174,7 @@ func BenchmarkRelayNoLatencies(b *testing.B) {
 	defer server.Close()
 
 	hostMapping := map[string][]string{"svc": {server.HostPort()}}
-	relay, err := benchmark.NewRealRelay(hostMapping)
+	relay, err := benchmark.NewRealRelay(hostMapping, nil)
 	require.NoError(b, err, "NewRealRelay failed")
 	defer relay.Close()
 
@@ -222,4 +222,17 @@ func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 	p.clients = 5
 	p.servers = 2
 	benchmarkRelay(b, p)
+}
+
+func BenchmarkRelayAppends(b *testing.B) {
+	for _, n := range []int{0, 1, 2, 5, 10} {
+		b.Run(fmt.Sprintf("%v appends", n), func(b *testing.B) {
+			p := defaultParams()
+			for i := 0; i < n; i++ {
+				p.appends = append(p.appends, relay.KeyVal{Key: []byte("foo"), Val: []byte("bar")})
+			}
+			b.ResetTimer()
+			benchmarkRelay(b, p)
+		})
+	}
 }

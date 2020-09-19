@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/thrift/arg2"
 	"github.com/uber/tchannel-go/typed"
 )
@@ -94,14 +95,17 @@ func (cr lazyCallRes) OK() bool {
 type lazyCallReq struct {
 	*Frame
 
-	caller, method, delegate, key, as []byte
-
 	checksumTypeOffset             uint16
 	arg2StartOffset, arg2EndOffset uint16
 	arg3StartOffset                uint16
 
-	checksumType     ChecksumType
-	isArg2Fragmented bool
+	caller, method, delegate, key, as []byte
+	arg2Appends                       []relay.KeyVal
+	checksumType                      ChecksumType
+	isArg2Fragmented                  bool
+
+	// Intentionally an array to combine allocations with that of lazyCallReq
+	arg2InitialBuf [1]relay.KeyVal
 }
 
 // TODO: Consider pooling lazyCallReq and using pointers to the struct.
@@ -112,6 +116,7 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	}
 
 	cr := &lazyCallReq{Frame: f}
+	cr.arg2Appends = cr.arg2InitialBuf[:0]
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(_serviceLenIndex)
@@ -247,6 +252,10 @@ func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
 	}
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
+}
+
+func (f *lazyCallReq) Arg2Append(key, val []byte) {
+	f.arg2Appends = append(f.arg2Appends, relay.KeyVal{Key: key, Val: val})
 }
 
 // finishesCall checks whether this frame is the last one we should expect for
