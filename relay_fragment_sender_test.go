@@ -50,7 +50,7 @@ func TestRelayFragmentSender(t *testing.T) {
 			wantPayload: []byte("hello, world"),
 		},
 		{
-			msg:                            "send falure",
+			msg:                            "send failure",
 			frame:                          f,
 			sent:                           false,
 			failure:                        "something bad happened",

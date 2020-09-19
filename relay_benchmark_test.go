@@ -224,19 +224,15 @@ func BenchmarkRelay2Servers5Clients4k(b *testing.B) {
 	benchmarkRelay(b, p)
 }
 
-func benchmarkRelayWithAppends(b *testing.B, n int) {
-	p := defaultParams()
-	for i := 0; i < n; i++ {
-		p.appends = append(p.appends, relay.KeyVal{Key: []byte("foo"), Val: []byte("bar")})
-	}
-	b.ResetTimer()
-	benchmarkRelay(b, p)
-}
-
 func BenchmarkRelayAppends(b *testing.B) {
 	for _, n := range []int{0, 1, 2, 5, 10} {
 		b.Run(fmt.Sprintf("%v appends", n), func(b *testing.B) {
-			benchmarkRelayWithAppends(b, n)
+			p := defaultParams()
+			for i := 0; i < n; i++ {
+				p.appends = append(p.appends, relay.KeyVal{Key: []byte("foo"), Val: []byte("bar")})
+			}
+			b.ResetTimer()
+			benchmarkRelay(b, p)
 		})
 	}
 }
