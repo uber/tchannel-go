@@ -1,6 +1,19 @@
 Changelog
 =========
 
+## [1.20.0] - 2020-09-23
+### Added
+ * Make the scope of coverage calculation customizable (#803)
+ * Support per-connection base context propagation in inbound/outbound connections and relays (#801)
+
+### Changed
+ * Internal API changes related to relaying.
+ * Detect RelayStubHost in TestServer (#798)
+ * Allow RelayStub to inspect frames (#797)
+ 
+### Fixed
+ * Optimize KVIterator and typed.ReadBuffer for 25% improvement (#795)
+
 ## [1.19.1] - 2020-08-03
 ### Fixed
  * Move OS-specific logic into OS-specific files to avoid compile issues on
@@ -295,6 +308,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.20.0]: https://github.com/uber/tchannel-go/compare/v1.19.1...v1.20.0
 [1.18.0]: https://github.com/uber/tchannel-go/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/uber/tchannel-go/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/uber/tchannel-go/compare/v1.15.0...v1.16.0
