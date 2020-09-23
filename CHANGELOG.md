@@ -3,16 +3,10 @@ Changelog
 
 ## [1.20.0] - 2020-09-23
 ### Added
- * Make the scope of coverage calculation customizable (#803)
  * Support per-connection base context propagation in inbound/outbound connections and relays (#801)
 
 ### Changed
  * Internal API changes related to relaying.
- * Detect RelayStubHost in TestServer (#798)
- * Allow RelayStub to inspect frames (#797)
- 
-### Fixed
- * Optimize KVIterator and typed.ReadBuffer for 25% improvement (#795)
 
 ## [1.19.1] - 2020-08-03
 ### Fixed
