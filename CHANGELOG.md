@@ -3,7 +3,7 @@ Changelog
 
 ## [1.20.0] - 2020-09-23
 ### Added
- * Support per-connection base context propagation in inbound/outbound connections and relays (#801)
+ * Support per-connection base context propagation for inbound/outbound connections (#801)
 
 ### Changed
  * Internal API changes related to relaying.
