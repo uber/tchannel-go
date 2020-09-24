@@ -3,7 +3,8 @@ Changelog
 
 ## [1.20.1] - 2020-09-24
 ### Fixed
- * Set ConnContext in the channel instead of the connection (#806)
+ * Set ConnContext in the channel instead of the connection to avoid serialization
+   errors since ConnectionOptions is sometimes embedded in configurations (#806)
 
 ## [1.20.0] - 2020-09-23
 ### Added
