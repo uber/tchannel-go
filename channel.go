@@ -121,6 +121,11 @@ type ChannelOptions struct {
 	// Dialer is optional factory method which can be used for overriding
 	// outbound connections for things like TLS handshake
 	Dialer func(ctx context.Context, network, hostPort string) (net.Conn, error)
+
+	// ConnContext runs when a connection is established, which updates
+	// the per-connection base context. This context is used as the parent context
+	// for incoming calls.
+	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // ChannelState is the state of a channel.
@@ -168,6 +173,7 @@ type Channel struct {
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
 	dialer              func(ctx context.Context, hostPort string) (net.Conn, error)
+	connContext         func(ctx context.Context, conn net.Conn) context.Context
 	closed              chan struct{}
 
 	// mutable contains all the members of Channel which are mutable.
@@ -262,6 +268,12 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		}
 	}
 
+	if opts.ConnContext == nil {
+		opts.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+			return ctx
+		}
+	}
+
 	ch := &Channel{
 		channelConnectionCommon: channelConnectionCommon{
 			log:           logger,
@@ -279,6 +291,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayMaxConnTimeout: opts.RelayMaxConnectionTimeout,
 		relayTimerVerify:    opts.RelayTimerVerification,
 		dialer:              dialCtx,
+		connContext:         opts.ConnContext,
 		closed:              make(chan struct{}),
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()

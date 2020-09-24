@@ -158,11 +158,6 @@ type ConnectionOptions struct {
 	// MaxCloseTime controls how long we allow a connection to complete pending
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
-
-	// ConnContext runs when a connection is established, which updates
-	// the per-connection base context. This context is used as the parent context
-	// for incoming calls.
-	ConnContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -278,11 +273,6 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
-	if co.ConnContext == nil {
-		co.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
-			return ctx
-		}
-	}
 	return co
 }
 
@@ -358,7 +348,7 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		healthCheckHistory: newHealthHistory(),
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
-		baseContext:        opts.ConnContext(baseCtx, conn),
+		baseContext:        ch.connContext(baseCtx, conn),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
