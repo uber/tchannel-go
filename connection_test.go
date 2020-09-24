@@ -34,6 +34,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/relay/relaytest"
@@ -41,9 +43,6 @@ import (
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/tos"
 	"github.com/uber/tchannel-go/typed"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -1434,7 +1433,7 @@ func TestInboundConnContext(t *testing.T) {
 		alice := ts.Server()
 		testutils.RegisterFunc(alice, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			// Verify that the context passed into the handler inherits from the base context
-			// set by connContext
+			// set by ConnContext
 			assert.Equal(t, "bar", ctx.Value("foo"), "Value unexpectedly different from base context")
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
 		})
