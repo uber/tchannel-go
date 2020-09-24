@@ -32,10 +32,6 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v2"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/relay/relaytest"
@@ -43,6 +39,9 @@ import (
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/tos"
 	"github.com/uber/tchannel-go/typed"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -1465,29 +1464,4 @@ func TestOutboundConnContext(t *testing.T) {
 
 		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
 	})
-}
-
-// TestConnectionOptionsMarshal ensures that ConnectionOptions can pass yaml.Marshal so configs that include
-// it don't break when being serialized
-func TestConnectionOptionsMarshal(t *testing.T) {
-	ch, err := NewChannel("foo", &ChannelOptions{})
-	require.NoError(t, err)
-
-	connOpts := ch.ConnectionOptions()
-	out, err := yaml.Marshal(&connOpts)
-	require.NoError(t, err)
-
-	wantConfig := `framepool: {}
-recvbuffersize: 0
-sendbuffersize: 512
-sendbuffersizeoverrides: []
-checksumtype: 1
-tospriority: ""
-healthchecks:
-  interval: 0s
-  timeout: 1s
-  failurestoclose: 5
-maxclosetime: 0s
-`
-	assert.Equal(t, wantConfig, string(out), "Got unexpected config")
 }
