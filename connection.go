@@ -273,7 +273,6 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
-
 	return co
 }
 
