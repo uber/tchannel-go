@@ -32,6 +32,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v2"
+
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/relay/relaytest"
@@ -1432,7 +1434,7 @@ func TestInboundConnContext(t *testing.T) {
 		alice := ts.Server()
 		testutils.RegisterFunc(alice, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			// Verify that the context passed into the handler inherits from the base context
-			// set by ConnContext
+			// set by connContext
 			assert.Equal(t, "bar", ctx.Value("foo"), "Value unexpectedly different from base context")
 			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
 		})
@@ -1464,4 +1466,29 @@ func TestOutboundConnContext(t *testing.T) {
 
 		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
 	})
+}
+
+// TestConnectionOptionsMarshal ensures that ConnectionOptions can pass yaml.Marshal so configs that include
+// it don't break when being serialized
+func TestConnectionOptionsMarshal(t *testing.T) {
+	ch, err := NewChannel("foo", &ChannelOptions{})
+	require.NoError(t, err)
+
+	connOpts := ch.ConnectionOptions()
+	out, err := yaml.Marshal(&connOpts)
+	require.NoError(t, err)
+
+	wantConfig := `framepool: {}
+recvbuffersize: 0
+sendbuffersize: 512
+sendbuffersizeoverrides: []
+checksumtype: 1
+tospriority: ""
+healthchecks:
+  interval: 0s
+  timeout: 1s
+  failurestoclose: 5
+maxclosetime: 0s
+`
+	assert.Equal(t, wantConfig, string(out), "Got unexpected config")
 }

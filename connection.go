@@ -159,10 +159,10 @@ type ConnectionOptions struct {
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
 
-	// ConnContext runs when a connection is established, which updates
+	// connContext runs when a connection is established, which updates
 	// the per-connection base context. This context is used as the parent context
 	// for incoming calls.
-	ConnContext func(ctx context.Context, conn net.Conn) context.Context
+	connContext func(ctx context.Context, conn net.Conn) context.Context
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -278,12 +278,17 @@ func (co ConnectionOptions) withDefaults() ConnectionOptions {
 		co.SendBufferSize = DefaultConnectionBufferSize
 	}
 	co.HealthChecks = co.HealthChecks.withDefaults()
-	if co.ConnContext == nil {
-		co.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+	if co.connContext == nil {
+		co.connContext = func(ctx context.Context, conn net.Conn) context.Context {
 			return ctx
 		}
 	}
 	return co
+}
+
+// SetConnContext sets the ConnContext function
+func (co *ConnectionOptions) SetConnContext(connContext func(ctx context.Context, conn net.Conn) context.Context) {
+	co.connContext = connContext
 }
 
 func (co ConnectionOptions) getSendBufferSize(processName string) int {
@@ -358,7 +363,7 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		healthCheckHistory: newHealthHistory(),
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
-		baseContext:        opts.ConnContext(baseCtx, conn),
+		baseContext:        opts.connContext(baseCtx, conn),
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {

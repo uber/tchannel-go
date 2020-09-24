@@ -519,7 +519,7 @@ func TestRelayMakeOutgoingCall(t *testing.T) {
 func TestRelayInboundConnContext(t *testing.T) {
 	rh := relaytest.NewStubRelayHost()
 	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
-		// Verify that the relay gets the base context set in the server's ConnContext
+		// Verify that the relay gets the base context set in the server's connContext
 		assert.Equal(t, "bar", conn.Context.Value("foo"), "Unexpected value set in base context")
 	})
 
