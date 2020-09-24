@@ -272,7 +272,7 @@ func (o *ChannelOpts) SetDialer(f func(context.Context, string, string) (net.Con
 
 // SetConnContext sets the connection's ConnContext function
 func (o *ChannelOpts) SetConnContext(f func(context.Context, net.Conn) context.Context) *ChannelOpts {
-	o.DefaultConnectionOptions.ConnContext = f
+	o.ConnContext = f
 	return o
 }
 
