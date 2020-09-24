@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.20.1] - 2020-09-24
+### Fixed
+ * Set ConnContext in the channel instead of the connection (#806)
+
 ## [1.20.0] - 2020-09-23
 ### Added
  * Support per-connection base context propagation for inbound/outbound connections (#801)
@@ -302,6 +306,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.20.1]: https://github.com/uber/tchannel-go/compare/v1.20.0...v1.20.1
 [1.20.0]: https://github.com/uber/tchannel-go/compare/v1.19.1...v1.20.0
 [1.18.0]: https://github.com/uber/tchannel-go/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/uber/tchannel-go/compare/v1.16.0...v1.17.0
