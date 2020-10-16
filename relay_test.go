@@ -1056,7 +1056,6 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
 		AddLogFilter("Received a frame without a RelayItem.", numCalls).
 		SetRelayOnly()
-	opts.RelayMaxTombs = numCalls / 2
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
 
