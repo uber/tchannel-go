@@ -243,6 +243,12 @@ func (o *ChannelOpts) SetRelayMaxConnectionTimeout(d time.Duration) *ChannelOpts
 	return o
 }
 
+// SetRelayMaxTombs sets the maximum number of tombs tracked in the relayer.
+func (o *ChannelOpts) SetRelayMaxTombs(maxTombs uint64) *ChannelOpts {
+	o.ChannelOptions.RelayMaxTombs = maxTombs
+	return o
+}
+
 // SetOnPeerStatusChanged sets the callback for channel status change
 // noficiations.
 func (o *ChannelOpts) SetOnPeerStatusChanged(f func(*tchannel.Peer)) *ChannelOpts {

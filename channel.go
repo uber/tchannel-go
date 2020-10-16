@@ -83,6 +83,12 @@ type ChannelOptions struct {
 	// the max connection timeout used.
 	RelayMaxConnectionTimeout time.Duration
 
+	// RelayMaxTombs is the maximum number of timed-out calls that the relay
+	// will keep track of per-connection to avoid spurious logs
+	// for late-arriving frames.
+	// This is an unstable API - breaking changes are likely.
+	RelayMaxTombs uint64
+
 	// RelayTimerVerification will disable pooling of relay timers, and instead
 	// verify that timers are not used once they are released.
 	// This is an unstable API - breaking changes are likely.
@@ -168,6 +174,7 @@ type Channel struct {
 	relayHost           RelayHost
 	relayMaxTimeout     time.Duration
 	relayMaxConnTimeout time.Duration
+	relayMaxTombs       uint64
 	relayTimerVerify    bool
 	internalHandlers    *handlerMap
 	handler             Handler
@@ -289,6 +296,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayHost:           opts.RelayHost,
 		relayMaxTimeout:     validateRelayMaxTimeout(opts.RelayMaxTimeout, logger),
 		relayMaxConnTimeout: opts.RelayMaxConnectionTimeout,
+		relayMaxTombs:       opts.RelayMaxTombs,
 		relayTimerVerify:    opts.RelayTimerVerification,
 		dialer:              dialCtx,
 		connContext:         opts.ConnContext,

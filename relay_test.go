@@ -1046,10 +1046,15 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 }
 
 func TestRelayRaceCompletionAndTimeout(t *testing.T) {
-	const numCalls = 10
+	const numCalls = 100
 
 	opts := testutils.NewOpts().
 		AddLogFilter("simpleHandler OnError.", numCalls).
+		// Trigger deletion on timeout, see https://github.com/uber/tchannel-go/issues/808.
+		SetRelayMaxTombs(numCalls/2).
+		// Hitting max tombs will cause the following logs:
+		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
+		AddLogFilter("Received a frame without a RelayItem.", numCalls).
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
