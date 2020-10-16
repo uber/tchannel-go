@@ -35,9 +35,9 @@ import (
 )
 
 const (
-	// _maxRelayTombs is the maximum number of tombs we'll accumulate in a
-	// single relayItems.
-	_maxRelayTombs = 3e4
+	// _defaultRelayMaxTombs is the default maximum number of tombs we'll accumulate
+	// in a single relayItems.
+	_defaultRelayMaxTombs = 3e4
 	// _relayTombTTL is the length of time we'll keep a tomb before GC'ing it.
 	_relayTombTTL = 3 * time.Second
 	// _defaultRelayMaxTimeout is the default max TTL for relayed calls.
@@ -82,6 +82,7 @@ type relayItems struct {
 
 	logger   Logger
 	timeouts *relayTimerPool
+	maxTombs uint64
 	tombs    uint64
 	items    map[uint32]relayItem
 }
@@ -90,10 +91,14 @@ type frameReceiver interface {
 	Receive(f *Frame, fType frameType) (sent bool, failureReason string)
 }
 
-func newRelayItems(logger Logger) *relayItems {
+func newRelayItems(logger Logger, maxTombs uint64) *relayItems {
+	if maxTombs == 0 {
+		maxTombs = _defaultRelayMaxTombs
+	}
 	return &relayItems{
-		items:  make(map[uint32]relayItem),
-		logger: logger,
+		items:    make(map[uint32]relayItem),
+		logger:   logger,
+		maxTombs: maxTombs,
 	}
 }
 
@@ -156,7 +161,7 @@ func (r *relayItems) Delete(id uint32) (relayItem, bool) {
 // a relayed call.
 func (r *relayItems) Entomb(id uint32, deleteAfter time.Duration) (relayItem, bool) {
 	r.Lock()
-	if r.tombs > _maxRelayTombs {
+	if r.tombs > r.maxTombs {
 		r.Unlock()
 		r.logger.WithFields(LogField{"id", id}).Warn("Too many tombstones, deleting relay item immediately.")
 		return r.Delete(id)
@@ -228,8 +233,8 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 		maxTimeout:     ch.relayMaxTimeout,
 		maxConnTimeout: ch.relayMaxConnTimeout,
 		localHandler:   ch.relayLocal,
-		outbound:       newRelayItems(conn.log.WithFields(LogField{"relayItems", "outbound"})),
-		inbound:        newRelayItems(conn.log.WithFields(LogField{"relayItems", "inbound"})),
+		outbound:       newRelayItems(conn.log.WithFields(LogField{"relayItems", "outbound"}), ch.relayMaxTombs),
+		inbound:        newRelayItems(conn.log.WithFields(LogField{"relayItems", "inbound"}), ch.relayMaxTombs),
 		peers:          ch.RootPeers(),
 		conn:           conn,
 		relayConn: &relay.Conn{
