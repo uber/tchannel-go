@@ -118,14 +118,23 @@ func (r *relayItems) Count() int {
 	return n
 }
 
-// Get checks for a relay item by ID, returning the item and a bool indicating
-// whether the item was found.
-func (r *relayItems) Get(id uint32) (relayItem, bool) {
+// Get checks for a relay item by ID, and will stop the timeout with the
+// read lock held (to avoid a race between timeout stop and deletion).
+// It returns whether a timeout was stopped, and if the item was found.
+func (r *relayItems) Get(id uint32, stopTimeout bool) (_ relayItem, stopped bool, found bool) {
 	r.RLock()
-	item, ok := r.items[id]
-	r.RUnlock()
+	defer r.RUnlock()
 
-	return item, ok
+	item, ok := r.items[id]
+	if !ok {
+		return relayItem{}, false /* stopped */, false /* found */
+	}
+
+	if !stopTimeout {
+		return item, false /* stopped */, true /* found */
+	}
+
+	return item, item.timeout.Stop(), true /* found */
 }
 
 // Add adds a relay item.
@@ -280,26 +289,19 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 	// If we receive a response frame, we expect to find that ID in our outbound.
 	// If we receive a request frame, we expect to find that ID in our inbound.
 	items := r.receiverItems(fType)
+	finished := finishesCall(f)
 
-	item, ok := items.Get(id)
+	// Stop the timeout if the call if finished.
+	item, stopped, ok := items.Get(id, finished /* stopTimeout */)
 	if !ok {
 		r.logger.WithFields(
 			LogField{"id", id},
 		).Warn("Received a frame without a RelayItem.")
 		return false, _relayErrorNotFound
 	}
-
-	finished := finishesCall(f)
-	if item.tomb {
-		// Call timed out, ignore this frame. (We've already handled stats.)
+	if item.tomb || (finished && !stopped) {
+		// Item has previously timed out, or is in the process of timing out.
 		// TODO: metrics for late-arriving frames.
-		return true, ""
-	}
-
-	// If the call is finished, we stop the timeout to ensure
-	// we don't have concurrent calls to end the call.
-	if finished && !item.timeout.Stop() {
-		// Timeout goroutine is already ending this call.
 		return true, ""
 	}
 
@@ -377,7 +379,7 @@ func (r *Relayer) canHandleNewCall() (bool, connectionState) {
 }
 
 func (r *Relayer) getDestination(f *lazyCallReq, call RelayCall) (*Connection, bool, error) {
-	if _, ok := r.outbound.Get(f.Header.ID); ok {
+	if _, _, ok := r.outbound.Get(f.Header.ID, false /* stopTimeout */); ok {
 		r.logger.WithFields(
 			LogField{"id", f.Header.ID},
 			LogField{"source", string(f.Caller())},
@@ -517,20 +519,14 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		items = r.inbound
 	}
 
-	item, ok := items.Get(f.Header.ID)
+	// Stop the timeout if the call if finished.
+	item, stopped, ok := items.Get(f.Header.ID, finished /* stopTimeout */)
 	if !ok {
 		return errUnknownID
 	}
-	if item.tomb {
-		// Call timed out, ignore this frame. (We've already handled stats.)
+	if item.tomb || (finished && !stopped) {
+		// Item has previously timed out, or is in the process of timing out.
 		// TODO: metrics for late-arriving frames.
-		return nil
-	}
-
-	// If the call is finished, we stop the timeout to ensure
-	// we don't have concurrent calls to end the call.
-	if finished && !item.timeout.Stop() {
-		// Timeout goroutine is already ending this call.
 		return nil
 	}
 
@@ -591,21 +587,19 @@ func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bo
 // forwarded. We keep the relay item tombed, rather than delete it to ensure that
 // future frames do not cause error logs.
 func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
-	item, ok := items.Get(id)
-	if !ok {
+	// Stop the timeout, so we either fail it here, or in the timeout goroutine but not both.
+	item, stopped, found := items.Get(id, true /* stopTimeout */)
+	if !found {
 		items.logger.WithFields(LogField{"id", id}).Warn("Attempted to fail non-existent relay item.")
 		return
 	}
-
-	// The call could time-out right as we entomb it, which would cause spurious
-	// error logs, so ensure we can stop the timeout.
-	if !item.timeout.Stop() {
+	if !stopped {
 		return
 	}
 
 	// Entomb it so that we don't get unknown exchange errors on further frames
 	// for this call.
-	item, ok = items.Entomb(id, _relayTombTTL)
+	item, ok := items.Entomb(id, _relayTombTTL)
 	if !ok {
 		return
 	}
