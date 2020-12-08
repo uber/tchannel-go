@@ -1495,11 +1495,11 @@ func inspectFrames(rh *relaytest.StubRelayHost) chan relay.CallFrame {
 }
 
 func TestRelayModifyArg2(t *testing.T) {
+	const kb = 1024
 	largeVal1 := testutils.RandString(16 * 1024)
 	largeVal2 := testutils.RandString(16 * 1024)
 	largeVal3 := testutils.RandString(16 * 1024)
 	largeVal4 := testutils.RandString(16 * 1024)
-	largePayload := testutils.RandString(1024)
 
 	modifyTests := []struct {
 		msg         string
@@ -1584,18 +1584,81 @@ func TestRelayModifyArg2(t *testing.T) {
 			arg3: []byte{},
 		},
 		{
-			msg: "small payloads",
+			msg: "16B payloads",
 			arg2: map[string]string{
 				"existingKey": "existingValue",
 			},
-			arg3: []byte("hello world"),
+			arg3: testutils.RandBytes(16),
 		},
 		{
-			msg: "large payloads",
+			msg: "32B payloads",
 			arg2: map[string]string{
 				"existingKey": "existingValue",
 			},
-			arg3: []byte(largePayload),
+			arg3: testutils.RandBytes(32),
+		},
+		{
+			msg: "64B payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(64),
+		},
+		{
+			msg: "128B payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(128),
+		},
+		{
+			msg: "512B payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(512),
+		},
+		{
+			msg: "1kB payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(kb),
+		},
+		{
+			msg: "16kB payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(16 * kb),
+		},
+		{
+			msg: "32kB payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(32 * kb),
+		},
+		{
+			msg: "64kB payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(64 * kb),
+		},
+		{
+			msg: "128kB payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(128 * kb),
+		},
+		{
+			msg: "512kB payloads",
+			arg2: map[string]string{
+				"existingKey": "existingValue",
+			},
+			arg3: testutils.RandBytes(512 * kb),
 		},
 	}
 
