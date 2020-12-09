@@ -561,7 +561,6 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	if !ok {
 		return errUnknownID
 	}
-
 	if item.tomb || (finished && !stopped) {
 		// Item has previously timed out, or is in the process of timing out.
 		// TODO: metrics for late-arriving frames.
