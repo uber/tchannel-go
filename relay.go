@@ -290,26 +290,25 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 
 // Relay is called for each frame that is read on the connection.
 func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
-	if f.messageType() == messageTypeCallReq {
-		cr, err := newLazyCallReq(f)
-		if err != nil {
-			return _relayNoRelease, err
+	if f.messageType() != messageTypeCallReq {
+		err := r.handleNonCallReq(f)
+		if err == errUnknownID {
+			// This ID may be owned by an outgoing call, so check the outbound
+			// message exchange, and if it succeeds, then the frame has been
+			// handled successfully.
+			if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
+				return _relayNoRelease, nil
+			}
 		}
-
-		return r.handleCallReq(cr)
+		return _relayNoRelease, err
 	}
 
-	err := r.handleNonCallReq(f)
-	if err == errUnknownID {
-		// This ID may be owned by an outgoing call, so check the outbound
-		// message exchange, and if it succeeds, then the frame has been
-		// handled successfully.
-		if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
-			return _relayNoRelease, nil
-		}
+	cr, err := newLazyCallReq(f)
+	if err != nil {
+		return _relayNoRelease, err
 	}
 
-	return _relayNoRelease, err
+	return r.handleCallReq(cr)
 }
 
 func (r *Relayer) updateChecksumIfCallIsMutated(f *Frame) {
