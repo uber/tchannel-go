@@ -72,14 +72,14 @@ var (
 )
 
 type relayItem struct {
-	remapID      uint32
-	tomb         bool
-	isOriginator bool
-	call         RelayCall
-	destination  *Relayer
-	span         Span
-	timeout      *relayTimer
-	mutatedCall  *mutatedCallState
+	remapID         uint32
+	tomb            bool
+	isOriginator    bool
+	call            RelayCall
+	destination     *Relayer
+	span            Span
+	timeout         *relayTimer
+	mutatedChecksum Checksum
 }
 
 type relayItems struct {
@@ -209,11 +209,6 @@ const (
 	responseFrame frameType = 1
 )
 
-type mutatedCallState struct {
-	arg3Complete bool
-	checksum     Checksum
-}
-
 // A Relayer forwards frames.
 type Relayer struct {
 	relayHost      RelayHost
@@ -291,29 +286,20 @@ func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 	return r.handleCallReq(cr)
 }
 
-func (r *Relayer) updateChecksumIfCallIsMutated(f *Frame, cs *mutatedCallState) {
-	if cs.arg3Complete {
-		return
-	}
-
+func (r *Relayer) updateCallReqContinueChecksum(f *Frame, cs Checksum) {
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(1) // flags
 	rbuf.SkipBytes(1) // checksum type
 
-	checksumRef := typed.BytesRef(rbuf.ReadBytes(cs.checksum.Size()))
+	checksumRef := typed.BytesRef(rbuf.ReadBytes(cs.Size()))
 
 	n := rbuf.ReadUint16()
 	if n == 0 {
-		cs.arg3Complete = true
 		return
 	}
 
-	cs.checksum.Add(rbuf.ReadBytes(int(n)))
-	if rbuf.BytesRemaining() > 0 {
-		cs.arg3Complete = true
-	}
-
-	checksumRef.Update(cs.checksum.Sum())
+	cs.Add(rbuf.ReadBytes(int(n)))
+	checksumRef.Update(cs.Sum())
 }
 
 // Receive receives frames intended for this connection.
@@ -519,14 +505,14 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	}
 	span := f.Span()
 
-	var cs *mutatedCallState
+	var mutatedChecksum Checksum
 	if len(f.arg2Appends) > 0 {
-		cs = &mutatedCallState{checksum: f.checksumType.New()}
+		mutatedChecksum = f.checksumType.New()
 	}
 
 	// The remote side of the relay doesn't need to track stats or call state.
 	remoteConn.relay.addRelayItem(false /* isOriginator */, destinationID, f.Header.ID, r, ttl, span, call, nil)
-	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call, cs)
+	relayToDest := r.addRelayItem(true /* isOriginator */, f.Header.ID, destinationID, remoteConn.relay, ttl, span, call, mutatedChecksum)
 
 	f.Header.ID = destinationID
 
@@ -582,8 +568,8 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return nil
 	}
 
-	if f.messageType() == messageTypeCallReqContinue && item.mutatedCall != nil {
-		r.updateChecksumIfCallIsMutated(f, item.mutatedCall)
+	if f.messageType() == messageTypeCallReqContinue && item.mutatedChecksum != nil {
+		r.updateCallReqContinueChecksum(f, item.mutatedChecksum)
 	}
 
 	// Track sent/received bytes. We don't do this before we check
@@ -606,7 +592,7 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
-func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, call RelayCall, cs *mutatedCallState) relayItem {
+func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, call RelayCall, mutatedChecksum Checksum) relayItem {
 	item := relayItem{
 		isOriginator: isOriginator,
 		call:         call,
@@ -618,7 +604,7 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	items := r.inbound
 	if isOriginator {
 		items = r.outbound
-		item.mutatedCall = cs
+		item.mutatedChecksum = mutatedChecksum
 	}
 	item.timeout = r.timeouts.Get()
 	items.Add(id, item)
@@ -679,8 +665,8 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 	}
 	if item.isOriginator {
 		item.call.End()
-		if item.mutatedCall != nil {
-			item.mutatedCall.checksum.Release()
+		if item.mutatedChecksum != nil {
+			item.mutatedChecksum.Release()
 		}
 	}
 	r.decrementPending()
@@ -745,12 +731,12 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 		return fmt.Errorf("%v: got %s", errArg2ThriftOnly, f.as)
 	}
 
-	cs := relayToDest.mutatedCall
+	cs := relayToDest.mutatedChecksum
 
 	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
 		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call, cs),
-		cs.checksum,
+		cs,
 	)
 
 	arg2Writer, err := fragWriter.ArgWriter(false /* last */)
@@ -767,9 +753,6 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 
 	if err := NewArgWriter(fragWriter.ArgWriter(true /* last */)).Write(f.arg3()); err != nil {
 		return errors.New("arg3 write failed")
-	}
-	if finishesCall(f.Frame) {
-		cs.arg3Complete = true
 	}
 
 	return nil
@@ -854,10 +837,10 @@ type relayFragmentSender struct {
 	outboundRelayItems *relayItems
 	origID             uint32
 	sentReporter       sentBytesReporter
-	callState          *mutatedCallState
+	mutatedChecksum    Checksum
 }
 
-func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, sentReporter sentBytesReporter, cs *mutatedCallState) *relayFragmentSender {
+func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, sentReporter sentBytesReporter, mutatedChecksum Checksum) *relayFragmentSender {
 	// TODO(cinchurge): pool fragment senders
 	return &relayFragmentSender{
 		callReq:            cr,
@@ -867,7 +850,7 @@ func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, ori
 		outboundRelayItems: r.outbound,
 		origID:             origID,
 		sentReporter:       sentReporter,
-		callState:          cs,
+		mutatedChecksum:    mutatedChecksum,
 	}
 }
 
