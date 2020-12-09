@@ -42,11 +42,12 @@ const (
 // for contents, a running checksum, and placeholders for the fragment flags
 // and final checksum value
 type writableFragment struct {
-	flagsRef    typed.ByteRef
-	checksumRef typed.BytesRef
-	checksum    Checksum
-	contents    *typed.WriteBuffer
-	frame       *Frame
+	flagsRef            typed.ByteRef
+	checksumRef         typed.BytesRef
+	checksum            Checksum
+	contents            *typed.WriteBuffer
+	frame               *Frame
+	dontReleaseChecksum bool
 }
 
 // finish finishes the fragment, updating the final checksum and fragment flags
@@ -54,7 +55,7 @@ func (f *writableFragment) finish(hasMoreFragments bool) {
 	f.checksumRef.Update(f.checksum.Sum())
 	if hasMoreFragments {
 		f.flagsRef.Update(hasMoreFragmentsFlag)
-	} else {
+	} else if !f.dontReleaseChecksum {
 		f.checksum.Release()
 	}
 }
