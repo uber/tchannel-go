@@ -206,26 +206,8 @@ const (
 )
 
 type mutatedCallState struct {
-	arg2Complete bool
 	arg3Complete bool
 	checksum     Checksum
-}
-
-func (cs *mutatedCallState) updateChecksumFromArg(rbuf *typed.ReadBuffer, complete *bool) {
-	if *complete {
-		return
-	}
-
-	n := rbuf.ReadUint16()
-	if n == 0 {
-		*complete = true
-		return
-	}
-
-	cs.checksum.Add(rbuf.ReadBytes(int(n)))
-	if rbuf.BytesRemaining() > 0 {
-		*complete = true
-	}
 }
 
 // A Relayer forwards frames.
@@ -306,13 +288,27 @@ func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 }
 
 func (r *Relayer) updateChecksumIfCallIsMutated(f *Frame, cs *mutatedCallState) {
+	if cs.arg3Complete {
+		return
+	}
+
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(1) // flags
 	rbuf.SkipBytes(1) // checksum type
 
 	checksumRef := typed.BytesRef(rbuf.ReadBytes(cs.checksum.Size()))
-	cs.updateChecksumFromArg(rbuf, &cs.arg2Complete)
-	cs.updateChecksumFromArg(rbuf, &cs.arg3Complete)
+
+	n := rbuf.ReadUint16()
+	if n == 0 {
+		cs.arg3Complete = true
+		return
+	}
+
+	cs.checksum.Add(rbuf.ReadBytes(int(n)))
+	if rbuf.BytesRemaining() > 0 {
+		cs.arg3Complete = true
+	}
+
 	checksumRef.Update(cs.checksum.Sum())
 }
 
@@ -751,7 +747,6 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 	if err := arg2Writer.Close(); err != nil {
 		return fmt.Errorf("close arg2 writer: %v", err)
 	}
-	cs.arg2Complete = true
 
 	if err := NewArgWriter(fragWriter.ArgWriter(true /* last */)).Write(f.arg3()); err != nil {
 		return errors.New("arg3 write failed")
