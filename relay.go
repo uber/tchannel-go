@@ -233,6 +233,9 @@ type Relayer struct {
 	relayConn *relay.Conn
 	logger    Logger
 	pending   atomic.Uint32
+
+	callStateMu  sync.RWMutex
+	callStateMap map[uint32]*callState
 }
 
 // NewRelayer constructs a Relayer.
@@ -252,33 +255,66 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 			IsOutbound:        conn.connDirection == outbound,
 			Context:           conn.baseContext,
 		},
-		logger: conn.log,
+		logger:       conn.log,
+		callStateMap: make(map[uint32]*callState),
 	}
 	r.timeouts = newRelayTimerPool(r.timeoutRelayItem, ch.relayTimerVerify)
 	return r
 }
 
+type callState struct {
+	argComplete [3]bool
+	checksum    Checksum
+}
+
+func (cs callState) String() string {
+	return fmt.Sprintf("arg1:%v, arg2:%v, arg3:%v, csum=%v", cs.argComplete[0], cs.argComplete[1], cs.argComplete[2], cs.checksum.Sum())
+}
+
 // Relay is called for each frame that is read on the connection.
 func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
-	if f.messageType() != messageTypeCallReq {
-		err := r.handleNonCallReq(f)
-		if err == errUnknownID {
-			// This ID may be owned by an outgoing call, so check the outbound
-			// message exchange, and if it succeeds, then the frame has been
-			// handled successfully.
-			if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
-				return _relayNoRelease, nil
-			}
+	if f.messageType() == messageTypeCallReq {
+		cr, err := newLazyCallReq(f)
+		if err != nil {
+			return _relayNoRelease, err
 		}
-		return _relayNoRelease, err
+
+		cs := &callState{checksum: cr.checksumType.New()}
+		//fmt.Printf("[before]handle call req: cs=%v (%p)\n", cs, cs)
+
+		r.callStateMu.Lock()
+		r.callStateMap[f.Header.ID] = cs
+		r.callStateMu.Unlock()
+
+		shouldRelease, err = r.handleCallReq(cr, cs)
+		//fmt.Printf("[after]handle call req: cs=%v (%p)\n", cs, cs)
+		return shouldRelease, err
 	}
 
-	cr, err := newLazyCallReq(f)
-	if err != nil {
-		return _relayNoRelease, err
+	if f.messageType() == messageTypeCallReqContinue {
+		r.callStateMu.RLock()
+		cs, ok := r.callStateMap[f.Header.ID]
+		r.callStateMu.RUnlock()
+
+		if !ok {
+			return _relayNoRelease, fmt.Errorf("no checksum for frame %v", f.Header.ID)
+		}
+
+		if f.Header.messageType == messageTypeCallReqContinue {
+			recalculateNonCallFrameChecksum(f, cs)
+		}
 	}
 
-	return r.handleCallReq(cr)
+	err := r.handleNonCallReq(f)
+	if err == errUnknownID {
+		// This ID may be owned by an outgoing call, so check the outbound
+		// message exchange, and if it succeeds, then the frame has been
+		// handled successfully.
+		if err := r.conn.outbound.forwardPeerFrame(f); err == nil {
+			return _relayNoRelease, nil
+		}
+	}
+	return _relayNoRelease, err
 }
 
 // Receive receives frames intended for this connection.
@@ -416,7 +452,7 @@ func (r *Relayer) getDestination(f *lazyCallReq, call RelayCall) (*Connection, b
 	return remoteConn, true, nil
 }
 
-func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
+func (r *Relayer) handleCallReq(f *lazyCallReq, cs *callState) (shouldRelease bool, _ error) {
 	if handled := r.handleLocalCallReq(f); handled {
 		return _relayNoRelease, nil
 	}
@@ -495,7 +531,20 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	if len(f.arg2Appends) > 0 {
 		// fragmentingSend always sends new frames in place of the old frame so we must
 		// release it separately
-		return _relayShouldRelease, r.fragmentingSend(call, f, relayToDest, origID)
+		return _relayShouldRelease, r.fragmentingSend(call, f, relayToDest, origID, cs)
+	}
+
+	cs.checksum.Add(f.method)
+	cs.argComplete[0] = true
+
+	cs.checksum.Add(f.arg2())
+	if !f.isArg2Fragmented {
+		cs.argComplete[1] = true
+
+		cs.checksum.Add(f.arg3())
+		if !f.HasMoreFragments() {
+			cs.argComplete[2] = true
+		}
 	}
 
 	call.SentBytes(f.Frame.Header.FrameSize())
@@ -547,6 +596,51 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		r.finishRelayItem(items, originalID)
 	}
 	return nil
+}
+
+func frameHasMoreFragments(f *Frame) bool {
+	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
+}
+
+func recalculateNonCallFrameChecksum(f *Frame, cs *callState) {
+	rbuf := typed.NewReadBuffer(f.SizedPayload())
+	// flags
+	rbuf.SkipBytes(1)
+
+	// checksum type
+	csType := ChecksumType(rbuf.ReadSingleByte())
+	if csType != cs.checksum.TypeCode() {
+		panic(fmt.Sprintf("want checksum type %v, got %v", cs.checksum.TypeCode(), csType))
+	}
+
+	// original checksum
+	checksumSlice := rbuf.ReadBytes(cs.checksum.Size())
+
+	for i := range cs.argComplete {
+		if cs.argComplete[i] {
+			continue
+		}
+
+		//fmt.Printf("recalculate: adding arg%d\n", i+1)
+		n := rbuf.ReadUint16()
+		if n == 0 {
+			cs.argComplete[i] = true
+			continue
+		} else {
+			cs.checksum.Add(rbuf.ReadBytes(int(n)))
+			if rbuf.BytesRemaining() > 0 {
+				cs.argComplete[i] = true
+			}
+		}
+	}
+
+	if !frameHasMoreFragments(f) {
+		for i := range cs.argComplete {
+			cs.argComplete[i] = true
+		}
+	}
+
+	copy(checksumSlice, cs.checksum.Sum())
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
@@ -677,7 +771,7 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) (shouldRelease bool) {
 	return _relayShouldRelease
 }
 
-func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32) error {
+func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32, cs *callState) error {
 	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
 		return errFragmentedArg2WithAppend
 	}
@@ -685,7 +779,7 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
 		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call),
-		f.checksumType.New(),
+		cs.checksum,
 	)
 
 	arg2Writer, err := fragWriter.ArgWriter(false /* last */)
