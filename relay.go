@@ -75,7 +75,7 @@ type relayItem struct {
 	destination  *Relayer
 	span         Span
 	timeout      *relayTimer
-	callState    *mutatedCallState
+	mutatedCall  *mutatedCallState
 }
 
 type relayItems struct {
@@ -568,8 +568,8 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return nil
 	}
 
-	if f.messageType() == messageTypeCallReqContinue && item.callState != nil {
-		r.updateChecksumIfCallIsMutated(f, item.callState)
+	if f.messageType() == messageTypeCallReqContinue && item.mutatedCall != nil {
+		r.updateChecksumIfCallIsMutated(f, item.mutatedCall)
 	}
 
 	// Track sent/received bytes. We don't do this before we check
@@ -604,7 +604,7 @@ func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destinatio
 	items := r.inbound
 	if isOriginator {
 		items = r.outbound
-		item.callState = cs
+		item.mutatedCall = cs
 	}
 	item.timeout = r.timeouts.Get()
 	items.Add(id, item)
@@ -665,8 +665,8 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 	}
 	if item.isOriginator {
 		item.call.End()
-		if item.callState != nil {
-			item.callState.checksum.Release()
+		if item.mutatedCall != nil {
+			item.mutatedCall.checksum.Release()
 		}
 	}
 	r.decrementPending()
@@ -728,7 +728,7 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 		return errFragmentedArg2WithAppend
 	}
 
-	cs := relayToDest.callState
+	cs := relayToDest.mutatedCall
 
 	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
