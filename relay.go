@@ -848,6 +848,9 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 	contents := typed.NewWriteBuffer(frame.Payload[:])
 
 	// flags:1
+	// Flags MUST be copied over from the callReq frame to all new fragments since if there are more
+	// fragments to follow the callReq, the destination needs to know about this or those frames will
+	// be dropped from the call
 	flagsRef := contents.DeferByte()
 	flagsRef.Update(rfs.callReq.Payload[_flagsIndex])
 
