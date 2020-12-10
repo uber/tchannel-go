@@ -54,6 +54,9 @@ type writableFragment struct {
 func (f *writableFragment) finish(hasMoreFragments bool) {
 	f.checksumRef.Update(f.checksum.Sum())
 	if hasMoreFragments {
+		// Important: hasMoreFragmentsFlag is set if there are more fragments, but NOT CLEARED if there aren't.
+		// This allows for callReqContinue frames to follow a fragmented callReq frame e.g. when arg2 is modified
+		// by the relayer
 		f.flagsRef.Update(hasMoreFragmentsFlag)
 	} else if !f.dontReleaseChecksum {
 		f.checksum.Release()
