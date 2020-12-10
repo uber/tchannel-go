@@ -286,13 +286,16 @@ func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 	return r.handleCallReq(cr)
 }
 
-func (r *Relayer) updateCallReqContinueChecksum(f *Frame, cs Checksum) {
+func (r *Relayer) updateMutatedCallReqContinueChecksum(f *Frame, cs Checksum) {
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(1) // flags
-	rbuf.SkipBytes(1) // checksum type
+	rbuf.SkipBytes(1) // checksum type: this should match the checksum type of the callReq frame
 
 	checksumRef := typed.BytesRef(rbuf.ReadBytes(cs.Size()))
 
+	// We only support non-fragmented arg2 for mutated calls, so by the time we hit callReqContinue both
+	// arg1 and arg2 must already have been read. As the call would be finished when we've read all of
+	// arg3, it isn't necessary to separately track its completion.
 	n := rbuf.ReadUint16()
 	if n == 0 {
 		return
@@ -568,8 +571,10 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return nil
 	}
 
+	// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
+	// (meaning the call was mutated) and it is a callReqContinue frame.
 	if f.messageType() == messageTypeCallReqContinue && item.mutatedChecksum != nil {
-		r.updateCallReqContinueChecksum(f, item.mutatedChecksum)
+		r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum)
 	}
 
 	// Track sent/received bytes. We don't do this before we check
@@ -594,17 +599,17 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 // addRelayItem adds a relay item to either outbound or inbound.
 func (r *Relayer) addRelayItem(isOriginator bool, id, remapID uint32, destination *Relayer, ttl time.Duration, span Span, call RelayCall, mutatedChecksum Checksum) relayItem {
 	item := relayItem{
-		isOriginator: isOriginator,
-		call:         call,
-		remapID:      remapID,
-		destination:  destination,
-		span:         span,
+		isOriginator:    isOriginator,
+		call:            call,
+		remapID:         remapID,
+		destination:     destination,
+		span:            span,
+		mutatedChecksum: mutatedChecksum,
 	}
 
 	items := r.inbound
 	if isOriginator {
 		items = r.outbound
-		item.mutatedChecksum = mutatedChecksum
 	}
 	item.timeout = r.timeouts.Get()
 	items.Add(id, item)
@@ -897,7 +902,7 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 		checksum:            checksum,
 		contents:            contents,
 		frame:               frame,
-		dontReleaseChecksum: true,
+		dontReleaseChecksum: true, // checksum will be released when the call is finished
 	}, contents.Err()
 }
 
