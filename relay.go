@@ -897,12 +897,12 @@ func (rfs *relayFragmentSender) newFragment(initial bool, checksum Checksum) (*w
 
 	// TODO(cinchurge): pool writableFragment
 	return &writableFragment{
-		flagsRef:            flagsRef,
-		checksumRef:         checksumRef,
-		checksum:            checksum,
-		contents:            contents,
-		frame:               frame,
-		dontReleaseChecksum: true, // checksum will be released when the call is finished
+		flagsRef:    flagsRef,
+		checksumRef: checksumRef,
+		// checksum will be released by the relayer when the call is finished
+		checksum: &noReleaseChecksum{Checksum: checksum},
+		contents: contents,
+		frame:    frame,
 	}, contents.Err()
 }
 
