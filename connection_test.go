@@ -500,6 +500,32 @@ func TestLargeMethod(t *testing.T) {
 	})
 }
 
+func TestLargeArg2(t *testing.T) {
+	consecutiveFailures := 0
+	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		arg3 := testutils.RandBytes(128000)
+		for i := 60000; i < MaxFrameSize+1000; i++ {
+			arg2 := testutils.RandBytes(i)
+
+			ctx, cancel := NewContext(time.Second)
+			defer cancel()
+
+			resArg2, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", arg2, arg3)
+			if assert.NoError(t, err, "call failed for arg2Size=%v", i) {
+				assert.Equal(t, arg2, resArg2, "resArg2 mismatch for size %v", i)
+				consecutiveFailures = 0
+			} else {
+				consecutiveFailures++
+				if consecutiveFailures > 10 {
+					t.Fatalf("Stoping test after %v consecutive failures", consecutiveFailures)
+				}
+			}
+		}
+	})
+}
+
 func TestLargeTimeout(t *testing.T) {
 	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ts.Register(raw.Wrap(newTestHandler(t)), "echo")
