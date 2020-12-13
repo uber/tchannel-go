@@ -27,10 +27,13 @@ import (
 	"math"
 	"net"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/uber/tchannel-go/relay"
 
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
@@ -500,30 +503,91 @@ func TestLargeMethod(t *testing.T) {
 	})
 }
 
+func mapKeys(kv map[string]string) []string {
+	keys := make([]string, 0, len(kv))
+	for k := range kv {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func TestLargeArg2(t *testing.T) {
-	consecutiveFailures := 0
-	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
-		testutils.RegisterEcho(ts.Server(), nil)
+	arg3KBSizes := []int{0, 1, 4, 16, 64, 128, 256}
+	modifyArg2Tests := []struct {
+		msg  string
+		k, v string
+	}{
+		{
+			msg: "small",
+			k:   "k",
+			v:   "v",
+		},
+		{
+			msg: "small",
+			k:   "key",
+			v:   "value",
+		},
+		{
+			msg: "large",
+			k:   strings.Repeat("key", 1024),
+			v:   strings.Repeat("hello-world", 100),
+		},
+	}
 
-		arg3 := testutils.RandBytes(128000)
-		for i := 60000; i < MaxFrameSize+1000; i++ {
-			arg2 := testutils.RandBytes(i)
-
-			ctx, cancel := NewContext(time.Second)
-			defer cancel()
-
-			resArg2, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", arg2, arg3)
-			if assert.NoError(t, err, "call failed for arg2Size=%v", i) {
-				assert.Equal(t, arg2, resArg2, "resArg2 mismatch for size %v", i)
-				consecutiveFailures = 0
-			} else {
-				consecutiveFailures++
-				if consecutiveFailures > 10 {
-					t.Fatalf("Stoping test after %v consecutive failures", consecutiveFailures)
+	for _, modifyArg2 := range modifyArg2Tests {
+		t.Run("modifyArg2="+modifyArg2.msg, func(t *testing.T) {
+			testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
+				testutils.RegisterEcho(ts.Server(), nil)
+				if ts.HasRelay() {
+					ts.RelayHost().SetFrameFn(func(cf relay.CallFrame, conn *relay.Conn) {
+						cf.Arg2Append([]byte(modifyArg2.k), []byte(modifyArg2.v))
+					})
 				}
-			}
-		}
-	})
+
+				for _, arg3SizeKB := range arg3KBSizes {
+					t.(*testing.T).Run("arg3Size="+fmt.Sprint(arg3SizeKB), func(t *testing.T) {
+						consecutiveFailures := 0
+						arg3 := testutils.RandBytes(arg3SizeKB * 1024)
+						for i := 60000; i < 65429; i++ {
+							baseHeaders := map[string]string{
+								"base": testutils.RandString(i),
+							}
+							arg2 := encodeThriftHeaders(t, baseHeaders)
+
+							if i%100 == 0 {
+								fmt.Printf("%v...", i)
+							}
+							if i%1000 == 0 {
+								fmt.Println()
+							}
+
+							ctx, cancel := NewContext(time.Second)
+							defer cancel()
+
+							resArg2, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "echo", arg2, arg3)
+							if assert.NoError(t, err, "call failed for arg2Size=%v", i) {
+								want := encodeThriftHeadersOrdered(t, "base", baseHeaders["base"])
+								if ts.HasRelay() {
+									want = encodeThriftHeadersOrdered(t, "base", baseHeaders["base"], modifyArg2.k, modifyArg2.v)
+								}
+								assert.Equal(t, want, resArg2, "resArg2 mismatch for size %v", i)
+								consecutiveFailures = 0
+							} else {
+								consecutiveFailures++
+								if consecutiveFailures > 10 {
+									t.Fatalf("Stoping test after %v consecutive failures", consecutiveFailures)
+								}
+							}
+						}
+						fmt.Println()
+					})
+				}
+			})
+		})
+
+	}
+
 }
 
 func TestLargeTimeout(t *testing.T) {

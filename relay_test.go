@@ -25,12 +25,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/uber/tchannel-go/typed"
 
 	. "github.com/uber/tchannel-go"
 
@@ -1863,9 +1866,37 @@ func encodeThriftHeaders(t testing.TB, m map[string]string) []byte {
 }
 
 func decodeThriftHeaders(t testing.TB, bs []byte) map[string]string {
-	m, err := thrift.ReadHeaders(bytes.NewReader(bs))
+	r := bytes.NewReader(bs)
+	m, err := thrift.ReadHeaders(r)
 	require.NoError(t, err, "Failed to read headers")
+
+	leftOver, err := ioutil.ReadAll(r)
+	require.NoError(t, err, "Failed to read leftover")
+
+	if len(leftOver) > 0 {
+		m["__leftover__"] = string(leftOver)
+	}
+
 	return m
+}
+
+func encodeThriftHeadersOrdered(t testing.TB, kv ...string) []byte {
+	size := 2 // number of headers
+	for _, v := range kv {
+		size += 2 // length prefix
+		size += len(v)
+	}
+
+	buf := make([]byte, size)
+	writeBuffer := typed.NewWriteBuffer(buf)
+	writeBuffer.WriteUint16(uint16(len(kv) / 2))
+	for _, v := range kv {
+		writeBuffer.WriteLen16String(v)
+	}
+
+	require.NoError(t, writeBuffer.Err(), "write failed")
+	assert.Equal(t, 0, writeBuffer.BytesRemaining(), "no writes should be left")
+	return buf
 }
 
 func copyHeaders(m map[string]string) map[string]string {
