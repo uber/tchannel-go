@@ -1693,7 +1693,7 @@ func TestRelayModifyArg2OnFrameWithFragmentedArg2ShouldFail(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly().
 		SetRelayHost(rh).
-		AddLogFilter("Failed to relay frame.", 1, "error", "fragmented arg2 not supported for appends")
+		AddLogFilter("Failed to send call with modified arg2.", 1)
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		rly := ts.Relay()
@@ -1717,7 +1717,8 @@ func TestRelayModifyArg2OnFrameWithFragmentedArg2ShouldFail(t *testing.T) {
 				"fum": testutils.RandString(16 * 1024),
 			}),
 		})
-		assert.EqualError(t, err, "tchannel error ErrCodeTimeout: timeout")
+		require.Error(t, err, "should fail to send call with large arg2")
+		assert.Contains(t, err.Error(), "relay-arg2-modify-failed: fragmented arg2")
 	})
 }
 

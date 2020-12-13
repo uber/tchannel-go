@@ -75,10 +75,11 @@ func TestRelayFragmentSender(t *testing.T) {
 					retFailureReason: tt.failure,
 					wantPayload:      tt.wantPayload,
 				},
-				failRelayItemFunc: func(items *relayItems, id uint32, failure string) {
+				failRelayItemFunc: func(items *relayItems, id uint32, failure string, err error) {
 					failRelayItemFuncCalled = true
 					assert.Equal(t, uint32(123), id, "got unexpected id")
 					assert.Equal(t, tt.failure, failure, "got unexpected failure string")
+					assert.Error(t, err, "missing err")
 				},
 				origID:       123,
 				sentReporter: &noopSentReporter{},
