@@ -249,7 +249,7 @@ func (f *lazyCallReq) arg3() []byte {
 // of TChannel-Thrift Arg Scheme.
 func (f *lazyCallReq) Arg2Iterator() (arg2.KeyValIterator, error) {
 	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
-		return arg2.KeyValIterator{}, fmt.Errorf("non thrift scheme %s", f.as)
+		return arg2.KeyValIterator{}, fmt.Errorf("%v: got %s", errArg2ThriftOnly, f.as)
 	}
 	return arg2.NewKeyValIterator(f.Payload[f.arg2StartOffset:f.arg2EndOffset])
 }

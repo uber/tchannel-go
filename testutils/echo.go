@@ -33,12 +33,14 @@ import (
 
 // CallEcho calls the "echo" endpoint from the given src to target.
 func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args *raw.Args) error {
-	ctx, cancel := tchannel.NewContext(Timeout(300 * time.Millisecond))
-	defer cancel()
-
 	if args == nil {
 		args = &raw.Args{}
 	}
+
+	ctx, cancel := tchannel.NewContextBuilder(Timeout(300 * time.Millisecond)).
+		SetFormat(args.Format).
+		Build()
+	defer cancel()
 
 	_, _, _, err := raw.Call(ctx, src, targetHostPort, targetService, "echo", args.Arg2, args.Arg3)
 	return err
