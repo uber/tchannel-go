@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"runtime"
 	"strings"
@@ -1754,8 +1755,16 @@ func encodeThriftHeaders(t testing.TB, m map[string]string) []byte {
 }
 
 func decodeThriftHeaders(t testing.TB, bs []byte) map[string]string {
-	m, err := thrift.ReadHeaders(bytes.NewReader(bs))
+	r := bytes.NewReader(bs)
+
+	m, err := thrift.ReadHeaders(r)
 	require.NoError(t, err, "Failed to read headers")
+
+	// Ensure there are no remaining bytes left.
+	remaining, err := ioutil.ReadAll(r)
+	require.NoError(t, err, "failed to read from arg2 reader")
+	assert.Empty(t, remaining, "expected no bytes after reading headers")
+
 	return m
 }
 
