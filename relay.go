@@ -49,6 +49,7 @@ const (
 	_relayErrorNotFound       = "relay-not-found"
 	_relayErrorDestConnSlow   = "relay-dest-conn-slow"
 	_relayErrorSourceConnSlow = "relay-source-conn-slow"
+	_relayArg2ModifyFailed    = "relay-arg2-modify-failed"
 
 	// _relayNoRelease indicates that the relayed frame should not be released immediately, since
 	// relayed frames normally end up in a send queue where it is released afterward. However in some
@@ -58,6 +59,7 @@ const (
 	_relayShouldRelease = true
 )
 
+// TODO: Replace errFrameNotSent with more specific errors from Receive.
 var (
 	errRelayMethodFragmented    = NewSystemError(ErrCodeBadRequest, "relay handler cannot receive fragmented calls")
 	errFrameNotSent             = NewSystemError(ErrCodeNetwork, "frame was not sent to remote side")
@@ -350,7 +352,7 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 			err = _relayErrorSourceConnSlow
 		}
 
-		r.failRelayItem(items, id, err)
+		r.failRelayItem(items, id, err, errFrameNotSent)
 		return false, err
 	}
 
@@ -493,15 +495,26 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	// over the max frame size. Do a fragmenting send which is slightly more expensive but
 	// will handle fragmenting if it is needed.
 	if len(f.arg2Appends) > 0 {
+		if err := r.fragmentingSend(call, f, relayToDest, origID); err != nil && true {
+			r.failRelayItem(r.outbound, origID, _relayArg2ModifyFailed, err)
+			r.logger.WithFields(
+				LogField{"id", origID},
+				LogField{"err", err.Error()},
+				LogField{"caller", string(f.Caller())},
+				LogField{"dest", string(f.Service())},
+				LogField{"method", string(f.Method())},
+			).Warn("Failed to send call with modified arg2.")
+		}
+
 		// fragmentingSend always sends new frames in place of the old frame so we must
 		// release it separately
-		return _relayShouldRelease, r.fragmentingSend(call, f, relayToDest, origID)
+		return _relayShouldRelease, nil
 	}
 
 	call.SentBytes(f.Frame.Header.FrameSize())
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
-		r.failRelayItem(r.outbound, origID, failure)
+		r.failRelayItem(r.outbound, origID, failure, errFrameNotSent)
 		return _relayNoRelease, nil
 	}
 	return _relayNoRelease, nil
@@ -539,7 +552,7 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 
 	sent, failure := item.destination.Receive(f, frameType)
 	if !sent {
-		r.failRelayItem(items, originalID, failure)
+		r.failRelayItem(items, originalID, failure, errFrameNotSent)
 		return nil
 	}
 
@@ -586,7 +599,7 @@ func (r *Relayer) timeoutRelayItem(items *relayItems, id uint32, isOriginator bo
 // failRelayItem tombs the relay item so that future frames for this call are not
 // forwarded. We keep the relay item tombed, rather than delete it to ensure that
 // future frames do not cause error logs.
-func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
+func (r *Relayer) failRelayItem(items *relayItems, id uint32, reason string, err error) {
 	// Stop the timeout, so we either fail it here, or in the timeout goroutine but not both.
 	item, stopped, found := items.Get(id, true /* stopTimeout */)
 	if !found {
@@ -605,10 +618,10 @@ func (r *Relayer) failRelayItem(items *relayItems, id uint32, failure string) {
 	}
 	if item.isOriginator {
 		// If the client is too slow, then there's no point sending an error frame.
-		if failure != _relayErrorSourceConnSlow {
-			r.conn.SendSystemError(id, item.span, errFrameNotSent)
+		if reason != _relayErrorSourceConnSlow {
+			r.conn.SendSystemError(id, item.span, fmt.Errorf("%v: %v", reason, err))
 		}
-		item.call.Failed(failure)
+		item.call.Failed(reason)
 		item.call.End()
 	}
 
@@ -782,7 +795,7 @@ type relayFragmentSender struct {
 	callReq            *lazyCallReq
 	framePool          FramePool
 	frameReceiver      frameReceiver
-	failRelayItemFunc  func(items *relayItems, id uint32, failure string)
+	failRelayItemFunc  func(items *relayItems, id uint32, failure string, err error)
 	outboundRelayItems *relayItems
 	origID             uint32
 	sentReporter       sentBytesReporter
@@ -850,7 +863,7 @@ func (rfs *relayFragmentSender) flushFragment(wf *writableFragment) error {
 
 	sent, failure := rfs.frameReceiver.Receive(wf.frame, requestFrame)
 	if !sent {
-		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure)
+		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure, errFrameNotSent)
 		return nil
 	}
 	return nil
