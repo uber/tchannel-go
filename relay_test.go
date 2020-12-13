@@ -1566,19 +1566,19 @@ func (rm *arg2KeyValRelayModifier) modifyArg2(m map[string]string) map[string]st
 
 func TestRelayModifyArg2(t *testing.T) {
 	const kb = 1024
-	largeVal1 := testutils.RandString(16 * 1024)
-	largeVal2 := testutils.RandString(16 * 1024)
-	largeVal3 := testutils.RandString(16 * 1024)
-	largeVal4 := testutils.RandString(16 * 1024)
+	//largeVal1 := testutils.RandString(16 * 1024)
+	//largeVal2 := testutils.RandString(16 * 1024)
+	//largeVal3 := testutils.RandString(16 * 1024)
+	//largeVal4 := testutils.RandString(16 * 1024)
 
 	checksumTypes := []struct {
 		msg          string
 		checksumType ChecksumType
 	}{
-		{"none", ChecksumTypeNone},
+		//{"none", ChecksumTypeNone},
 		{"crc32", ChecksumTypeCrc32},
-		{"farmhash", ChecksumTypeFarmhash},
-		{"crc32c", ChecksumTypeCrc32C},
+		//{"farmhash", ChecksumTypeFarmhash},
+		//{"crc32c", ChecksumTypeCrc32C},
 	}
 
 	modifyTests := []struct {
@@ -1592,72 +1592,72 @@ func TestRelayModifyArg2(t *testing.T) {
 				return &noopRelayModifer{}
 			},
 		},
-		{
-			msg: "add zero-length key/value",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return addFixedKeyVal([]keyVal{{key: "", val: ""}})
-			},
-		},
-		{
-			msg: "add multiple zero-length key/value",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return addFixedKeyVal([]keyVal{
-					{"", ""},
-					{"", ""},
-					{"", ""},
-				})
-			},
-		},
-		{
-			msg: "add small key/value",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return addFixedKeyVal([]keyVal{
-					{"foo", "bar"},
-					{"baz", "qux"},
-				})
-			},
-		},
-		{
-			msg: "fill the first frame until 2 bytes remain",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return fillFrameWithArg2(t, cst, arg1, arg2, -2)
-			},
-		},
-		{
-			msg: "fill the first frame until 1 byte remain",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return fillFrameWithArg2(t, cst, arg1, arg2, -1)
-			},
-		},
-		{
-			msg: "fill the first frame to its boundary",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return fillFrameWithArg2(t, cst, arg1, arg2, 0)
-			},
-		},
-		{
-			msg: "fill the first frame to 1 byte over its boundary",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return fillFrameWithArg2(t, cst, arg1, arg2, 1)
-			},
-		},
-		{
-			msg: "fill the first frame to 2 bytes over its boundary",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return fillFrameWithArg2(t, cst, arg1, arg2, 2)
-			},
-		},
-		{
-			msg: "add large key/value",
-			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
-				return addFixedKeyVal([]keyVal{
-					{"fee", largeVal1},
-					{"fi", largeVal2},
-					{"fo", largeVal3},
-					{"fum", largeVal4},
-				})
-			},
-		},
+		//{
+		//	msg: "add zero-length key/value",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return addFixedKeyVal([]keyVal{{key: "", val: ""}})
+		//	},
+		//},
+		//{
+		//	msg: "add multiple zero-length key/value",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return addFixedKeyVal([]keyVal{
+		//			{"", ""},
+		//			{"", ""},
+		//			{"", ""},
+		//		})
+		//	},
+		//},
+		//{
+		//	msg: "add small key/value",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return addFixedKeyVal([]keyVal{
+		//			{"foo", "bar"},
+		//			{"baz", "qux"},
+		//		})
+		//	},
+		//},
+		//{
+		//	msg: "fill the first frame until 2 bytes remain",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return fillFrameWithArg2(t, cst, arg1, arg2, -2)
+		//	},
+		//},
+		//{
+		//	msg: "fill the first frame until 1 byte remain",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return fillFrameWithArg2(t, cst, arg1, arg2, -1)
+		//	},
+		//},
+		//{
+		//	msg: "fill the first frame to its boundary",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return fillFrameWithArg2(t, cst, arg1, arg2, 0)
+		//	},
+		//},
+		//{
+		//	msg: "fill the first frame to 1 byte over its boundary",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return fillFrameWithArg2(t, cst, arg1, arg2, 1)
+		//	},
+		//},
+		//{
+		//	msg: "fill the first frame to 2 bytes over its boundary",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return fillFrameWithArg2(t, cst, arg1, arg2, 2)
+		//	},
+		//},
+		//{
+		//	msg: "add large key/value",
+		//	modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+		//		return addFixedKeyVal([]keyVal{
+		//			{"fee", largeVal1},
+		//			{"fi", largeVal2},
+		//			{"fo", largeVal3},
+		//			{"fum", largeVal4},
+		//		})
+		//	},
+		//},
 	}
 
 	payloadTests := []struct {
@@ -1670,48 +1670,48 @@ func TestRelayModifyArg2(t *testing.T) {
 			arg2: nil, // empty map
 			arg3: []byte{},
 		},
-		{
-			msg: "1kB payloads",
-			arg2: map[string]string{
-				"existingKey": "existingValue",
-			},
-			arg3: testutils.RandBytes(kb),
-		},
-		{
-			msg: "16kB payloads",
-			arg2: map[string]string{
-				"existingKey": "existingValue",
-			},
-			arg3: testutils.RandBytes(16 * kb),
-		},
-		{
-			msg: "32kB payloads",
-			arg2: map[string]string{
-				"existingKey": "existingValue",
-			},
-			arg3: testutils.RandBytes(32 * kb),
-		},
-		{
-			msg: "64kB payloads",
-			arg2: map[string]string{
-				"existingKey": "existingValue",
-			},
-			arg3: testutils.RandBytes(64 * kb),
-		},
-		{
-			msg: "128kB payloads",
-			arg2: map[string]string{
-				"existingKey": "existingValue",
-			},
-			arg3: testutils.RandBytes(128 * kb),
-		},
-		{
-			msg: "1MB payloads",
-			arg2: map[string]string{
-				"existingKey": "existingValue",
-			},
-			arg3: testutils.RandBytes(1024 * kb),
-		},
+		//{
+		//	msg: "1kB payloads",
+		//	arg2: map[string]string{
+		//		"existingKey": "existingValue",
+		//	},
+		//	arg3: testutils.RandBytes(kb),
+		//},
+		//{
+		//	msg: "16kB payloads",
+		//	arg2: map[string]string{
+		//		"existingKey": "existingValue",
+		//	},
+		//	arg3: testutils.RandBytes(16 * kb),
+		//},
+		//{
+		//	msg: "32kB payloads",
+		//	arg2: map[string]string{
+		//		"existingKey": "existingValue",
+		//	},
+		//	arg3: testutils.RandBytes(32 * kb),
+		//},
+		//{
+		//	msg: "64kB payloads",
+		//	arg2: map[string]string{
+		//		"existingKey": "existingValue",
+		//	},
+		//	arg3: testutils.RandBytes(64 * kb),
+		//},
+		//{
+		//	msg: "128kB payloads",
+		//	arg2: map[string]string{
+		//		"existingKey": "existingValue",
+		//	},
+		//	arg3: testutils.RandBytes(128 * kb),
+		//},
+		//{
+		//	msg: "1MB payloads",
+		//	arg2: map[string]string{
+		//		"existingKey": "existingValue",
+		//	},
+		//	arg3: testutils.RandBytes(1024 * kb),
+		//},
 	}
 
 	const (
@@ -1730,11 +1730,11 @@ func TestRelayModifyArg2(t *testing.T) {
 			method:     noErrMethod,
 			wantAppErr: false,
 		},
-		{
-			msg:        "app error bit",
-			method:     errMethod,
-			wantAppErr: true,
-		},
+		//{
+		//	msg:        "app error bit",
+		//	method:     errMethod,
+		//	wantAppErr: true,
+		//},
 	}
 
 	for _, mt := range modifyTests {
@@ -1743,49 +1743,59 @@ func TestRelayModifyArg2(t *testing.T) {
 			for _, aet := range appErrTests {
 				for _, tt := range payloadTests {
 					t.Run(fmt.Sprintf("%s,checksum=%s,%s,%s", mt.msg, csTest.msg, aet.msg, tt.msg), func(t *testing.T) {
-						modifier := mt.modifier(t, csTest.checksumType, aet.method, tt.arg2)
+						//modifier := mt.modifier(t, csTest.checksumType, aet.method, tt.arg2)
+						for n := 61000; n < 65411; n++ {
+							t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+								modifier := addFixedKeyVal([]keyVal{
+								//{"", testutils.RandString(2000)},
+								})
 
-						// Create a relay that will modify the frame as per the test.
-						relayHost := relaytest.NewStubRelayHost()
-						relayHost.SetFrameFn(modifier.frameFn)
-						opts := testutils.NewOpts().
-							SetRelayHost(relayHost).
-							SetRelayOnly()
-						testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
-							// Create a client that uses a specific checksumType.
-							clientOpts := testutils.NewOpts().SetChecksumType(csTest.checksumType)
-							client := ts.NewClient(clientOpts)
-							defer client.Close()
+								// Create a relay that will modify the frame as per the test.
+								relayHost := relaytest.NewStubRelayHost()
+								relayHost.SetFrameFn(modifier.frameFn)
+								opts := testutils.NewOpts().
+									SetRelayHost(relayHost).
+									SetRelayOnly()
+								testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+									// Create a client that uses a specific checksumType.
+									clientOpts := testutils.NewOpts().SetChecksumType(csTest.checksumType)
+									client := ts.NewClient(clientOpts)
+									defer client.Close()
 
-							// Create a server echo verify endpoints (optionally returning an error).
-							for _, appErrTest := range appErrTests {
-								handler := echoVerifyHandler{
-									t:            t,
-									verifyFormat: format,
-									verifyCaller: client.ServiceName(),
-									verifyMethod: appErrTest.method,
-									appErr:       appErrTest.wantAppErr,
-								}
-								ts.Server().Register(raw.Wrap(handler), appErrTest.method)
-							}
+									// Create a server echo verify endpoints (optionally returning an error).
+									for _, appErrTest := range appErrTests {
+										handler := echoVerifyHandler{
+											t:            t,
+											verifyFormat: format,
+											verifyCaller: client.ServiceName(),
+											verifyMethod: appErrTest.method,
+											appErr:       appErrTest.wantAppErr,
+										}
+										ts.Server().Register(raw.Wrap(handler), appErrTest.method)
+									}
 
-							ctx, cancel := NewContextBuilder(testutils.Timeout(time.Second)).
-								SetFormat(format).Build()
-							defer cancel()
+									ctx, cancel := NewContextBuilder(testutils.Timeout(5 * time.Second)).
+										SetFormat(format).Build()
+									defer cancel()
 
-							arg2Encoded := encodeThriftHeaders(t, tt.arg2)
+									tt.arg2 = map[string]string{
+										"k": testutils.RandString(n),
+									}
+									arg2Encoded := encodeThriftHeaders(t, tt.arg2)
 
-							resArg2, resArg3, resp, err := raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), aet.method, arg2Encoded, tt.arg3)
-							require.NoError(t, err, "%v: Received unexpected error", tt.msg)
-							assert.Equal(t, format, resp.Format(), "%v: Unexpected error format")
-							assert.Equal(t, aet.wantAppErr, resp.ApplicationError(), "%v: Unexpected app error")
+									resArg2, resArg3, resp, err := raw.Call(ctx, client, ts.HostPort(), ts.ServiceName(), aet.method, arg2Encoded, tt.arg3)
+									require.NoError(t, err, "%v: Received unexpected error", tt.msg)
+									assert.Equal(t, format, resp.Format(), "%v: Unexpected error format")
+									assert.Equal(t, aet.wantAppErr, resp.ApplicationError(), "%v: Unexpected app error")
 
-							wantArg2 := modifier.modifyArg2(copyHeaders(tt.arg2))
+									wantArg2 := modifier.modifyArg2(copyHeaders(tt.arg2))
 
-							gotArg2Map := decodeThriftHeaders(t, resArg2)
-							assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)
-							assert.Equal(t, resArg3, tt.arg3, "%v: Unexpected arg3", tt.msg)
-						})
+									gotArg2Map := decodeThriftHeaders(t, resArg2)
+									assert.Equal(t, wantArg2, gotArg2Map, "%v: Unexpected arg2 headers", tt.msg)
+									assert.Equal(t, resArg3, tt.arg3, "%v: Unexpected arg3", tt.msg)
+								})
+							})
+						}
 					})
 				}
 			}

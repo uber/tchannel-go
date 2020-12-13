@@ -282,7 +282,7 @@ func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 	return r.handleCallReq(cr)
 }
 
-func (r *Relayer) updateMutatedCallReqContinueChecksum(f *Frame, cs Checksum) {
+func (r *Relayer) updateMutatedCallReqContinueChecksum(f *Frame, cs Checksum) error {
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
 	rbuf.SkipBytes(1) // flags
 	rbuf.SkipBytes(1) // checksum type: this should match the checksum type of the callReq frame
@@ -294,11 +294,19 @@ func (r *Relayer) updateMutatedCallReqContinueChecksum(f *Frame, cs Checksum) {
 	// arg3, it isn't necessary to separately track its completion.
 	n := rbuf.ReadUint16()
 	if n == 0 {
-		return
+		r.logger.Info("zero-length arg3 while recalculating checksum")
+		return nil
 	}
 
-	cs.Add(rbuf.ReadBytes(int(n)))
+	arg3Bytes := rbuf.ReadBytes(int(n))
+	if err := rbuf.Err(); err != nil {
+		return fmt.Errorf("recalculate checksum: %v", err)
+	}
+
+	cs.Add(arg3Bytes)
 	checksumRef.Update(cs.Sum())
+
+	return nil
 }
 
 // Receive receives frames intended for this connection.
@@ -559,7 +567,9 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
 	// (meaning the call was mutated) and it is a callReqContinue frame.
 	if f.messageType() == messageTypeCallReqContinue && item.mutatedChecksum != nil {
-		r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum)
+		if err := r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum); err != nil {
+			return err
+		}
 	}
 
 	// Track sent/received bytes. We don't do this before we check
