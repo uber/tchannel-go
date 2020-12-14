@@ -848,7 +848,6 @@ type relayFragmentSender struct {
 	outboundRelayItems *relayItems
 	origID             uint32
 	sentReporter       sentBytesReporter
-	mutatedChecksum    Checksum
 }
 
 func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, sentReporter sentBytesReporter, mutatedChecksum Checksum) *relayFragmentSender {
@@ -861,7 +860,6 @@ func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, ori
 		outboundRelayItems: r.outbound,
 		origID:             origID,
 		sentReporter:       sentReporter,
-		mutatedChecksum:    mutatedChecksum,
 	}
 }
 
