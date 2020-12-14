@@ -1662,6 +1662,10 @@ func TestRelayModifyArg2(t *testing.T) {
 		},
 	}
 
+	// TODO(cinchurge): we need to cover a combination of the following for the payloads:
+	//   - no arg2, small arg2, large arg2 (3 or 4 cases that are close/on the boundary)
+	//   - no arg3, small arg3, 16kb arg3, 32kb arg3, 64kb arg3, 128kb arg3, 1mb arg3
+	//   - 2 bytes, 1 byte, and 0 bytes from the frame boundary for both arg2 and arg3
 	payloadTests := []struct {
 		msg  string
 		arg2 map[string]string
