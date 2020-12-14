@@ -721,7 +721,7 @@ func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest re
 
 	// TODO(echung): should we pool the writers?
 	fragWriter := newFragmentingWriter(
-		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call, cs),
+		r.logger, r.newFragmentSender(relayToDest.destination, f, origID, call),
 		cs,
 	)
 
@@ -850,7 +850,7 @@ type relayFragmentSender struct {
 	sentReporter       sentBytesReporter
 }
 
-func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, sentReporter sentBytesReporter, mutatedChecksum Checksum) *relayFragmentSender {
+func (r *Relayer) newFragmentSender(dstRelay frameReceiver, cr *lazyCallReq, origID uint32, sentReporter sentBytesReporter) *relayFragmentSender {
 	// TODO(cinchurge): pool fragment senders
 	return &relayFragmentSender{
 		callReq:            cr,
