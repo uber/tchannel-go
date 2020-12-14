@@ -305,6 +305,7 @@ func (r *Relayer) updateMutatedCallReqContinueChecksum(f *Frame, cs Checksum) {
 	//
 	// Additionally, if the checksum type results in a 0-length checksum, the .Update() would
 	// become a copy between empty slices, which correctly becomes a noop.
+	// TODO(cinchurge): include a test for len(arg3)==0 in the unit tests
 	n := rbuf.ReadUint16()
 	cs.Add(rbuf.ReadBytes(int(n)))
 	checksumRef.Update(cs.Sum())
