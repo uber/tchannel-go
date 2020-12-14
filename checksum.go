@@ -173,3 +173,12 @@ func (h *hashChecksum) Release() { h.TypeCode().Release(h) }
 
 // Reset resets the checksum state to the default 0 value.
 func (h *hashChecksum) Reset() { h.hash.Reset() }
+
+// noReleaseChecksum overrides .Release() with a NOOP so that the checksum won't
+// be released by the fragmentingWriter when it is managed externally, e.g. by the
+// relayer
+type noReleaseChecksum struct {
+	Checksum
+}
+
+func (n *noReleaseChecksum) Release() {}
