@@ -296,11 +296,16 @@ func (r *Relayer) updateMutatedCallReqContinueChecksum(f *Frame, cs Checksum) {
 	// We only support non-fragmented arg2 for mutated calls, so by the time we hit callReqContinue both
 	// arg1 and arg2 must already have been read. As the call would be finished when we've read all of
 	// arg3, it isn't necessary to separately track its completion.
+	//
+	// In theory we could have a frame with 0-length arg3, which can happen if a manual flush occurred
+	// after writing 0 bytes for arg3. This is handled correctly by
+	// 1) reading n=0 (nArg3)
+	// 2) reading 0 bytes from the rbuf
+	// 3) updating the checksum with the current running checksum
+	//
+	// Additionally, if the checksum type results in a 0-length checksum, the .Update() would
+	// become a copy between empty slices, which correctly becomes a noop.
 	n := rbuf.ReadUint16()
-	if n == 0 {
-		return
-	}
-
 	cs.Add(rbuf.ReadBytes(int(n)))
 	checksumRef.Update(cs.Sum())
 }
