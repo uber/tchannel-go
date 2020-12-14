@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.21.0] - 2020-12-13
+### Changed
+ * Internal changes related to relaying.
+
 ## [1.20.1] - 2020-09-24
 ### Fixed
  * Set ConnContext in the channel instead of the connection to avoid serialization
@@ -307,6 +311,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.21.0]: https://github.com/uber/tchannel-go/compare/v1.20.1...v1.21.0
 [1.20.1]: https://github.com/uber/tchannel-go/compare/v1.20.0...v1.20.1
 [1.20.0]: https://github.com/uber/tchannel-go/compare/v1.19.1...v1.20.0
 [1.18.0]: https://github.com/uber/tchannel-go/compare/v1.17.0...v1.18.0
