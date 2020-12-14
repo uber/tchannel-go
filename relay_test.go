@@ -1525,9 +1525,6 @@ func addFixedKeyVal(kvPairs []keyVal) *arg2KeyValRelayModifier {
 
 func fillFrameWithArg2(t *testing.T, checksumType ChecksumType, arg1 string, arg2 map[string]string, bytePosFromBoundary int) *arg2KeyValRelayModifier {
 	arg2Key := "foo"
-
-	fmt.Println("method=", arg1)
-
 	arg2Len := 2 // nh
 	for k, v := range arg2 {
 		arg2Len += 2 + len(k) + 2 + len(v)
@@ -1568,10 +1565,6 @@ func (rm *arg2KeyValRelayModifier) modifyArg2(m map[string]string) map[string]st
 
 func TestRelayModifyArg2(t *testing.T) {
 	const kb = 1024
-	largeVal1 := testutils.RandString(16 * 1024)
-	largeVal2 := testutils.RandString(16 * 1024)
-	largeVal3 := testutils.RandString(16 * 1024)
-	largeVal4 := testutils.RandString(16 * 1024)
 
 	checksumTypes := []struct {
 		msg          string
@@ -1650,13 +1643,19 @@ func TestRelayModifyArg2(t *testing.T) {
 			},
 		},
 		{
-			msg: "add large key/value",
+			msg: "add large key/value which pushes arg2 into 2nd frame",
 			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
 				return addFixedKeyVal([]keyVal{
-					{"fee", largeVal1},
-					{"fi", largeVal2},
-					{"fo", largeVal3},
-					{"fum", largeVal4},
+					{"fee", testutils.RandString(65535)},
+				})
+			},
+		},
+		{
+			msg: "add large key/value which pushes arg2 into 2nd and 3rd frame",
+			modifier: func(t *testing.T, cst ChecksumType, arg1 string, arg2 map[string]string) relayModifier {
+				return addFixedKeyVal([]keyVal{
+					{"fee", testutils.RandString(65535)},
+					{"fi", testutils.RandString(65535)},
 				})
 			},
 		},
@@ -1674,6 +1673,16 @@ func TestRelayModifyArg2(t *testing.T) {
 		{
 			msg:  "no payload",
 			arg2: nil, // empty map
+			arg3: []byte{},
+		},
+		{
+			// TODO(cinchurge): ideally we'd like to do tests where arg2 is close to and on the
+			// frame boundary, however since the corresponding arg2 size depends on the sizes of arg1
+			// and the checksum, we're deferring this to a separate change.
+			msg: "no payload + large arg2",
+			arg2: map[string]string{
+				"foo": testutils.RandString(60000),
+			}, // empty map
 			arg3: []byte{},
 		},
 		{
