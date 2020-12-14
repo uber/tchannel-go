@@ -469,12 +469,12 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 			msg:        "not tchannel thrift",
 			argScheme:  HTTP,
 			bufKV:      map[string]string{"key": "val"},
-			wantBadErr: "non thrift scheme",
+			wantBadErr: "non-Thrift",
 		},
 		{
 			msg:        "not arg scheme",
 			bufKV:      map[string]string{"key": "val"},
-			wantBadErr: "non thrift scheme",
+			wantBadErr: "non-Thrift",
 		},
 	}
 

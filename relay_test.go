@@ -1419,13 +1419,13 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 		{
 			msg:           "without appends",
 			arg3:          []byte("hello, world"),
-			wantSentBytes: 127,
+			wantSentBytes: 130,
 		},
 		{
 			msg:           "with appends",
 			arg3:          []byte("hello, world"),
 			appends:       map[string]string{"baz": "qux"},
-			wantSentBytes: 137, // 127 + 2 bytes size + 3 bytes key + 2 byts size + 3 bytes val = 137
+			wantSentBytes: 140, // 130 + 2 bytes size + 3 bytes key + 2 byts size + 3 bytes val = 137
 		},
 		{
 			msg:  "with large appends that result in fragments",
@@ -1436,10 +1436,10 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 				"foo": testutils.RandString(16 * 1024),
 				"fum": testutils.RandString(16 * 1024),
 			},
-			// original data size = 127
+			// original data size = 130
 			// appended arg2 size = 2 bytes number of keys + 4 * (2 bytes key size + 3 bytes key + 2 bytes val size + 16 * 1024 bytes val)
 			// additional frame preamble = 16 bytes header + 1 byte flag + 1 byte checksum type + 4 bytes checksum size + 2 bytes size of remaining arg2
-			wantSentBytes: 127 + (2+3+2+16*1024)*4 + 16 + 1 + 1 + 4 + 2,
+			wantSentBytes: 130 + (2+3+2+16*1024)*4 + 16 + 1 + 1 + 4 + 2,
 		},
 	}
 
@@ -1459,7 +1459,8 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 				testutils.RegisterEcho(svr, nil)
 
 				client := testutils.NewClient(t, nil)
-				ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
+				ctx, cancel := NewContextBuilder(testutils.Timeout(time.Second)).
+					SetFormat(Thrift).Build()
 				defer cancel()
 
 				sendArgs := &raw.Args{
@@ -1685,41 +1686,75 @@ func TestRelayModifyArg2(t *testing.T) {
 	}
 }
 
-func TestRelayModifyArg2OnFrameWithFragmentedArg2ShouldFail(t *testing.T) {
-	rh := relaytest.NewStubRelayHost()
-	rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
-		f.Arg2Append([]byte("foo"), []byte("bar"))
-	})
-	opts := testutils.NewOpts().
-		SetRelayOnly().
-		SetRelayHost(rh).
-		AddLogFilter("Failed to send call with modified arg2.", 1)
-
-	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
-		rly := ts.Relay()
-		callee := ts.Server()
-		testutils.RegisterEcho(callee, nil)
-
-		caller := ts.NewServer(testutils.NewOpts())
-		testutils.RegisterEcho(caller, nil)
-
-		baseCtx := context.WithValue(context.Background(), "foo", "bar")
-		ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
-		defer cancel()
-
-		require.NoError(t, rly.Ping(ctx, caller.PeerInfo().HostPort))
-
-		err := testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), &raw.Args{
-			Arg2: thriftarg2test.BuildKVBuffer(map[string]string{
+func TestRelayModifyArg2ShouldFail(t *testing.T) {
+	tests := []struct {
+		msg     string
+		arg2    []byte
+		format  Format
+		wantErr string
+	}{
+		{
+			msg: "large arg2, fragmented",
+			arg2: thriftarg2test.BuildKVBuffer(map[string]string{
 				"fee": testutils.RandString(16 * 1024),
 				"fi":  testutils.RandString(16 * 1024),
 				"fo":  testutils.RandString(16 * 1024),
 				"fum": testutils.RandString(16 * 1024),
 			}),
+			wantErr: "relay-arg2-modify-failed: fragmented arg2",
+		},
+		{
+			msg:    "non-Thrift call",
+			format: JSON,
+			arg2: thriftarg2test.BuildKVBuffer(map[string]string{
+				"fee": testutils.RandString(16 * 1024),
+			}),
+			wantErr: "relay-arg2-modify-failed: cannot inspect or modify arg2 for non-Thrift calls",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			rh := relaytest.NewStubRelayHost()
+			rh.SetFrameFn(func(f relay.CallFrame, conn *relay.Conn) {
+				f.Arg2Append([]byte("foo"), []byte("bar"))
+			})
+			opts := testutils.NewOpts().
+				SetRelayOnly().
+				SetRelayHost(rh).
+				AddLogFilter("Failed to send call with modified arg2.", 1)
+
+			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+				rly := ts.Relay()
+				callee := ts.Server()
+				testutils.RegisterEcho(callee, nil)
+
+				caller := ts.NewServer(testutils.NewOpts())
+				testutils.RegisterEcho(caller, nil)
+
+				baseCtx := context.WithValue(context.Background(), "foo", "bar")
+				ctx, cancel := NewContextBuilder(time.Second).SetConnectBaseContext(baseCtx).Build()
+				defer cancel()
+
+				require.NoError(t, rly.Ping(ctx, caller.PeerInfo().HostPort))
+
+				err := testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), &raw.Args{
+					Format: tt.format,
+					Arg2:   tt.arg2,
+				})
+				require.Error(t, err, "should fail to send call with large arg2")
+				assert.Contains(t, err.Error(), tt.wantErr, "unexpected error")
+
+				// Even after a failure, a simple call should still suceed (e.g., connection is left in a safe state).
+				err = testutils.CallEcho(caller, ts.HostPort(), ts.ServiceName(), &raw.Args{
+					Format: Thrift,
+					Arg2:   encodeThriftHeaders(t, map[string]string{"key": "value"}),
+					Arg3:   testutils.RandBytes(100),
+				})
+				require.NoError(t, err, "Standard Thrift call should not fail")
+			})
 		})
-		require.Error(t, err, "should fail to send call with large arg2")
-		assert.Contains(t, err.Error(), "relay-arg2-modify-failed: fragmented arg2")
-	})
+	}
 }
 
 // echoVerifyHandler is an echo handler with some added verification of

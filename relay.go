@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -67,6 +68,7 @@ var (
 	errUnknownID                = errors.New("non-callReq for inactive ID")
 	errNoNHInArg2               = errors.New("no nh in arg2")
 	errFragmentedArg2WithAppend = errors.New("fragmented arg2 not supported for appends")
+	errArg2ThriftOnly           = errors.New("cannot inspect or modify arg2 for non-Thrift calls")
 )
 
 type relayItem struct {
@@ -691,8 +693,11 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) (shouldRelease bool) {
 }
 
 func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32) error {
-	if len(f.arg2Appends) > 0 && f.isArg2Fragmented {
+	if f.isArg2Fragmented {
 		return errFragmentedArg2WithAppend
+	}
+	if !bytes.Equal(f.as, _tchanThriftValueBytes) {
+		return fmt.Errorf("%v: got %s", errArg2ThriftOnly, f.as)
 	}
 
 	// TODO(echung): should we pool the writers?
