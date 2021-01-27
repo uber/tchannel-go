@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
