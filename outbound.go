@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -134,6 +135,31 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	if err := call.writeMethod([]byte(methodName)); err != nil {
 		return nil, err
 	}
+
+	if !callOptions.ContextDoneCancelsRequest {
+		// No need to launch a routine to check for cancellation.
+		return call, nil
+	}
+
+	go func() {
+		<-ctx.Done()
+		if !mex.shutdown() {
+			// Already shutdown, no need to send frame.
+			return
+		}
+
+		msg := ErrRequestCancelled.Error()
+		if err := ctx.Err(); err != nil {
+			msg = err.Error()
+		}
+
+		call.conn.sendMessage(&errorMessage{
+			id:      call.mex.msgID,
+			errCode: SystemErrCode(ErrCodeCancelled),
+			message: msg,
+		})
+	}()
+
 	return call, nil
 }
 
