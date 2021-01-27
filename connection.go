@@ -158,6 +158,14 @@ type ConnectionOptions struct {
 	// MaxCloseTime controls how long we allow a connection to complete pending
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
+
+	// ContextDoneCancelsRequest will start a listener to each call and
+	// if the context completes before the call is finished a cancelled
+	// error frame will be sent to the server for server side cancellation
+	// of the request.
+	// Note: This does require an extra goroutine per call to listen
+	// and propagate the cancel error frame if the context is cancelled.
+	ContextDoneCancelsRequest bool
 }
 
 // connectionEvents are the events that can be triggered by a connection.

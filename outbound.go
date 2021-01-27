@@ -136,14 +136,14 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, err
 	}
 
-	if !callOptions.ContextDoneCancelsRequest {
+	if !call.conn.opts.ContextDoneCancelsRequest {
 		// No need to launch a routine to check for cancellation.
 		return call, nil
 	}
 
 	go func() {
 		<-ctx.Done()
-		if !mex.shutdown() {
+		if !call.mex.shutdown() {
 			// Already shutdown, no need to send frame.
 			return
 		}
