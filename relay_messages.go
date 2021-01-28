@@ -35,6 +35,7 @@ import (
 var (
 	_callerNameKeyBytes      = []byte(CallerName)
 	_routingDelegateKeyBytes = []byte(RoutingDelegate)
+	_callerProcedureKeyBytes = []byte(CallerProcedure)
 	_routingKeyKeyBytes      = []byte(RoutingKey)
 	_argSchemeKeyBytes       = []byte(ArgScheme)
 	_tchanThriftValueBytes   = []byte(Thrift)
@@ -99,10 +100,10 @@ type lazyCallReq struct {
 	arg2StartOffset, arg2EndOffset uint16
 	arg3StartOffset                uint16
 
-	caller, method, delegate, key, as []byte
-	arg2Appends                       []relay.KeyVal
-	checksumType                      ChecksumType
-	isArg2Fragmented                  bool
+	caller, method, delegate, callerProcedure, key, as []byte
+	arg2Appends                                        []relay.KeyVal
+	checksumType                                       ChecksumType
+	isArg2Fragmented                                   bool
 
 	// Intentionally an array to combine allocations with that of lazyCallReq
 	arg2InitialBuf [1]relay.KeyVal
@@ -140,6 +141,8 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 			cr.caller = val
 		} else if bytes.Equal(key, _routingDelegateKeyBytes) {
 			cr.delegate = val
+		} else if bytes.Equal(key, _callerProcedureKeyBytes) {
+			cr.callerProcedure = val
 		} else if bytes.Equal(key, _routingKeyKeyBytes) {
 			cr.key = val
 		}
@@ -195,6 +198,11 @@ func (f *lazyCallReq) Method() []byte {
 // RoutingDelegate returns the routing delegate for this call req, if any.
 func (f *lazyCallReq) RoutingDelegate() []byte {
 	return f.delegate
+}
+
+//CallerProcedure return the caller procedure for this call req, if any.
+func (f *lazyCallReq) CallerProcedure() []byte {
+	return f.callerProcedure
 }
 
 // RoutingKey returns the routing delegate for this call req, if any.

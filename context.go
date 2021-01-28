@@ -61,6 +61,8 @@ type IncomingCall interface {
 	// transport header.
 	RoutingDelegate() string
 
+	CallerProcedure() string
+
 	// LocalPeer returns the local peer information.
 	LocalPeer() LocalPeerInfo
 

@@ -175,6 +175,8 @@ const (
 	// requested service. A relay may use the routing key over the service if
 	// it knows about traffic groups.
 	RoutingKey TransportHeaderName = "rk"
+
+	CallerProcedure TransportHeaderName = "cp"
 )
 
 // transportHeaders are passed as part of a CallReq/CallRes

@@ -39,6 +39,7 @@ const (
 	reqHasHeaders testCallReq = (1 << iota)
 	reqHasCaller
 	reqHasDelegate
+	reqHasCallerProcedure
 	reqHasRoutingKey
 	reqHasChecksum
 	reqTotalCombinations
@@ -76,9 +77,10 @@ func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
-	f := NewFrame(200)
+	f := NewFrame(220)
 	fh := fakeHeader()
-	fh.size = 0xD8 // 200 + 16 bytes of header = 216 (0xD8)
+	fh.size = 0xEC // 220 + 16 bytes of header = 236 (0xEC)
+
 	f.Header = fh
 	fh.write(typed.NewWriteBuffer(f.headerBuffer))
 
@@ -101,6 +103,9 @@ func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	}
 	if cr&reqHasDelegate != 0 {
 		headers["rd"] = "fake-delegate"
+	}
+	if cr&reqHasCallerProcedure != 0 {
+		headers["cp"] = "fake-callerprocedure"
 	}
 	if cr&reqHasRoutingKey != 0 {
 		headers["rk"] = "fake-routingkey"
@@ -287,6 +292,16 @@ func TestLazyCallReqRoutingDelegate(t *testing.T) {
 	})
 }
 
+func TestLazyCallReqCallerProcedure(t *testing.T) {
+	withLazyCallReqCombinations(func(crt testCallReq) {
+		cr := crt.req(t)
+		if crt&reqHasCallerProcedure == 0 {
+			assert.Equal(t, []byte(nil), cr.CallerProcedure(), "Unexpected caller procedure.")
+		} else {
+			assert.Equal(t, "fake-callerprocedure", string(cr.CallerProcedure()), "caller procedure mismatch.")
+		}
+	})
+}
 func TestLazyCallReqRoutingKey(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req(t)

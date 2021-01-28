@@ -49,6 +49,8 @@ type CallFrame interface {
 	Method() []byte
 	// RoutingDelegate is the name of the routing delegate, if any.
 	RoutingDelegate() []byte
+	// CallerProcedure is the name of the caller procedure of the service making the request
+	CallerProcedure() []byte
 	// RoutingKey may refer to an alternate traffic group instead of the
 	// traffic group identified by the service name.
 	RoutingKey() []byte

@@ -32,6 +32,7 @@ func TestSetHeaders(t *testing.T) {
 		routingDelegate string
 		routingKey      string
 		callerName      string
+		callerProcedure string
 		expectedHeaders transportHeaders
 	}{
 		{
@@ -66,6 +67,14 @@ func TestSetHeaders(t *testing.T) {
 				RoutingKey: "canary",
 			},
 		},
+		{
+			format:          JSON,
+			callerProcedure: "callerP",
+			expectedHeaders: transportHeaders{
+				ArgScheme:       JSON.String(),
+				CallerProcedure: "callerP",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -74,6 +83,7 @@ func TestSetHeaders(t *testing.T) {
 			RoutingDelegate: tt.routingDelegate,
 			RoutingKey:      tt.routingKey,
 			CallerName:      tt.callerName,
+			CallerProcedure: tt.callerProcedure,
 		}
 		headers := make(transportHeaders)
 		callOpts.setHeaders(headers)

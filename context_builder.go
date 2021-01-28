@@ -136,6 +136,15 @@ func (cb *ContextBuilder) SetRoutingDelegate(rd string) *ContextBuilder {
 	return cb
 }
 
+// SetCallerProcedure sets the CallerProcedure call options ("cp" transport header).
+func (cb *ContextBuilder) SetCallerProcedure(rd string) *ContextBuilder {
+	if cb.CallOptions == nil {
+		cb.CallOptions = new(CallOptions)
+	}
+	cb.CallOptions.CallerProcedure = rd
+	return cb
+}
+
 // SetConnectTimeout sets the ConnectionTimeout for this context.
 // The context timeout applies to the whole call, while the connect
 // timeout only applies to creating a new connection.

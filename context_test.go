@@ -306,3 +306,26 @@ func TestContextInheritParentTimeout(t *testing.T) {
 	assert.False(t, deadline.Before(deadlineAfter),
 		"Expected deadline to be after %v, got %v", deadlineAfter, deadline)
 }
+
+func TestCallerProcedurePropagates(t *testing.T) {
+	WithVerifiedServer(t, nil, func(ch *Channel, hostPort string) {
+		peerInfo := ch.PeerInfo()
+		testutils.RegisterFunc(ch, "test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			return &raw.Res{
+				Arg3: []byte(CurrentCall(ctx).CallerProcedure()),
+			}, nil
+		})
+
+		ctx, cancel := NewContextBuilder(time.Second).Build()
+		defer cancel()
+		_, arg3, _, err := raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, "", string(arg3), "Expected no routing delegate header")
+
+		ctx, cancel = NewContextBuilder(time.Second).SetCallerProcedure("cpr").Build()
+		defer cancel()
+		_, arg3, _, err = raw.Call(ctx, ch, peerInfo.HostPort, peerInfo.ServiceName, "test", nil, nil)
+		assert.NoError(t, err, "Call failed")
+		assert.Equal(t, "cpr", string(arg3), "Expected routing delegate header to be set")
+	})
+}
