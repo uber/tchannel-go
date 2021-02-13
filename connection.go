@@ -318,6 +318,8 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 	if outboundHP != "" {
 		connDirection = outbound
 		log = log.WithFields(LogField{"outboundHP", outboundHP})
+	} else {
+		baseCtx = ch.connContext(baseCtx, conn)
 	}
 
 	log = log.WithFields(LogField{"connectionDirection", connDirection})
@@ -348,7 +350,7 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		healthCheckHistory: newHealthHistory(),
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
-		baseContext:        ch.connContext(baseCtx, conn),
+		baseContext:        baseCtx,
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
