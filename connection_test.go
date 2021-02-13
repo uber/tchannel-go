@@ -1444,20 +1444,20 @@ func TestInboundConnContext(t *testing.T) {
 }
 
 func TestOutboundConnContext(t *testing.T) {
-	tests := []struct{
-		msg string
+	tests := []struct {
+		msg  string
 		opts *testutils.ChannelOpts
-	} {
+	}{
 		{
 			// As a channel can have both inbound and outbound connections, we may want a connContext set for the inbound,
 			// but this shouldn't affect the outbound
 			msg: "conncontext doesn't overwrite base context",
-			opts:testutils.NewOpts().NoRelay().SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
+			opts: testutils.NewOpts().NoRelay().SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
 				return context.WithValue(ctx, "foo", "baz")
 			}),
 		},
 		{
-			msg: "base context is propagated when without conncontext",
+			msg:  "base context is propagated when without conncontext",
 			opts: testutils.NewOpts().NoRelay(),
 		},
 	}
