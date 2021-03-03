@@ -1,4 +1,5 @@
 export GO15VENDOREXPERIMENT=1
+export GO111MODULE=off
 
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
