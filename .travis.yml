@@ -6,19 +6,19 @@ cache:
   - $HOME/.glide/cache
 
 go:
-- 1.13.x
-- 1.14.x
+  - oldstable
+  - stable
 
 matrix:
   include:
-  - go: 1.13.x
+  - go: stable
     env: CROSSDOCK=true
     sudo: required
     dist: trusty
     services:
     - docker
   include:
-  - go: 1.13.x
+  - go: stable
     env: NO_TEST=yes COVERAGE=yes LINT=yes
 
 env:
