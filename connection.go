@@ -394,7 +394,7 @@ func (c *Connection) callOnActive() {
 			{"remotePeerTChannelVersion", remoteVersion.TChannelVersion},
 		}...)
 	}
-	log.Info("Created new active connection.")
+	log.Debug("Created new active connection.")
 
 	if f := c.events.OnActive; f != nil {
 		f(c)
@@ -849,7 +849,7 @@ func (c *Connection) checkExchanges() {
 }
 
 func (c *Connection) close(fields ...LogField) error {
-	c.log.WithFields(fields...).Info("Connection closing.")
+	c.log.WithFields(fields...).Debug("Connection closing.")
 
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
