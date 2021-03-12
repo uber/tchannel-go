@@ -118,8 +118,15 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	wc := newWorkerControl(p.clients)
 	dec := testutils.Decrementor(b.N)
 
+	var wg sync.WaitGroup
+	errC := make(chan error, 1)
+	defer close(errC)
+
 	for i, c := range clients {
+		wg.Add(1)
 		go func(i int, c benchmark.Client) {
+			defer wg.Done()
+
 			// Do a warm up call.
 			c.RawCall(1)
 
@@ -134,7 +141,8 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 
 				durations, err := c.RawCall(tokens)
 				if err != nil {
-					b.Fatalf("Call failed: %v", err)
+					errC <- err
+					return
 				}
 
 				for _, d := range durations {
@@ -142,6 +150,11 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 				}
 			}
 		}(i, c)
+	}
+
+	wg.Wait()
+	if err := <-errC; err != nil {
+		b.Fatalf("Call failed: %v", err)
 	}
 
 	var started time.Time

@@ -325,7 +325,7 @@ func runTest(t *testing.T, opts processOptions, extraChecks func(string) error) 
 	}
 
 	// Run go build to ensure that the generated code builds.
-	cmd := exec.Command("go", "build", "-i", "./...")
+	cmd := exec.Command("go", "build", "./...")
 	cmd.Dir = tempDir
 	// NOTE: we check output, since go build ./... returns 0 status code on failure:
 	// https://github.com/golang/go/issues/11407
