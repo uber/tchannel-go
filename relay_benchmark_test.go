@@ -119,7 +119,7 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 	dec := testutils.Decrementor(b.N)
 
 	for i, c := range clients {
-		go func(b *testing.B, i int, c benchmark.Client) {
+		go func(i int, c benchmark.Client) {
 			// Do a warm up call.
 			c.RawCall(1)
 
@@ -141,7 +141,7 @@ func benchmarkRelay(b *testing.B, p benchmarkParams) {
 					quantiles[i].Insert(float64(d))
 				}
 			}
-		}(b, i, c)
+		}(i, c)
 	}
 
 	var started time.Time
