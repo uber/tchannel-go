@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.21.1] - 2021-03-13
+### Changed
+ * Change log level for connection create/close to debug.
+
 ## [1.21.0] - 2020-12-13
 ### Changed
  * Internal changes related to relaying.
