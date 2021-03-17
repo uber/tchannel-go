@@ -1,9 +1,9 @@
 Changelog
 =========
 
-## [1.21.1] - 2021-03-13
+## [1.21.1] - 2021-03-17
 ### Changed
- * Change log level for connection create/close to debug.
+ * Change log level for connection create/close from info level to debug level to reduce noisy logs.
 
 ## [1.21.0] - 2020-12-13
 ### Changed
