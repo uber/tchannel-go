@@ -60,6 +60,8 @@ type CallOptions struct {
 	// Optionally override this field to support transparent proxying when inbound
 	// caller names vary across calls.
 	CallerName string
+
+	CallerProcedure string
 }
 
 var defaultCallOptions = &CallOptions{}
@@ -85,6 +87,10 @@ func (c *CallOptions) overrideHeaders(headers transportHeaders) {
 	}
 	if c.CallerName != "" {
 		headers[CallerName] = c.CallerName
+	}
+
+	if c.CallerProcedure != "" {
+		headers[CallerProcedure] = c.CallerProcedure
 	}
 }
 

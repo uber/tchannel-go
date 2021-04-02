@@ -50,6 +50,9 @@ type FakeIncomingCall struct {
 
 	// RoutingDelegateF is the routing delegate.
 	RoutingDelegateF string
+
+	// CallerProcedureF is the caller procedure
+	CallerProcedureF string
 }
 
 // CallerName returns the caller name as specified in the fake call.
@@ -72,6 +75,11 @@ func (f *FakeIncomingCall) RoutingDelegate() string {
 	return f.RoutingDelegateF
 }
 
+// CallerProcedure returns the caller procedure as specified in the fake call.
+func (f *FakeIncomingCall) CallerProcedure() string {
+	return f.CallerProcedureF
+}
+
 // LocalPeer returns the local peer information for this call.
 func (f *FakeIncomingCall) LocalPeer() tchannel.LocalPeerInfo {
 	return f.LocalPeerF
@@ -88,6 +96,7 @@ func (f *FakeIncomingCall) CallOptions() *tchannel.CallOptions {
 		ShardKey:        f.ShardKey(),
 		RoutingKey:      f.RoutingKey(),
 		RoutingDelegate: f.RoutingDelegate(),
+		CallerProcedure: f.CallerProcedure(),
 	}
 }
 
@@ -101,7 +110,7 @@ type FakeCallFrame struct {
 	tb   testing.TB
 	TTLF time.Duration
 
-	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF string
+	ServiceF, MethodF, CallerF, RoutingKeyF, RoutingDelegateF, CallerProcedureF string
 
 	Arg2StartOffsetVal, Arg2EndOffsetVal int
 	IsArg2Fragmented                     bool
@@ -144,6 +153,11 @@ func (f *FakeCallFrame) RoutingDelegate() []byte {
 	return []byte(f.RoutingDelegateF)
 }
 
+// CallerProcedure returns the caller procedure field.
+func (f *FakeCallFrame) CallerProcedure() []byte {
+	return []byte(f.CallerProcedureF)
+}
+
 // Arg2StartOffset returns the offset from start of payload to
 // the beginning of Arg2.
 func (f *FakeCallFrame) Arg2StartOffset() int {
@@ -179,6 +193,7 @@ func CopyCallFrame(f relay.CallFrame) *FakeCallFrame {
 		CallerF:            string(f.Caller()),
 		RoutingKeyF:        string(f.RoutingKey()),
 		RoutingDelegateF:   string(f.RoutingDelegate()),
+		CallerProcedureF:   string(f.CallerProcedure()),
 		Arg2StartOffsetVal: f.Arg2StartOffset(),
 		Arg2EndOffsetVal:   endOffset,
 		IsArg2Fragmented:   hasMore,

@@ -152,6 +152,7 @@ func TestCallOptionsPropogated(t *testing.T) {
 		ShardKey:        "test-shard-key",
 		RoutingKey:      "test-routing-key",
 		RoutingDelegate: "test-routing-delegate",
+		CallerProcedure: "test-caller-procedure",
 	}
 
 	var gotCallOpts *CallOptions

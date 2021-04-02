@@ -257,6 +257,10 @@ func (call *InboundCall) RoutingDelegate() string {
 	return call.headers[RoutingDelegate]
 }
 
+func (call *InboundCall) CallerProcedure() string {
+	return call.headers[CallerProcedure]
+}
+
 // LocalPeer returns the local peer information for this call.
 func (call *InboundCall) LocalPeer() LocalPeerInfo {
 	return call.conn.localPeerInfo
@@ -275,6 +279,7 @@ func (call *InboundCall) CallOptions() *CallOptions {
 		ShardKey:        call.ShardKey(),
 		RoutingDelegate: call.RoutingDelegate(),
 		RoutingKey:      call.RoutingKey(),
+		CallerProcedure: call.CallerProcedure(),
 	}
 }
 
