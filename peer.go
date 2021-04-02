@@ -375,7 +375,10 @@ func (p *Peer) getActiveConnLocked() (*Connection, bool) {
 
 	// We cycle through the connection list, starting at a random point
 	// to avoid always choosing the same connection.
-	startOffset := peerRng.Intn(allConns)
+	var startOffset int
+	if allConns > 1 {
+		startOffset = peerRng.Intn(allConns)
+	}
 	for i := 0; i < allConns; i++ {
 		connIndex := (i + startOffset) % allConns
 		if conn := p.getConn(connIndex); conn.IsActive() {
