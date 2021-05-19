@@ -59,6 +59,7 @@ type testCallReqParams struct {
 	argScheme       Format
 	arg2Buf         []byte
 	overrideArg2Len int
+	skipArg3        bool
 	arg3Buf         []byte
 }
 
@@ -67,20 +68,24 @@ func (cr testCallReq) req(tb testing.TB) lazyCallReq {
 }
 
 func (cr testCallReq) reqWithParams(tb testing.TB, p testCallReqParams) lazyCallReq {
-	lcr, err := newLazyCallReq(cr.frameWithParams(p))
+	lcr, err := newLazyCallReq(cr.frameWithParams(tb, p))
 	require.NoError(tb, err)
 	return *lcr
 }
 
-func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
+func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame {
 	// TODO: Constructing a frame is ugly because the initial flags byte is
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
-	f := NewFrame(200)
+	f := NewFrame(MaxFramePayloadSize)
 	fh := fakeHeader()
-	fh.size = 0xD8 // 200 + 16 bytes of header = 216 (0xD8)
-	f.Header = fh
-	fh.write(typed.NewWriteBuffer(f.headerBuffer))
+
+	// Set the size in the header and write out the header after we know the payload contents.
+	defer func() {
+		fh.size = uint16(len(f.Payload)) + 16 // add 16 bytes for the header
+		f.Header = fh
+		require.NoError(t, fh.write(typed.NewWriteBuffer(f.headerBuffer)), "failed to write header")
+	}()
 
 	payload := typed.NewWriteBuffer(f.Payload)
 	payload.WriteSingleByte(p.flags)     // flags
@@ -123,10 +128,15 @@ func (cr testCallReq) frameWithParams(p testCallReqParams) *Frame {
 	payload.WriteUint16(uint16(arg2Len))
 	payload.WriteBytes(p.arg2Buf)
 
-	arg3Len := len(p.arg3Buf)
-	payload.WriteUint16(uint16(arg3Len))
-	payload.WriteBytes(p.arg3Buf)
+	if !p.skipArg3 {
+		arg3Len := len(p.arg3Buf)
+		payload.WriteUint16(uint16(arg3Len))
+		payload.WriteBytes(p.arg3Buf)
+	}
 
+	f.Payload = f.Payload[:payload.BytesWritten()]
+
+	require.NoError(t, payload.Err(), "failed to write payload")
 	return f
 }
 
@@ -383,14 +393,15 @@ func TestLazyCallArg2Offset(t *testing.T) {
 					// For each CallReq, we first get the remaining space left, and
 					// fill up the remaining space with arg2.
 					crNoArg2 := crt.req(t)
-					arg2Size := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
+					arg2Size := MaxFramePayloadSize - crNoArg2.Arg2StartOffset()
 					var flags byte
 					if tt.hasMore {
 						flags |= hasMoreFragmentsFlag
 					}
-					f := crt.frameWithParams(testCallReqParams{
-						flags:   flags,
-						arg2Buf: make([]byte, arg2Size),
+					f := crt.frameWithParams(t, testCallReqParams{
+						flags:    flags,
+						arg2Buf:  make([]byte, arg2Size),
+						skipArg3: true,
 					})
 					cr, err := newLazyCallReq(f)
 					if tt.wantError != "" {
@@ -400,7 +411,7 @@ func TestLazyCallArg2Offset(t *testing.T) {
 					require.NoError(t, err)
 					endOffset, hasMore := cr.Arg2EndOffset()
 					assert.Equal(t, hasMore, tt.hasMore)
-					assert.EqualValues(t, crNoArg2.Header.PayloadSize(), endOffset)
+					assert.EqualValues(t, MaxFramePayloadSize, endOffset)
 				})
 			})
 		}
@@ -514,7 +525,7 @@ func TestLazyCallReqSetTChanThriftArg2(t *testing.T) {
 		withLazyCallReqCombinations(func(crt testCallReq) {
 			crNoArg2 := crt.req(t)
 			leftSpace := int(crNoArg2.Header.PayloadSize()) - crNoArg2.Arg2StartOffset()
-			frm := crt.frameWithParams(testCallReqParams{
+			frm := crt.frameWithParams(t, testCallReqParams{
 				arg2Buf:         make([]byte, leftSpace),
 				argScheme:       Thrift,
 				overrideArg2Len: leftSpace + 5, // Arg2 length extends beyond payload
