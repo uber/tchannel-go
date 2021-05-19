@@ -23,6 +23,8 @@ package tchannel
 import (
 	"fmt"
 	"io"
+	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +52,10 @@ var (
 		"foo": "bar",
 		"baz": "qux",
 	}
+)
+
+const (
+	exampleService  = "bankemoji"
 	exampleArg3Data = "some arg3 data"
 )
 
@@ -61,6 +67,8 @@ type testCallReqParams struct {
 	overrideArg2Len int
 	skipArg3        bool
 	arg3Buf         []byte
+
+	serviceOverride string
 }
 
 func (cr testCallReq) req(tb testing.TB) lazyCallReq {
@@ -91,7 +99,12 @@ func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame 
 	payload.WriteSingleByte(p.flags)     // flags
 	payload.WriteUint32(42)              // TTL
 	payload.WriteBytes(make([]byte, 25)) // tracing
-	payload.WriteLen8String("bankmoji")  // service
+
+	svc := p.serviceOverride
+	if svc == "" {
+		svc = exampleService
+	}
+	payload.WriteLen8String(svc) // service
 
 	headers := make(map[string]string)
 	switch p.argScheme {
@@ -133,7 +146,6 @@ func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame 
 		payload.WriteUint16(uint16(arg3Len))
 		payload.WriteBytes(p.arg3Buf)
 	}
-
 	f.Payload = f.Payload[:payload.BytesWritten()]
 
 	require.NoError(t, payload.Err(), "failed to write payload")
@@ -271,7 +283,7 @@ func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 func TestLazyCallReqService(t *testing.T) {
 	withLazyCallReqCombinations(func(crt testCallReq) {
 		cr := crt.req(t)
-		assert.Equal(t, "bankmoji", string(cr.Service()), "Service name mismatch")
+		assert.Equal(t, exampleService, string(cr.Service()), "Service name mismatch")
 	})
 }
 
@@ -605,4 +617,22 @@ func TestLazyCallReqContents(t *testing.T) {
 		// TODO(echung): switch to assert.Equal once we have more robust test frame generation
 		assert.Contains(t, string(cr.arg3()), exampleArg3Data, "Got unexpected headers")
 	})
+}
+
+func TestLazyCallReqLargeService(t *testing.T) {
+	for _, svcSize := range []int{10, 100, 200, 240, math.MaxInt8} {
+		t.Run(fmt.Sprintf("size=%v", svcSize), func(t *testing.T) {
+			largeService := strings.Repeat("a", svcSize)
+			withLazyCallReqCombinations(func(cr testCallReq) {
+				f := cr.frameWithParams(t, testCallReqParams{
+					serviceOverride: largeService,
+				})
+
+				callReq, err := newLazyCallReq(f)
+				require.NoError(t, err)
+
+				assert.Equal(t, largeService, string(callReq.Service()), "service name mismatch")
+			})
+		})
+	}
 }
