@@ -55,7 +55,7 @@ var (
 )
 
 const (
-	exampleService  = "bankemoji"
+	exampleService  = "fooservice"
 	exampleArg3Data = "some arg3 data"
 )
 
