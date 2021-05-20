@@ -46,20 +46,21 @@ const (
 	// Common to many frame types.
 	_flagsIndex = 0
 
-	// For call req.
-	_ttlIndex         = 1
-	_ttlLen           = 4
-	_spanIndex        = _ttlIndex + _ttlLen
-	_spanLength       = 25
-	_serviceLenIndex  = _spanIndex + _spanLength
-	_serviceNameIndex = _serviceLenIndex + 1
+	// For call req, indexes into the frame.
+	// Use int for indexes to avoid overflow caused by accidental byte arithmentic.
+	_ttlIndex         int = 1
+	_ttlLen           int = 4
+	_spanIndex        int = _ttlIndex + _ttlLen
+	_spanLength       int = 25
+	_serviceLenIndex  int = _spanIndex + _spanLength
+	_serviceNameIndex int = _serviceLenIndex + 1
 
 	// For call res and call res continue.
-	_resCodeOK    = 0x00
-	_resCodeIndex = 1
+	_resCodeOK        = 0x00
+	_resCodeIndex int = 1
 
 	// For error.
-	_errCodeIndex = 0
+	_errCodeIndex int = 0
 )
 
 type lazyError struct {
@@ -184,7 +185,7 @@ func (f *lazyCallReq) Caller() []byte {
 // Service returns the name of the destination service for this callReq.
 func (f *lazyCallReq) Service() []byte {
 	l := f.Payload[_serviceLenIndex]
-	return f.Payload[_serviceNameIndex : _serviceNameIndex+l]
+	return f.Payload[_serviceNameIndex : _serviceNameIndex+int(l)]
 }
 
 // Method returns the name of the method being called.
