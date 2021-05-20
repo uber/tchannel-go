@@ -629,7 +629,7 @@ func TestLazyCallReqLargeService(t *testing.T) {
 				})
 
 				callReq, err := newLazyCallReq(f)
-				require.NoError(t, err)
+				require.NoError(t, err, "newLazyCallReq failed")
 
 				assert.Equal(t, largeService, string(callReq.Service()), "service name mismatch")
 			})
