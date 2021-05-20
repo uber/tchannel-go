@@ -232,11 +232,11 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown() {
+func (mex *messageExchange) shutdown() bool {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if !mex.shutdownAtomic.CAS(false, true) {
-		return
+		return false
 	}
 
 	if mex.errChNotified.CAS(false, true) {
@@ -244,6 +244,7 @@ func (mex *messageExchange) shutdown() {
 	}
 
 	mex.mexset.removeExchange(mex.msgID)
+	return true
 }
 
 // inboundExpired is called when an exchange is canceled or it times out,
