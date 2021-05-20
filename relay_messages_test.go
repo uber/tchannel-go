@@ -82,7 +82,7 @@ func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame 
 
 	// Set the size in the header and write out the header after we know the payload contents.
 	defer func() {
-		fh.size = uint16(len(f.Payload)) + 16 // add 16 bytes for the header
+		fh.size = FrameHeaderSize + uint16(len(f.Payload))
 		f.Header = fh
 		require.NoError(t, fh.write(typed.NewWriteBuffer(f.headerBuffer)), "failed to write header")
 	}()
