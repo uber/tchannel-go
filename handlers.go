@@ -23,6 +23,7 @@ package tchannel
 import (
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -124,4 +125,26 @@ type channelHandler struct{ ch *Channel }
 
 func (c channelHandler) Handle(ctx context.Context, call *InboundCall) {
 	c.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
+}
+
+// channelHandlerWithNative is a Handler that wraps a Channel and delegates requests
+// to SubChannels if the inbound call's service and method name are configured to
+// ignore passed-in thirdparty handlers.
+type userHandlerWithIgnore struct {
+	ch          *Channel
+	ignore      map[string]struct{} // key is serviceName::method format
+	userHandler Handler
+}
+
+func (u userHandlerWithIgnore) Handle(ctx context.Context, call *InboundCall) {
+	var sb strings.Builder
+	sb.WriteString(call.ServiceName())
+	sb.WriteString("::")
+	sb.Write(call.Method())
+
+	if _, ok := u.ignore[sb.String()]; ok {
+		u.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
+		return
+	}
+	u.userHandler.Handle(ctx, call)
 }

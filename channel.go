@@ -124,6 +124,11 @@ type ChannelOptions struct {
 	// default handler that delegates to a subchannel.
 	Handler Handler
 
+	// HandlerWithIgnore allows users to configure TChannel server such that
+	// requests with specified methods can be ignored by passed-in handler and natively by TChannel.
+	// All other methods will be handled by passed-in handler.
+	HandlerWithIgnore HandlerWithIgnore
+
 	// Dialer is optional factory method which can be used for overriding
 	// outbound connections for things like TLS handshake
 	Dialer func(ctx context.Context, network, hostPort string) (net.Conn, error)
@@ -132,6 +137,16 @@ type ChannelOptions struct {
 	// the per-connection base context. This context is used as the parent context
 	// for incoming calls.
 	ConnContext func(ctx context.Context, conn net.Conn) context.Context
+}
+
+// HandlerWithIgnore allows users to configure TChannel server such that
+// requests with method listed in NativeHanderMethods are
+// ignored by passed-in handler and natively by TChannel.
+// All other methods will be handled by passed-in handler.
+type HandlerWithIgnore struct {
+	Handler Handler
+	// should we generalize to a func(request) bool here?
+	IgnoreMethods []string
 }
 
 // ChannelState is the state of a channel.
@@ -304,9 +319,16 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	}
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
 
-	if opts.Handler != nil {
+	switch n := opts.HandlerWithIgnore; {
+	case opts.Handler != nil:
 		ch.handler = opts.Handler
-	} else {
+	case len(n.IgnoreMethods) > 0 && n.Handler != nil:
+		ch.handler = userHandlerWithIgnore{
+			ch:          ch,
+			ignore:      toStringSet(n.IgnoreMethods),
+			userHandler: n.Handler,
+		}
+	default:
 		ch.handler = channelHandler{ch}
 	}
 
