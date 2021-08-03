@@ -64,6 +64,19 @@ func procedure(svc, method string) string {
 	return fmt.Sprintf("%s::%s", svc, method)
 }
 
+func makeInboundCall(svc, method string, logger Logger) *InboundCall {
+	// need to populate connection.log to avoid nil pointer
+	conn := &Connection{}
+	// can't inline due to embeds
+	conn.log = logger
+	return &InboundCall{
+		serviceName:  svc,
+		method:       []byte(method),
+		methodString: method,
+		conn:         conn,
+	}
+}
+
 func TestUserHandlerWithIgnore(t *testing.T) {
 	const (
 		svc          = "svc"
@@ -72,38 +85,29 @@ func TestUserHandlerWithIgnore(t *testing.T) {
 		runs         = 3
 	)
 
-	ch, err := NewChannel(svc, nil /* ChannelOptions */)
+	userCounter, channelCounter := map[string]int{}, map[string]int{}
+
+	opts := &ChannelOptions{
+		Handler:       recorderHandler(userCounter),
+		IgnoreMethods: []string{procedure(svc, ignoreMethod)},
+	}
+	ch, err := NewChannel(svc, opts)
 	require.NoError(t, err, "error creating a TChannel channel")
 
-	userCounter, channelCounter := map[string]int{}, map[string]int{}
+	// channel should be able to handle user ignored methods
 	ch.Register(recorderHandler(channelCounter), ignoreMethod)
 
-	u := userHandlerWithIgnore{
-		ch: ch,
-		ignore: map[string]struct{}{
-			procedure(svc, ignoreMethod): struct{}{},
-		},
-		userHandler: recorderHandler(userCounter),
-	}
 	// need to populate connection.log to avoid nil pointer
 	conn := &Connection{}
-	conn.log = ch.log
-	call := &InboundCall{
-		serviceName:  svc,
-		method:       []byte(method),
-		methodString: method,
-		conn:         conn,
-	}
-	ignoreCall := &InboundCall{
-		serviceName:  svc,
-		method:       []byte(ignoreMethod),
-		methodString: ignoreMethod,
-		conn:         conn,
-	}
+	conn.log = NullLogger
+
+	call, ignoreCall := makeInboundCall(svc, method, NullLogger), makeInboundCall(svc, ignoreMethod, NullLogger)
+
+	h := channelHandler{ch}
 
 	for i := 0; i < runs; i++ {
-		u.Handle(context.Background(), ignoreCall)
-		u.Handle(context.Background(), call)
+		h.Handle(context.Background(), ignoreCall)
+		h.Handle(context.Background(), call)
 	}
 	assert.Equal(t, map[string]int{procedure(svc, method): runs}, userCounter, "user provided handler not invoked correct amount of times")
 	assert.Equal(t, map[string]int{procedure(svc, ignoreMethod): runs}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")

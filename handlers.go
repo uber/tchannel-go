@@ -127,13 +127,15 @@ func (c channelHandler) Handle(ctx context.Context, call *InboundCall) {
 	c.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
 }
 
-// channelHandlerWithNative is a Handler that wraps a Channel and delegates requests
-// to SubChannels if the inbound call's service and method name are configured to
-// ignore passed-in thirdparty handlers.
+// userHandlerWithIgnore is a Handler that wraps a localHandler backed by the channel.
+// and a user provided handler.
+// The inbound call will be handled by user handler, unless the call's
+// service and method name are configured to be handled by localHandler
+// from ignore.
 type userHandlerWithIgnore struct {
-	ch          *Channel
-	ignore      map[string]struct{} // key is serviceName::method format
-	userHandler Handler
+	localHandler      Handler
+	ignoreUserHandler map[string]struct{} // key is serviceName::method format
+	userHandler       Handler
 }
 
 func (u userHandlerWithIgnore) Handle(ctx context.Context, call *InboundCall) {
@@ -142,8 +144,8 @@ func (u userHandlerWithIgnore) Handle(ctx context.Context, call *InboundCall) {
 	sb.WriteString("::")
 	sb.Write(call.Method())
 
-	if _, ok := u.ignore[sb.String()]; ok {
-		u.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
+	if _, ok := u.ignoreUserHandler[sb.String()]; ok {
+		u.localHandler.Handle(ctx, call)
 		return
 	}
 	u.userHandler.Handle(ctx, call)
