@@ -314,7 +314,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	switch {
 	case len(opts.IgnoreMethods) > 0 && opts.Handler != nil:
 		ch.handler = userHandlerWithIgnore{
-			localHandler:      channelHandler{ch},
+			channelHandler:    channelHandler{ch},
 			ignoreUserHandler: toStringSet(opts.IgnoreMethods),
 			userHandler:       opts.Handler,
 		}
@@ -439,12 +439,14 @@ type Registrar interface {
 // information.
 //
 // Register panics if the channel was constructed with an alternate root
-// handler.
+// handler that does not support Register.
 func (ch *Channel) Register(h Handler, methodName string) {
-	if _, ok := ch.handler.(channelHandler); !ok {
-		panic("can't register handler when channel configured with alternate root handler")
+	r, ok := ch.handler.(registrar)
+	if !ok {
+		panic("can't register handler when channel configured with alternate root handler without Register method")
 	}
-	ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, methodName)
+
+	r.Register(h, methodName)
 }
 
 // PeerInfo returns the current peer info for the channel

@@ -563,7 +563,7 @@ func (ch *Channel) createInternalHandlers() *handlerMap {
 		}
 
 		h := HandlerFunc(handler)
-		internalHandlers.register(h, ep.name)
+		internalHandlers.Register(h, ep.name)
 
 		// Register under the service name of channel as well (for backwards compatibility).
 		ch.GetSubChannel(ch.PeerInfo().ServiceName).Register(h, ep.name)

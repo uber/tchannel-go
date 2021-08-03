@@ -51,11 +51,11 @@ func TestHandlers(t *testing.T) {
 	assert.Nil(t, hmap.find(m1b))
 	assert.Nil(t, hmap.find(m2b))
 
-	hmap.register(h1, m1)
+	hmap.Register(h1, m1)
 	assert.Equal(t, h1, hmap.find(m1b))
 	assert.Nil(t, hmap.find(m2b))
 
-	hmap.register(h2, m2)
+	hmap.Register(h2, m2)
 	assert.Equal(t, h1, hmap.find(m1b))
 	assert.Equal(t, h2, hmap.find(m2b))
 }
@@ -64,11 +64,11 @@ func procedure(svc, method string) string {
 	return fmt.Sprintf("%s::%s", svc, method)
 }
 
-func makeInboundCall(svc, method string, logger Logger) *InboundCall {
+func makeInboundCall(svc, method string) *InboundCall {
 	// need to populate connection.log to avoid nil pointer
 	conn := &Connection{}
 	// can't inline due to embeds
-	conn.log = logger
+	conn.log = NullLogger
 	return &InboundCall{
 		serviceName:  svc,
 		method:       []byte(method),
@@ -97,17 +97,11 @@ func TestUserHandlerWithIgnore(t *testing.T) {
 	// channel should be able to handle user ignored methods
 	ch.Register(recorderHandler(channelCounter), ignoreMethod)
 
-	// need to populate connection.log to avoid nil pointer
-	conn := &Connection{}
-	conn.log = NullLogger
-
-	call, ignoreCall := makeInboundCall(svc, method, NullLogger), makeInboundCall(svc, ignoreMethod, NullLogger)
-
-	h := channelHandler{ch}
+	call, ignoreCall := makeInboundCall(svc, method), makeInboundCall(svc, ignoreMethod)
 
 	for i := 0; i < runs; i++ {
-		h.Handle(context.Background(), ignoreCall)
-		h.Handle(context.Background(), call)
+		ch.handler.Handle(context.Background(), ignoreCall)
+		ch.handler.Handle(context.Background(), call)
 	}
 	assert.Equal(t, map[string]int{procedure(svc, method): runs}, userCounter, "user provided handler not invoked correct amount of times")
 	assert.Equal(t, map[string]int{procedure(svc, ignoreMethod): runs}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")

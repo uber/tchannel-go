@@ -36,6 +36,11 @@ type Handler interface {
 	Handle(ctx context.Context, call *InboundCall)
 }
 
+// registrar is a subset of the Registrar interface, only containing Register.
+type registrar interface {
+	Register(h Handler, methodName string)
+}
+
 // A HandlerFunc is an adapter to allow the use of ordinary functions as
 // Channel handlers.  If f is a function with the appropriate signature, then
 // HandlerFunc(f) is a Handler object that calls f.
@@ -78,8 +83,8 @@ type handlerMap struct {
 	handlers map[string]Handler
 }
 
-// Registers a handler
-func (hmap *handlerMap) register(h Handler, method string) {
+// Register implements registrar.
+func (hmap *handlerMap) Register(h Handler, method string) {
 	hmap.Lock()
 	defer hmap.Unlock()
 
@@ -127,13 +132,18 @@ func (c channelHandler) Handle(ctx context.Context, call *InboundCall) {
 	c.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
 }
 
+// Register registers the handler on the channel's default service name.
+func (c channelHandler) Register(h Handler, methodName string) {
+	c.ch.GetSubChannel(c.ch.PeerInfo().ServiceName).Register(h, methodName)
+}
+
 // userHandlerWithIgnore is a Handler that wraps a localHandler backed by the channel.
 // and a user provided handler.
 // The inbound call will be handled by user handler, unless the call's
 // service and method name are configured to be handled by localHandler
 // from ignore.
 type userHandlerWithIgnore struct {
-	localHandler      Handler
+	channelHandler
 	ignoreUserHandler map[string]struct{} // key is serviceName::method format
 	userHandler       Handler
 }
@@ -145,7 +155,7 @@ func (u userHandlerWithIgnore) Handle(ctx context.Context, call *InboundCall) {
 	sb.Write(call.Method())
 
 	if _, ok := u.ignoreUserHandler[sb.String()]; ok {
-		u.localHandler.Handle(ctx, call)
+		u.channelHandler.Handle(ctx, call)
 		return
 	}
 	u.userHandler.Handle(ctx, call)

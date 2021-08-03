@@ -108,14 +108,15 @@ func (c *SubChannel) Isolated() bool {
 // This function panics if the Handler for the SubChannel was overwritten with
 // SetHandler.
 func (c *SubChannel) Register(h Handler, methodName string) {
-	handlers, ok := c.handler.(*handlerMap)
+	r, ok := c.handler.(registrar)
 	if !ok {
 		panic(fmt.Sprintf(
-			"handler for SubChannel(%v) was changed to disallow method registration",
+			"handler for SubChannel(%v) configured with alternate root handler without Register method",
 			c.ServiceName(),
 		))
 	}
-	handlers.register(h, methodName)
+
+	r.Register(h, methodName)
 }
 
 // GetHandlers returns all handlers registered on this subchannel by method name.
