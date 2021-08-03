@@ -231,7 +231,8 @@ func TestCannotRegisterOrGetAfterSetHandler(t *testing.T) {
 	ch.GetSubChannel("foo").SetHandler(someHandler)
 
 	// Registering against the original service should not panic but
-	// registering against the "foo" service should panic.
+	// registering against the "foo" service should panic since the handler
+	// was overridden, and doesn't support Register.
 	assert.NotPanics(t, func() { ch.Register(anotherHandler, "bar") })
 	assert.NotPanics(t, func() { ch.GetSubChannel("svc").GetHandlers() })
 	assert.Panics(t, func() { ch.GetSubChannel("foo").Register(anotherHandler, "bar") })
@@ -266,4 +267,46 @@ func TestHandlerWithoutSubChannel(t *testing.T) {
 			ts.Server().Register(raw.Wrap(newTestHandler(t)), "nyuck")
 		})
 	})
+}
+
+type handlerWithRegister struct {
+	registered map[string]struct{}
+}
+
+func (handlerWithRegister) Handle(ctx context.Context, call *InboundCall) {
+	panic("Handle not expected to be called")
+}
+
+func (hr *handlerWithRegister) Register(h Handler, methodName string) {
+	if hr.registered == nil {
+		hr.registered = make(map[string]struct{})
+	}
+	hr.registered[methodName] = struct{}{}
+}
+
+func TestHandlerCustomRegister(t *testing.T) {
+	hrTop := &handlerWithRegister{}
+	hrSC := &handlerWithRegister{}
+
+	opts := testutils.NewOpts()
+	opts.ChannelOptions.Handler = hrTop
+	ch := testutils.NewServer(t, opts)
+	defer ch.Close()
+
+	var unused HandlerFunc = func(_ context.Context, _ *InboundCall) {
+		panic("unexpected call")
+	}
+
+	ch.Register(unused, "Top-Method")
+
+	sc := ch.GetSubChannel("sc")
+	sc.SetHandler(hrSC)
+	sc.Register(unused, "SC-Method")
+
+	assert.Equal(t, map[string]struct{}{
+		"Top-Method": {},
+	}, hrTop.registered, "Register on top channel mismatch")
+	assert.Equal(t, map[string]struct{}{
+		"SC-Method": {},
+	}, hrSC.registered, "Register on subchannel mismatch")
 }
