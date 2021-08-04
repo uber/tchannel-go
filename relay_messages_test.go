@@ -37,6 +37,10 @@ import (
 
 type testCallReq int
 
+type keyVal struct {
+	key, val string
+}
+
 const (
 	reqHasHeaders testCallReq = (1 << iota)
 	reqHasCaller
@@ -160,6 +164,20 @@ func withLazyCallReqCombinations(f func(cr testCallReq)) {
 
 type testCallRes int
 
+type testCallResParams struct {
+	payloadSize       int
+	hasFragmentedArg2 bool
+
+	flags    byte
+	code     byte
+	span     [25]byte
+	headers  []byte
+	csumType byte
+	arg1     []byte
+	arg2     []byte
+	arg3     []byte
+}
+
 const (
 	resIsContinued testCallRes = (1 << iota)
 	resIsOK
@@ -168,51 +186,72 @@ const (
 	resTotalCombinations
 )
 
-func (cr testCallRes) res() lazyCallRes {
-	f := NewFrame(100)
-	fh := FrameHeader{
-		size:        uint16(0xFF34),
-		messageType: messageTypeCallRes,
-		ID:          0xDEADBEEF,
+func (cr testCallRes) res(tb testing.TB) lazyCallRes {
+	params := testCallResParams{
+		payloadSize: 100,
 	}
-	f.Header = fh
-	fh.write(typed.NewWriteBuffer(f.headerBuffer))
-
-	payload := typed.NewWriteBuffer(f.Payload)
-
-	if cr&resIsContinued == 0 {
-		payload.WriteSingleByte(0) // flags
-	} else {
-		payload.WriteSingleByte(hasMoreFragmentsFlag) // flags
+	if cr&resIsContinued != 0 {
+		params.flags |= hasMoreFragmentsFlag
 	}
-
 	if cr&resIsOK == 0 {
-		payload.WriteSingleByte(1) // code not ok
-	} else {
-		payload.WriteSingleByte(0) // code ok
+		params.code = 1
 	}
-
-	headers := make(map[string]string)
 	if cr&resHasHeaders != 0 {
-		addRandomHeaders(headers)
+		kvList := []keyVal{
+			{"k1", "v1"},
+			{"k222222", ""},
+			{"k3", "thisisalonglongkey"},
+		}
+		params.headers = append(params.headers, byte(len(kvList)))
+		for _, kv := range kvList {
+			params.headers = append(params.headers, byte(len(kv.key)))
+			params.headers = append(params.headers, []byte(kv.key)...)
+			params.headers = append(params.headers, byte(len(kv.val)))
+			params.headers = append(params.headers, []byte(kv.val)...)
+		}
 	}
-	writeHeaders(payload, headers)
-
-	if cr&resHasChecksum == 0 {
-		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
-		// No contents for ChecksumTypeNone.
-	} else {
-		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
-		payload.WriteUint32(0)                            // checksum contents
+	if cr&resHasChecksum != 0 {
+		params.csumType = byte(ChecksumTypeCrc32C)
 	}
-	payload.WriteUint16(0) // no arg1 for call res
-	return newLazyCallRes(f)
+	return newLazyCallRes(newCallResFrame(tb, params))
 }
 
 func withLazyCallResCombinations(f func(cr testCallRes)) {
 	for cr := testCallRes(0); cr < resTotalCombinations; cr++ {
 		f(cr)
 	}
+}
+
+func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
+	f := NewFrame(p.payloadSize)
+	f.Header = FrameHeader{
+		// size is set below after construction of payload
+		messageType: messageTypeCallRes,
+		ID:          0xDEADBEEF,
+	}
+	require.NoError(tb, f.Header.write(typed.NewWriteBuffer(f.headerBuffer)))
+
+	payload := typed.NewWriteBuffer(f.Payload)
+	payload.WriteSingleByte(p.flags)                                          // flags
+	payload.WriteSingleByte(p.code)                                           // code
+	payload.WriteBytes(p.span[:])                                             // span
+	payload.WriteBytes(p.headers)                                             // headers
+	payload.WriteSingleByte(p.csumType)                                       // checksum type
+	payload.WriteBytes(make([]byte, ChecksumType(p.csumType).ChecksumSize())) // dummy checksum (not used in tests)
+
+	args := [][]byte{p.arg1, p.arg2}
+	if !p.hasFragmentedArg2 {
+		args = append(args, p.arg3)
+	}
+	for _, arg := range args {
+		payload.WriteUint16(uint16(len(arg)))
+		payload.WriteBytes(arg)
+	}
+
+	f.Header.SetPayloadSize(uint16(payload.BytesWritten()))
+	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
+
+	return f
 }
 
 func (ec SystemErrCode) fakeErrFrame() lazyError {
@@ -275,7 +314,7 @@ func assertWrappingPanics(t testing.TB, f *Frame, wrap func(f *Frame)) {
 func TestLazyCallReqRejectsOtherFrames(t *testing.T) {
 	assertWrappingPanics(
 		t,
-		resIsContinued.res().Frame,
+		resIsContinued.res(t).Frame,
 		func(f *Frame) { newLazyCallReq(f) },
 	)
 }
@@ -558,7 +597,7 @@ func TestLazyCallResRejectsOtherFrames(t *testing.T) {
 
 func TestLazyCallResOK(t *testing.T) {
 	withLazyCallResCombinations(func(crt testCallRes) {
-		cr := crt.res()
+		cr := crt.res(t)
 		if crt&resIsOK == 0 {
 			assert.False(t, cr.OK(), "Expected call res to have a non-ok code.")
 		} else {
