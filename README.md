@@ -58,8 +58,8 @@ This project is released under the [MIT License](LICENSE.md).
 
 [doc-img]: https://godoc.org/github.com/uber/tchannel-go?status.svg
 [doc]: https://godoc.org/github.com/uber/tchannel-go
-[ci-img]: https://travis-ci.com/uber/tchannel-go.svg?branch=master
-[ci]: https://travis-ci.com/uber/tchannel-go
+[ci-img]: https://github.com/uber/tchannel-go/actions/workflows/tests.yaml/badge.svg?branch=master
+[ci]: https://github.com/uber/tchannel-go/actions/workflows/tests.yaml
 [cov-img]: https://coveralls.io/repos/uber/tchannel-go/badge.svg?branch=master&service=github
 [cov]: https://coveralls.io/github/uber/tchannel-go?branch=master
 [tchan-spec]: http://tchannel.readthedocs.org/en/latest/
