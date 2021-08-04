@@ -552,6 +552,15 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return nil
 	}
 
+	if f.messageType() == messageTypeCallRes {
+		cr, err := newLazyCallRes(f)
+		if err != nil {
+			r.logger.Error(err.Error())
+		} else {
+			item.call.CallResponse(cr)
+		}
+	}
+
 	// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
 	// (meaning the call was mutated) and it is a callReqContinue frame.
 	if f.messageType() == messageTypeCallReqContinue && item.mutatedChecksum != nil {
@@ -812,7 +821,7 @@ func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
 		msg := newLazyError(f).Code().MetricsKey()
 		return false, msg
 	case messageTypeCallRes:
-		if newLazyCallRes(f).OK() {
+		if isCallResOK(f) {
 			return true, ""
 		}
 		return false, "application-error"

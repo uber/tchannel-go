@@ -1420,6 +1420,33 @@ func TestRelayTransferredBytes(t *testing.T) {
 	})
 }
 
+func TestRelayCallResponse(t *testing.T) {
+	fibBytes := []byte{1, 2, 3, 5, 8, 13}
+
+	rh := relaytest.NewStubRelayHost()
+	rh.SetRespFrameFn(func(frame relay.RespFrame) {
+		assert.True(t, frame.OK(), "Got unexpected response status")
+		assert.Equal(t, frame.Arg2(), fibBytes, "Got unexpected response arg2")
+	})
+
+	opts := testutils.NewOpts().
+		SetRelayHost(rh).
+		SetRelayOnly()
+
+	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
+		s1 := ts.NewServer(testutils.NewOpts().SetServiceName("s1"))
+		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
+		testutils.RegisterEcho(s1, nil)
+		testutils.RegisterEcho(s2, nil)
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+
+		_, _, _, err := raw.Call(ctx, s1, ts.HostPort(), s2.ServiceName(), "echo", fibBytes, nil)
+		require.NoError(t, err)
+	})
+}
+
 func TestRelayAppendArg2SentBytes(t *testing.T) {
 	tests := []struct {
 		msg           string

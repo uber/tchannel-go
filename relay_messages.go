@@ -23,7 +23,6 @@ package tchannel
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"time"
 
@@ -38,8 +37,6 @@ var (
 	_routingKeyKeyBytes      = []byte(RoutingKey)
 	_argSchemeKeyBytes       = []byte(ArgScheme)
 	_tchanThriftValueBytes   = []byte(Thrift)
-
-	errBadArg2Len = errors.New("bad Arg2 length")
 )
 
 const (
@@ -80,17 +77,88 @@ func (e lazyError) Code() SystemErrCode {
 
 type lazyCallRes struct {
 	*Frame
+
+	isOK             bool
+	as               []byte
+	isThrift         bool
+	arg2IsFragmented bool
+	arg2Payload      []byte
 }
 
-func newLazyCallRes(f *Frame) lazyCallRes {
+func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	if msgType := f.Header.messageType; msgType != messageTypeCallRes {
 		panic(fmt.Errorf("newLazyCallRes called for wrong messageType: %v", msgType))
 	}
-	return lazyCallRes{f}
+
+	rbuf := typed.NewReadBuffer(f.SizedPayload())
+	rbuf.SkipBytes(1)                           // flags
+	isOK := rbuf.ReadSingleByte() == _resCodeOK // code
+	rbuf.SkipBytes(_spanLength)                 // tracing
+
+	var (
+		as       []byte
+		isThrift bool
+	)
+
+	nh := int(rbuf.ReadSingleByte())
+	for i := 0; i < nh; i++ {
+		hk := int(rbuf.ReadSingleByte())
+		key := rbuf.ReadBytes(hk)
+		hv := int(rbuf.ReadSingleByte())
+		val := rbuf.ReadBytes(hv)
+
+		if bytes.Equal(key, _argSchemeKeyBytes) {
+			isThrift = bytes.Equal(val, _tchanThriftValueBytes)
+			as = val
+			continue
+		}
+	}
+
+	csumtype := ChecksumType(rbuf.ReadSingleByte()) // csumtype
+	rbuf.SkipBytes(csumtype.ChecksumSize())         // csum
+
+	// arg1: ignored
+	narg1 := int(rbuf.ReadUint16())
+	rbuf.SkipBytes(narg1)
+
+	// arg2: keep track of payload
+	narg2 := int(rbuf.ReadUint16())
+	arg2Payload := rbuf.ReadBytes(narg2)
+	arg2IsFragmented := rbuf.BytesRemaining() == 0 && hasMoreFragments(f)
+
+	// arg3: ignored
+
+	// Make sure we didn't hit any issues reading the buffer
+	if err := rbuf.Err(); err != nil {
+		return lazyCallRes{}, fmt.Errorf("read response frame: %v", err)
+	}
+
+	return lazyCallRes{
+		Frame:            f,
+		isOK:             isOK,
+		as:               as,
+		isThrift:         isThrift,
+		arg2IsFragmented: arg2IsFragmented,
+		arg2Payload:      arg2Payload,
+	}, nil
 }
 
+// OK implements relay.RespFrame
 func (cr lazyCallRes) OK() bool {
-	return cr.Payload[_resCodeIndex] == _resCodeOK
+	return cr.isOK
+}
+
+// Arg2 implements relay.RespFrame
+func (cr lazyCallRes) Arg2() []byte {
+	return cr.arg2Payload
+}
+
+// Arg2Iterator implements relay.RespFrame
+func (cr lazyCallRes) Arg2Iterator() (arg2.KeyValIterator, error) {
+	if !cr.isThrift {
+		return arg2.KeyValIterator{}, fmt.Errorf("%v: got %s", errArg2ThriftOnly, cr.as)
+	}
+	return arg2.NewKeyValIterator(cr.arg2Payload)
 }
 
 type lazyCallReq struct {
@@ -271,4 +339,14 @@ func finishesCall(f *Frame) bool {
 	default:
 		return false
 	}
+}
+
+// isCallResOK indicates whether the call was successful
+func isCallResOK(f *Frame) bool {
+	return f.Payload[_resCodeIndex] == _resCodeOK
+}
+
+// hasMoreFragments indicates whether there are more fragments following this frame
+func hasMoreFragments(f *Frame) bool {
+	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }

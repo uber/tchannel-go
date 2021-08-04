@@ -21,13 +21,9 @@
 package relaytest
 
 import (
-	"errors"
-
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 )
-
-var errNoChannel = errors.New("no channel set to get peers from")
 
 // Ensure that the StubRelayHost implements tchannel.RelayHost.
 var _ tchannel.RelayHost = (*StubRelayHost)(nil)
@@ -35,25 +31,35 @@ var _ tchannel.RelayHost = (*StubRelayHost)(nil)
 // StubRelayHost is a stub RelayHost for tests that backs peer selection to an
 // underlying channel using isolated subchannels and the default peer selection.
 type StubRelayHost struct {
-	ch      *tchannel.Channel
-	stats   *MockStats
-	frameFn func(relay.CallFrame, *relay.Conn)
+	ch          *tchannel.Channel
+	stats       *MockStats
+	frameFn     func(relay.CallFrame, *relay.Conn)
+	respFrameFn func(relay.RespFrame)
 }
 
 type stubCall struct {
 	*MockCallStats
 
-	peer *tchannel.Peer
+	peer        *tchannel.Peer
+	respFrameFn func(relay.RespFrame)
 }
 
 // NewStubRelayHost creates a new stub RelayHost for tests.
 func NewStubRelayHost() *StubRelayHost {
-	return &StubRelayHost{stats: NewMockStats()}
+	return &StubRelayHost{
+		stats:       NewMockStats(),
+		respFrameFn: func(_ relay.RespFrame) {},
+	}
 }
 
 // SetFrameFn sets a function to run on every frame.
 func (rh *StubRelayHost) SetFrameFn(f func(relay.CallFrame, *relay.Conn)) {
 	rh.frameFn = f
+}
+
+// SetRespFrameFn sets a function to run on every frame.
+func (rh *StubRelayHost) SetRespFrameFn(f func(relay.RespFrame)) {
+	rh.respFrameFn = f
 }
 
 // SetChannel is called by the channel after creation so we can
@@ -70,7 +76,11 @@ func (rh *StubRelayHost) Start(cf relay.CallFrame, conn *relay.Conn) (tchannel.R
 
 	// Get a peer from the subchannel.
 	peer, err := rh.ch.GetSubChannel(string(cf.Service())).Peers().Get(nil)
-	return &stubCall{rh.stats.Begin(cf), peer}, err
+	return &stubCall{
+		MockCallStats: rh.stats.Begin(cf),
+		peer:          peer,
+		respFrameFn:   rh.respFrameFn,
+	}, err
 }
 
 // Add adds a service instance with the specified host:port.
@@ -86,4 +96,8 @@ func (rh *StubRelayHost) Stats() *MockStats {
 // Destination returns the selected peer for this call.
 func (c *stubCall) Destination() (*tchannel.Peer, bool) {
 	return c.peer, c.peer != nil
+}
+
+func (c *stubCall) CallResponse(frame relay.RespFrame) {
+	c.respFrameFn(frame)
 }
