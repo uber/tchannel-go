@@ -8,8 +8,14 @@ on:
     branches: ['*']
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    env:
+      GOPATH: ${{ github.workspace }}
+      GOBIN: ${{ github.workspace }}/bin
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/src/${{ github.repository }}
     strategy:
       matrix:
         go: ["1.15.x", "1.16.x"]
@@ -28,7 +34,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
       with:
-        path: ./src/github.com/${{ github.repository }}
+        path: ${{ env.GOPATH }}/src/${{ github.repository }}
 
     - name: Load cache
       uses: actions/cache@v1
