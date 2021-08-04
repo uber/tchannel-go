@@ -15,7 +15,7 @@ jobs:
       GOBIN: ${{ github.workspace }}/bin
     defaults:
       run:
-        working-directory: ${{ env.GOPATH }}/src/${{ github.repository }}
+        working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository_owner }}/${{ github.repository }}
     strategy:
       matrix:
         go: ["1.15.x", "1.16.x"]
@@ -34,7 +34,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
       with:
-        path: ${{ env.GOPATH }}/src/${{ github.repository }}
+        path: ${{ env.GOPATH }}/src/github.com/${{ github.repository_owner }}/${{ github.repository }}
 
     - name: Load cache
       uses: actions/cache@v1
