@@ -8,7 +8,6 @@ on:
     branches: ['*']
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -39,22 +38,29 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Install CI
+      env:
+        GOPATH: /home/runner/go
       run: make install_ci
 
     - name: Test CI
       env:
+        GOPATH: /home/runner/go
         NO_TEST: ${{ matrix.NO_TEST }}
       run: test -n "$NO_TEST" || make test_ci
 
     - name: Cover CI
       env:
+        GOPATH: /home/runner/go
         COVERAGE: ${{ matrix.COVERAGE }}
       run: test -z "$COVERAGE" || make cover_ci
 
     - name: Lint CI
       env:
+        GOPATH: /home/runner/go
         LINT: ${{ matrix.LINT }}
       run: test -z "$LINT" || make install_lint lint
 
     - name: Crossdock CI
+      env:
+        GOPATH: /home/runner/go
       run: make crossdock_logs_ci
