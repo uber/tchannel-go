@@ -88,7 +88,7 @@ endif
 
 test: clean setup install_test check_no_test_deps $(BIN)/thrift
 	@echo Testing packages:
-	PATH=$(BIN):$$PATH go test -parallel=1 $(TEST_ARG) $(ALL_PKGS)
+	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
 	@echo Running frame pool tests
 	PATH=$(BIN):$$PATH go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
