@@ -1,0 +1,60 @@
+name: Tests
+
+on:
+  push:
+    branches: ['*']
+    tags: ['v*']
+  pull_request:
+    branches: ['*']
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.15.x", "1.16.x"]
+        include:
+        - go: 1.16.x
+          latest: true
+          NO_TEST: "yes"
+          COVERAGE: "yes"
+          LINT: "yes"
+
+    steps:
+    - name: Setup Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Load cache
+      uses: actions/cache@v1
+      with:
+        path: ~/.glide/cache
+        key: ${{ runner.os }}-go-${{ hashFiles('**/glide.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install CI
+      run: make install_ci
+
+    - name: Test CI
+      env:
+        NO_TEST: ${{ matrix.NO_TEST }}
+      run: test -n "$NO_TEST" || make test_ci
+
+    - name: Cover CI
+      env:
+        COVERAGE: ${{ matrix.COVERAGE }}
+      run: test -z "$COVERAGE" || make cover_ci
+
+    - name: Lint CI
+      env:
+        LINT: ${{ matrix.LINT }}
+      run: test -z "$LINT" || make install_lint lint
+
+    - name: Crossdock CI
+      run: make crossdock_logs_ci
