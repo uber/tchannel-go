@@ -16,7 +16,6 @@ jobs:
         include:
         - go: 1.16.x
           latest: true
-          NO_TEST: "yes"
           COVERAGE: "yes"
           LINT: "yes"
 
@@ -28,6 +27,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        path: ./src/github.com/${{ github.repository }}
 
     - name: Load cache
       uses: actions/cache@v1
@@ -39,28 +40,28 @@ jobs:
 
     - name: Install CI
       env:
-        GOPATH: /home/runner/go
+        GOPATH: ${{ runner.workspace }}
       run: make install_ci
 
     - name: Test CI
       env:
-        GOPATH: /home/runner/go
+        GOPATH: ${{ runner.workspace }}
         NO_TEST: ${{ matrix.NO_TEST }}
       run: test -n "$NO_TEST" || make test_ci
 
     - name: Cover CI
       env:
-        GOPATH: /home/runner/go
+        GOPATH: ${{ runner.workspace }}
         COVERAGE: ${{ matrix.COVERAGE }}
       run: test -z "$COVERAGE" || make cover_ci
 
     - name: Lint CI
       env:
-        GOPATH: /home/runner/go
+        GOPATH: ${{ runner.workspace }}
         LINT: ${{ matrix.LINT }}
       run: test -z "$LINT" || make install_lint lint
 
     - name: Crossdock CI
       env:
-        GOPATH: /home/runner/go
+        GOPATH: ${{ runner.workspace }}
       run: make crossdock_logs_ci
