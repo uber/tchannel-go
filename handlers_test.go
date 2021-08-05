@@ -49,11 +49,11 @@ func TestHandlers(t *testing.T) {
 	assert.Nil(t, hmap.find(m1b))
 	assert.Nil(t, hmap.find(m2b))
 
-	hmap.register(h1, m1)
+	hmap.Register(h1, m1)
 	assert.Equal(t, h1, hmap.find(m1b))
 	assert.Nil(t, hmap.find(m2b))
 
-	hmap.register(h2, m2)
+	hmap.Register(h2, m2)
 	assert.Equal(t, h1, hmap.find(m1b))
 	assert.Equal(t, h2, hmap.find(m2b))
 }

@@ -35,6 +35,11 @@ type Handler interface {
 	Handle(ctx context.Context, call *InboundCall)
 }
 
+// registrar is a subset of the Registrar interface, only containing Register.
+type registrar interface {
+	Register(h Handler, methodName string)
+}
+
 // A HandlerFunc is an adapter to allow the use of ordinary functions as
 // Channel handlers.  If f is a function with the appropriate signature, then
 // HandlerFunc(f) is a Handler object that calls f.
@@ -77,8 +82,8 @@ type handlerMap struct {
 	handlers map[string]Handler
 }
 
-// Registers a handler
-func (hmap *handlerMap) register(h Handler, method string) {
+// Register implements registrar.
+func (hmap *handlerMap) Register(h Handler, method string) {
 	hmap.Lock()
 	defer hmap.Unlock()
 
@@ -124,4 +129,9 @@ type channelHandler struct{ ch *Channel }
 
 func (c channelHandler) Handle(ctx context.Context, call *InboundCall) {
 	c.ch.GetSubChannel(call.ServiceName()).handler.Handle(ctx, call)
+}
+
+// Register registers the handler on the channel's default service name.
+func (c channelHandler) Register(h Handler, methodName string) {
+	c.ch.GetSubChannel(c.ch.PeerInfo().ServiceName).Register(h, methodName)
 }
