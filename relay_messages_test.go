@@ -90,7 +90,7 @@ func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame 
 	// written in reqResWriter instead of callReq. We should instead handle that
 	// in callReq, which will allow our tests to be sane.
 	f := NewFrame(MaxFramePayloadSize)
-	fh := fakeHeader()
+	fh := fakeHeader(messageTypeCallReq)
 
 	// Set the size in the header and write out the header after we know the payload contents.
 	defer func() {
@@ -197,17 +197,17 @@ func (cr testCallRes) res(tb testing.TB) lazyCallRes {
 		params.code = 1
 	}
 	if cr&resHasHeaders != 0 {
-		kvList := []keyVal{
-			{"k1", "v1"},
-			{"k222222", ""},
-			{"k3", "thisisalonglongkey"},
+		kvMap := map[string]string{
+			"k1":      "v1",
+			"k222222": "",
+			"k3":      "thisisalonglongkey",
 		}
-		params.headers = append(params.headers, byte(len(kvList)))
-		for _, kv := range kvList {
-			params.headers = append(params.headers, byte(len(kv.key)))
-			params.headers = append(params.headers, []byte(kv.key)...)
-			params.headers = append(params.headers, byte(len(kv.val)))
-			params.headers = append(params.headers, []byte(kv.val)...)
+		params.headers = append(params.headers, byte(len(kvMap)))
+		for k, v := range kvMap {
+			params.headers = append(params.headers, byte(len(k)))
+			params.headers = append(params.headers, []byte(k)...)
+			params.headers = append(params.headers, byte(len(v)))
+			params.headers = append(params.headers, []byte(v)...)
 		}
 	}
 	if cr&resHasChecksum != 0 {
@@ -224,14 +224,9 @@ func withLazyCallResCombinations(f func(cr testCallRes)) {
 
 func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 	f := NewFrame(p.payloadSize)
-	f.Header = FrameHeader{
-		// size is set below after construction of payload
-		messageType: messageTypeCallRes,
-		ID:          0xDEADBEEF,
-	}
-	require.NoError(tb, f.Header.write(typed.NewWriteBuffer(f.headerBuffer)))
-
+	fh := fakeHeader(messageTypeCallRes)
 	payload := typed.NewWriteBuffer(f.Payload)
+
 	payload.WriteSingleByte(p.flags)                                          // flags
 	payload.WriteSingleByte(p.code)                                           // code
 	payload.WriteBytes(p.span[:])                                             // span
@@ -248,8 +243,10 @@ func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 		payload.WriteBytes(arg)
 	}
 
-	f.Header.SetPayloadSize(uint16(payload.BytesWritten()))
 	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
+	fh.SetPayloadSize(uint16(payload.BytesWritten()))
+	f.Header = fh
+	require.NoError(tb, fh.write(typed.NewWriteBuffer(f.headerBuffer)), "Failed to write header")
 
 	return f
 }
