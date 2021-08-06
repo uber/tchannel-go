@@ -37,10 +37,6 @@ import (
 
 type testCallReq int
 
-type keyVal struct {
-	key, val string
-}
-
 const (
 	reqHasHeaders testCallReq = (1 << iota)
 	reqHasCaller
