@@ -167,7 +167,7 @@ type testCallResParams struct {
 	flags    byte
 	code     byte
 	span     [25]byte
-	headers  []byte
+	headers  map[string]string
 	csumType byte
 	arg1     []byte
 	arg2     []byte
@@ -193,17 +193,10 @@ func (cr testCallRes) res(tb testing.TB) lazyCallRes {
 		params.code = 1
 	}
 	if cr&resHasHeaders != 0 {
-		kvMap := map[string]string{
+		params.headers = map[string]string{
 			"k1":      "v1",
 			"k222222": "",
 			"k3":      "thisisalonglongkey",
-		}
-		params.headers = append(params.headers, byte(len(kvMap)))
-		for k, v := range kvMap {
-			params.headers = append(params.headers, byte(len(k)))
-			params.headers = append(params.headers, []byte(k)...)
-			params.headers = append(params.headers, byte(len(v)))
-			params.headers = append(params.headers, []byte(v)...)
 		}
 	}
 	if cr&resHasChecksum != 0 {
@@ -223,10 +216,22 @@ func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 	fh := fakeHeader(messageTypeCallRes)
 	payload := typed.NewWriteBuffer(f.Payload)
 
-	payload.WriteSingleByte(p.flags)                                          // flags
-	payload.WriteSingleByte(p.code)                                           // code
-	payload.WriteBytes(p.span[:])                                             // span
-	payload.WriteBytes(p.headers)                                             // headers
+	defer func() {
+		fh.SetPayloadSize(uint16(payload.BytesWritten()))
+		f.Header = fh
+		require.NoError(tb, fh.write(typed.NewWriteBuffer(f.headerBuffer)), "Failed to write header")
+	}()
+
+	payload.WriteSingleByte(p.flags)              // flags
+	payload.WriteSingleByte(p.code)               // code
+	payload.WriteBytes(p.span[:])                 // span
+	payload.WriteSingleByte(byte(len(p.headers))) // headers
+	for k, v := range p.headers {
+		payload.WriteSingleByte(byte(len(k)))
+		payload.WriteBytes([]byte(k))
+		payload.WriteSingleByte(byte(len(v)))
+		payload.WriteBytes([]byte(v))
+	}
 	payload.WriteSingleByte(p.csumType)                                       // checksum type
 	payload.WriteBytes(make([]byte, ChecksumType(p.csumType).ChecksumSize())) // dummy checksum (not used in tests)
 
@@ -240,9 +245,6 @@ func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 	}
 
 	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
-	fh.SetPayloadSize(uint16(payload.BytesWritten()))
-	f.Header = fh
-	require.NoError(tb, fh.write(typed.NewWriteBuffer(f.headerBuffer)), "Failed to write header")
 
 	return f
 }
