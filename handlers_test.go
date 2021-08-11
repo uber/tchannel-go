@@ -79,38 +79,32 @@ func makeInboundCall(svc, method string, logger Logger) *InboundCall {
 
 func TestUserHandlerWithIgnore(t *testing.T) {
 	const (
-		svc          = "svc"
-		method       = "method"
-		ignoreMethod = "ignoreMethod"
-		runs         = 3
+		svc                    = "svc"
+		userHandleMethod       = "method"
+		userHandleIgnoreMethod = "ignoreMethod"
+		runs                   = 3
 	)
 
 	userCounter, channelCounter := map[string]int{}, map[string]int{}
 
 	opts := &ChannelOptions{
 		Handler:       recorderHandler(userCounter),
-		IgnoreMethods: []string{procedure(svc, ignoreMethod)},
+		IgnoreMethods: []string{procedure(svc, userHandleIgnoreMethod)},
 	}
 	ch, err := NewChannel(svc, opts)
 	require.NoError(t, err, "error creating a TChannel channel")
 
 	// channel should be able to handle user ignored methods
-	ch.Register(recorderHandler(channelCounter), ignoreMethod)
+	ch.Register(recorderHandler(channelCounter), userHandleIgnoreMethod)
 
-	// need to populate connection.log to avoid nil pointer
-	conn := &Connection{}
-	conn.log = NullLogger
-
-	call, ignoreCall := makeInboundCall(svc, method, NullLogger), makeInboundCall(svc, ignoreMethod, NullLogger)
-
-	h := channelHandler{ch}
+	call, ignoreCall := makeInboundCall(svc, userHandleMethod, NullLogger), makeInboundCall(svc, userHandleIgnoreMethod, NullLogger)
 
 	for i := 0; i < runs; i++ {
-		h.Handle(context.Background(), ignoreCall)
-		h.Handle(context.Background(), call)
+		ch.handler.Handle(context.Background(), ignoreCall)
+		ch.handler.Handle(context.Background(), call)
 	}
-	assert.Equal(t, map[string]int{procedure(svc, method): runs}, userCounter, "user provided handler not invoked correct amount of times")
-	assert.Equal(t, map[string]int{procedure(svc, ignoreMethod): runs}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")
+	assert.Equal(t, map[string]int{procedure(svc, userHandleMethod): runs}, userCounter, "user provided handler not invoked correct amount of times")
+	assert.Equal(t, map[string]int{procedure(svc, userHandleIgnoreMethod): runs}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")
 }
 
 type recorderHandler map[string]int

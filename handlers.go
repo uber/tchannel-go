@@ -143,7 +143,7 @@ func (c channelHandler) Register(h Handler, methodName string) {
 // service and method name are configured to be handled by localHandler
 // from ignore.
 type userHandlerWithIgnore struct {
-	localHandler      Handler
+	localHandler      channelHandler
 	ignoreUserHandler map[string]struct{} // key is serviceName::method format
 	userHandler       Handler
 }
@@ -159,4 +159,8 @@ func (u userHandlerWithIgnore) Handle(ctx context.Context, call *InboundCall) {
 		return
 	}
 	u.userHandler.Handle(ctx, call)
+}
+
+func (u userHandlerWithIgnore) Register(h Handler, methodName string) {
+	u.localHandler.Register(h, methodName)
 }
