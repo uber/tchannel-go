@@ -37,16 +37,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func fakeHeader() FrameHeader {
+func fakeHeader(t messageType) FrameHeader {
 	return FrameHeader{
 		size:        uint16(0xFF34),
-		messageType: messageTypeCallReq,
+		messageType: t,
 		ID:          0xDEADBEEF,
 	}
 }
 
 func TestFrameHeaderJSON(t *testing.T) {
-	fh := fakeHeader()
+	fh := fakeHeader(messageTypeCallReq)
 	logged, err := json.Marshal(fh)
 	assert.NoError(t, err, "FrameHeader can't be marshalled to JSON")
 	assert.Equal(
@@ -58,7 +58,7 @@ func TestFrameHeaderJSON(t *testing.T) {
 }
 
 func TestFraming(t *testing.T) {
-	fh := fakeHeader()
+	fh := fakeHeader(messageTypeCallReq)
 	wbuf := typed.NewWriteBufferWithSize(1024)
 	require.Nil(t, fh.write(wbuf))
 
