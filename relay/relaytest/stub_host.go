@@ -25,8 +25,10 @@ import (
 	"github.com/uber/tchannel-go/relay"
 )
 
-// Ensure that the StubRelayHost implements tchannel.RelayHost.
+// Ensure that the StubRelayHost implements tchannel.RelayHost and stubCall implements
+// tchannel.RelayCall
 var _ tchannel.RelayHost = (*StubRelayHost)(nil)
+var _ tchannel.RelayCall = (*stubCall)(nil)
 
 // StubRelayHost is a stub RelayHost for tests that backs peer selection to an
 // underlying channel using isolated subchannels and the default peer selection.

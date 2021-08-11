@@ -199,12 +199,11 @@ func (cr testCallRes) res(tb testing.TB) lazyCallRes {
 	if cr&resIsOK == 0 {
 		params.code = 1
 	}
+	params.headers = map[string]string{}
 	if cr&resHasHeaders != 0 {
-		params.headers = map[string]string{
-			"k1":      "v1",
-			"k222222": "",
-			"k3":      "thisisalonglongkey",
-		}
+		params.headers["k1"] = "v1"
+		params.headers["k222222"] = ""
+		params.headers["k3"] = "thisisalonglongkey"
 	}
 	if cr&(resHasArg2|resHasFragmentedArg2) != 0 {
 		params.headers[string(_argSchemeKeyBytes)] = string(_tchanThriftValueBytes)
@@ -681,7 +680,7 @@ func TestLazyCallRes(t *testing.T) {
 func TestLazyCallResCorruptedFrame(t *testing.T) {
 	_, err := newLazyCallRes(newCallResFrame(t, testCallResParams{
 		payloadSize: 100,
-		arg2Prefix:  []byte{0, 1},
+		arg2Prefix:  []byte{0, 100},
 		arg2KeyVals: exampleArg2Map,
 	}))
 

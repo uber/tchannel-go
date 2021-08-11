@@ -31,6 +31,8 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
+var _ relay.RespFrame = (*lazyCallRes)(nil)
+
 var (
 	_callerNameKeyBytes      = []byte(CallerName)
 	_routingDelegateKeyBytes = []byte(RoutingDelegate)

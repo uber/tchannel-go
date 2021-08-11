@@ -5,6 +5,11 @@ import (
 	"github.com/uber/tchannel-go/relay"
 )
 
+// Ensure that the hostFunc implements tchannel.RelayHost and hostFuncPeer implements
+// tchannel.RelayCall
+var _ tchannel.RelayHost = (*hostFunc)(nil)
+var _ tchannel.RelayCall = (*hostFuncPeer)(nil)
+
 type hostFunc struct {
 	ch    *tchannel.Channel
 	stats *MockStats
