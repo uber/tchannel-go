@@ -286,9 +286,6 @@ func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 	}
 
 	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
-	fh.SetPayloadSize(uint16(payload.BytesWritten()))
-	f.Header = fh
-	require.NoError(tb, fh.write(typed.NewWriteBuffer(f.headerBuffer)), "Failed to write header")
 
 	return f
 }
