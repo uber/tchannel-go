@@ -230,6 +230,7 @@ func TestCannotRegisterOrGetAfterSetHandler(t *testing.T) {
 
 	ch.GetSubChannel("foo").SetHandler(someHandler)
 
+	// Registering against the original service should not panic but
 	// registering against the "foo" service should panic since the handler
 	// was overridden, and doesn't support Register.
 	assert.NotPanics(t, func() { ch.Register(anotherHandler, "bar") })
