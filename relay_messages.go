@@ -80,7 +80,6 @@ func (e lazyError) Code() SystemErrCode {
 type lazyCallRes struct {
 	*Frame
 
-	isOK             bool
 	as               []byte
 	isThrift         bool
 	arg2IsFragmented bool
@@ -93,9 +92,9 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	}
 
 	rbuf := typed.NewReadBuffer(f.SizedPayload())
-	rbuf.SkipBytes(1)                           // flags
-	isOK := rbuf.ReadSingleByte() == _resCodeOK // code
-	rbuf.SkipBytes(_spanLength)                 // tracing
+	rbuf.SkipBytes(1)           // flags
+	rbuf.SkipBytes(1)           // code
+	rbuf.SkipBytes(_spanLength) // tracing
 
 	var (
 		as       []byte
@@ -137,7 +136,6 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 
 	return lazyCallRes{
 		Frame:            f,
-		isOK:             isOK,
 		as:               as,
 		isThrift:         isThrift,
 		arg2IsFragmented: arg2IsFragmented,
@@ -147,7 +145,7 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 
 // OK implements relay.RespFrame
 func (cr lazyCallRes) OK() bool {
-	return cr.isOK
+	return isCallResOK(cr.Frame)
 }
 
 // Arg2 implements relay.RespFrame

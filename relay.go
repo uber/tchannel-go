@@ -552,19 +552,24 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return nil
 	}
 
-	if f.messageType() == messageTypeCallRes {
+	switch f.messageType() {
+	case messageTypeCallRes:
+		// Invoke call.CallResponse() if we got the response frame
 		cr, err := newLazyCallRes(f)
-		if err != nil {
-			r.logger.Error(err.Error())
-		} else {
+		if err == nil {
 			item.call.CallResponse(cr)
+		} else {
+			r.logger.WithFields(
+				ErrField(err),
+				LogField{"id", f.Header.ID},
+			).Error("Malformed callRes frame.")
 		}
-	}
-
-	// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
-	// (meaning the call was mutated) and it is a callReqContinue frame.
-	if f.messageType() == messageTypeCallReqContinue && item.mutatedChecksum != nil {
-		r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum)
+	case messageTypeCallReqContinue:
+		// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
+		// (meaning the call was mutated) and it is a callReqContinue frame.
+		if item.mutatedChecksum != nil {
+			r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum)
+		}
 	}
 
 	// Track sent/received bytes. We don't do this before we check
