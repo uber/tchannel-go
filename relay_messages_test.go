@@ -162,7 +162,6 @@ func withLazyCallReqCombinations(f func(cr testCallReq)) {
 type testCallRes int
 
 type testCallResParams struct {
-	payloadSize       int
 	hasFragmentedArg2 bool
 
 	flags       byte
@@ -187,9 +186,8 @@ const (
 )
 
 func (cr testCallRes) res(tb testing.TB) lazyCallRes {
-	params := testCallResParams{
-		payloadSize: MaxFramePayloadSize,
-	}
+	var params testCallResParams
+
 	if cr&resHasFragmentedArg2 != 0 {
 		params.hasFragmentedArg2 = true
 	}
@@ -230,7 +228,7 @@ func withLazyCallResCombinations(t *testing.T, f func(t *testing.T, cr testCallR
 }
 
 func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
-	f := NewFrame(p.payloadSize)
+	f := NewFrame(MaxFramePayloadSize)
 	fh := fakeHeader(messageTypeCallRes)
 	payload := typed.NewWriteBuffer(f.Payload)
 
@@ -676,7 +674,6 @@ func TestLazyCallRes(t *testing.T) {
 
 func TestLazyCallResCorruptedFrame(t *testing.T) {
 	_, err := newLazyCallRes(newCallResFrame(t, testCallResParams{
-		payloadSize: 100,
 		arg2Prefix:  []byte{0, 100},
 		arg2KeyVals: exampleArg2Map,
 	}))
