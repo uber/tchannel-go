@@ -21,9 +21,11 @@
 package tchannel
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
 
@@ -56,4 +58,59 @@ func TestHandlers(t *testing.T) {
 	hmap.Register(h2, m2)
 	assert.Equal(t, h1, hmap.find(m1b))
 	assert.Equal(t, h2, hmap.find(m2b))
+}
+
+func procedure(svc, method string) string {
+	return fmt.Sprintf("%s::%s", svc, method)
+}
+
+func TestUserHandlerWithIgnore(t *testing.T) {
+	const (
+		svc          = "svc"
+		method       = "method"
+		ignoreMethod = "ignoreMethod"
+		runs         = 3
+	)
+
+	ch, err := NewChannel(svc, nil /* ChannelOptions */)
+	require.NoError(t, err, "error creating a TChannel channel")
+
+	userCounter, channelCounter := map[string]int{}, map[string]int{}
+	ch.Register(recorderHandler(channelCounter), ignoreMethod)
+
+	u := userHandlerWithIgnore{
+		ch: ch,
+		ignore: map[string]struct{}{
+			procedure(svc, ignoreMethod): struct{}{},
+		},
+		userHandler: recorderHandler(userCounter),
+	}
+	// need to populate connection.log to avoid nil pointer
+	conn := &Connection{}
+	conn.log = ch.log
+	call := &InboundCall{
+		serviceName:  svc,
+		method:       []byte(method),
+		methodString: method,
+		conn:         conn,
+	}
+	ignoreCall := &InboundCall{
+		serviceName:  svc,
+		method:       []byte(ignoreMethod),
+		methodString: ignoreMethod,
+		conn:         conn,
+	}
+
+	for i := 0; i < runs; i++ {
+		u.Handle(context.Background(), ignoreCall)
+		u.Handle(context.Background(), call)
+	}
+	assert.Equal(t, map[string]int{procedure(svc, method): runs}, userCounter, "user provided handler not invoked correct amount of times")
+	assert.Equal(t, map[string]int{procedure(svc, ignoreMethod): runs}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")
+}
+
+type recorderHandler map[string]int
+
+func (r recorderHandler) Handle(ctx context.Context, call *InboundCall) {
+	r[procedure(call.ServiceName(), call.MethodString())]++
 }
