@@ -75,6 +75,9 @@ type RespFrame interface {
 	// ArgScheme returns the scheme of the arg
 	ArgScheme() []byte
 
+	// Arg2IsFragmented indicates whether arg2 runs over the first frame
+	Arg2IsFragmented() bool
+
 	// Arg2 returns the raw arg2 payload
 	Arg2() []byte
 }

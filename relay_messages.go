@@ -141,8 +141,14 @@ func (cr lazyCallRes) OK() bool {
 	return isCallResOK(cr.Frame)
 }
 
+// ArgScheme implements relay.RespFrame
 func (cr lazyCallRes) ArgScheme() []byte {
 	return cr.as
+}
+
+// Arg2IsFragmented implements relay.RespFrame
+func (cr lazyCallRes) Arg2IsFragmented() bool {
+	return cr.arg2IsFragmented
 }
 
 // Arg2 implements relay.RespFrame

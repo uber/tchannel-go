@@ -665,7 +665,7 @@ func TestLazyCallRes(t *testing.T) {
 
 		// arg2IsFragmented
 		if crt&resHasFragmentedArg2 != 0 {
-			assert.True(t, cr.arg2IsFragmented, "Expected arg2 to be fragmented")
+			assert.True(t, cr.Arg2IsFragmented(), "Expected arg2 to be fragmented")
 		}
 
 		if crt&resIsThrift != 0 {
