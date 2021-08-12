@@ -21,11 +21,9 @@
 package tchannel
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
 
@@ -58,57 +56,4 @@ func TestHandlers(t *testing.T) {
 	hmap.Register(h2, m2)
 	assert.Equal(t, h1, hmap.find(m1b))
 	assert.Equal(t, h2, hmap.find(m2b))
-}
-
-func procedure(svc, method string) string {
-	return fmt.Sprintf("%s::%s", svc, method)
-}
-
-func makeInboundCall(svc, method string, logger Logger) *InboundCall {
-	// need to populate connection.log to avoid nil pointer
-	conn := &Connection{}
-	// can't inline due to embeds
-	conn.log = logger
-	return &InboundCall{
-		serviceName:  svc,
-		method:       []byte(method),
-		methodString: method,
-		conn:         conn,
-	}
-}
-
-func TestUserHandlerWithSkip(t *testing.T) {
-	const (
-		svc                  = "svc"
-		userHandleMethod     = "method"
-		userHandleSkipMethod = "skipMethod"
-		runs                 = 3
-	)
-
-	userCounter, channelCounter := map[string]int{}, map[string]int{}
-
-	opts := &ChannelOptions{
-		Handler:            recorderHandler(userCounter),
-		SkipHandlerMethods: []string{procedure(svc, userHandleSkipMethod)},
-	}
-	ch, err := NewChannel(svc, opts)
-	require.NoError(t, err, "error creating a TChannel channel")
-
-	// channel should be able to handle user ignored methods
-	ch.Register(recorderHandler(channelCounter), userHandleSkipMethod)
-
-	call, ignoreCall := makeInboundCall(svc, userHandleMethod, NullLogger), makeInboundCall(svc, userHandleSkipMethod, NullLogger)
-
-	for i := 0; i < runs; i++ {
-		ch.handler.Handle(context.Background(), ignoreCall)
-		ch.handler.Handle(context.Background(), call)
-	}
-	assert.Equal(t, map[string]int{procedure(svc, userHandleMethod): runs}, userCounter, "user provided handler not invoked correct amount of times")
-	assert.Equal(t, map[string]int{procedure(svc, userHandleSkipMethod): runs}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")
-}
-
-type recorderHandler map[string]int
-
-func (r recorderHandler) Handle(ctx context.Context, call *InboundCall) {
-	r[procedure(call.ServiceName(), call.MethodString())]++
 }

@@ -907,7 +907,7 @@ func toStringSet(ss []string) map[string]struct{} {
 	return set
 }
 
-// take a lise of service::method formatted string and make
+// take a list of service::method formatted string and make
 // the map[service]map[method]struct{} set
 func toServiceMethodSet(sms []string) (map[string]map[string]struct{}, error) {
 	set := map[string]map[string]struct{}{}
