@@ -23,7 +23,6 @@ package tchannel
 import (
 	"reflect"
 	"runtime"
-	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -137,30 +136,25 @@ func (c channelHandler) Register(h Handler, methodName string) {
 	c.ch.GetSubChannel(c.ch.PeerInfo().ServiceName).Register(h, methodName)
 }
 
-// userHandlerWithIgnore is a Handler that wraps a localHandler backed by the channel.
+// userHandlerWithSkip is a Handler that wraps a localHandler backed by the channel.
 // and a user provided handler.
 // The inbound call will be handled by user handler, unless the call's
 // service and method name are configured to be handled by localHandler
 // from ignore.
-type userHandlerWithIgnore struct {
+type userHandlerWithSkip struct {
 	localHandler      channelHandler
-	ignoreUserHandler map[string]struct{} // key is serviceName::method format
+	ignoreUserHandler map[string]map[string]struct{} // key is service, subkey is method
 	userHandler       Handler
 }
 
-func (u userHandlerWithIgnore) Handle(ctx context.Context, call *InboundCall) {
-	var sb strings.Builder
-	sb.WriteString(call.ServiceName())
-	sb.WriteString("::")
-	sb.Write(call.Method())
-
-	if _, ok := u.ignoreUserHandler[sb.String()]; ok {
+func (u userHandlerWithSkip) Handle(ctx context.Context, call *InboundCall) {
+	if _, ok := u.ignoreUserHandler[call.ServiceName()][call.MethodString()]; ok {
 		u.localHandler.Handle(ctx, call)
 		return
 	}
 	u.userHandler.Handle(ctx, call)
 }
 
-func (u userHandlerWithIgnore) Register(h Handler, methodName string) {
+func (u userHandlerWithSkip) Register(h Handler, methodName string) {
 	u.localHandler.Register(h, methodName)
 }

@@ -124,12 +124,12 @@ type ChannelOptions struct {
 	// default handler that delegates to a subchannel.
 	Handler Handler
 
-	// IgnoreMethods allow users to configure TChannel server such that
+	// SkipHandlerMethods allow users to configure TChannel server such that
 	// requests with specified methods can be ignored by the above passed-in handler
 	// and handled natively by TChannel.
 	// Requests with other methods will be handled by passed-in handler.
 	// This is useful for the gradual migration purpose.
-	IgnoreMethods []string
+	SkipHandlerMethods []string
 
 	// Dialer is optional factory method which can be used for overriding
 	// outbound connections for things like TLS handshake
@@ -312,10 +312,14 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 	ch.peers = newRootPeerList(ch, opts.OnPeerStatusChanged).newChild()
 
 	switch {
-	case len(opts.IgnoreMethods) > 0 && opts.Handler != nil:
-		ch.handler = userHandlerWithIgnore{
+	case len(opts.SkipHandlerMethods) > 0 && opts.Handler != nil:
+		sm, err := toServiceMethodSet(opts.SkipHandlerMethods)
+		if err != nil {
+			return nil, err
+		}
+		ch.handler = userHandlerWithSkip{
 			localHandler:      channelHandler{ch},
-			ignoreUserHandler: toStringSet(opts.IgnoreMethods),
+			ignoreUserHandler: sm,
 			userHandler:       opts.Handler,
 		}
 	case opts.Handler != nil:
@@ -901,4 +905,22 @@ func toStringSet(ss []string) map[string]struct{} {
 		set[s] = struct{}{}
 	}
 	return set
+}
+
+// take a lise of service::method formatted string and make
+// the map[service]map[method]struct{} set
+func toServiceMethodSet(sms []string) (map[string]map[string]struct{}, error) {
+	set := map[string]map[string]struct{}{}
+	for _, sm := range sms {
+		s := strings.Split(sm, "::")
+		if len(s) != 2 {
+			return nil, fmt.Errorf(`Each "SkipHandlerMethods" value should be of service::Method format but got %q`, sm)
+		}
+		svc, method := s[0], s[1]
+		if _, ok := set[svc]; !ok {
+			set[svc] = map[string]struct{}{}
+		}
+		set[svc][method] = struct{}{}
+	}
+	return set, nil
 }
