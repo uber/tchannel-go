@@ -554,7 +554,7 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 
 	switch f.messageType() {
 	case messageTypeCallRes:
-		// Invoke call.CallResponse() if we got the response frame
+		// Invoke call.CallResponse() if we get a valid call response frame.
 		cr, err := newLazyCallRes(f)
 		if err == nil {
 			item.call.CallResponse(cr)
