@@ -34,6 +34,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uber/tchannel-go/thrift/arg2"
+
 	. "github.com/uber/tchannel-go"
 
 	"github.com/uber/tchannel-go/benchmark"
@@ -1421,29 +1423,56 @@ func TestRelayTransferredBytes(t *testing.T) {
 }
 
 func TestRelayCallResponse(t *testing.T) {
-	fibBytes := []byte{1, 2, 3, 5, 8, 13}
+	ctx, cancel := NewContext(testutils.Timeout(time.Second))
+	defer cancel()
+
+	kv := map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}
+	arg2Buf := thriftarg2test.BuildKVBuffer(kv)
 
 	rh := relaytest.NewStubRelayHost()
+
 	rh.SetRespFrameFn(func(frame relay.RespFrame) {
-		assert.True(t, frame.OK(), "Got unexpected response status")
-		assert.Equal(t, frame.Arg2(), fibBytes, "Got unexpected response arg2")
+		require.True(t, frame.OK(), "Got unexpected response status")
+		require.Equal(t, Thrift.String(), string(frame.ArgScheme()), "Got unexpected scheme")
+
+		iter, err := arg2.NewKeyValIterator(frame.Arg2())
+		require.NoError(t, err, "Got unexpected iterator error")
+
+		gotKV := make(map[string]string)
+		for ; err == nil; iter, err = iter.Next() {
+			gotKV[string(iter.Key())] = string(iter.Value())
+		}
+
+		assert.Equal(t, kv, gotKV, "Got unexpected arg2 in response")
 	})
 
 	opts := testutils.NewOpts().
-		SetRelayHost(rh).
-		SetRelayOnly()
+		SetRelayOnly().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
-		s1 := ts.NewServer(testutils.NewOpts().SetServiceName("s1"))
-		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
-		testutils.RegisterEcho(s1, nil)
-		testutils.RegisterEcho(s2, nil)
+		const (
+			testMethod = "echo"
+			arg3Data   = "arg3-here"
+		)
 
-		ctx, cancel := NewContext(testutils.Timeout(time.Second))
-		defer cancel()
+		testutils.RegisterEcho(ts.Server(), nil)
 
-		_, _, _, err := raw.Call(ctx, s1, ts.HostPort(), s2.ServiceName(), "echo", fibBytes, nil)
-		require.NoError(t, err)
+		client := testutils.NewClient(t, nil /*opts*/)
+		defer client.Close()
+
+		call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), testMethod, &CallOptions{Format: Thrift})
+		require.NoError(t, err, "BeginCall failed")
+		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(arg2Buf), "arg2 write failed")
+		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3Data)), "arg3 write failed")
+
+		gotArg2, gotArg3, err := raw.ReadArgsV2(call.Response())
+		assert.NoError(t, err)
+		assert.Equal(t, string(arg2Buf), string(gotArg2), "arg2 in response does not meet expectation")
+		assert.Equal(t, arg3Data, string(gotArg3), "arg3 in response does not meet expectation")
 	})
 }
 

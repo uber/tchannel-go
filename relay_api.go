@@ -20,9 +20,7 @@
 
 package tchannel
 
-import (
-	"github.com/uber/tchannel-go/relay"
-)
+import "github.com/uber/tchannel-go/relay"
 
 // RelayHost is the interface used to create RelayCalls when the relay
 // receives an incoming call.

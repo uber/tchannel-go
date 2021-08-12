@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uber/tchannel-go/thrift/arg2"
+
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/typed"
 
@@ -167,6 +169,7 @@ type testCallResParams struct {
 	flags       byte
 	code        byte
 	span        [25]byte
+	isThrift    bool
 	headers     map[string]string
 	csumType    byte
 	arg1        []byte
@@ -180,6 +183,7 @@ const (
 	resIsOK
 	resHasHeaders
 	resHasChecksum
+	resIsThrift
 	resHasArg2
 	resHasFragmentedArg2
 	resTotalCombinations
@@ -203,7 +207,8 @@ func (cr testCallRes) res(tb testing.TB) lazyCallRes {
 		params.headers["k222222"] = ""
 		params.headers["k3"] = "thisisalonglongkey"
 	}
-	if cr&(resHasArg2|resHasFragmentedArg2) != 0 {
+	if cr&(resIsThrift) != 0 {
+		params.isThrift = true
 		params.headers[string(_argSchemeKeyBytes)] = string(_tchanThriftValueBytes)
 	}
 	if cr&resHasChecksum != 0 {
@@ -260,20 +265,29 @@ func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 	payload.WriteBytes(p.arg2Prefix) // prefix is used only for corrupting arg2
 	arg2SizeRef := payload.DeferUint16()
 	arg2StartBytes := payload.BytesWritten()
-	arg2NHRef := payload.DeferUint16()
-	var arg2NH uint16
-	for k, v := range p.arg2KeyVals {
-		arg2NH++
-		payload.WriteLen16String(k)
-		payload.WriteLen16String(v)
+	if p.isThrift {
+		arg2NHRef := payload.DeferUint16()
+		var arg2NH uint16
+		for k, v := range p.arg2KeyVals {
+			arg2NH++
+			payload.WriteLen16String(k)
+			payload.WriteLen16String(v)
+		}
+		if p.hasFragmentedArg2 {
+			// fill remainder of frame with the next key/val
+			arg2NH++
+			payload.WriteLen16String("ube")
+			payload.WriteLen16String(strings.Repeat("r", payload.BytesRemaining()-2))
+		}
+		arg2NHRef.Update(arg2NH)
+	} else {
+		for k, v := range p.arg2KeyVals {
+			payload.WriteString(k + v)
+		}
+		if p.hasFragmentedArg2 {
+			payload.WriteString("ube" + strings.Repeat("r", payload.BytesRemaining()-3))
+		}
 	}
-	if p.hasFragmentedArg2 {
-		// fill remainder of frame with the next key/val
-		arg2NH++
-		payload.WriteLen16String("ube")
-		payload.WriteLen16String(strings.Repeat("r", payload.BytesRemaining()-2))
-	}
-	arg2NHRef.Update(arg2NH)
 	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
 	arg2SizeRef.Update(uint16(payload.BytesWritten() - arg2StartBytes))
 
@@ -641,11 +655,11 @@ func TestLazyCallRes(t *testing.T) {
 		}
 
 		// isThrift
-		if crt&(resHasArg2|resHasFragmentedArg2) != 0 {
-			assert.True(t, cr.isThrift, "Expected call res to have isThrift=true")
+		if crt&resIsThrift != 0 {
+			assert.Equal(t, Thrift.String(), string(cr.ArgScheme()), "Expected call res to have isThrift=true")
 			assert.Equal(t, cr.as, _tchanThriftValueBytes, "Expected arg scheme to be thrift")
 		} else {
-			assert.False(t, cr.isThrift, "Expected call res to have isThrift=false")
+			assert.NotEqual(t, Thrift.String(), string(cr.ArgScheme()), "Expected call res to have isThrift=false")
 			assert.NotEqual(t, cr.as, _tchanThriftValueBytes, "Expected arg scheme to not be thrift")
 		}
 
@@ -654,20 +668,22 @@ func TestLazyCallRes(t *testing.T) {
 			assert.True(t, cr.arg2IsFragmented, "Expected arg2 to be fragmented")
 		}
 
-		iter, err := cr.Arg2Iterator()
-		if crt&(resHasArg2|resHasFragmentedArg2) != 0 {
-			require.NoError(t, err, "Got unexpected error for .Arg2()")
-			kvMap := make(map[string]string)
-			for ; err == nil; iter, err = iter.Next() {
-				kvMap[string(iter.Key())] = string(iter.Value())
-			}
-			if crt&resHasArg2 != 0 {
-				for k, v := range exampleArg2Map {
-					assert.Equal(t, kvMap[k], v)
+		if crt&resIsThrift != 0 {
+			iter, err := arg2.NewKeyValIterator(cr.Arg2())
+			if crt&resHasArg2 != 0 || crt&resHasFragmentedArg2 != 0 {
+				require.NoError(t, err, "Got unexpected error for .Arg2()")
+				kvMap := make(map[string]string)
+				for ; err == nil; iter, err = iter.Next() {
+					kvMap[string(iter.Key())] = string(iter.Value())
 				}
+				if crt&resHasArg2 != 0 {
+					for k, v := range exampleArg2Map {
+						assert.Equal(t, kvMap[k], v)
+					}
+				}
+			} else {
+				require.Error(t, err, io.EOF, "Got unexpected error for .Arg2()")
 			}
-		} else {
-			require.Error(t, err, "Got unexpected error for .Arg2()")
 		}
 	})
 }

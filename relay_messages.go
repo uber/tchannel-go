@@ -81,7 +81,6 @@ type lazyCallRes struct {
 	*Frame
 
 	as               []byte
-	isThrift         bool
 	arg2IsFragmented bool
 	arg2Payload      []byte
 }
@@ -96,11 +95,7 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	rbuf.SkipBytes(1)           // code
 	rbuf.SkipBytes(_spanLength) // tracing
 
-	var (
-		as       []byte
-		isThrift bool
-	)
-
+	var as []byte
 	nh := int(rbuf.ReadSingleByte())
 	for i := 0; i < nh; i++ {
 		hk := int(rbuf.ReadSingleByte())
@@ -109,7 +104,6 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 		val := rbuf.ReadBytes(hv)
 
 		if bytes.Equal(key, _argSchemeKeyBytes) {
-			isThrift = bytes.Equal(val, _tchanThriftValueBytes)
 			as = val
 			continue
 		}
@@ -137,7 +131,6 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	return lazyCallRes{
 		Frame:            f,
 		as:               as,
-		isThrift:         isThrift,
 		arg2IsFragmented: arg2IsFragmented,
 		arg2Payload:      arg2Payload,
 	}, nil
@@ -148,17 +141,13 @@ func (cr lazyCallRes) OK() bool {
 	return isCallResOK(cr.Frame)
 }
 
+func (cr lazyCallRes) ArgScheme() []byte {
+	return cr.as
+}
+
 // Arg2 implements relay.RespFrame
 func (cr lazyCallRes) Arg2() []byte {
 	return cr.arg2Payload
-}
-
-// Arg2Iterator implements relay.RespFrame
-func (cr lazyCallRes) Arg2Iterator() (arg2.KeyValIterator, error) {
-	if !cr.isThrift {
-		return arg2.KeyValIterator{}, fmt.Errorf("%v: got %s", errArg2ThriftOnly, cr.as)
-	}
-	return arg2.NewKeyValIterator(cr.arg2Payload)
 }
 
 type lazyCallReq struct {

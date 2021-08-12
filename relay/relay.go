@@ -72,11 +72,11 @@ type RespFrame interface {
 	// OK indicates whether the call was successful
 	OK() bool
 
+	// ArgScheme returns the scheme of the arg
+	ArgScheme() []byte
+
 	// Arg2 returns the raw arg2 payload
 	Arg2() []byte
-
-	// Arg2Iterator returns an iterator for iterating over arg2 headers
-	Arg2Iterator() (arg2.KeyValIterator, error)
 }
 
 // Conn contains information about the underlying connection.
