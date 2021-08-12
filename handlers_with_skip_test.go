@@ -22,7 +22,6 @@ package tchannel_test
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
+	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -44,21 +44,21 @@ func TestUserHandlerWithSkip(t *testing.T) {
 		userHandleMethod     = "method"
 		userHandleSkipMethod = "skipMethod"
 		handleRuns           = 3
-		handleSkipRuns       = 4
+		handleSkipRuns       = 5
 	)
 
-	userCounter, channelCounter := map[string]int{}, map[string]int{}
+	userCounter, channelCounter := recorderHandler{c: atomic.NewUint32(0)}, recorderHandler{c: atomic.NewUint32(0)}
 
 	opts := testutils.NewOpts().NoRelay()
 	opts.ServiceName = svc
 	opts.ChannelOptions = ChannelOptions{
-		Handler:            recorderHandler{m: userCounter},
+		Handler:            userCounter,
 		SkipHandlerMethods: []string{procedure(svc, userHandleSkipMethod)},
 	}
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// channel should be able to handle user ignored methods
-		ts.Register(recorderHandler{m: channelCounter}, userHandleSkipMethod)
+		ts.Register(channelCounter, userHandleSkipMethod)
 
 		client := ts.NewClient(nil)
 
@@ -67,24 +67,21 @@ func TestUserHandlerWithSkip(t *testing.T) {
 			defer cancel()
 			raw.Call(ctx, client, ts.HostPort(), svc, userHandleMethod, nil, nil)
 		}
-		assert.Equal(t, map[string]int{procedure(svc, userHandleMethod): handleRuns}, userCounter, "user provided handler not invoked correct amount of times")
+		assert.Equal(t, uint32(handleRuns), userCounter.c.Load(), "user provided handler not invoked correct amount of times")
 
 		for i := 0; i < handleSkipRuns; i++ {
 			ctx, cancel := tchannel.NewContext(testutils.Timeout(300 * time.Millisecond))
 			defer cancel()
 			raw.Call(ctx, client, ts.HostPort(), svc, userHandleSkipMethod, nil, nil)
 		}
-		assert.Equal(t, map[string]int{procedure(svc, userHandleSkipMethod): handleSkipRuns}, channelCounter, "channel handler not invoked correct amount of times after ignoring user provided handler")
+		assert.Equal(t, uint32(handleSkipRuns), channelCounter.c.Load(), "user provided handler not invoked correct amount of times")
 	})
 }
 
 type recorderHandler struct {
-	sync.Mutex
-	m map[string]int
+	c *atomic.Uint32
 }
 
 func (r recorderHandler) Handle(ctx context.Context, call *InboundCall) {
-	r.Lock()
-	defer r.Unlock()
-	r.m[procedure(call.ServiceName(), call.MethodString())]++
+	r.c.Inc()
 }
