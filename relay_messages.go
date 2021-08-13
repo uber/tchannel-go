@@ -98,10 +98,10 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	var as []byte
 	nh := int(rbuf.ReadSingleByte())
 	for i := 0; i < nh; i++ {
-		hk := int(rbuf.ReadSingleByte())
-		key := rbuf.ReadBytes(hk)
-		hv := int(rbuf.ReadSingleByte())
-		val := rbuf.ReadBytes(hv)
+		keyLen := int(rbuf.ReadSingleByte())
+		key := rbuf.ReadBytes(keyLen)
+		valLen := int(rbuf.ReadSingleByte())
+		val := rbuf.ReadBytes(valLen)
 
 		if bytes.Equal(key, _argSchemeKeyBytes) {
 			as = val

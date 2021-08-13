@@ -34,8 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uber/tchannel-go/thrift/arg2"
-
 	. "github.com/uber/tchannel-go"
 
 	"github.com/uber/tchannel-go/benchmark"
@@ -46,6 +44,7 @@ import (
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/thrift"
+	"github.com/uber/tchannel-go/thrift/arg2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -937,10 +936,10 @@ func TestRelayStalledClientConnection(t *testing.T) {
 // Test that a corrupted callRes frame results in log emission. We set up the following:
 //   client <-> relay <-> man-in-the-middle (MITM) relay <-> server
 // The MITM relay is configured to intercept and corrupt response frames (through truncation)
-// sent back from the server, and relay them back to the relay, where it is checked for errors.
+// sent back from the server, and forward them back to the relay, where it is checked for errors.
 func TestRelayCorruptedCallResFrame(t *testing.T) {
 	opts := testutils.NewOpts().
-		// Expect errors from dropped frames.
+		// Expect errors from corrupted callRes frames.
 		AddLogFilter("Malformed callRes frame.", 1).
 		SetRelayOnly()
 
@@ -974,11 +973,6 @@ func TestRelayCorruptedCallResFrame(t *testing.T) {
 		ctx, cancel := NewContext(testutils.Timeout(time.Second))
 		defer cancel()
 
-		// Data to fit one frame fully, but large enough that a number of these frames will fill
-		// all the buffers and cause the relay to drop the response frame. Buffers are:
-		// 1. Relay's sendCh on the connection to the client (set to 10 frames explicitly)
-		// 2. Relay's TCP send buffer for the connection to the client.
-		// 3. Client's TCP receive buffer on the connection to the relay.
 		data := bytes.Repeat([]byte("test"), 256*60)
 		call, err := client.BeginCall(ctx, ts.Relay().PeerInfo().HostPort, "s1", "echo", nil)
 		require.NoError(t, err, "BeginCall failed")
