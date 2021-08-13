@@ -552,10 +552,24 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 		return nil
 	}
 
-	// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
-	// (meaning the call was mutated) and it is a callReqContinue frame.
-	if f.messageType() == messageTypeCallReqContinue && item.mutatedChecksum != nil {
-		r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum)
+	switch f.messageType() {
+	case messageTypeCallRes:
+		// Invoke call.CallResponse() if we get a valid call response frame.
+		cr, err := newLazyCallRes(f)
+		if err == nil {
+			item.call.CallResponse(cr)
+		} else {
+			r.logger.WithFields(
+				ErrField(err),
+				LogField{"id", f.Header.ID},
+			).Error("Malformed callRes frame.")
+		}
+	case messageTypeCallReqContinue:
+		// Recalculate and update the checksum for this frame if it has non-nil item.mutatedChecksum
+		// (meaning the call was mutated) and it is a callReqContinue frame.
+		if item.mutatedChecksum != nil {
+			r.updateMutatedCallReqContinueChecksum(f, item.mutatedChecksum)
+		}
 	}
 
 	// Track sent/received bytes. We don't do this before we check
@@ -812,7 +826,7 @@ func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
 		msg := newLazyError(f).Code().MetricsKey()
 		return false, msg
 	case messageTypeCallRes:
-		if newLazyCallRes(f).OK() {
+		if isCallResOK(f) {
 			return true, ""
 		}
 		return false, "application-error"

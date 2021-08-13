@@ -24,9 +24,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/uber/tchannel-go/thrift/arg2"
 
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/typed"
@@ -161,17 +164,18 @@ func withLazyCallReqCombinations(f func(cr testCallReq)) {
 type testCallRes int
 
 type testCallResParams struct {
-	payloadSize       int
 	hasFragmentedArg2 bool
 
-	flags    byte
-	code     byte
-	span     [25]byte
-	headers  map[string]string
-	csumType byte
-	arg1     []byte
-	arg2     []byte
-	arg3     []byte
+	flags       byte
+	code        byte
+	span        [25]byte
+	isThrift    bool
+	headers     map[string]string
+	csumType    byte
+	arg1        []byte
+	arg2Prefix  []byte // used for corrupting arg2
+	arg2KeyVals map[string]string
+	arg3        []byte
 }
 
 const (
@@ -179,40 +183,57 @@ const (
 	resIsOK
 	resHasHeaders
 	resHasChecksum
+	resIsThrift
+	resHasArg2
+	resHasFragmentedArg2
 	resTotalCombinations
 )
 
 func (cr testCallRes) res(tb testing.TB) lazyCallRes {
-	params := testCallResParams{
-		payloadSize: 100,
+	var params testCallResParams
+
+	if cr&resHasFragmentedArg2 != 0 {
+		params.hasFragmentedArg2 = true
 	}
-	if cr&resIsContinued != 0 {
+	if cr&(resIsContinued|resHasFragmentedArg2) != 0 {
 		params.flags |= hasMoreFragmentsFlag
 	}
 	if cr&resIsOK == 0 {
 		params.code = 1
 	}
+	params.headers = map[string]string{}
 	if cr&resHasHeaders != 0 {
-		params.headers = map[string]string{
-			"k1":      "v1",
-			"k222222": "",
-			"k3":      "thisisalonglongkey",
-		}
+		params.headers["k1"] = "v1"
+		params.headers["k222222"] = ""
+		params.headers["k3"] = "thisisalonglongkey"
+	}
+	if cr&(resIsThrift) != 0 {
+		params.isThrift = true
+		params.headers[string(_argSchemeKeyBytes)] = string(_tchanThriftValueBytes)
 	}
 	if cr&resHasChecksum != 0 {
 		params.csumType = byte(ChecksumTypeCrc32C)
 	}
-	return newLazyCallRes(newCallResFrame(tb, params))
+	if cr&resHasArg2 != 0 {
+		params.arg2KeyVals = exampleArg2Map
+	}
+
+	lcr, err := newLazyCallRes(newCallResFrame(tb, params))
+	require.NoError(tb, err, "Unexpected error creating lazyCallRes")
+
+	return lcr
 }
 
-func withLazyCallResCombinations(f func(cr testCallRes)) {
+func withLazyCallResCombinations(t *testing.T, f func(t *testing.T, cr testCallRes)) {
 	for cr := testCallRes(0); cr < resTotalCombinations; cr++ {
-		f(cr)
+		t.Run(fmt.Sprintf("cr=%v", strconv.FormatInt(int64(cr), 2)), func(t *testing.T) {
+			f(t, cr)
+		})
 	}
 }
 
 func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
-	f := NewFrame(p.payloadSize)
+	f := NewFrame(MaxFramePayloadSize)
 	fh := fakeHeader(messageTypeCallRes)
 	payload := typed.NewWriteBuffer(f.Payload)
 
@@ -235,13 +256,45 @@ func newCallResFrame(tb testing.TB, p testCallResParams) *Frame {
 	payload.WriteSingleByte(p.csumType)                                       // checksum type
 	payload.WriteBytes(make([]byte, ChecksumType(p.csumType).ChecksumSize())) // dummy checksum (not used in tests)
 
-	args := [][]byte{p.arg1, p.arg2}
-	if !p.hasFragmentedArg2 {
-		args = append(args, p.arg3)
+	// arg1
+	payload.WriteUint16(uint16(len(p.arg1)))
+	payload.WriteBytes(p.arg1)
+	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
+
+	// arg2
+	payload.WriteBytes(p.arg2Prefix) // prefix is used only for corrupting arg2
+	arg2SizeRef := payload.DeferUint16()
+	arg2StartBytes := payload.BytesWritten()
+	if p.isThrift {
+		arg2NHRef := payload.DeferUint16()
+		var arg2NH uint16
+		for k, v := range p.arg2KeyVals {
+			arg2NH++
+			payload.WriteLen16String(k)
+			payload.WriteLen16String(v)
+		}
+		if p.hasFragmentedArg2 {
+			// fill remainder of frame with the next key/val
+			arg2NH++
+			payload.WriteLen16String("ube")
+			payload.WriteLen16String(strings.Repeat("r", payload.BytesRemaining()-2))
+		}
+		arg2NHRef.Update(arg2NH)
+	} else {
+		for k, v := range p.arg2KeyVals {
+			payload.WriteString(k + v)
+		}
+		if p.hasFragmentedArg2 {
+			payload.WriteString("ube" + strings.Repeat("r", payload.BytesRemaining()-3))
+		}
 	}
-	for _, arg := range args {
-		payload.WriteUint16(uint16(len(arg)))
-		payload.WriteBytes(arg)
+	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
+	arg2SizeRef.Update(uint16(payload.BytesWritten() - arg2StartBytes))
+
+	if !p.hasFragmentedArg2 {
+		// arg3
+		payload.WriteUint16(uint16(len(p.arg3)))
+		payload.WriteBytes(p.arg3)
 	}
 
 	require.NoError(tb, payload.Err(), "Got unexpected error constructing callRes frame")
@@ -590,15 +643,58 @@ func TestLazyCallResRejectsOtherFrames(t *testing.T) {
 	)
 }
 
-func TestLazyCallResOK(t *testing.T) {
-	withLazyCallResCombinations(func(crt testCallRes) {
+func TestLazyCallRes(t *testing.T) {
+	withLazyCallResCombinations(t, func(t *testing.T, crt testCallRes) {
 		cr := crt.res(t)
+
+		// isOK
 		if crt&resIsOK == 0 {
 			assert.False(t, cr.OK(), "Expected call res to have a non-ok code.")
 		} else {
 			assert.True(t, cr.OK(), "Expected call res to have code ok.")
 		}
+
+		// isThrift
+		if crt&resIsThrift != 0 {
+			assert.Equal(t, Thrift.String(), string(cr.ArgScheme()), "Expected call res to have isThrift=true")
+			assert.Equal(t, cr.as, _tchanThriftValueBytes, "Expected arg scheme to be thrift")
+		} else {
+			assert.NotEqual(t, Thrift.String(), string(cr.ArgScheme()), "Expected call res to have isThrift=false")
+			assert.NotEqual(t, cr.as, _tchanThriftValueBytes, "Expected arg scheme to not be thrift")
+		}
+
+		// arg2IsFragmented
+		if crt&resHasFragmentedArg2 != 0 {
+			assert.True(t, cr.Arg2IsFragmented(), "Expected arg2 to be fragmented")
+		}
+
+		if crt&resIsThrift != 0 {
+			iter, err := arg2.NewKeyValIterator(cr.Arg2())
+			if crt&resHasArg2 != 0 || crt&resHasFragmentedArg2 != 0 {
+				require.NoError(t, err, "Got unexpected error for .Arg2()")
+				kvMap := make(map[string]string)
+				for ; err == nil; iter, err = iter.Next() {
+					kvMap[string(iter.Key())] = string(iter.Value())
+				}
+				if crt&resHasArg2 != 0 {
+					for k, v := range exampleArg2Map {
+						assert.Equal(t, kvMap[k], v)
+					}
+				}
+			} else {
+				require.Error(t, err, io.EOF, "Got unexpected error for .Arg2()")
+			}
+		}
 	})
+}
+
+func TestNewLazyCallResCorruptedFrame(t *testing.T) {
+	_, err := newLazyCallRes(newCallResFrame(t, testCallResParams{
+		arg2Prefix:  []byte{0, 100},
+		arg2KeyVals: exampleArg2Map,
+	}))
+
+	require.EqualError(t, err, "read response frame: buffer is too small", "Got unexpected error for corrupted frame")
 }
 
 func TestLazyErrorRejectsOtherFrames(t *testing.T) {

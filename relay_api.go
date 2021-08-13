@@ -49,6 +49,9 @@ type RelayCall interface {
 	// ReceivedBytes is called when a frame is received from the destination peer.
 	ReceivedBytes(uint16)
 
+	// CallResponse is called when a call response frame is received from the destination peer
+	CallResponse(relay.RespFrame)
+
 	// The call succeeded (possibly after retrying).
 	Succeeded()
 

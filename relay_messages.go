@@ -23,7 +23,6 @@ package tchannel
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"time"
 
@@ -32,14 +31,14 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
+var _ relay.RespFrame = (*lazyCallRes)(nil)
+
 var (
 	_callerNameKeyBytes      = []byte(CallerName)
 	_routingDelegateKeyBytes = []byte(RoutingDelegate)
 	_routingKeyKeyBytes      = []byte(RoutingKey)
 	_argSchemeKeyBytes       = []byte(ArgScheme)
 	_tchanThriftValueBytes   = []byte(Thrift)
-
-	errBadArg2Len = errors.New("bad Arg2 length")
 )
 
 const (
@@ -80,17 +79,81 @@ func (e lazyError) Code() SystemErrCode {
 
 type lazyCallRes struct {
 	*Frame
+
+	as               []byte
+	arg2IsFragmented bool
+	arg2Payload      []byte
 }
 
-func newLazyCallRes(f *Frame) lazyCallRes {
+func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	if msgType := f.Header.messageType; msgType != messageTypeCallRes {
 		panic(fmt.Errorf("newLazyCallRes called for wrong messageType: %v", msgType))
 	}
-	return lazyCallRes{f}
+
+	rbuf := typed.NewReadBuffer(f.SizedPayload())
+	rbuf.SkipBytes(1)           // flags
+	rbuf.SkipBytes(1)           // code
+	rbuf.SkipBytes(_spanLength) // tracing
+
+	var as []byte
+	nh := int(rbuf.ReadSingleByte())
+	for i := 0; i < nh; i++ {
+		keyLen := int(rbuf.ReadSingleByte())
+		key := rbuf.ReadBytes(keyLen)
+		valLen := int(rbuf.ReadSingleByte())
+		val := rbuf.ReadBytes(valLen)
+
+		if bytes.Equal(key, _argSchemeKeyBytes) {
+			as = val
+			continue
+		}
+	}
+
+	csumtype := ChecksumType(rbuf.ReadSingleByte()) // csumtype
+	rbuf.SkipBytes(csumtype.ChecksumSize())         // csum
+
+	// arg1: ignored
+	narg1 := int(rbuf.ReadUint16())
+	rbuf.SkipBytes(narg1)
+
+	// arg2: keep track of payload
+	narg2 := int(rbuf.ReadUint16())
+	arg2Payload := rbuf.ReadBytes(narg2)
+	arg2IsFragmented := rbuf.BytesRemaining() == 0 && hasMoreFragments(f)
+
+	// arg3: ignored
+
+	// Make sure we didn't hit any issues reading the buffer
+	if err := rbuf.Err(); err != nil {
+		return lazyCallRes{}, fmt.Errorf("read response frame: %v", err)
+	}
+
+	return lazyCallRes{
+		Frame:            f,
+		as:               as,
+		arg2IsFragmented: arg2IsFragmented,
+		arg2Payload:      arg2Payload,
+	}, nil
 }
 
+// OK implements relay.RespFrame
 func (cr lazyCallRes) OK() bool {
-	return cr.Payload[_resCodeIndex] == _resCodeOK
+	return isCallResOK(cr.Frame)
+}
+
+// ArgScheme implements relay.RespFrame
+func (cr lazyCallRes) ArgScheme() []byte {
+	return cr.as
+}
+
+// Arg2IsFragmented implements relay.RespFrame
+func (cr lazyCallRes) Arg2IsFragmented() bool {
+	return cr.arg2IsFragmented
+}
+
+// Arg2 implements relay.RespFrame
+func (cr lazyCallRes) Arg2() []byte {
+	return cr.arg2Payload
 }
 
 type lazyCallReq struct {
@@ -271,4 +334,14 @@ func finishesCall(f *Frame) bool {
 	default:
 		return false
 	}
+}
+
+// isCallResOK indicates whether the call was successful
+func isCallResOK(f *Frame) bool {
+	return f.Payload[_resCodeIndex] == _resCodeOK
+}
+
+// hasMoreFragments indicates whether there are more fragments following this frame
+func hasMoreFragments(f *Frame) bool {
+	return f.Payload[_flagsIndex]&hasMoreFragmentsFlag != 0
 }

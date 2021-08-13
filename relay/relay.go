@@ -67,6 +67,21 @@ type CallFrame interface {
 	Arg2Append(key, val []byte)
 }
 
+// RespFrame is an interface that abstracts access to the CallRes frame
+type RespFrame interface {
+	// OK indicates whether the call was successful
+	OK() bool
+
+	// ArgScheme returns the scheme of the arg
+	ArgScheme() []byte
+
+	// Arg2IsFragmented indicates whether arg2 runs over the first frame
+	Arg2IsFragmented() bool
+
+	// Arg2 returns the raw arg2 payload
+	Arg2() []byte
+}
+
 // Conn contains information about the underlying connection.
 type Conn struct {
 	// RemoteAddr is the remote address of the underlying TCP connection.
