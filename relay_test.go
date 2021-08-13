@@ -44,6 +44,7 @@ import (
 	"github.com/uber/tchannel-go/testutils/testreader"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
 	"github.com/uber/tchannel-go/thrift"
+	"github.com/uber/tchannel-go/thrift/arg2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -931,6 +932,63 @@ func TestRelayStalledClientConnection(t *testing.T) {
 		}
 	})
 }
+
+// Test that a corrupted callRes frame results in log emission. We set up the following:
+//   client <-> relay <-> man-in-the-middle (MITM) relay <-> server
+// The MITM relay is configured to intercept and corrupt response frames (through truncation)
+// sent back from the server, and forward them back to the relay, where it is checked for errors.
+func TestRelayCorruptedCallResFrame(t *testing.T) {
+	opts := testutils.NewOpts().
+		// Expect errors from corrupted callRes frames.
+		AddLogFilter("Malformed callRes frame.", 1).
+		SetRelayOnly()
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		s1 := testutils.NewServer(t, testutils.NewOpts().SetServiceName("s1"))
+		defer s1.Close()
+
+		// Track when the server receives the call
+		gotCall := make(chan struct{})
+		testutils.RegisterFunc(s1, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			gotCall <- struct{}{}
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		})
+
+		mitmHostPort, relayCancel := testutils.FrameRelay(t, s1.PeerInfo().HostPort, func(outgoing bool, f *Frame) *Frame {
+			// We care only about callRes frames
+			if f.Header.MessageType() == 0x04 {
+				// Corrupt the frame by truncating its payload size to 1 byte
+				f.Header.SetPayloadSize(1)
+			}
+			return f
+		})
+		defer relayCancel()
+
+		// The relay only forwards requests to the MITM relay
+		ts.RelayHost().Add("s1", mitmHostPort)
+
+		client := ts.NewClient(nil)
+		defer client.Close()
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+
+		data := bytes.Repeat([]byte("test"), 256*60)
+		call, err := client.BeginCall(ctx, ts.Relay().PeerInfo().HostPort, "s1", "echo", nil)
+		require.NoError(t, err, "BeginCall failed")
+
+		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "arg2 write failed")
+		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(data), "arg2 write failed")
+
+		// Wait for server to receive the call
+		<-gotCall
+
+		// Unblock the client so it can close.
+		cancel()
+		require.Error(t, NewArgReader(call.Response().Arg2Reader()).Read(&data), "should fail to read response")
+	})
+}
+
 func TestRelayThroughSeparateRelay(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly()
@@ -1417,6 +1475,60 @@ func TestRelayTransferredBytes(t *testing.T) {
 			assert.InDelta(t, 64*kb, statsMap["s2->s1::echo.sent-bytes"], protocolBuffer, "Unexpected sent bytes")
 			assert.InDelta(t, 64*kb, statsMap["s2->s1::echo.received-bytes"], protocolBuffer, "Unexpected sent bytes")
 		})
+	})
+}
+
+func TestRelayCallResponse(t *testing.T) {
+	ctx, cancel := NewContext(testutils.Timeout(time.Second))
+	defer cancel()
+
+	kv := map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}
+	arg2Buf := thriftarg2test.BuildKVBuffer(kv)
+
+	rh := relaytest.NewStubRelayHost()
+
+	rh.SetRespFrameFn(func(frame relay.RespFrame) {
+		require.True(t, frame.OK(), "Got unexpected response status")
+		require.Equal(t, Thrift.String(), string(frame.ArgScheme()), "Got unexpected scheme")
+
+		iter, err := arg2.NewKeyValIterator(frame.Arg2())
+		require.NoError(t, err, "Got unexpected iterator error")
+
+		gotKV := make(map[string]string)
+		for ; err == nil; iter, err = iter.Next() {
+			gotKV[string(iter.Key())] = string(iter.Value())
+		}
+
+		assert.Equal(t, kv, gotKV, "Got unexpected arg2 in response")
+	})
+
+	opts := testutils.NewOpts().
+		SetRelayOnly().
+		SetRelayHost(rh)
+
+	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
+		const (
+			testMethod = "echo"
+			arg3Data   = "arg3-here"
+		)
+
+		testutils.RegisterEcho(ts.Server(), nil)
+
+		client := testutils.NewClient(t, nil /*opts*/)
+		defer client.Close()
+
+		call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), testMethod, &CallOptions{Format: Thrift})
+		require.NoError(t, err, "BeginCall failed")
+		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(arg2Buf), "arg2 write failed")
+		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write([]byte(arg3Data)), "arg3 write failed")
+
+		gotArg2, gotArg3, err := raw.ReadArgsV2(call.Response())
+		assert.NoError(t, err)
+		assert.Equal(t, string(arg2Buf), string(gotArg2), "arg2 in response does not meet expectation")
+		assert.Equal(t, arg3Data, string(gotArg3), "arg3 in response does not meet expectation")
 	})
 }
 

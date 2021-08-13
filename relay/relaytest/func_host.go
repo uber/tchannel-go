@@ -5,6 +5,11 @@ import (
 	"github.com/uber/tchannel-go/relay"
 )
 
+// Ensure that the hostFunc implements tchannel.RelayHost and hostFuncPeer implements
+// tchannel.RelayCall
+var _ tchannel.RelayHost = (*hostFunc)(nil)
+var _ tchannel.RelayCall = (*hostFuncPeer)(nil)
+
 type hostFunc struct {
 	ch    *tchannel.Channel
 	stats *MockStats
@@ -14,7 +19,8 @@ type hostFunc struct {
 type hostFuncPeer struct {
 	*MockCallStats
 
-	peer *tchannel.Peer
+	peer      *tchannel.Peer
+	respFrame relay.RespFrame
 }
 
 // HostFunc wraps a given function to implement tchannel.RelayHost.
@@ -36,7 +42,7 @@ func (hf *hostFunc) Start(cf relay.CallFrame, conn *relay.Conn) (tchannel.RelayC
 	}
 
 	// We still track stats if we failed to get a peer, so return the peer.
-	return &hostFuncPeer{hf.stats.Begin(cf), peer}, err
+	return &hostFuncPeer{MockCallStats: hf.stats.Begin(cf), peer: peer}, err
 }
 
 func (hf *hostFunc) Stats() *MockStats {
@@ -45,4 +51,8 @@ func (hf *hostFunc) Stats() *MockStats {
 
 func (p *hostFuncPeer) Destination() (*tchannel.Peer, bool) {
 	return p.peer, p.peer != nil
+}
+
+func (p *hostFuncPeer) CallResponse(frame relay.RespFrame) {
+	p.respFrame = frame
 }
