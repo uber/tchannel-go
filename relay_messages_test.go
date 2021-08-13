@@ -688,7 +688,7 @@ func TestLazyCallRes(t *testing.T) {
 	})
 }
 
-func TestLazyCallResCorruptedFrame(t *testing.T) {
+func TestNewLazyCallResCorruptedFrame(t *testing.T) {
 	_, err := newLazyCallRes(newCallResFrame(t, testCallResParams{
 		arg2Prefix:  []byte{0, 100},
 		arg2KeyVals: exampleArg2Map,

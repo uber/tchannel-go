@@ -933,6 +933,68 @@ func TestRelayStalledClientConnection(t *testing.T) {
 		}
 	})
 }
+
+// Test that a corrupted callRes frame results in log emission. We set up the following:
+//   client <-> relay <-> man-in-the-middle (MITM) relay <-> server
+// The MITM relay is configured to intercept and corrupt response frames (through truncation)
+// sent back from the server, and relay them back to the relay, where it is checked for errors.
+func TestRelayCorruptedCallResFrame(t *testing.T) {
+	opts := testutils.NewOpts().
+		// Expect errors from dropped frames.
+		AddLogFilter("Malformed callRes frame.", 1).
+		SetRelayOnly()
+
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		s1 := testutils.NewServer(t, testutils.NewOpts().SetServiceName("s1"))
+		defer s1.Close()
+
+		// Track when the server receives the call
+		gotCall := make(chan struct{})
+		testutils.RegisterFunc(s1, "echo", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+			gotCall <- struct{}{}
+			return &raw.Res{Arg2: args.Arg2, Arg3: args.Arg3}, nil
+		})
+
+		mitmHostPort, relayCancel := testutils.FrameRelay(t, s1.PeerInfo().HostPort, func(outgoing bool, f *Frame) *Frame {
+			// We care only about callRes frames
+			if f.Header.MessageType() == 0x04 {
+				// Corrupt the frame by truncating its payload size to 1 byte
+				f.Header.SetPayloadSize(1)
+			}
+			return f
+		})
+		defer relayCancel()
+
+		// The relay only forwards requests to the MITM relay
+		ts.RelayHost().Add("s1", mitmHostPort)
+
+		client := ts.NewClient(nil)
+		defer client.Close()
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+
+		// Data to fit one frame fully, but large enough that a number of these frames will fill
+		// all the buffers and cause the relay to drop the response frame. Buffers are:
+		// 1. Relay's sendCh on the connection to the client (set to 10 frames explicitly)
+		// 2. Relay's TCP send buffer for the connection to the client.
+		// 3. Client's TCP receive buffer on the connection to the relay.
+		data := bytes.Repeat([]byte("test"), 256*60)
+		call, err := client.BeginCall(ctx, ts.Relay().PeerInfo().HostPort, "s1", "echo", nil)
+		require.NoError(t, err, "BeginCall failed")
+
+		require.NoError(t, NewArgWriter(call.Arg2Writer()).Write(nil), "arg2 write failed")
+		require.NoError(t, NewArgWriter(call.Arg3Writer()).Write(data), "arg2 write failed")
+
+		// Wait for server to receive the call
+		<-gotCall
+
+		// Unblock the client so it can close.
+		cancel()
+		require.Error(t, NewArgReader(call.Response().Arg2Reader()).Read(&data), "should fail to read response")
+	})
+}
+
 func TestRelayThroughSeparateRelay(t *testing.T) {
 	opts := testutils.NewOpts().
 		SetRelayOnly()
