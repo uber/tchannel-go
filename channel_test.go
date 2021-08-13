@@ -182,3 +182,78 @@ func TestChannelTracerMethod(t *testing.T) {
 	opentracing.InitGlobalTracer(mockTracer)
 	assert.Equal(t, mockTracer, ch.Tracer(), "expecting tracer set as global tracer")
 }
+
+func TestToServiceMethodSet(t *testing.T) {
+	tests := []struct {
+		desc    string
+		sms     []string
+		want    map[string]map[string]struct{}
+		wantErr string
+	}{
+		{
+			desc: "single service, single method",
+			sms:  []string{"service::Method"},
+			want: map[string]map[string]struct{}{
+				"service": map[string]struct{}{
+					"Method": struct{}{},
+				},
+			},
+		},
+		{
+			desc: "single service, multiple methods",
+			sms:  []string{"service::Method1", "service::Method2", "service::Method3"},
+			want: map[string]map[string]struct{}{
+				"service": map[string]struct{}{
+					"Method1": struct{}{},
+					"Method2": struct{}{},
+					"Method3": struct{}{},
+				},
+			},
+		},
+		{
+			desc: "multiple services, single method",
+			sms:  []string{"service1::Method1", "service2::Method1", "service3::Method1"},
+			want: map[string]map[string]struct{}{
+				"service1": map[string]struct{}{
+					"Method1": struct{}{},
+				},
+				"service2": map[string]struct{}{
+					"Method1": struct{}{},
+				},
+				"service3": map[string]struct{}{
+					"Method1": struct{}{},
+				},
+			},
+		},
+		{
+			desc: "multiple services, multiple methods",
+			sms:  []string{"service1::Method1", "service1::Method2", "service2::Method1", "service2::Method2"},
+			want: map[string]map[string]struct{}{
+				"service1": map[string]struct{}{
+					"Method1": struct{}{},
+					"Method2": struct{}{},
+				},
+				"service2": map[string]struct{}{
+					"Method1": struct{}{},
+					"Method2": struct{}{},
+				},
+			},
+		},
+		{
+			desc:    "invalid input",
+			sms:     []string{"notDelimitedByDoubleColons"},
+			wantErr: `each "SkipHandlerMethods" value should be of service::Method format but got "notDelimitedByDoubleColons"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			r, err := toServiceMethodSet(tt.sms)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+				return
+			}
+			assert.Equal(t, tt.want, r)
+		})
+	}
+}

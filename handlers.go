@@ -135,3 +135,26 @@ func (c channelHandler) Handle(ctx context.Context, call *InboundCall) {
 func (c channelHandler) Register(h Handler, methodName string) {
 	c.ch.GetSubChannel(c.ch.PeerInfo().ServiceName).Register(h, methodName)
 }
+
+// userHandlerWithSkip is a Handler that wraps a localHandler backed by the channel.
+// and a user provided handler.
+// The inbound call will be handled by user handler, unless the call's
+// service and method name are configured to be handled by localHandler
+// from ignore.
+type userHandlerWithSkip struct {
+	localHandler      channelHandler
+	ignoreUserHandler map[string]map[string]struct{} // key is service, subkey is method
+	userHandler       Handler
+}
+
+func (u userHandlerWithSkip) Handle(ctx context.Context, call *InboundCall) {
+	if _, ok := u.ignoreUserHandler[call.ServiceName()][call.MethodString()]; ok {
+		u.localHandler.Handle(ctx, call)
+		return
+	}
+	u.userHandler.Handle(ctx, call)
+}
+
+func (u userHandlerWithSkip) Register(h Handler, methodName string) {
+	u.localHandler.Register(h, methodName)
+}
