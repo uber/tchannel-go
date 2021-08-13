@@ -241,8 +241,8 @@ func TestToServiceMethodSet(t *testing.T) {
 		},
 		{
 			desc:    "invalid input",
-			sms:     []string{"notDelimitedByDouleColons"},
-			wantErr: `Each "SkipHandlerMethods" value should be of service::Method format but got "notDelimitedByDouleColons"`,
+			sms:     []string{"notDelimitedByDoubleColons"},
+			wantErr: `each "SkipHandlerMethods" value should be of service::Method format but got "notDelimitedByDoubleColons"`,
 		},
 	}
 

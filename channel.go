@@ -128,6 +128,7 @@ type ChannelOptions struct {
 	// requests with specified methods can be ignored by the above passed-in handler
 	// and handled natively by TChannel.
 	// Requests with other methods will be handled by passed-in handler.
+	// Methods should be in the format of Service::Method.
 	// This is useful for the gradual migration purpose.
 	SkipHandlerMethods []string
 
@@ -914,7 +915,7 @@ func toServiceMethodSet(sms []string) (map[string]map[string]struct{}, error) {
 	for _, sm := range sms {
 		s := strings.Split(sm, "::")
 		if len(s) != 2 {
-			return nil, fmt.Errorf(`Each "SkipHandlerMethods" value should be of service::Method format but got %q`, sm)
+			return nil, fmt.Errorf("each %q value should be of service::Method format but got %q", "SkipHandlerMethods", sm)
 		}
 		svc, method := s[0], s[1]
 		if _, ok := set[svc]; !ok {

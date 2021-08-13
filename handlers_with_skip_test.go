@@ -47,7 +47,7 @@ func TestUserHandlerWithSkip(t *testing.T) {
 		handleSkipRuns       = 5
 	)
 
-	userCounter, channelCounter := recorderHandler{c: atomic.NewUint32(0)}, recorderHandler{c: atomic.NewUint32(0)}
+	userCounter, channelCounter := &recordHandler{}, &recordHandler{}
 
 	opts := testutils.NewOpts().NoRelay()
 	opts.ServiceName = svc
@@ -78,10 +78,17 @@ func TestUserHandlerWithSkip(t *testing.T) {
 	})
 }
 
-type recorderHandler struct {
-	c *atomic.Uint32
+func TestUserHandlerWithSkipInvalidInput(t *testing.T) {
+	opts := &ChannelOptions{
+		Handler:            &recordHandler{},
+		SkipHandlerMethods: []string{"notDelimitedByDoubleColons"},
+	}
+	_, err := NewChannel("svc", opts)
+	assert.EqualError(t, err, `each "SkipHandlerMethods" value should be of service::Method format but got "notDelimitedByDoubleColons"`)
 }
 
-func (r recorderHandler) Handle(ctx context.Context, call *InboundCall) {
+type recordHandler struct{ c atomic.Uint32 }
+
+func (r *recordHandler) Handle(ctx context.Context, call *InboundCall) {
 	r.c.Inc()
 }
