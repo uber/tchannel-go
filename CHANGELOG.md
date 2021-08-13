@@ -1,12 +1,11 @@
 Changelog
 =========
 
-## [1.21.3] - 2021-08-13
+## [1.22.0] - 2021-08-13
 ### Changed
 
  * Add `SkipHandlerMethods` option as an allow-list of metohds that are handled by the override handler
  * Allow method registration if handler implements Register
- * Remove Travis CI, add Github Actions, bypass 2 flaky tests in GHA
  * Internal changes related to relaying.
 
 ## [1.21.2] - 2021-05-19
