@@ -2,9 +2,10 @@ Changelog
 =========
 
 ## [1.22.0] - 2021-08-13
-### Changed
-
+### Added
  * Add `SkipHandlerMethods` option as an allow-list of metohds that are handled by the override handler.
+
+### Changed
  * Allow method registration if handler implements Register.
  * Internal changes related to relaying.
 
