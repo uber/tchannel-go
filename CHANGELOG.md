@@ -1,6 +1,14 @@
 Changelog
 =========
 
+## [1.22.0] - 2021-08-13
+### Added
+ * Add `SkipHandlerMethods` option as an allow-list of metohds that are handled by the override handler.
+
+### Changed
+ * Allow method registration if handler implements Register.
+ * Internal changes related to relaying.
+
 ## [1.21.2] - 2021-05-19
 ### Changed
 
@@ -320,6 +328,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.22.0]: https://github.com/uber/tchannel-go/compare/v1.21.2...v1.22.0
 [1.21.2]: https://github.com/uber/tchannel-go/compare/v1.21.1...v1.21.2
 [1.21.1]: https://github.com/uber/tchannel-go/compare/v1.21.0...v1.21.1
 [1.21.0]: https://github.com/uber/tchannel-go/compare/v1.20.1...v1.21.0
