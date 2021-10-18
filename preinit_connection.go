@@ -109,6 +109,7 @@ func (ch *Channel) getInitParams() initParams {
 		InitParamTChannelLanguage:        localPeer.Version.Language,
 		InitParamTChannelLanguageVersion: localPeer.Version.LanguageVersion,
 		InitParamTChannelVersion:         localPeer.Version.TChannelVersion,
+		InitParamTChannelCompression:     localPeer.CompressionMethod.String(),
 	}
 }
 
@@ -192,6 +193,14 @@ func parseRemotePeer(p initParams, remoteAddr net.Addr) (PeerInfo, peerAddressCo
 	}
 	if remotePeer.ProcessName, ok = p[InitParamProcessName]; !ok {
 		return remotePeer, remotePeerAddress, fmt.Errorf("header %v is required", InitParamProcessName)
+	}
+
+	if compressionMethod, ok := p[InitParamTChannelCompression]; ok {
+		cm, err := NewCompressionMethod(compressionMethod)
+		if err != nil {
+			return remotePeer, remotePeerAddress, err
+		}
+		remotePeer.CompressionMethod = cm
 	}
 
 	// If the remote host:port is ephemeral, use the socket address as the

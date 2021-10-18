@@ -212,10 +212,11 @@ func TestRemotePeer(t *testing.T) {
 			remote: func(t testing.TB, ts *testutils.TestServer) *Channel { return ts.NewClient(nil) },
 			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
 				return PeerInfo{
-					HostPort:    state.RootPeers[ts.HostPort()].OutboundConnections[0].LocalHostPort,
-					IsEphemeral: true,
-					ProcessName: state.LocalPeer.ProcessName,
-					Version:     wantVersion,
+					HostPort:          state.RootPeers[ts.HostPort()].OutboundConnections[0].LocalHostPort,
+					IsEphemeral:       true,
+					ProcessName:       state.LocalPeer.ProcessName,
+					Version:           wantVersion,
+					CompressionMethod: NoCompression,
 				}
 			},
 		},
@@ -224,10 +225,11 @@ func TestRemotePeer(t *testing.T) {
 			remote: func(t testing.TB, ts *testutils.TestServer) *Channel { return ts.NewServer(nil) },
 			expectedFn: func(state *RuntimeState, ts *testutils.TestServer) PeerInfo {
 				return PeerInfo{
-					HostPort:    state.LocalPeer.HostPort,
-					IsEphemeral: false,
-					ProcessName: state.LocalPeer.ProcessName,
-					Version:     wantVersion,
+					HostPort:          state.LocalPeer.HostPort,
+					IsEphemeral:       false,
+					ProcessName:       state.LocalPeer.ProcessName,
+					Version:           wantVersion,
+					CompressionMethod: NoCompression,
 				}
 			},
 		},

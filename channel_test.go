@@ -45,7 +45,8 @@ func toMap(fields LogFields) map[string]interface{} {
 
 func TestNewChannel(t *testing.T) {
 	ch, err := NewChannel("svc", &ChannelOptions{
-		ProcessName: "pname",
+		ProcessName:              "pname",
+		DefaultConnectionOptions: ConnectionOptions{CompressionMethod: SnappyCompression}.withDefaults(),
 	})
 	require.NoError(t, err, "NewChannel failed")
 
@@ -60,6 +61,7 @@ func TestNewChannel(t *testing.T) {
 				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
 				TChannelVersion: VersionInfo,
 			},
+			CompressionMethod: SnappyCompression,
 		},
 	}, ch.PeerInfo(), "Wrong local peer info")
 }

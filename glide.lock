@@ -1,5 +1,5 @@
-hash: 7400b8d3d51badea662da185fd9cc0098c7a1fb0a2731b17ceae4e91f6455d1d
-updated: 2020-03-17T12:48:49.8534584+11:00
+hash: 59640aee5ecbe113a82206d2ddc96ecea477c4a75f92747bbe04ef16599317eb
+updated: 2020-09-03T09:22:05.734767741+03:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -9,6 +9,8 @@ imports:
   version: 5ca90424ceb7e5e9affff2765da00e9dd737f274
   subpackages:
   - statsd
+- name: github.com/golang/snappy
+  version: 196ae77b8a26000fa30caa8b2b541e09674dbc43
 - name: github.com/opentracing/opentracing-go
   version: 659c90643e714681897ec2521c60567dd21da733
   subpackages:
