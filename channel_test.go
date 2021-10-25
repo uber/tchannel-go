@@ -195,7 +195,7 @@ func TestToServiceMethodSet(t *testing.T) {
 			sms:  []string{"service::Method"},
 			want: map[string]map[string]struct{}{
 				"service": map[string]struct{}{
-					"Method": struct{}{},
+					"service::Method": struct{}{},
 				},
 			},
 		},
@@ -204,9 +204,9 @@ func TestToServiceMethodSet(t *testing.T) {
 			sms:  []string{"service::Method1", "service::Method2", "service::Method3"},
 			want: map[string]map[string]struct{}{
 				"service": map[string]struct{}{
-					"Method1": struct{}{},
-					"Method2": struct{}{},
-					"Method3": struct{}{},
+					"service::Method1": struct{}{},
+					"service::Method2": struct{}{},
+					"service::Method3": struct{}{},
 				},
 			},
 		},
@@ -215,13 +215,13 @@ func TestToServiceMethodSet(t *testing.T) {
 			sms:  []string{"service1::Method1", "service2::Method1", "service3::Method1"},
 			want: map[string]map[string]struct{}{
 				"service1": map[string]struct{}{
-					"Method1": struct{}{},
+					"service1::Method1": struct{}{},
 				},
 				"service2": map[string]struct{}{
-					"Method1": struct{}{},
+					"service2::Method1": struct{}{},
 				},
 				"service3": map[string]struct{}{
-					"Method1": struct{}{},
+					"service3::Method1": struct{}{},
 				},
 			},
 		},
@@ -230,12 +230,12 @@ func TestToServiceMethodSet(t *testing.T) {
 			sms:  []string{"service1::Method1", "service1::Method2", "service2::Method1", "service2::Method2"},
 			want: map[string]map[string]struct{}{
 				"service1": map[string]struct{}{
-					"Method1": struct{}{},
-					"Method2": struct{}{},
+					"service1::Method1": struct{}{},
+					"service1::Method2": struct{}{},
 				},
 				"service2": map[string]struct{}{
-					"Method1": struct{}{},
-					"Method2": struct{}{},
+					"service2::Method1": struct{}{},
+					"service2::Method2": struct{}{},
 				},
 			},
 		},

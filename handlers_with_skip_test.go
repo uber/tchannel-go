@@ -58,21 +58,21 @@ func TestUserHandlerWithSkip(t *testing.T) {
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// channel should be able to handle user ignored methods
-		ts.Register(channelCounter, userHandleSkipMethod)
+		ts.Register(channelCounter, procedure(svc, userHandleSkipMethod))
 
 		client := ts.NewClient(nil)
 
 		for i := 0; i < handleRuns; i++ {
 			ctx, cancel := tchannel.NewContext(testutils.Timeout(300 * time.Millisecond))
 			defer cancel()
-			raw.Call(ctx, client, ts.HostPort(), svc, userHandleMethod, nil, nil)
+			raw.Call(ctx, client, ts.HostPort(), svc, procedure(svc, userHandleMethod), nil, nil)
 		}
 		assert.Equal(t, uint32(handleRuns), userCounter.c.Load(), "user provided handler not invoked correct amount of times")
 
 		for i := 0; i < handleSkipRuns; i++ {
 			ctx, cancel := tchannel.NewContext(testutils.Timeout(300 * time.Millisecond))
 			defer cancel()
-			raw.Call(ctx, client, ts.HostPort(), svc, userHandleSkipMethod, nil, nil)
+			raw.Call(ctx, client, ts.HostPort(), svc, procedure(svc, userHandleSkipMethod), nil, nil)
 		}
 		assert.Equal(t, uint32(handleSkipRuns), channelCounter.c.Load(), "user provided handler not invoked correct amount of times")
 	})
