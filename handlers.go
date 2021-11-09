@@ -143,12 +143,12 @@ func (c channelHandler) Register(h Handler, methodName string) {
 // from ignore.
 type userHandlerWithSkip struct {
 	localHandler      channelHandler
-	ignoreUserHandler map[string]map[string]struct{} // key is service, subkey is method
+	ignoreUserHandler map[string]struct{} // key is service, subkey is method
 	userHandler       Handler
 }
 
 func (u userHandlerWithSkip) Handle(ctx context.Context, call *InboundCall) {
-	if _, ok := u.ignoreUserHandler[call.ServiceName()][call.MethodString()]; ok {
+	if _, ok := u.ignoreUserHandler[call.MethodString()]; ok {
 		u.localHandler.Handle(ctx, call)
 		return
 	}
