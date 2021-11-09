@@ -139,11 +139,10 @@ func (c channelHandler) Register(h Handler, methodName string) {
 // userHandlerWithSkip is a Handler that wraps a localHandler backed by the channel.
 // and a user provided handler.
 // The inbound call will be handled by user handler, unless the call's
-// service and method name are configured to be handled by localHandler
-// from ignore.
+// method name is configured to be handled by localHandler from ignore.
 type userHandlerWithSkip struct {
 	localHandler      channelHandler
-	ignoreUserHandler map[string]struct{} // key is service, subkey is method
+	ignoreUserHandler map[string]struct{} // key is service::method
 	userHandler       Handler
 }
 
