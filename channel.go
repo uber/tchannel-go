@@ -909,19 +909,14 @@ func toStringSet(ss []string) map[string]struct{} {
 }
 
 // take a list of service::method formatted string and make
-// the map[service]map[service::method]struct{} set
-func toServiceMethodSet(sms []string) (map[string]map[string]struct{}, error) {
-	set := map[string]map[string]struct{}{}
+// the map[service::method]struct{} set
+func toServiceMethodSet(sms []string) (map[string]struct{}, error) {
+	set := map[string]struct{}{}
 	for _, sm := range sms {
-		s := strings.Split(sm, "::")
-		if len(s) != 2 {
+		if len(strings.Split(sm, "::")) != 2 {
 			return nil, fmt.Errorf("each %q value should be of service::Method format but got %q", "SkipHandlerMethods", sm)
 		}
-		svc := s[0]
-		if _, ok := set[svc]; !ok {
-			set[svc] = map[string]struct{}{}
-		}
-		set[svc][sm] = struct{}{}
+		set[sm] = struct{}{}
 	}
 	return set, nil
 }
