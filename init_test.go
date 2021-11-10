@@ -242,6 +242,7 @@ func TestHandleInitReqNewVersion(t *testing.T) {
 					InitParamTChannelLanguage:        "go",
 					InitParamTChannelLanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
 					InitParamTChannelVersion:         VersionInfo,
+					InitParamTChannelCompression:     NoCompression.String(),
 				},
 			},
 		}, msg, "unexpected init res")

@@ -78,6 +78,8 @@ const (
 	InitParamTChannelLanguageVersion = "tchannel_language_version"
 	// InitParamTChannelVersion contains the library version.
 	InitParamTChannelVersion = "tchannel_version"
+	// InitParamTChannelCompression contains the compression method.
+	InitParamTChannelCompression = "tchannel_compression"
 )
 
 // initMessage is the base for messages in the initialization handshake
