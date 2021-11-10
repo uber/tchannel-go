@@ -913,8 +913,7 @@ func toStringSet(ss []string) map[string]struct{} {
 func toServiceMethodSet(sms []string) (map[string]struct{}, error) {
 	set := map[string]struct{}{}
 	for _, sm := range sms {
-		s := strings.Split(sm, "::")
-		if len(s) != 2 {
+		if len(strings.Split(sm, "::")) != 2 {
 			return nil, fmt.Errorf("each %q value should be of service::Method format but got %q", "SkipHandlerMethods", sm)
 		}
 		set[sm] = struct{}{}
