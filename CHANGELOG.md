@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.22.2] - 2021-11-10
+### Changed
+ * Fixes related to `SkipHandlerMethods` request handling.
+
 ## [1.22.1] - 2021-10-25
 ### Changed
 
