@@ -291,7 +291,15 @@ func TestHeaders(t *testing.T) {
 		args.s1.On("Simple", ctxArg()).Return(nil).Run(func(args mock.Arguments) {
 			ctx := args.Get(0).(Context)
 			assert.Equal(t, reqHeaders, ctx.Headers(), "request headers mismatch")
-			ctx.SetResponseHeaders(respHeaders)
+			respHeadersWithRPCService := make(map[string]string, len(respHeaders)+1)
+			for k, v := range respHeaders {
+				respHeadersWithRPCService[k] = v
+			}
+			// Adding RPC-Service header that gets written to Arg2 to verify that it
+			// gets removed from the response headers that are set on the Context after
+			// the client.Call() finishes
+			respHeadersWithRPCService["$rpc$-service"] = "simple"
+			ctx.SetResponseHeaders(respHeadersWithRPCService)
 		})
 
 		ctx = WithHeaders(ctx, reqHeaders)
