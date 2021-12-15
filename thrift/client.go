@@ -184,7 +184,7 @@ func (c *client) Call(ctx Context, thriftService, methodName string, req, resp t
 // prevents A from seeing the $rpc$-header and marking the rpc as a failure. The alternative is to make
 // B use Child() context while making downstream calls and the net effect is the same and while migrating to yarpc,
 // it is unreasonable to expect the callee service owners to perform changes into the upstream callers
-// to create Child() context especially when the call graph is complex are multiple levels deep. This is
+// to create Child() context especially when the call graph is complex and multiple levels deep. This is
 // a reasonbable backward incompatible change to make as we do not expect any caller to actually depend on
 // or find the $rpc$-service header from a descendant service to be actually useful.
 func removeRPCServiceHeader(headers map[string]string) map[string]string {
