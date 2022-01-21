@@ -437,7 +437,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 				call.Failed("relay-dropped")
 				call.End()
 			}
-			return _relayNoRelease, nil
+			return _relayShouldRelease, nil
 		}
 		if _, ok := err.(SystemError); !ok {
 			err = NewSystemError(ErrCodeDeclined, err.Error())
@@ -450,9 +450,9 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 
 		// If the RelayHost returns a protocol error, close the connection.
 		if GetSystemErrorCode(err) == ErrCodeProtocol {
-			return _relayNoRelease, r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
+			return _relayShouldRelease, r.conn.close(LogField{"reason", "RelayHost returned protocol error"})
 		}
-		return _relayNoRelease, nil
+		return _relayShouldRelease, nil
 	}
 
 	// Check that the current connection is in a valid state to handle a new call.
@@ -461,7 +461,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 		call.End()
 		err := errConnNotActive{"incoming", state}
 		r.conn.SendSystemError(f.Header.ID, f.Span(), NewWrappedSystemError(ErrCodeDeclined, err))
-		return _relayNoRelease, err
+		return _relayShouldRelease, err
 	}
 
 	// Get a remote connection and check whether it can handle this call.
@@ -479,7 +479,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 		// the current relay, we need to decrement it.
 		r.decrementPending()
 		call.End()
-		return _relayNoRelease, err
+		return _relayShouldRelease, err
 	}
 
 	origID := f.Header.ID
@@ -526,7 +526,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	sent, failure := relayToDest.destination.Receive(f.Frame, requestFrame)
 	if !sent {
 		r.failRelayItem(r.outbound, origID, failure, errFrameNotSent)
-		return _relayNoRelease, nil
+		return _relayShouldRelease, nil
 	}
 	return _relayNoRelease, nil
 }
