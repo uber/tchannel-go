@@ -823,11 +823,13 @@ func TestRelayStalledConnection(t *testing.T) {
 	if os.Getenv("GITHUB_WORKFLOW") != "" {
 		t.Skip("skipping test flaky in github actions.")
 	}
+
 	opts := testutils.NewOpts().
 		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
-		SetRelayOnly()
+		SetRelayOnly().
+		SetCheckFramePooling()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
 		testutils.RegisterEcho(s2, nil)
@@ -1993,7 +1995,6 @@ func TestRelayModifyArg2(t *testing.T) {
 }
 
 func TestRelayModifyArg2ShouldFail(t *testing.T) {
-	// TODO: enable framepool checks
 	tests := []struct {
 		msg     string
 		arg2    []byte
@@ -2029,6 +2030,7 @@ func TestRelayModifyArg2ShouldFail(t *testing.T) {
 			opts := testutils.NewOpts().
 				SetRelayOnly().
 				SetRelayHost(rh).
+				SetCheckFramePooling().
 				AddLogFilter("Failed to send call with modified arg2.", 1)
 
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
