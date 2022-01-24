@@ -4,6 +4,9 @@ go 1.16
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
+	// github.com/apache/thrift should be >=0.9.3, <0.11.0 due to
+	// https://issues.apache.org/jira/browse/THRIFT-5205
+	// We are currently pinned to b2a4d4ae21c789b689dd162deb819665567f481c
 	github.com/apache/thrift v0.0.0-20161221203622-b2a4d4ae21c7
 	github.com/bmizerany/perks v0.0.0-20141205001514-d9a9656a3a4b
 	github.com/cactus/go-statsd-client/v5 v5.0.0

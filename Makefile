@@ -12,8 +12,6 @@ THRIFT_GEN_RELEASE_DARWIN := $(THRIFT_GEN_RELEASE)/darwin-x86_64
 PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
 
-OLD_GOPATH := $(GOPATH)
-
 BIN := $(shell pwd)/.bin
 
 # Cross language test args
@@ -38,11 +36,11 @@ setup:
 	mkdir -p $(THRIFT_GEN_RELEASE_DARWIN)
 
 install:
-	GOPATH=$(OLD_GOPATH) go mod vendor
+	go mod vendor
 
 install_lint:
 	@echo "Installing golint, since we expect to lint"
-	GOPATH=$(OLD_GOPATH) go get -u -f golang.org/x/lint/golint
+	go get -u -f golang.org/x/lint/golint
 
 install_ci: $(BIN)/thrift install
 ifdef CROSSDOCK
