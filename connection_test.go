@@ -617,7 +617,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 
 		// Wait for the write to complete, make sure there are no errors.
 		select {
-		case <-time.After(testutils.Timeout(60 * time.Millisecond)):
+		case <-time.After(testutils.Timeout(100 * time.Millisecond)):
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
