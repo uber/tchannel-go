@@ -638,6 +638,11 @@ func TestRelayConnection(t *testing.T) {
 		_, err = ts.Relay().Connect(ctx, listeningHBSvc.PeerInfo().HostPort)
 		require.NoError(t, err, "Failed to connect from relay to listening host:port")
 
+		// Wait for inbound connection to be established before making call
+		if !waitForInboundConnection(listeningHBSvc, ts.Relay()) {
+			require.Fail(t, "no inbound connections established from relay to listeningHBSvc")
+		}
+
 		// Now when listeningHBSvc makes a call, it should use the above connection.
 		err = testutils.CallEcho(listeningHBSvc, ts.HostPort(), ts.ServiceName(), nil)
 		require.Error(t, err, "Expected CallEcho to fail")
@@ -2061,4 +2066,22 @@ func copyHeaders(m map[string]string) map[string]string {
 		copied[k] = v
 	}
 	return copied
+}
+
+func waitForInboundConnection(listeningCh, callingCh *Channel) bool {
+	for beg := time.Now(); time.Now().Sub(beg) < time.Second; {
+		if getInbounds(listeningCh, callingCh) > 0 {
+			break
+		}
+		<-time.After(10 * time.Millisecond)
+	}
+	return getInbounds(listeningCh, callingCh) > 0
+}
+
+func getInbounds(listeningCh, callingCh *Channel) int {
+	callingPeer, ok := listeningCh.IntrospectState(nil).RootPeers[callingCh.PeerInfo().HostPort]
+	if !ok {
+		return 0
+	}
+	return len(callingPeer.InboundConnections)
 }
