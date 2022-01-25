@@ -639,7 +639,9 @@ func TestRelayConnection(t *testing.T) {
 		require.NoError(t, err, "Failed to connect from relay to listening host:port")
 
 		// Wait for inbound connection to be established before making call
-		if !waitForInboundConnection(listeningHBSvc, ts.Relay()) {
+		if !testutils.WaitFor(time.Second, func() bool {
+			return getInbounds(listeningHBSvc, ts.Relay()) > 0
+		}) {
 			require.Fail(t, "no inbound connections established from relay to listeningHBSvc")
 		}
 
@@ -2066,16 +2068,6 @@ func copyHeaders(m map[string]string) map[string]string {
 		copied[k] = v
 	}
 	return copied
-}
-
-func waitForInboundConnection(listeningCh, callingCh *Channel) bool {
-	for beg := time.Now(); time.Now().Sub(beg) < time.Second; {
-		if getInbounds(listeningCh, callingCh) > 0 {
-			break
-		}
-		<-time.After(10 * time.Millisecond)
-	}
-	return getInbounds(listeningCh, callingCh) > 0
 }
 
 func getInbounds(listeningCh, callingCh *Channel) int {
