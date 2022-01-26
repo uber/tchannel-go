@@ -2071,7 +2071,7 @@ func copyHeaders(m map[string]string) map[string]string {
 }
 
 func getInbounds(listeningCh, callingCh *Channel) int {
-	callingPeer, ok := listeningCh.IntrospectState(nil).RootPeers[callingCh.PeerInfo().HostPort]
+	callingPeer, ok := listeningCh.IntrospectState(nil /* opts */).RootPeers[callingCh.PeerInfo().HostPort]
 	if !ok {
 		return 0
 	}
