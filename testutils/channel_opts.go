@@ -288,6 +288,7 @@ func (o *ChannelOpts) SetConnContext(f func(context.Context, net.Conn) context.C
 	return o
 }
 
+// SetCheckFramePooling sets a flag to enable frame pooling checks such as leaks or bad releases
 func (o *ChannelOpts) SetCheckFramePooling() *ChannelOpts {
 	o.CheckFramePooling = true
 	return o
