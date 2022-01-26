@@ -20,7 +20,7 @@ TEST_PORT=0
 
 -include crossdock/rules.mk
 
-all: test examples
+all: lint test examples
 
 $(BIN)/thrift:
 	mkdir -p $(BIN)
@@ -40,7 +40,7 @@ install:
 
 install_lint:
 	@echo "Installing golint, since we expect to lint"
-	go get -u -f golang.org/x/lint/golint
+	go install golang.org/x/lint/golint@latest
 
 install_ci: $(BIN)/thrift install
 ifdef CROSSDOCK
@@ -100,7 +100,7 @@ cover_ci:
 
 
 FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
-lint:
+lint: install
 	@echo "Running golint"
 	-golint $(ALL_PKGS) | $(FILTER) | tee lint.log
 	@echo "Running go vet"
