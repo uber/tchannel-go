@@ -398,8 +398,7 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 // TestRelayConcurrentCalls makes many concurrent calls and ensures that
 // we don't try to reuse any frames once they've been released.
 func TestRelayConcurrentCalls(t *testing.T) {
-	pool := NewProtectMemFramePool()
-	opts := testutils.NewOpts().SetRelayOnly().SetFramePool(pool)
+	opts := testutils.NewOpts().SetRelayOnly().SetCheckFramePooling()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		server := benchmark.NewServer(
 			benchmark.WithNoLibrary(),

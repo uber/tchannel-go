@@ -66,6 +66,12 @@ type ChannelOpts struct {
 	// negative values are treated as a single run.
 	RunCount int
 
+	// CheckFramePooling indicates whether we should check for frame leaks or not.
+	// This causes the same tests to be run twice, first with the default frame pool,
+	// then with the recording frame pool, which will double the amount of time it takes
+	// for the test.
+	CheckFramePooling bool
+
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
@@ -279,6 +285,12 @@ func (o *ChannelOpts) SetDialer(f func(context.Context, string, string) (net.Con
 // SetConnContext sets the connection's ConnContext function
 func (o *ChannelOpts) SetConnContext(f func(context.Context, net.Conn) context.Context) *ChannelOpts {
 	o.ConnContext = f
+	return o
+}
+
+// SetCheckFramePooling sets a flag to enable frame pooling checks such as leaks or bad releases
+func (o *ChannelOpts) SetCheckFramePooling() *ChannelOpts {
+	o.CheckFramePooling = true
 	return o
 }
 
