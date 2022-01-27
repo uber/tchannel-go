@@ -86,6 +86,7 @@ func TestRequest(t *testing.T) {
 	withSetup(t, func(ctx Context, args testArgs) {
 		args.s1.On("Simple", ctxArg()).Return(nil)
 		require.NoError(t, args.c1.Simple(ctx))
+		assert.Equal(t, "testService", ctx.ResponseHeaders()[ServiceHeaderKey])
 	})
 }
 
@@ -105,15 +106,16 @@ func TestRequestSubChannel(t *testing.T) {
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
-	tchan := testutils.NewServer(t, testutils.NewOpts().SetServiceName("svc1"))
+	rpcServices := []string{"svc1", "svc2", "svc3"}
+	tchan := testutils.NewServer(t, testutils.NewOpts().SetServiceName(rpcServices[0]))
 	defer tchan.Close()
 
 	clientCh := testutils.NewClient(t, nil)
 	defer clientCh.Close()
 	clientCh.Peers().Add(tchan.PeerInfo().HostPort)
 
-	tests := []tchannel.Registrar{tchan, tchan.GetSubChannel("svc2"), tchan.GetSubChannel("svc3")}
-	for _, ch := range tests {
+	tests := []tchannel.Registrar{tchan, tchan.GetSubChannel(rpcServices[1]), tchan.GetSubChannel(rpcServices[2])}
+	for i, ch := range tests {
 		mockHandler := new(mocks.TChanSecondService)
 		server := NewServer(ch)
 		server.Register(gen.NewTChanSecondServiceServer(mockHandler))
@@ -127,6 +129,7 @@ func TestRequestSubChannel(t *testing.T) {
 		res, err := secondClient.Echo(ctx, echoArg)
 		assert.NoError(t, err, "Echo failed")
 		assert.Equal(t, echoRes, res)
+		assert.Equal(t, rpcServices[i], ctx.ResponseHeaders()[ServiceHeaderKey])
 	}
 }
 
@@ -291,15 +294,7 @@ func TestHeaders(t *testing.T) {
 		args.s1.On("Simple", ctxArg()).Return(nil).Run(func(args mock.Arguments) {
 			ctx := args.Get(0).(Context)
 			assert.Equal(t, reqHeaders, ctx.Headers(), "request headers mismatch")
-			respHeadersWithRPCService := make(map[string]string, len(respHeaders)+1)
-			for k, v := range respHeaders {
-				respHeadersWithRPCService[k] = v
-			}
-			// Adding RPC-Service header that gets written to Arg2 to verify that it
-			// gets removed from the response headers that are set on the Context after
-			// the client.Call() finishes
-			respHeadersWithRPCService["$rpc$-service"] = "simple"
-			ctx.SetResponseHeaders(respHeadersWithRPCService)
+			ctx.SetResponseHeaders(respHeaders)
 		})
 
 		ctx = WithHeaders(ctx, reqHeaders)

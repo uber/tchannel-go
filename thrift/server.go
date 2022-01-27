@@ -32,6 +32,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	ServiceHeaderKey = "$rpc$-service"
+)
+
 type handler struct {
 	server         TChanServer
 	postResponseCB PostResponseCB
@@ -194,7 +198,12 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 		return err
 	}
 
-	if err := WriteHeaders(writer, ctx.ResponseHeaders()); err != nil {
+	respHeaders := ctx.ResponseHeaders()
+	if respHeaders == nil {
+		respHeaders = make(map[string]string, 1)
+	}
+	respHeaders[ServiceHeaderKey] = call.ServiceName()
+	if err := WriteHeaders(writer, respHeaders); err != nil {
 		return err
 	}
 	if err := writer.Close(); err != nil {
