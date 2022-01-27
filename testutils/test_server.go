@@ -120,41 +120,63 @@ func runSubTest(t testing.TB, name string, f func(testing.TB)) {
 // WithTestServer creates a new TestServer, runs the passed function, and then
 // verifies that no resources were leaked.
 func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(testing.TB, *TestServer)) {
-	chanOpts = chanOpts.Copy()
-	runCount := chanOpts.RunCount
-	if runCount < 1 {
-		runCount = 1
-	}
-
-	for i := 0; i < runCount; i++ {
-		if t.Failed() {
-			return
+	runTest := func(t testing.TB, chanOpts *ChannelOpts) {
+		runCount := chanOpts.RunCount
+		if runCount < 1 {
+			runCount = 1
 		}
 
-		// Run without the relay, unless OnlyRelay was set.
-		if !chanOpts.OnlyRelay {
-			runSubTest(t, "no relay", func(t testing.TB) {
-				noRelayOpts := chanOpts.Copy()
-				noRelayOpts.DisableRelay = true
-				withServer(t, noRelayOpts, f)
-			})
-		}
+		for i := 0; i < runCount; i++ {
+			if t.Failed() {
+				return
+			}
 
-		// Run with the relay, unless the user has disabled it.
-		if !chanOpts.DisableRelay {
-			runSubTest(t, "with relay", func(t testing.TB) {
-				withServer(t, chanOpts.Copy(), f)
-			})
-
-			// Re-run the same test with timer verification if this is a relay-only test.
-			if chanOpts.OnlyRelay {
-				runSubTest(t, "with relay and timer verification", func(t testing.TB) {
-					verifyOpts := chanOpts.Copy()
-					verifyOpts.RelayTimerVerification = true
-					withServer(t, verifyOpts, f)
+			// Run without the relay, unless OnlyRelay was set.
+			if !chanOpts.OnlyRelay {
+				runSubTest(t, "no relay", func(t testing.TB) {
+					noRelayOpts := chanOpts.Copy()
+					noRelayOpts.DisableRelay = true
+					withServer(t, noRelayOpts, f)
 				})
 			}
+
+			// Run with the relay, unless the user has disabled it.
+			if !chanOpts.DisableRelay {
+				runSubTest(t, "with relay", func(t testing.TB) {
+					withServer(t, chanOpts.Copy(), f)
+				})
+
+				// Re-run the same test with timer verification if this is a relay-only test.
+				if chanOpts.OnlyRelay {
+					runSubTest(t, "with relay and timer verification", func(t testing.TB) {
+						verifyOpts := chanOpts.Copy()
+						verifyOpts.RelayTimerVerification = true
+						withServer(t, verifyOpts, f)
+					})
+				}
+			}
 		}
+	}
+
+	chanOptsCopy := chanOpts.Copy()
+	runTest(t, chanOptsCopy)
+
+	if chanOptsCopy.CheckFramePooling {
+		runSubTest(t, "check frame leaks", func(t testing.TB) {
+			pool := tchannel.NewCheckedFramePoolForTest()
+
+			runTest(t, chanOpts.Copy().SetFramePool(pool))
+
+			result := pool.CheckEmpty()
+			if len(result.Unreleased) > 0 {
+				t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\n",
+					len(result.Unreleased), strings.Join(result.Unreleased, "\n"))
+			}
+			if len(result.BadReleases) > 0 {
+				t.Errorf("Frame pool has %v bad releases, errors:\n%v\n",
+					len(result.BadReleases), strings.Join(result.BadReleases, "\n"))
+			}
+		})
 	}
 }
 

@@ -398,8 +398,7 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 // TestRelayConcurrentCalls makes many concurrent calls and ensures that
 // we don't try to reuse any frames once they've been released.
 func TestRelayConcurrentCalls(t *testing.T) {
-	pool := NewProtectMemFramePool()
-	opts := testutils.NewOpts().SetRelayOnly().SetFramePool(pool)
+	opts := testutils.NewOpts().SetRelayOnly().SetCheckFramePooling()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		server := benchmark.NewServer(
 			benchmark.WithNoLibrary(),
@@ -635,7 +634,8 @@ func TestRelayConnection(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		_, err = ts.Relay().Connect(ctx, listeningHBSvc.PeerInfo().HostPort)
+		// Ping to ensure the connection has been added to peers on both sides.
+		err = ts.Relay().Ping(ctx, listeningHBSvc.PeerInfo().HostPort)
 		require.NoError(t, err, "Failed to connect from relay to listening host:port")
 
 		// Now when listeningHBSvc makes a call, it should use the above connection.
