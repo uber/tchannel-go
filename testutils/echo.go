@@ -31,7 +31,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const _echoTimeout = 500 * time.Millisecond
+const _echoTimeout = 600 * time.Millisecond
 
 // CallEcho calls the "echo" endpoint from the given src to target.
 func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args *raw.Args) error {
