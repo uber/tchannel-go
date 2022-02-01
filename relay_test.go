@@ -1204,9 +1204,6 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 }
 
 func TestRelayArg2OffsetIntegration(t *testing.T) {
-	ctx, cancel := NewContext(testutils.Timeout(time.Second))
-	defer cancel()
-
 	rh := relaytest.NewStubRelayHost()
 	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
@@ -1301,6 +1298,9 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.msg, func(t *testing.T) {
+				ctx, cancel := NewContext(testutils.Timeout(time.Second))
+				defer cancel()
+
 				call, err := client.BeginCall(ctx, ts.HostPort(), ts.ServiceName(), testMethod, nil)
 				require.NoError(t, err, "BeginCall failed")
 				writer, err := call.Arg2Writer()
