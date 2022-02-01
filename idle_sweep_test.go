@@ -410,8 +410,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 
 		// Since the idle sweep loop and message exchange run concurrently, there is
 		// a race between the idle sweep and exchange shutdown. To mitigate this,
-		// trigger the idle sweep a few times to ensure that a sweep happens
-		// after the inbound exchange has been shutdown
+		// wait for the exchanges to shut down before triggering the idel sweep.
 		listener.waitForZeroExchanges(t, ts.Server(), c2)
 
 		check.tick()
