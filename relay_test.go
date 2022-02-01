@@ -837,7 +837,7 @@ func TestRelayStalledConnection(t *testing.T) {
 		}
 		ts.Register(HandlerFunc(stallHandler), "echo")
 
-		ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(600 * time.Millisecond))
 		defer cancel()
 
 		client := ts.NewClient(nil)
