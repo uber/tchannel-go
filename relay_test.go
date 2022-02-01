@@ -1964,7 +1964,7 @@ func TestRelayModifyArg2(t *testing.T) {
 								ts.Server().Register(raw.Wrap(handler), appErrTest.method)
 							}
 
-							ctx, cancel := NewContextBuilder(testutils.Timeout(time.Second)).
+							ctx, cancel := NewContextBuilder(testutils.Timeout(2 * time.Second)).
 								SetFormat(format).Build()
 							defer cancel()
 
