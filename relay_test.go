@@ -259,8 +259,8 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 	// TestServer validates that there are no relay items left after the given func.
 	opts := serviceNameOpts("svc").
 		SetRelayOnly().
-		DisableLogVerification().
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(nil)
 
@@ -558,8 +558,8 @@ func TestRelayInboundConnContext(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
 		SetCheckFramePooling().
+		SetRelayHost(rh).
 		SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
 			return context.WithValue(ctx, "foo", "bar")
 		})
@@ -581,8 +581,8 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 	})
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		rly := ts.Relay()
@@ -1217,8 +1217,8 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		const (
@@ -1353,8 +1353,8 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		kv := map[string]string{
@@ -1567,8 +1567,8 @@ func TestRelayCallResponse(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		const (
@@ -1638,8 +1638,8 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 
 			opts := testutils.NewOpts().
 				SetRelayOnly().
-				SetRelayHost(rh).
-				SetCheckFramePooling()
+				SetCheckFramePooling().
+				SetRelayHost(rh)
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 				rly := ts.Relay()
 				svr := ts.Server()
@@ -2029,8 +2029,8 @@ func TestRelayModifyArg2ShouldFail(t *testing.T) {
 			})
 			opts := testutils.NewOpts().
 				SetRelayOnly().
-				SetRelayHost(rh).
 				SetCheckFramePooling().
+				SetRelayHost(rh).
 				AddLogFilter("Failed to send call with modified arg2.", 1)
 
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
