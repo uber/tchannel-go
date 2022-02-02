@@ -506,7 +506,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	// over the max frame size. Do a fragmenting send which is slightly more expensive but
 	// will handle fragmenting if it is needed.
 	if len(f.arg2Appends) > 0 {
-		if err := r.fragmentingSend(call, f, relayToDest, origID); err != nil && true {
+		if err := r.fragmentingSend(call, f, relayToDest, origID); err != nil {
 			r.failRelayItem(r.outbound, origID, _relayArg2ModifyFailed, err)
 			r.logger.WithFields(
 				LogField{"id", origID},
@@ -590,7 +590,7 @@ func (r *Relayer) handleNonCallReq(f *Frame) (shouldRelease bool, _ error) {
 	if finished {
 		r.finishRelayItem(items, originalID)
 	}
-	return !sent, nil
+	return _relayNoRelease, nil
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.
