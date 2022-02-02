@@ -11,6 +11,8 @@ import (
 	"github.com/uber/tchannel-go/typed"
 )
 
+var _ frameReceiver = (*dummyFrameReceiver)(nil)
+
 type dummyFrameReceiver struct {
 	t                *testing.T
 	retSent          bool

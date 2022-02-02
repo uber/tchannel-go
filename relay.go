@@ -209,6 +209,8 @@ const (
 	responseFrame frameType = 1
 )
 
+var _ frameReceiver = (*Relayer)(nil)
+
 // A Relayer forwards frames.
 type Relayer struct {
 	relayHost      RelayHost
@@ -266,7 +268,7 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 // Relay is called for each frame that is read on the connection.
 func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 	if f.messageType() != messageTypeCallReq {
-		err := r.handleNonCallReq(f)
+		shouldRelease, err := r.handleNonCallReq(f)
 		if err == errUnknownID {
 			// This ID may be owned by an outgoing call, so check the outbound
 			// message exchange, and if it succeeds, then the frame has been
@@ -275,7 +277,7 @@ func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 				return _relayNoRelease, nil
 			}
 		}
-		return _relayNoRelease, err
+		return shouldRelease, err
 	}
 
 	cr, err := newLazyCallReq(f)
@@ -504,7 +506,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 	// over the max frame size. Do a fragmenting send which is slightly more expensive but
 	// will handle fragmenting if it is needed.
 	if len(f.arg2Appends) > 0 {
-		if err := r.fragmentingSend(call, f, relayToDest, origID); err != nil && true {
+		if err := r.fragmentingSend(call, f, relayToDest, origID); err != nil {
 			r.failRelayItem(r.outbound, origID, _relayArg2ModifyFailed, err)
 			r.logger.WithFields(
 				LogField{"id", origID},
@@ -530,7 +532,7 @@ func (r *Relayer) handleCallReq(f *lazyCallReq) (shouldRelease bool, _ error) {
 }
 
 // Handle all frames except messageTypeCallReq.
-func (r *Relayer) handleNonCallReq(f *Frame) error {
+func (r *Relayer) handleNonCallReq(f *Frame) (shouldRelease bool, _ error) {
 	frameType := frameTypeFor(f)
 	finished := finishesCall(f)
 
@@ -544,12 +546,12 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	// Stop the timeout if the call if finished.
 	item, stopped, ok := items.Get(f.Header.ID, finished /* stopTimeout */)
 	if !ok {
-		return errUnknownID
+		return _relayShouldRelease, errUnknownID
 	}
 	if item.tomb || (finished && !stopped) {
 		// Item has previously timed out, or is in the process of timing out.
 		// TODO: metrics for late-arriving frames.
-		return nil
+		return _relayShouldRelease, nil
 	}
 
 	switch f.messageType() {
@@ -582,13 +584,13 @@ func (r *Relayer) handleNonCallReq(f *Frame) error {
 	sent, failure := item.destination.Receive(f, frameType)
 	if !sent {
 		r.failRelayItem(items, originalID, failure, errFrameNotSent)
-		return nil
+		return _relayShouldRelease, nil
 	}
 
 	if finished {
 		r.finishRelayItem(items, originalID)
 	}
-	return nil
+	return _relayNoRelease, nil
 }
 
 // addRelayItem adds a relay item to either outbound or inbound.

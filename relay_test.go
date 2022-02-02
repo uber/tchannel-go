@@ -259,8 +259,8 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 	// TestServer validates that there are no relay items left after the given func.
 	opts := serviceNameOpts("svc").
 		SetRelayOnly().
-		DisableLogVerification().
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		client := ts.NewClient(nil)
 
@@ -558,8 +558,8 @@ func TestRelayInboundConnContext(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
 		SetCheckFramePooling().
+		SetRelayHost(rh).
 		SetConnContext(func(ctx context.Context, conn net.Conn) context.Context {
 			return context.WithValue(ctx, "foo", "bar")
 		})
@@ -581,8 +581,8 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 	})
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		rly := ts.Relay()
@@ -823,11 +823,13 @@ func TestRelayStalledConnection(t *testing.T) {
 	if os.Getenv("GITHUB_WORKFLOW") != "" {
 		t.Skip("skipping test flaky in github actions.")
 	}
+
 	opts := testutils.NewOpts().
 		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
-		SetRelayOnly()
+		SetRelayOnly().
+		SetCheckFramePooling()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
 		testutils.RegisterEcho(s2, nil)
@@ -1215,8 +1217,8 @@ func TestRelayArg2OffsetIntegration(t *testing.T) {
 	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		const (
@@ -1351,8 +1353,8 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 	frameCh := inspectFrames(rh)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		kv := map[string]string{
@@ -1565,8 +1567,8 @@ func TestRelayCallResponse(t *testing.T) {
 
 	opts := testutils.NewOpts().
 		SetRelayOnly().
-		SetRelayHost(rh).
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		SetRelayHost(rh)
 
 	testutils.WithTestServer(t, opts, func(tb testing.TB, ts *testutils.TestServer) {
 		const (
@@ -1636,8 +1638,8 @@ func TestRelayAppendArg2SentBytes(t *testing.T) {
 
 			opts := testutils.NewOpts().
 				SetRelayOnly().
-				SetRelayHost(rh).
-				SetCheckFramePooling()
+				SetCheckFramePooling().
+				SetRelayHost(rh)
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 				rly := ts.Relay()
 				svr := ts.Server()
@@ -1993,7 +1995,6 @@ func TestRelayModifyArg2(t *testing.T) {
 }
 
 func TestRelayModifyArg2ShouldFail(t *testing.T) {
-	// TODO: enable framepool checks
 	tests := []struct {
 		msg     string
 		arg2    []byte
@@ -2028,6 +2029,7 @@ func TestRelayModifyArg2ShouldFail(t *testing.T) {
 			})
 			opts := testutils.NewOpts().
 				SetRelayOnly().
+				SetCheckFramePooling().
 				SetRelayHost(rh).
 				AddLogFilter("Failed to send call with modified arg2.", 1)
 
