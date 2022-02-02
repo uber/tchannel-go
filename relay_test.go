@@ -404,8 +404,12 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 			close(done)
 		}()
 
+		// This test is very sensitive to system noise, where a spike of latency in the relay (e.g. caused by load)
+		// is able to cause the client call to timeout, making this test prone to false positives. As such, we
+		// can't time out too close to clampTTL, but instead check that we don't time out after longTTL/2. This might
+		// be a bit generous, but should be sufficient for our purposes here.
 		select {
-		case <-time.After(testutils.Timeout(10 * clampTTL)):
+		case <-time.After(testutils.Timeout(longTTL / 2)):
 			t.Fatal("Failed to clamp timeout.")
 		case <-done:
 		}
