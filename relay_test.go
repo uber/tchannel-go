@@ -117,8 +117,8 @@ func TestRelaySetHost(t *testing.T) {
 
 func TestRelayHandlesClosedPeers(t *testing.T) {
 	opts := serviceNameOpts("test").
-		SetCheckFramePooling().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		// Disable logs as we are closing connections that can error in a lot of places.
 		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
@@ -236,18 +236,15 @@ func TestRelayErrorsOnGetPeer(t *testing.T) {
 			}
 
 			opts := testutils.NewOpts().
-				SetCheckFramePooling().
 				SetRelayHost(relaytest.HostFunc(f)).
 				SetRelayOnly().
+				SetCheckFramePooling().
 				DisableLogVerification() // some of the test cases cause warnings.
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 				client := ts.NewClient(nil)
 				err := testutils.CallEcho(client, ts.HostPort(), "svc", nil)
-				if !assert.Error(t, err, "Call to unknown service should fail") {
-					return
-				}
-
-				assert.Equal(t, tt.wantErr, err, "%v: unexpected error", tt.desc)
+				require.Error(t, err, "Call to unknown service should fail")
+				assert.Equal(t, tt.wantErr, err, "unexpected error")
 
 				calls := relaytest.NewMockStats()
 				calls.Add(client.PeerInfo().ServiceName, "svc", "echo").
@@ -290,8 +287,8 @@ func TestErrorFrameEndsRelay(t *testing.T) {
 func TestRaceCloseWithNewCall(t *testing.T) {
 	opts := serviceNameOpts("s1").
 		SetRelayOnly().
-		DisableLogVerification().
-		SetCheckFramePooling()
+		SetCheckFramePooling().
+		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
@@ -474,10 +471,9 @@ func TestRelayOutgoingConnectionsEphemeral(t *testing.T) {
 }
 
 func TestRelayHandleLocalCall(t *testing.T) {
-	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
-		SetCheckFramePooling().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		SetRelayLocal("relay", "tchannel", "test").
 		// We make a call to "test" for an unknown method.
 		AddLogFilter("Couldn't find handler.", 1)
@@ -618,8 +614,8 @@ func TestRelayConnection(t *testing.T) {
 	}
 
 	opts := testutils.NewOpts().
-		SetCheckFramePooling().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		getConn := func(ch *Channel, outbound bool) ConnectionRuntimeState {
@@ -706,8 +702,8 @@ func TestRelayConnectionClosed(t *testing.T) {
 	}
 
 	opts := testutils.NewOpts().
-		SetCheckFramePooling().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// The client receives a protocol error which causes the following logs.
@@ -743,8 +739,8 @@ func TestRelayUsesRootPeers(t *testing.T) {
 // it declines the call, and increments a relay-client-conn-inactive stat.
 func TestRelayRejectsDuringClose(t *testing.T) {
 	opts := testutils.NewOpts().
-		SetCheckFramePooling().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		AddLogFilter("Failed to relay frame.", 1, "error", "incoming connection is not active: connectionStartClose")
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		gotCall := make(chan struct{})
@@ -790,8 +786,8 @@ func TestRelayRateLimitDrop(t *testing.T) {
 	}
 
 	opts := testutils.NewOpts().
-		SetCheckFramePooling().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		var gotCall bool
@@ -1438,8 +1434,8 @@ func TestRelayConnectionTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
 			opts := testutils.NewOpts().
-				SetCheckFramePooling().
 				SetRelayOnly().
+				SetCheckFramePooling().
 				SetRelayMaxConnectionTimeout(tt.maxConnTimeout).
 				AddLogFilter("Failed during connection handshake.", 1).
 				AddLogFilter("Failed to connect to relay host.", 1)
@@ -2038,7 +2034,6 @@ func TestRelayModifyArg2ShouldFail(t *testing.T) {
 				SetRelayOnly().
 				SetCheckFramePooling().
 				SetRelayHost(rh).
-				SetCheckFramePooling().
 				AddLogFilter("Failed to send call with modified arg2.", 1)
 
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {

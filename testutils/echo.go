@@ -31,15 +31,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-const _echoTimeout = 500 * time.Millisecond
-
 // CallEcho calls the "echo" endpoint from the given src to target.
 func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args *raw.Args) error {
 	if args == nil {
 		args = &raw.Args{}
 	}
 
-	ctx, cancel := tchannel.NewContextBuilder(Timeout(_echoTimeout)).
+	ctx, cancel := tchannel.NewContextBuilder(Timeout(300 * time.Millisecond)).
 		SetFormat(args.Format).
 		Build()
 	defer cancel()
@@ -51,7 +49,7 @@ func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args 
 // AssertEcho calls the "echo" endpoint with random data, and asserts
 // that the returned data matches the arguments "echo" was called with.
 func AssertEcho(tb testing.TB, src *tchannel.Channel, targetHostPort, targetService string) {
-	ctx, cancel := tchannel.NewContext(Timeout(_echoTimeout))
+	ctx, cancel := tchannel.NewContext(Timeout(300 * time.Millisecond))
 	defer cancel()
 
 	args := &raw.Args{
