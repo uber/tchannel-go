@@ -433,7 +433,7 @@ func (mexset *messageExchangeSet) IntrospectState(opts *IntrospectionOptions) Ex
 		Count: len(mexset.exchanges),
 	}
 
-	if opts.IncludeExchanges {
+	if opts != nil && opts.IncludeExchanges {
 		setState.Exchanges = make(map[string]ExchangeRuntimeState, len(mexset.exchanges))
 		for k, v := range mexset.exchanges {
 			state := ExchangeRuntimeState{

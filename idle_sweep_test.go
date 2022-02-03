@@ -66,6 +66,19 @@ func (pl *peerStatusListener) waitForZeroConnections(t testing.TB, channels ...*
 	}
 }
 
+func (pl *peerStatusListener) waitForZeroExchanges(t testing.TB, channels ...*Channel) {
+	var (
+		isEmpty bool
+		status  []string
+	)
+	if !testutils.WaitFor(100*time.Millisecond, func() bool {
+		isEmpty, status = allExchangesEmpty(channels)
+		return isEmpty
+	}) {
+		t.Fatalf("Some exchanges are still non-empty: %s", strings.Join(status, ", "))
+	}
+}
+
 func allConnectionsClosed(channels []*Channel) bool {
 	for _, ch := range channels {
 		if numConnections(ch) != 0 {
@@ -74,6 +87,18 @@ func allConnectionsClosed(channels []*Channel) bool {
 	}
 
 	return true
+}
+
+func allExchangesEmpty(channels []*Channel) (isEmpty bool, status []string) {
+	for _, ch := range channels {
+		n := numExchanges(ch)
+		if n == 0 {
+			return true, nil
+		}
+		status = append(status,
+			fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, n))
+	}
+	return false, status
 }
 
 func numConnections(ch *Channel) int {
@@ -86,6 +111,21 @@ func numConnections(ch *Channel) int {
 	}
 
 	return count
+}
+
+func numExchanges(ch *Channel) int {
+	var num int
+	rootPeers := ch.RootPeers().Copy()
+	for _, p := range rootPeers {
+		state := p.IntrospectState(nil)
+		for _, c := range state.InboundConnections {
+			num += c.InboundExchange.Count + c.OutboundExchange.Count
+		}
+		for _, c := range state.OutboundConnections {
+			num += c.InboundExchange.Count + c.OutboundExchange.Count
+		}
+	}
+	return num
 }
 
 func connectionStatus(channels []*Channel) string {
@@ -362,6 +402,12 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 		// Unblock the call.
 		close(block)
 		<-c2CallComplete
+
+		// Since the idle sweep loop and message exchange run concurrently, there is
+		// a race between the idle sweep and exchange shutdown. To mitigate this,
+		// wait for the exchanges to shut down before triggering the idle sweep.
+		listener.waitForZeroExchanges(t, ts.Server(), c2)
+
 		check.tick()
 		listener.waitForZeroConnections(t, ts.Server(), c2)
 	})
