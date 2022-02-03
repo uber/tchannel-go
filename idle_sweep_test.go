@@ -67,13 +67,16 @@ func (pl *peerStatusListener) waitForZeroConnections(t testing.TB, channels ...*
 }
 
 func (pl *peerStatusListener) waitForZeroExchanges(t testing.TB, channels ...*Channel) {
-	for i := 0; i < 10; i++ {
-		if allExchangesEmpty(channels) {
-			return
-		}
-		<-time.After(100 * time.Millisecond)
+	var (
+		isEmpty bool
+		status  []string
+	)
+	if !testutils.WaitFor(100*time.Millisecond, func() bool {
+		isEmpty, status = allExchangesEmpty(channels)
+		return isEmpty
+	}) {
+		t.Fatalf("Some exchanges are still non-empty: %s", strings.Join(status, ", "))
 	}
-	t.Fatalf("Some exchanges are still non-empty: %s", exchangeStatus(channels))
 }
 
 func allConnectionsClosed(channels []*Channel) bool {
@@ -86,13 +89,16 @@ func allConnectionsClosed(channels []*Channel) bool {
 	return true
 }
 
-func allExchangesEmpty(channels []*Channel) bool {
+func allExchangesEmpty(channels []*Channel) (isEmpty bool, status []string) {
 	for _, ch := range channels {
-		if numExchanges(ch) == 0 {
-			return true
+		n := numExchanges(ch)
+		if n == 0 {
+			return true, nil
 		}
+		status = append(status,
+			fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, n))
 	}
-	return false
+	return false, status
 }
 
 func numConnections(ch *Channel) int {
@@ -111,12 +117,12 @@ func numExchanges(ch *Channel) int {
 	var num int
 	rootPeers := ch.RootPeers().Copy()
 	for _, p := range rootPeers {
-		state := p.IntrospectState(&IntrospectionOptions{IncludeExchanges: true})
+		state := p.IntrospectState(nil)
 		for _, c := range state.InboundConnections {
-			num += len(c.InboundExchange.Exchanges) + len(c.OutboundExchange.Exchanges)
+			num += c.InboundExchange.Count + c.OutboundExchange.Count
 		}
 		for _, c := range state.OutboundConnections {
-			num += len(c.InboundExchange.Exchanges) + len(c.OutboundExchange.Exchanges)
+			num += c.InboundExchange.Count + c.OutboundExchange.Count
 		}
 	}
 	return num
@@ -127,15 +133,6 @@ func connectionStatus(channels []*Channel) string {
 	for _, ch := range channels {
 		status = append(status,
 			fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, numConnections(ch)))
-	}
-	return strings.Join(status, ", ")
-}
-
-func exchangeStatus(channels []*Channel) string {
-	status := make([]string, 0)
-	for _, ch := range channels {
-		status = append(status,
-			fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, numExchanges(ch)))
 	}
 	return strings.Join(status, ", ")
 }
@@ -320,8 +317,6 @@ func TestIdleSweepMisconfiguration(t *testing.T) {
 }
 
 func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
-	const numSweeps = 10
-
 	ctx, cancel := NewContext(time.Second)
 	defer cancel()
 
@@ -331,7 +326,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 	listener := newPeerStatusListener()
 	// TODO: Log filtering doesn't require the message to be seen.
 	serverOpts := testutils.NewOpts().
-		AddLogFilter("Skip closing idle Connection as it has pending calls.", numSweeps).
+		AddLogFilter("Skip closing idle Connection as it has pending calls.", 2).
 		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetTimeNow(clock.Now).
 		SetTimeTicker(clientTicker.New).
@@ -410,7 +405,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 
 		// Since the idle sweep loop and message exchange run concurrently, there is
 		// a race between the idle sweep and exchange shutdown. To mitigate this,
-		// wait for the exchanges to shut down before triggering the idel sweep.
+		// wait for the exchanges to shut down before triggering the idle sweep.
 		listener.waitForZeroExchanges(t, ts.Server(), c2)
 
 		check.tick()
