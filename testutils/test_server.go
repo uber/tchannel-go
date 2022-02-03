@@ -22,6 +22,7 @@ package testutils
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -161,7 +162,7 @@ func WithTestServer(t testing.TB, chanOpts *ChannelOpts, f func(testing.TB, *Tes
 	chanOptsCopy := chanOpts.Copy()
 	runTest(t, chanOptsCopy)
 
-	if chanOptsCopy.CheckFramePooling {
+	if os.Getenv("DISABLE_FRAME_POOLING_CHECKS") == "" && chanOptsCopy.CheckFramePooling {
 		runSubTest(t, "check frame leaks", func(t testing.TB) {
 			pool := tchannel.NewCheckedFramePoolForTest()
 
