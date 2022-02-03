@@ -84,7 +84,7 @@ benchmark: clean setup $(BIN)/thrift
 cover_profile: clean setup $(BIN)/thrift
 	@echo Testing packages:
 	mkdir -p $(BUILD)
-	PATH=$(BIN)::$$PATH go test $(COV_PKG) $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
+	PATH=$(BIN)::$$PATH DISABLE_FRAME_POOLING_CHECKS=1 go test $(COV_PKG) $(TEST_ARG) -coverprofile=$(BUILD)/coverage.out
 
 cover: cover_profile
 	go tool cover -html=$(BUILD)/coverage.out
