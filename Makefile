@@ -47,9 +47,6 @@ ifdef CROSSDOCK
 	$(MAKE) install_docker_ci
 endif
 
-install_test:
-	go test -i $(TEST_ARG) $(ALL_PKGS)
-
 help:
 	@egrep "^# target:" [Mm]akefile | sort -
 
@@ -71,7 +68,7 @@ else
 	$(MAKE) test
 endif
 
-test: clean setup install_test check_no_test_deps $(BIN)/thrift
+test: clean setup check_no_test_deps $(BIN)/thrift
 	@echo Testing packages:
 	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
 	@echo Running frame pool tests
