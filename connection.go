@@ -501,8 +501,16 @@ func (c *Connection) NextMessageID() uint32 {
 }
 
 // SendSystemError sends an error frame for the given system error.
-func (c *Connection) SendSystemError(id uint32, span Span, err error) error {
+func (c *Connection) SendSystemError(id uint32, span Span, err error) (sendErr error) {
+	// Allocate an error frame to be sent over the connection. A nil is
+	// returned if the frame was successfully sent, otherwise an error is
+	// returned, and we must release the error frame back to the pool.
 	frame := c.opts.FramePool.Get()
+	defer func() {
+		if sendErr != nil {
+			c.opts.FramePool.Release(frame)
+		}
+	}()
 
 	if err := frame.write(&errorMessage{
 		id:      id,
@@ -510,7 +518,6 @@ func (c *Connection) SendSystemError(id uint32, span Span, err error) error {
 		tracing: span,
 		message: GetSystemErrorMessage(err),
 	}); err != nil {
-
 		// This shouldn't happen - it means writing the errorMessage is broken.
 		c.log.WithFields(
 			LogField{"remotePeer", c.remotePeerInfo},
