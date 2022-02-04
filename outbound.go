@@ -293,13 +293,15 @@ func (c *Connection) handleError(frame *Frame) bool {
 	}
 
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.log.WithFields(
-			LogField{"frameHeader", frame.Header.String()},
-			LogField{"id", errMsg.id},
-			LogField{"errorMessage", errMsg.message},
-			LogField{"errorCode", errMsg.errCode},
-			ErrField(err),
-		).Info("Failed to forward error frame.")
+		if err != errUnknownMex {
+			c.log.WithFields(
+				LogField{"frameHeader", frame.Header.String()},
+				LogField{"id", errMsg.id},
+				LogField{"errorMessage", errMsg.message},
+				LogField{"errorCode", errMsg.errCode},
+				ErrField(err),
+			).Info("Failed to forward error frame.")
+		}
 		return true
 	}
 

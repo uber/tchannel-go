@@ -37,6 +37,7 @@ var (
 	errMexSetShutdown      = errors.New("mexset has been shutdown")
 	errMexChannelFull      = NewSystemError(ErrCodeBusy, "cannot send frame to message exchange channel")
 	errUnexpectedFrameType = errors.New("unexpected frame received")
+	errUnknownMex          = errors.New("received frame for unknown message exchange")
 )
 
 const (
@@ -239,6 +240,11 @@ func (mex *messageExchange) shutdown() {
 		return
 	}
 
+	// Drain recvCh and release any pending frames
+	for len(mex.recvCh) > 0 {
+		mex.framePool.Release(<-mex.recvCh)
+	}
+
 	if mex.errChNotified.CAS(false, true) {
 		mex.errCh.Notify(errMexShutdown)
 	}
@@ -425,12 +431,13 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	mexset.RUnlock()
 
 	if mex == nil {
-		// This is ok since the exchange might have expired or been cancelled
+		// This is ok since the exchange might have expired or been cancelled,
+		// but we still need to release the frame
 		mexset.log.WithFields(
 			LogField{"frameHeader", frame.Header.String()},
 			LogField{"exchange", mexset.name},
 		).Info("Received frame for unknown message exchange.")
-		return nil
+		return errUnknownMex
 	}
 
 	if err := mex.forwardPeerFrame(frame); err != nil {

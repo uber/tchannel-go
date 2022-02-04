@@ -131,7 +131,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 // defragmentation
 func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 	if err := c.inbound.forwardPeerFrame(frame); err != nil {
-		// If forward fails, it's due to a timeout. We can free this frame.
+		// If forward fails we can free this frame.
 		return true
 	}
 	return false

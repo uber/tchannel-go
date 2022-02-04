@@ -438,7 +438,9 @@ func (c *Connection) ping(ctx context.Context) error {
 // handlePingRes calls registered ping handlers.
 func (c *Connection) handlePingRes(frame *Frame) bool {
 	if err := c.outbound.forwardPeerFrame(frame); err != nil {
-		c.log.WithFields(LogField{"response", frame.Header}).Warn("Unexpected ping response.")
+		if err != errUnknownMex {
+			c.log.WithFields(LogField{"response", frame.Header}).Warn("Unexpected ping response.")
+		}
 		return true
 	}
 	// ping req is waiting for this frame, and will release it.
