@@ -824,6 +824,7 @@ func TestRelayRateLimitDrop(t *testing.T) {
 // Test that a stalled connection to a single server does not block all calls
 // from that server, and we have stats to capture that this is happening.
 func TestRelayStalledConnection(t *testing.T) {
+	// TODO: enable framepool checks
 	// TODO(ablackmon): Debug why this is flaky in github
 	if os.Getenv("GITHUB_WORKFLOW") != "" {
 		t.Skip("skipping test flaky in github actions.")
