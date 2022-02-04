@@ -740,6 +740,15 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 // writeFrames is the main loop that pulls frames from the send channel and
 // writes them to the connection.
 func (c *Connection) writeFrames(_ uint32) {
+	defer func() {
+		<-c.stopCh
+		// Drain and release any remaining frames in sendCh for best-effort
+		// reduction in leaked frames
+		for len(c.sendCh) > 0 {
+			c.opts.FramePool.Release(<-c.sendCh)
+		}
+	}()
+
 	for {
 		select {
 		case f := <-c.sendCh:
@@ -858,14 +867,6 @@ func (c *Connection) checkExchanges() {
 func (c *Connection) close(fields ...LogField) error {
 	c.log.WithFields(fields...).Debug("Connection closing.")
 
-	// Remaining frames in sendCh must be drained and released,
-	// or we will leak frames
-	defer func() {
-		for len(c.sendCh) > 0 {
-			c.opts.FramePool.Release(<-c.sendCh)
-		}
-	}()
-
 	// Update the state which will start blocking incoming calls.
 	if err := c.withStateLock(func() error {
 		switch s := c.state; s {
@@ -899,6 +900,14 @@ func (c *Connection) close(fields ...LogField) error {
 // Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
 // before finally marking the connection state as closed.
 func (c *Connection) Close() error {
+	// Remaining frames in sendCh must be drained and released,
+	// or we will leak frames
+	defer func() {
+		for len(c.sendCh) > 0 {
+			c.opts.FramePool.Release(<-c.sendCh)
+		}
+	}()
+
 	return c.close(LogField{"reason", "user initiated"})
 }
 

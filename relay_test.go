@@ -335,12 +335,12 @@ func TestRaceCloseWithNewCall(t *testing.T) {
 }
 
 func TestTimeoutCallsThenClose(t *testing.T) {
+	// TODO: enable framepool checks
 	// Test needs at least 2 CPUs to trigger race conditions.
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
 
 	opts := serviceNameOpts("s1").
 		SetRelayOnly().
-		SetCheckFramePooling().
 		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
@@ -1047,9 +1047,9 @@ func TestRelayCorruptedCallResFrame(t *testing.T) {
 }
 
 func TestRelayThroughSeparateRelay(t *testing.T) {
+	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
-		SetRelayOnly().
-		SetCheckFramePooling()
+		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		serverHP := ts.Server().PeerInfo().HostPort
 		dummyFactory := func(relay.CallFrame, *relay.Conn) (string, error) {
