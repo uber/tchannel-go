@@ -20,7 +20,7 @@
 
 package thrift
 
-import athrift "github.com/apache/thrift/lib/go/thrift"
+import athrift "github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 
 // This file defines interfaces that are used or exposed by thrift-gen generated code.
 // TChanClient is used by the generated code to make outgoing requests.
