@@ -32,7 +32,7 @@ import (
 	"github.com/uber/tchannel-go/testutils/testwriter"
 	"github.com/uber/tchannel-go/thrift/gen-go/test"
 
-	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
 )
 

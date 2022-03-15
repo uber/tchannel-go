@@ -21,7 +21,7 @@
 package thrift
 
 import (
-	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 	"golang.org/x/net/context"
 )
 

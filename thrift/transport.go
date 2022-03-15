@@ -25,7 +25,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 )
 
 // readerWriterTransport is a transport that reads and writes from the underlying Reader/Writer.
