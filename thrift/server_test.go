@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	athrift "github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 	"github.com/stretchr/testify/assert"
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
+	athrift "github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 )
 
 var errIO = errors.New("IO Error")

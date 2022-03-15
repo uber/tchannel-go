@@ -96,12 +96,12 @@ cover_ci:
 	bash $(BUILD)/codecov.bash -f $(BUILD)/coverage.out
 
 
-FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/'
+FILTER := grep -v -e '_string.go' -e '/gen-go/' -e '/mocks/' -e 'vendor/' -e 'thirdparty'
 lint: install
 	@echo "Running golint"
 	-golint $(ALL_PKGS) | $(FILTER) | tee lint.log
 	@echo "Running go vet"
-	-go vet $(ALL_PKGS) 2>&1 | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
+	-go vet $(ALL_PKGS) 2>&1 | $(FILTER) | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
 	@echo "Verifying files are gofmt'd"
 	-gofmt -l . | $(FILTER) | tee -a lint.log
 	@echo "Checking for unresolved FIXMEs"
