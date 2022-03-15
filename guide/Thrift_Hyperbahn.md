@@ -78,7 +78,7 @@ You can run the commands manually as well:
 
 ```bash
 # Generate serialization/deserialization logic.
-thrift -r --gen go:thrift_import=github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift keyvalue.thrift
+thrift -r --gen go:thrift_import=github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift keyvalue.thrift 
 
 # Generate TChannel service interfaces in the same directory where Thrift generates code.
 thrift-gen --inputFile "$THRIFTFILE" --outputFile "THRIFT_FILE_FOLDER/gen-go/thriftName/tchan-keyvalue.go"
