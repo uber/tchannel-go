@@ -36,7 +36,7 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 	"github.com/uber/tchannel-go/thrift/mocks"
-
+	
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
