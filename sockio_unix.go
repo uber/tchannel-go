@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 // Match the golang/sys unix file, https://github.com/golang/sys/blob/master/unix/syscall_unix.go#L5
+//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris
 // +build aix darwin dragonfly freebsd linux netbsd openbsd solaris
 
 package tchannel
