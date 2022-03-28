@@ -256,7 +256,7 @@ func TestRelayBasedSweep(t *testing.T) {
 
 		// The relay will drop both sides of the connection after 3 minutes of inactivity.
 		clock.Elapse(180 * time.Second)
-		listener.waitForZeroExchanges(t, ts.Relay(), client)
+		listener.waitForZeroExchanges(t, client)
 
 		relayTicker.Tick()
 		listener.waitForZeroConnections(t, ts.Relay(), server, client)
