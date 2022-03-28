@@ -1183,6 +1183,7 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		// Hitting max tombs will cause the following logs:
 		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
 		AddLogFilter("Received a frame without a RelayItem.", numCalls).
+		AddLogFilter("Attempted to create new mex after mexset shutdown.", numCalls).
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
