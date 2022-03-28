@@ -168,9 +168,9 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 }
 
 func TestRelayIDClash(t *testing.T) {
+	// TODO: enable framepool checks
 	opts := serviceNameOpts("s1").
-		SetRelayOnly().
-		SetCheckFramePooling()
+		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2"))
@@ -827,12 +827,12 @@ func TestRelayStalledConnection(t *testing.T) {
 		t.Skip("skipping test flaky in github actions.")
 	}
 
+	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
-		SetRelayOnly().
-		SetCheckFramePooling()
+		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
 		testutils.RegisterEcho(s2, nil)
@@ -1184,6 +1184,7 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		// Hitting max tombs will cause the following logs:
 		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
 		AddLogFilter("Received a frame without a RelayItem.", numCalls).
+		AddLogFilter("Attempted to create new mex after mexset shutdown.", numCalls).
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)

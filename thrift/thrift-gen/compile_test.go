@@ -329,7 +329,18 @@ func runTest(t *testing.T, opts processOptions, extraChecks func(string) error) 
 	cmd.Dir = tempDir
 	// NOTE: we check output, since go build ./... returns 0 status code on failure:
 	// https://github.com/golang/go/issues/11407
-	if output, err := cmd.CombinedOutput(); err != nil || len(output) > 0 {
+	var (
+		output, err = cmd.CombinedOutput()
+		outputLines []string
+	)
+	for _, s := range strings.Split(string(output), "\n") {
+		// Exclude expected output like vendor package downloads and formatting lines
+		if strings.HasPrefix(s, "go: downloading") || strings.TrimSpace(s) == "" {
+			continue
+		}
+		outputLines = append(outputLines, s)
+	}
+	if err != nil || len(outputLines) > 0 {
 		return fmt.Errorf("build in %q failed.\nError: %v Output:\n%v", tempDir, err, string(output))
 	}
 
