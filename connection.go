@@ -740,6 +740,15 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 // writeFrames is the main loop that pulls frames from the send channel and
 // writes them to the connection.
 func (c *Connection) writeFrames(_ uint32) {
+	defer func() {
+		<-c.stopCh
+		// Drain and release any remaining frames in sendCh for best-effort
+		// reduction in leaked frames
+		for len(c.sendCh) > 0 {
+			c.opts.FramePool.Release(<-c.sendCh)
+		}
+	}()
+
 	for {
 		select {
 		case f := <-c.sendCh:

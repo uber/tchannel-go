@@ -339,7 +339,9 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 	// Test needs at least 2 CPUs to trigger race conditions.
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
 
-	opts := serviceNameOpts("s1").SetRelayOnly().DisableLogVerification()
+	opts := serviceNameOpts("s1").
+		SetRelayOnly().
+		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
@@ -369,7 +371,6 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 }
 
 func TestLargeTimeoutsAreClamped(t *testing.T) {
-	// TODO: enable frame pool checks
 	const (
 		clampTTL = time.Millisecond
 		longTTL  = time.Minute
@@ -377,6 +378,7 @@ func TestLargeTimeoutsAreClamped(t *testing.T) {
 
 	opts := serviceNameOpts("echo-service").
 		SetRelayOnly().
+		SetCheckFramePooling().
 		SetRelayMaxTimeout(clampTTL).
 		DisableLogVerification() // handler returns after deadline
 
@@ -910,10 +912,10 @@ func TestRelayStalledConnection(t *testing.T) {
 // Test that a stalled connection to the client does not cause stuck calls
 // See https://github.com/uber/tchannel-go/issues/700 for more info.
 func TestRelayStalledClientConnection(t *testing.T) {
-	// TODO: enable framepool checks
 	// This needs to be large enough to fill up the client TCP buffer.
 	const _calls = 100
 
+	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		// Expect errors from dropped frames.
 		AddLogFilter("Dropping call due to slow connection.", _calls).
