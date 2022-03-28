@@ -334,9 +334,11 @@ func runTest(t *testing.T, opts processOptions, extraChecks func(string) error) 
 		outputLines []string
 	)
 	for _, s := range strings.Split(string(output), "\n") {
-		if !(strings.HasPrefix(s, "go: downloading") || strings.TrimSpace(s) == "") {
-			outputLines = append(outputLines, s)
+		// Exclude expected output like vendor package downloads and formatting lines
+		if strings.HasPrefix(s, "go: downloading") || strings.TrimSpace(s) == "" {
+			continue
 		}
+		outputLines = append(outputLines, s)
 	}
 	if err != nil || len(outputLines) > 0 {
 		return fmt.Errorf("build in %q failed.\nError: %v Output:\n%v", tempDir, err, string(output))
