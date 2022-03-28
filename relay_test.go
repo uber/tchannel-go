@@ -827,6 +827,7 @@ func TestRelayStalledConnection(t *testing.T) {
 		t.Skip("skipping test flaky in github actions.")
 	}
 
+	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.

@@ -332,7 +332,7 @@ func runTest(t *testing.T, opts processOptions, extraChecks func(string) error) 
 	output, err := cmd.CombinedOutput()
 	var outputLines []string
 	for _, s := range strings.Split(string(output), "\n") {
-		if !(strings.HasPrefix(s, "go: ") || strings.TrimSpace(s) == "") {
+		if !(strings.HasPrefix(s, "go: downloading") || strings.TrimSpace(s) == "") {
 			outputLines = append(outputLines, s)
 		}
 	}
