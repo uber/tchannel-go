@@ -350,7 +350,9 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 
 		// Client 1 will just ping, so we create a connection that should be closed.
 		c1 := ts.NewClient(clientOpts)
-		require.NoError(t, c1.Ping(ctx, ts.HostPort()), "Ping failed")
+		require.True(t, testutils.WaitFor(5*time.Second, func() bool {
+			return c1.Ping(ctx, ts.HostPort()) == nil
+		}), "Ping failed")
 
 		// Client 2 will make a call that will be blocked. Wait for the call to be received.
 		c2CallComplete := make(chan struct{})
