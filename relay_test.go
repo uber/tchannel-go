@@ -831,8 +831,7 @@ func TestRelayStalledConnection(t *testing.T) {
 		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
-		SetRelayOnly().
-		SetCheckFramePooling()
+		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
 		testutils.RegisterEcho(s2, nil)
