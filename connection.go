@@ -900,14 +900,6 @@ func (c *Connection) close(fields ...LogField) error {
 // Close starts a graceful Close which will first reject incoming calls, reject outgoing calls
 // before finally marking the connection state as closed.
 func (c *Connection) Close() error {
-	// Remaining frames in sendCh must be drained and released,
-	// or we will leak frames
-	defer func() {
-		for len(c.sendCh) > 0 {
-			c.opts.FramePool.Release(<-c.sendCh)
-		}
-	}()
-
 	return c.close(LogField{"reason", "user initiated"})
 }
 
