@@ -1,6 +1,12 @@
 Changelog
 =========
 
+## [1.22.3] - 2022-03-28
+### Changed
+ * Fix memory leak due to unreturned frames in the relayer.
+ * Test against Go 1.17 and 1.18 in CI.
+ * Migrate to go mod.
+
 ## [1.22.2] - 2021-11-10
 ### Changed
  * Fixes related to `SkipHandlerMethods` request handling.
@@ -337,6 +343,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.22.3]: https://github.com/uber/tchannel-go/compare/v1.22.2...v1.22.3
 [1.22.1]: https://github.com/uber/tchannel-go/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/uber/tchannel-go/compare/v1.21.2...v1.22.0
 [1.21.2]: https://github.com/uber/tchannel-go/compare/v1.21.1...v1.21.2
