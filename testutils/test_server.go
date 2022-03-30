@@ -71,6 +71,8 @@ type TestServer struct {
 	introspectOpts *tchannel.IntrospectionOptions
 	verifyOpts     *goroutines.VerifyOpts
 	postFns        []func()
+
+	opts *ChannelOpts
 }
 
 type relayStatter interface {
@@ -86,6 +88,7 @@ func NewTestServer(t testing.TB, opts *ChannelOpts) *TestServer {
 			IncludeExchanges:  true,
 			IncludeTombstones: true,
 		},
+		opts: opts,
 	}
 
 	if !opts.DisableServer {
@@ -306,6 +309,11 @@ func (ts *TestServer) AssertRelayStats(expected *relaytest.MockStats) {
 	ts.relayStats.AssertEqual(ts, expected)
 }
 
+// ChannelOpts returns a copy of the server's configured ChannelOpts.
+func (ts *TestServer) ChannelOpts() *ChannelOpts {
+	return ts.opts.Copy()
+}
+
 // NewClient returns a client that with log verification.
 // TODO: Verify message exchanges and leaks for client channels as well.
 func (ts *TestServer) NewClient(opts *ChannelOpts) *tchannel.Channel {
@@ -362,7 +370,7 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 func (ts *TestServer) close(ch *tchannel.Channel) {
 	ch.Close()
 
-	timeout := Timeout(3 * time.Second)
+	timeout := Timeout(5 * time.Second)
 	select {
 	case <-time.After(timeout):
 		ts.Errorf("Channel %p did not close after %v, last state: %v", ch, timeout, ch.State())

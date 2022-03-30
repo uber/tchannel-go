@@ -168,12 +168,16 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 }
 
 func TestRelayIDClash(t *testing.T) {
-	// TODO: enable framepool checks
 	opts := serviceNameOpts("s1").
+		SetCheckFramePooling().
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
-		s1 := ts.Server()
-		s2 := ts.NewServer(serviceNameOpts("s2"))
+		var (
+			s1     = ts.Server()
+			s2opts = serviceNameOpts("s2").
+				SetFramePool(ts.ChannelOpts().DefaultConnectionOptions.FramePool)
+			s2 = ts.NewServer(s2opts)
+		)
 
 		unblock := make(chan struct{})
 		testutils.RegisterEcho(s1, func() {
@@ -335,16 +339,21 @@ func TestRaceCloseWithNewCall(t *testing.T) {
 }
 
 func TestTimeoutCallsThenClose(t *testing.T) {
-	// TODO: enable framepool checks
 	// Test needs at least 2 CPUs to trigger race conditions.
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
 
 	opts := serviceNameOpts("s1").
 		SetRelayOnly().
+		SetCheckFramePooling().
 		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
-		s1 := ts.Server()
-		s2 := ts.NewServer(serviceNameOpts("s2").DisableLogVerification())
+		var (
+			s1     = ts.Server()
+			s2opts = serviceNameOpts("s2").
+				DisableLogVerification().
+				SetFramePool(ts.ChannelOpts().DefaultConnectionOptions.FramePool)
+			s2 = ts.NewServer(s2opts)
+		)
 
 		unblockEcho := make(chan struct{})
 		testutils.RegisterEcho(s1, func() {
@@ -505,9 +514,9 @@ func TestRelayHandleLocalCall(t *testing.T) {
 }
 
 func TestRelayHandleLargeLocalCall(t *testing.T) {
-	// TODO: enablle framepool checks
 	opts := testutils.NewOpts().SetRelayOnly().
 		SetRelayLocal("relay").
+		SetCheckFramePooling().
 		AddLogFilter("Received fragmented callReq", 1).
 		// Expect 4 callReqContinues for 256 kb payload that we cannot relay.
 		AddLogFilter("Failed to relay frame.", 4)
@@ -610,17 +619,16 @@ func TestRelayConnection(t *testing.T) {
 	var (
 		errTest = errors.New("test")
 		gotConn *relay.Conn
+		getHost = func(_ relay.CallFrame, conn *relay.Conn) (string, error) {
+			gotConn = conn
+			return "", errTest
+		}
+		opts = testutils.NewOpts().
+			SetRelayOnly().
+			SetCheckFramePooling().
+			SetRelayHost(relaytest.HostFunc(getHost))
 	)
 
-	getHost := func(_ relay.CallFrame, conn *relay.Conn) (string, error) {
-		gotConn = conn
-		return "", errTest
-	}
-
-	opts := testutils.NewOpts().
-		SetRelayOnly().
-		SetCheckFramePooling().
-		SetRelayHost(relaytest.HostFunc(getHost))
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		getConn := func(ch *Channel, outbound bool) ConnectionRuntimeState {
 			state := ch.IntrospectState(nil)
@@ -831,11 +839,11 @@ func TestRelayStalledConnection(t *testing.T) {
 		t.Skip("skipping test flaky in github actions.")
 	}
 
-	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		AddLogFilter("Dropping call due to slow connection.", 1, "sendChCapacity", "32").
 		SetSendBufferSize(32). // We want to hit the buffer size earlier, but also ensure we're only dropping once the sendCh is full.
 		SetServiceName("s1").
+		SetCheckFramePooling().
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2 := ts.NewServer(testutils.NewOpts().SetServiceName("s2"))
@@ -917,12 +925,12 @@ func TestRelayStalledClientConnection(t *testing.T) {
 	// This needs to be large enough to fill up the client TCP buffer.
 	const _calls = 100
 
-	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		// Expect errors from dropped frames.
 		AddLogFilter("Dropping call due to slow connection.", _calls).
 		SetSendBufferSize(10). // We want to hit the buffer size earlier.
 		SetServiceName("s1").
+		SetCheckFramePooling().
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// Track when the server receives calls
@@ -1048,15 +1056,18 @@ func TestRelayCorruptedCallResFrame(t *testing.T) {
 }
 
 func TestRelayThroughSeparateRelay(t *testing.T) {
-	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
+		SetCheckFramePooling().
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		serverHP := ts.Server().PeerInfo().HostPort
 		dummyFactory := func(relay.CallFrame, *relay.Conn) (string, error) {
 			panic("should not get invoked")
 		}
-		relay2Opts := testutils.NewOpts().SetRelayHost(relaytest.HostFunc(dummyFactory))
+
+		relay2Opts := testutils.NewOpts().
+			SetFramePool(ts.ChannelOpts().DefaultConnectionOptions.FramePool).
+			SetRelayHost(relaytest.HostFunc(dummyFactory))
 		relay2 := ts.NewServer(relay2Opts)
 
 		// Override where the peers come from.
@@ -1128,7 +1139,6 @@ func TestRelayConcurrentNewConnectionAttempts(t *testing.T) {
 }
 
 func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
-	// TODO: enable framepool checks
 	// TODO(ablackmon): Debug why this is flaky in github
 	if os.Getenv("GITHUB_WORKFLOW") != "" {
 		t.Skip("skipping test flaky in github actions.")
@@ -1139,6 +1149,7 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 	)
 	opts := testutils.NewOpts().
 		SetRelayOnly().
+		SetCheckFramePooling().
 		SetSendBufferSize(concurrentClients * callsPerClient) // Avoid dropped frames causing unexpected logs.
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
@@ -1178,7 +1189,6 @@ func TestRelayRaceTimerCausesStuckConnectionOnClose(t *testing.T) {
 }
 
 func TestRelayRaceCompletionAndTimeout(t *testing.T) {
-	// TODO: enable framepool checks
 	const numCalls = 100
 
 	opts := testutils.NewOpts().
@@ -1189,6 +1199,7 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
 		AddLogFilter("Received a frame without a RelayItem.", numCalls).
 		AddLogFilter("Attempted to create new mex after mexset shutdown.", numCalls).
+		SetCheckFramePooling().
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
