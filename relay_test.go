@@ -168,9 +168,9 @@ func TestRelayConnectionCloseDrainsRelayItems(t *testing.T) {
 }
 
 func TestRelayIDClash(t *testing.T) {
-	// TODO: enable framepool checks
 	opts := serviceNameOpts("s1").
-		SetRelayOnly()
+		SetRelayOnly().
+		SetCheckFramePooling()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
 		s2 := ts.NewServer(serviceNameOpts("s2"))
@@ -335,12 +335,12 @@ func TestRaceCloseWithNewCall(t *testing.T) {
 }
 
 func TestTimeoutCallsThenClose(t *testing.T) {
-	// TODO: enable framepool checks
 	// Test needs at least 2 CPUs to trigger race conditions.
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
 
 	opts := serviceNameOpts("s1").
 		SetRelayOnly().
+		SetCheckFramePooling().
 		DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s1 := ts.Server()
@@ -607,7 +607,7 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 }
 
 func TestRelayConnection(t *testing.T) {
-	var errTest = errors.New("test")
+	errTest := errors.New("test")
 	var gotConn *relay.Conn
 
 	getHost := func(_ relay.CallFrame, conn *relay.Conn) (string, error) {
@@ -915,13 +915,13 @@ func TestRelayStalledClientConnection(t *testing.T) {
 	// This needs to be large enough to fill up the client TCP buffer.
 	const _calls = 100
 
-	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		// Expect errors from dropped frames.
 		AddLogFilter("Dropping call due to slow connection.", _calls).
 		SetSendBufferSize(10). // We want to hit the buffer size earlier.
 		SetServiceName("s1").
-		SetRelayOnly()
+		SetRelayOnly().
+		SetCheckFramePooling()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// Track when the server receives calls
 		gotCall := make(chan struct{}, _calls)

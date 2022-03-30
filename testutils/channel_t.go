@@ -23,13 +23,12 @@ package testutils
 import (
 	"testing"
 
-	"github.com/uber/tchannel-go"
-
 	"github.com/stretchr/testify/require"
+	"github.com/uber/tchannel-go"
 )
 
 func updateOptsLogger(opts *ChannelOpts) {
-	if opts.Logger == nil && *connectionLog {
+	if opts.Logger == nil || !(*connectionLog) {
 		opts.Logger = tchannel.SimpleLogger
 	}
 }

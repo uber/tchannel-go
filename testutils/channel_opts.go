@@ -314,7 +314,7 @@ func DefaultOpts(opts *ChannelOpts) *ChannelOpts {
 
 // WrapLogger wraps the given logger with extra verification.
 func (v *LogVerification) WrapLogger(t testing.TB, l tchannel.Logger) tchannel.Logger {
-	return errorLogger{l, t, v, &errorLoggerState{
+	return &errorLogger{l, t, v, &errorLoggerState{
 		matchCount: make([]atomic.Uint32, len(v.Filters)),
 	}}
 }

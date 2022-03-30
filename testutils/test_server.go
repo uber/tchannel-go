@@ -267,6 +267,10 @@ func (ts *TestServer) CloseAndVerify() {
 		ts.verify(ch)
 	}
 
+	if ts.relayCh != nil {
+		ts.close(ts.relayCh)
+	}
+
 	// Verify that there's no goroutine leaks after all tests are complete.
 	ts.verifyNoGoroutinesLeaked()
 }
