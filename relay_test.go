@@ -351,7 +351,7 @@ func TestTimeoutCallsThenClose(t *testing.T) {
 			<-unblockEcho
 		})
 
-		ctx, cancel := NewContext(testutils.Timeout(30 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
 		defer cancel()
 
 		var callers sync.WaitGroup
@@ -1404,7 +1404,7 @@ func TestRelayThriftArg2KeyValueIteration(t *testing.T) {
 
 func TestRelayConnectionTimeout(t *testing.T) {
 	var (
-		minTimeout = testutils.Timeout(10 * time.Millisecond)
+		minTimeout = testutils.Timeout(100 * time.Millisecond)
 		maxTimeout = testutils.Timeout(time.Minute)
 	)
 	tests := []struct {
