@@ -23,8 +23,11 @@ package tchannel
 import (
 	"fmt"
 	"io"
-	"os"
 	"time"
+)
+
+import (
+	"os"
 )
 
 // Logger provides an abstract interface for logging from TChannel.
@@ -142,7 +145,7 @@ func (l writerLogger) WithFields(newFields ...LogField) Logger {
 	fields := make(LogFields, 0, len(existingFields)+1)
 	fields = append(fields, existingFields...)
 	fields = append(fields, newFields...)
-	return &writerLogger{l.writer, fields}
+	return writerLogger{l.writer, fields}
 }
 
 // LogLevel is the level of logging used by LevelLogger.
