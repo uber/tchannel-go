@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -252,19 +253,38 @@ func (ts *TestServer) RegisterFunc(name string, f func(context.Context, *raw.Arg
 func (ts *TestServer) CloseAndVerify() {
 	// Verify channels before they are closed to ensure that we catch any
 	// unexpected pending exchanges.
+	var verify sync.WaitGroup
 	for i := len(ts.channels) - 1; i >= 0; i-- {
 		ch := ts.channels[i]
-		ch.Logger().Debugf("TEST: TestServer is verifying channel")
-		ts.verify(ch)
+
+		verify.Add(1)
+		go func() {
+			defer verify.Done()
+			ch.Logger().Debugf("TEST: TestServer is verifying channel")
+			ts.verify(ch)
+		}()
 	}
+	verify.Wait()
 
 	// Close the connection, then verify again to ensure connection close didn't
 	// cause any unexpected issues.
+	var closeVerify sync.WaitGroup
 	for i := len(ts.channels) - 1; i >= 0; i-- {
 		ch := ts.channels[i]
-		ch.Logger().Debugf("TEST: TestServer is closing and verifying channel")
-		ts.close(ch)
-		ts.verify(ch)
+
+		closeVerify.Add(1)
+		go func() {
+			defer closeVerify.Done()
+			ch.Logger().Debugf("TEST: TestServer is closing and verifying channel")
+			ts.close(ch)
+			ts.verify(ch)
+		}()
+	}
+	closeVerify.Wait()
+
+	if ts.relayCh != nil {
+		ts.close(ts.relayCh)
+		ts.verify(ts.relayCh)
 	}
 
 	// Verify that there's no goroutine leaks after all tests are complete.
