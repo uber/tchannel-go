@@ -915,13 +915,13 @@ func TestRelayStalledClientConnection(t *testing.T) {
 	// This needs to be large enough to fill up the client TCP buffer.
 	const _calls = 100
 
+	// TODO: enable framepool checks
 	opts := testutils.NewOpts().
 		// Expect errors from dropped frames.
 		AddLogFilter("Dropping call due to slow connection.", _calls).
 		SetSendBufferSize(10). // We want to hit the buffer size earlier.
 		SetServiceName("s1").
-		SetRelayOnly().
-		SetCheckFramePooling()
+		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		// Track when the server receives calls
 		gotCall := make(chan struct{}, _calls)
