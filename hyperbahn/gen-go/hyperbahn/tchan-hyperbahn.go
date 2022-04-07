@@ -41,7 +41,8 @@ func (c *tchanHyperbahnClient) Discover(ctx thrift.Context, query *DiscoveryQuer
 	args := HyperbahnDiscoverArgs{
 		Query: query,
 	}
-	success, err := c.client.Call(ctx, c.thriftService, "discover", &args, &resp)
+	success, err := c.client.
+		Call(ctx, c.thriftService, "discover", &args, &resp)
 	if err == nil && !success {
 		switch {
 		case resp.NoPeersAvailable != nil:
