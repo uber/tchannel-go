@@ -21,6 +21,7 @@
 package thrift
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
@@ -43,7 +44,7 @@ func (t *readWriterTransport) Open() error {
 	return nil
 }
 
-func (t *readWriterTransport) Flush() error {
+func (t *readWriterTransport) Flush(ctx context.Context) error {
 	return nil
 }
 

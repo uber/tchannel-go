@@ -21,6 +21,7 @@
 package thrift_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -39,9 +40,10 @@ import (
 )
 
 func serializeStruct(t *testing.T, s thrift.TStruct) []byte {
+	ctx := context.Background()
 	trans := thrift.NewTMemoryBuffer()
 	p := thrift.NewTBinaryProtocolTransport(trans)
-	require.NoError(t, s.Write(p), "Struct serialization failed")
+	require.NoError(t, s.Write(ctx, p), "Struct serialization failed")
 	return trans.Bytes()
 }
 

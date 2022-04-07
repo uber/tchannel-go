@@ -92,7 +92,7 @@ func (s *tchanHyperbahnServer) handleDiscover(ctx thrift.Context, protocol athri
 	var req HyperbahnDiscoverArgs
 	var res HyperbahnDiscoverResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 

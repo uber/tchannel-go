@@ -113,7 +113,7 @@ func (s *tchanAdminServer) handleClearAll(ctx thrift.Context, protocol athrift.T
 	var req AdminClearAllArgs
 	var res AdminClearAllResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -241,7 +241,7 @@ func (s *tchanKeyValueServer) handleGet(ctx thrift.Context, protocol athrift.TPr
 	var req KeyValueGetArgs
 	var res KeyValueGetResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -274,7 +274,7 @@ func (s *tchanKeyValueServer) handleSet(ctx thrift.Context, protocol athrift.TPr
 	var req KeyValueSetArgs
 	var res KeyValueSetResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -364,7 +364,7 @@ func (s *tchanBaseServiceServer) handleHealthCheck(ctx thrift.Context, protocol 
 	var req BaseServiceHealthCheckArgs
 	var res BaseServiceHealthCheckResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 

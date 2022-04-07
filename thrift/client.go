@@ -62,7 +62,7 @@ func (c *client) startCall(ctx context.Context, method string, callOptions *tcha
 	return c.sc.BeginCall(ctx, method, callOptions)
 }
 
-func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrift.TStruct) error {
+func writeArgs(ctx context.Context, call *tchannel.OutboundCall, headers map[string]string, req thrift.TStruct) error {
 	writer, err := call.Arg2Writer()
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrif
 		return err
 	}
 
-	if err := WriteStruct(writer, req); err != nil {
+	if err := WriteStruct(ctx, writer, req); err != nil {
 		return err
 	}
 
@@ -89,7 +89,7 @@ func writeArgs(call *tchannel.OutboundCall, headers map[string]string, req thrif
 
 // readResponse reads the response struct into resp, and returns:
 // (response headers, whether there was an application error, unexpected error).
-func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) (map[string]string, bool, error) {
+func readResponse(ctx context.Context, response *tchannel.OutboundCallResponse, resp thrift.TStruct) (map[string]string, bool, error) {
 	reader, err := response.Arg2Reader()
 	if err != nil {
 		return nil, false, err
@@ -114,7 +114,7 @@ func readResponse(response *tchannel.OutboundCallResponse, resp thrift.TStruct) 
 		return headers, success, err
 	}
 
-	if err := ReadStruct(reader, resp); err != nil {
+	if err := ReadStruct(ctx, reader, resp); err != nil {
 		return headers, success, err
 	}
 
@@ -144,11 +144,11 @@ func (c *client) Call(ctx Context, thriftService, methodName string, req, resp t
 			return err
 		}
 
-		if err := writeArgs(call, headers, req); err != nil {
+		if err := writeArgs(ctx, call, headers, req); err != nil {
 			return err
 		}
 
-		respHeaders, isOK, err = readResponse(call.Response(), resp)
+		respHeaders, isOK, err = readResponse(ctx, call.Response(), resp)
 		return err
 	})
 	if err != nil {

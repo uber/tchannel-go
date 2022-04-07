@@ -1,7 +1,7 @@
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
 ALL_PKGS := $(shell go list ./...)
-PROD_PKGS := . ./http ./hyperbahn ./json ./peers ./pprof ./raw ./relay ./stats ./thrift $(EXAMPLES)
+PROD_PKGS := ./hyperbahn $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
 COV_PKG ?= ./
 BUILD := ./build
@@ -12,7 +12,7 @@ THRIFT_GEN_RELEASE_DARWIN := $(THRIFT_GEN_RELEASE)/darwin-x86_64
 PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m)
 
-BIN := $(shell pwd)/.bin
+BIN := $(shell pwd)/bin
 
 # Cross language test args
 TEST_HOST=127.0.0.1

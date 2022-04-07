@@ -22,6 +22,7 @@ package thrift_test
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"sync"
 	"testing"
@@ -95,9 +96,10 @@ func TestReadStruct(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		ctx := context.Background()
 		reader := bytes.NewReader(tt.encoded)
 		var s thrift.TStruct = &test.Data{}
-		err := ReadStruct(reader, s)
+		err := ReadStruct(ctx, reader, s)
 		assert.Equal(t, tt.wantErr, err != nil, "Unexpected error: %v", err)
 
 		// Even if there's an error, the struct will be partially filled.
@@ -120,8 +122,9 @@ func TestReadStructErr(t *testing.T) {
 	writer <- nil
 	close(writer)
 
+	ctx := context.Background()
 	s := &test.Data{}
-	err := ReadStruct(reader, s)
+	err := ReadStruct(ctx, reader, s)
 	if assert.Error(t, err, "ReadStruct should fail") {
 		// Apache Thrift just prepends the error message, and doesn't give us access
 		// to the underlying error, so we can't check the underlying error exactly.
@@ -142,8 +145,9 @@ func TestWriteStruct(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		ctx := context.Background()
 		buf := &bytes.Buffer{}
-		err := WriteStruct(buf, tt.s)
+		err := WriteStruct(ctx, buf, tt.s)
 		assert.Equal(t, tt.wantErr, err != nil, "Unexpected err: %v", err)
 		if err != nil {
 			continue
@@ -154,8 +158,9 @@ func TestWriteStruct(t *testing.T) {
 }
 
 func TestWriteStructErr(t *testing.T) {
+	ctx := context.Background()
 	writer := testwriter.Limited(10)
-	err := WriteStruct(writer, structTest.s)
+	err := WriteStruct(ctx, writer, structTest.s)
 	if assert.Error(t, err, "WriteStruct should fail") {
 		// Apache Thrift just prepends the error message, and doesn't give us access
 		// to the underlying error, so we can't check the underlying error exactly.
@@ -180,22 +185,24 @@ func TestParallelReadWrites(t *testing.T) {
 }
 
 func BenchmarkWriteStruct(b *testing.B) {
+	ctx := context.Background()
 	buf := &bytes.Buffer{}
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
-		WriteStruct(buf, structTest.s)
+		WriteStruct(ctx, buf, structTest.s)
 	}
 }
 
 func BenchmarkReadStruct(b *testing.B) {
+	ctx := context.Background()
 	buf := bytes.NewReader(structTest.encoded)
 	var d test.Data
 
 	buf.Seek(0, 0)
-	assert.NoError(b, ReadStruct(buf, &d))
+	assert.NoError(b, ReadStruct(ctx, buf, &d))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Seek(0, 0)
-		ReadStruct(buf, &d)
+		ReadStruct(ctx, buf, &d)
 	}
 }

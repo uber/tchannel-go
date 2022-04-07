@@ -1,6 +1,7 @@
 package thrift
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -21,25 +22,25 @@ type badTStruct struct {
 	Err error
 }
 
-func (t *badTStruct) Write(p athrift.TProtocol) error {
+func (t *badTStruct) Write(ctx context.Context, p athrift.TProtocol) error {
 	if t.PreWrite != nil {
 		t.PreWrite(p)
 	}
 	return t.Err
 }
 
-func (t *badTStruct) Read(p athrift.TProtocol) error {
+func (t *badTStruct) Read(ctx context.Context, p athrift.TProtocol) error {
 	return t.Err
 }
 
 // nullTStruct implements TStruct that does nothing at all with no errors.
 type nullTStruct struct{}
 
-func (*nullTStruct) Write(p athrift.TProtocol) error {
+func (*nullTStruct) Write(ctx context.Context, p athrift.TProtocol) error {
 	return nil
 }
 
-func (*nullTStruct) Read(p athrift.TProtocol) error {
+func (*nullTStruct) Read(ctx context.Context, p athrift.TProtocol) error {
 	return nil
 }
 
@@ -60,9 +61,9 @@ func (ts *thriftStruction) Handle(
 	var preWrite func(athrift.TProtocol)
 	if methodName == "partialDestruct" {
 		preWrite = func(p athrift.TProtocol) {
-			p.WriteStructBegin("foo")
-			p.WriteFieldBegin("bar", athrift.STRING, 42)
-			p.WriteString("baz")
+			p.WriteStructBegin(ctx, "foo")
+			p.WriteFieldBegin(ctx, "bar", athrift.STRING, 42)
+			p.WriteString(ctx, "baz")
 		}
 	}
 

@@ -149,7 +149,7 @@ func (s *{{ .ServerStruct }}) Handle(ctx {{ contextType }}, methodName string, p
 		var req {{ .ArgsType }}
 		var res {{ .ResultType }}
 
-		if err := req.Read(protocol); err != nil {
+		if err := req.Read(ctx, protocol); err != nil {
 			return false, nil, err
 		}
 

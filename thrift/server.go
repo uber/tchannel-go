@@ -206,7 +206,7 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	wp = getProtocolWriter(writer)
 	defer thriftProtocolPool.Put(wp)
 
-	if err := resp.Write(wp.protocol); err != nil {
+	if err := resp.Write(origCtx, wp.protocol); err != nil {
 		call.Response().SendSystemError(err)
 		return err
 	}

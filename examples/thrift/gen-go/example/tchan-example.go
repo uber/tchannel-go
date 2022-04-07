@@ -100,7 +100,7 @@ func (s *tchanBaseServer) handleBaseCall(ctx thrift.Context, protocol athrift.TP
 	var req BaseBaseCallArgs
 	var res BaseBaseCallResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -228,7 +228,7 @@ func (s *tchanFirstServer) handleAppError(ctx thrift.Context, protocol athrift.T
 	var req FirstAppErrorArgs
 	var res FirstAppErrorResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -247,7 +247,7 @@ func (s *tchanFirstServer) handleEcho(ctx thrift.Context, protocol athrift.TProt
 	var req FirstEchoArgs
 	var res FirstEchoResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -267,7 +267,7 @@ func (s *tchanFirstServer) handleHealthcheck(ctx thrift.Context, protocol athrif
 	var req FirstHealthcheckArgs
 	var res FirstHealthcheckResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -350,7 +350,7 @@ func (s *tchanSecondServer) handleTest(ctx thrift.Context, protocol athrift.TPro
 	var req SecondTestArgs
 	var res SecondTestResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 

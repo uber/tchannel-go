@@ -122,7 +122,7 @@ func (s *tchanMetaServer) handleHealth(ctx Context, protocol athrift.TProtocol) 
 	var req gen.MetaHealthArgs
 	var res gen.MetaHealthResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -141,7 +141,7 @@ func (s *tchanMetaServer) handleThriftIDL(ctx Context, protocol athrift.TProtoco
 	var req gen.MetaThriftIDLArgs
 	var res gen.MetaThriftIDLResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -160,7 +160,7 @@ func (s *tchanMetaServer) handleVersionInfo(ctx Context, protocol athrift.TProto
 	var req gen.MetaVersionInfoArgs
 	var res gen.MetaVersionInfoResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 

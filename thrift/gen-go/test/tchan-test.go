@@ -98,7 +98,7 @@ func (s *tchanMetaServer) handleHealth(ctx thrift.Context, protocol athrift.TPro
 	var req MetaHealthArgs
 	var res MetaHealthResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -183,7 +183,7 @@ func (s *tchanSecondServiceServer) handleEcho(ctx thrift.Context, protocol athri
 	var req SecondServiceEchoArgs
 	var res SecondServiceEchoResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -308,7 +308,7 @@ func (s *tchanSimpleServiceServer) handleCall(ctx thrift.Context, protocol athri
 	var req SimpleServiceCallArgs
 	var res SimpleServiceCallResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -328,7 +328,7 @@ func (s *tchanSimpleServiceServer) handleSimple(ctx thrift.Context, protocol ath
 	var req SimpleServiceSimpleArgs
 	var res SimpleServiceSimpleResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
@@ -355,7 +355,7 @@ func (s *tchanSimpleServiceServer) handleSimpleFuture(ctx thrift.Context, protoc
 	var req SimpleServiceSimpleFutureArgs
 	var res SimpleServiceSimpleFutureResult
 
-	if err := req.Read(protocol); err != nil {
+	if err := req.Read(ctx, protocol); err != nil {
 		return false, nil, err
 	}
 
