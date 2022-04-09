@@ -14,7 +14,7 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/prashantv/protectmem v0.0.0-20171002184600-e20412882b3a
 	github.com/samuel/go-thrift v0.0.0-20190219015601-e8b6b52668fe
-	github.com/streadway/quantile v0.0.0-20150917103942-b0c588724d25
+	github.com/streadway/quantile v0.0.0-20220407130108-4246515d968d
 	github.com/stretchr/testify v1.5.1
 	github.com/uber-go/tally v3.3.15+incompatible
 	github.com/uber/jaeger-client-go v2.22.1+incompatible
