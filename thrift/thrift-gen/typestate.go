@@ -112,7 +112,7 @@ func (s *State) goTypePrefix(prefix string, thriftType *parser.Type) string {
 	case "list":
 		return "[]" + s.goType(thriftType.ValueType)
 	case "set":
-		return "map[" + s.goType(thriftType.ValueType) + "]bool"
+		return "[]" + s.goType(thriftType.ValueType)
 	case "map":
 		return "map[" + s.goType(thriftType.KeyType) + "]" + s.goType(thriftType.ValueType)
 	}
