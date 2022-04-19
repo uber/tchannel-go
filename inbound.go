@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"time"
@@ -31,6 +32,8 @@ import (
 )
 
 var errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
+
+var _ (IncomingCallTLSState) = (*InboundCall)(nil)
 
 // handleCallReq handles an incoming call request, registering a message
 // exchange to receive further fragments for that call, and dispatching it in
@@ -116,6 +119,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.messageForFragment = func(initial bool) message { return new(callReqContinue) }
 	call.contents = newFragmentingReader(call.log, call)
 	call.statsReporter = c.statsReporter
+	call.tlsConnectionState = c.tlsConnectionState
 	call.createStatsTags(c.commonStatsTags)
 
 	response.statsReporter = c.statsReporter
@@ -207,14 +211,15 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 type InboundCall struct {
 	reqResReader
 
-	conn            *Connection
-	response        *InboundCallResponse
-	serviceName     string
-	method          []byte
-	methodString    string
-	headers         transportHeaders
-	statsReporter   StatsReporter
-	commonStatsTags map[string]string
+	conn               *Connection
+	response           *InboundCallResponse
+	serviceName        string
+	method             []byte
+	methodString       string
+	headers            transportHeaders
+	statsReporter      StatsReporter
+	commonStatsTags    map[string]string
+	tlsConnectionState *tls.ConnectionState
 }
 
 // ServiceName returns the name of the service being called
@@ -265,6 +270,11 @@ func (call *InboundCall) LocalPeer() LocalPeerInfo {
 // RemotePeer returns the remote peer information for this call.
 func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
+}
+
+// RemotePeer returns the remote peer information for this call.
+func (call *InboundCall) TLSConnectionState() *tls.ConnectionState {
+	return call.tlsConnectionState
 }
 
 // CallOptions returns a CallOptions struct suitable for forwarding a request.
