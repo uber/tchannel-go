@@ -216,9 +216,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 
 // GetOrAdd returns a peer for the given hostPort, creating one if it doesn't yet exist.
 func (l *PeerList) GetOrAdd(hostPort string) *Peer {
-	if ps, ok := l.exists(hostPort); ok {
-		return ps.Peer
-	}
+	// TODO: remove calls to GetOrAdd, use Add instead
 	return l.Add(hostPort)
 }
 
