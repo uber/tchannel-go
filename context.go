@@ -46,8 +46,7 @@ type tchannelCtxParams struct {
 	connectBaseContext      context.Context
 }
 
-// IncomingCallTlsState exposes properties for incoming calls through
-// TLS connection.
+// IncomingCallTlsState exposes properties for incoming calls through TLS connection.
 type IncomingCallTLSState interface {
 	// TLSConnectionState returns the TLS connection state or nil for plaintext
 	// connections.

@@ -272,7 +272,8 @@ func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }
 
-// RemotePeer returns the remote peer information for this call.
+// TLSConnectionState returns the TLS connection state of the call when the
+// underlying connection is TLS.
 func (call *InboundCall) TLSConnectionState() *tls.ConnectionState {
 	return call.tlsConnectionState
 }
