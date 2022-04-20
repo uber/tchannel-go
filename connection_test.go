@@ -470,7 +470,7 @@ func TestTimeout(t *testing.T) {
 		testHandler := onErrorTestHandler{newTestHandler(t), onError}
 		ts.Register(raw.Wrap(testHandler), "block")
 
-		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
 		defer cancel()
 
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "block", []byte("Arg2"), []byte("Arg3"))
@@ -622,7 +622,7 @@ func TestWriteArg3AfterTimeout(t *testing.T) {
 
 		// Wait for the write to complete, make sure there are no errors.
 		select {
-		case <-time.After(testutils.Timeout(60 * time.Millisecond)):
+		case <-time.After(testutils.Timeout(300 * time.Millisecond)):
 			t.Errorf("Handler should have failed due to timeout")
 		case <-timedOut:
 		}
@@ -777,7 +777,7 @@ func TestReadTimeout(t *testing.T) {
 func TestWriteTimeout(t *testing.T) {
 	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
 		ch := ts.Server()
-		ctx, cancel := NewContext(testutils.Timeout(15 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
 		defer cancel()
 
 		call, err := ch.BeginCall(ctx, ts.HostPort(), ch.ServiceName(), "call", nil)

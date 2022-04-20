@@ -56,7 +56,7 @@ func TestPeerConnectionLeaks(t *testing.T) {
 	opts.Logger = &loggerPtr{NullLogger}
 
 	connFinalized := make(chan struct{})
-	setFinalizer := func(p *Peer, hostPort string) {
+	setFinalizer := func(p *Peer) {
 		ctx, cancel := NewContext(time.Second)
 		defer cancel()
 
@@ -75,16 +75,16 @@ func TestPeerConnectionLeaks(t *testing.T) {
 
 		// Set a finalizer to detect when the connection from s1 -> s2 is freed.
 		peer := ts.Server().Peers().GetOrAdd(s2.PeerInfo().HostPort)
-		setFinalizer(peer, s2.PeerInfo().HostPort)
+		setFinalizer(peer)
 
 		// Close s2, so that the connection in s1 to s2 is released.
 		s2.Close()
-		closed := testutils.WaitFor(time.Second, s2.Closed)
+		closed := testutils.WaitFor(3*time.Second, s2.Closed)
 		require.True(t, closed, "s2 didn't close")
 
 		// Trigger the GC which will call the finalizer, and ensure
 		// that the connection logger was finalized.
-		finalized := testutils.WaitFor(time.Second, func() bool {
+		finalized := testutils.WaitFor(3*time.Second, func() bool {
 			runtime.GC()
 			select {
 			case <-connFinalized:

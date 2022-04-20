@@ -148,15 +148,14 @@ func TestRelayCloseTimeout(t *testing.T) {
 func TestRaceExchangesWithClose(t *testing.T) {
 	var wg sync.WaitGroup
 
-	ctx, cancel := NewContext(testutils.Timeout(70 * time.Millisecond))
-	defer cancel()
-
 	opts := testutils.NewOpts().DisableLogVerification()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
-		server := ts.Server()
+		var (
+			server       = ts.Server()
+			gotCall      = make(chan struct{})
+			completeCall = make(chan struct{})
+		)
 
-		gotCall := make(chan struct{})
-		completeCall := make(chan struct{})
 		testutils.RegisterFunc(server, "dummy", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 			return &raw.Res{}, nil
 		})
@@ -171,7 +170,27 @@ func TestRaceExchangesWithClose(t *testing.T) {
 
 		callDone := make(chan struct{})
 		go func() {
-			assert.NoError(t, testutils.CallEcho(client, ts.HostPort(), server.ServiceName(), &raw.Args{}), "Echo failed")
+			// n.b. Use a longer context here; server shutdown is inherently
+			//      nondeterministic, and now that it's blocking on channel and
+			//      connection closure, it can take anywhere from 0-2s to fully
+			//      close all of its internals.
+			ctx, cancel := context.WithTimeout(
+				context.Background(),
+				testutils.Timeout(5*time.Second),
+			)
+			defer cancel()
+
+			assert.NoError(
+				t,
+				testutils.CallEchoWithContext(
+					ctx,
+					client,
+					ts.HostPort(),
+					server.ServiceName(),
+					&raw.Args{},
+				),
+				"Echo failed",
+			)
 			close(callDone)
 		}()
 
@@ -192,12 +211,18 @@ func TestRaceExchangesWithClose(t *testing.T) {
 				if closed.Load() {
 					return
 				}
+
+				ctx, cancel := NewContext(testutils.Timeout(time.Second))
+				defer cancel()
+
 				if err := c.Ping(ctx, ts.HostPort()); err != nil {
 					return
 				}
+
 				if closed.Load() {
 					return
 				}
+
 				raw.Call(ctx, c, ts.HostPort(), server.ServiceName(), "dummy", nil, nil)
 			}()
 		}
@@ -205,9 +230,39 @@ func TestRaceExchangesWithClose(t *testing.T) {
 		// Now try to close the channel, it should block since there's active exchanges.
 		server.Close()
 		closed.Store(true)
-		assert.Equal(t, ChannelStartClose, ts.Server().State(), "Server should be in StartClose")
-		closed.Store(true)
 
+		// n.b. As it's shutting down, server state can be in any of the
+		//      outlined states below. It doesn't matter which specific state
+		//      it's in, as long as we're verifying that it's at least in the
+		//      process of shutting down.
+		var (
+			timeout    = time.After(testutils.Timeout(time.Second))
+			validState = func() bool {
+				switch ts.Server().State() {
+				case ChannelStartClose, ChannelInboundClosed, ChannelClosed:
+					return true
+				default:
+					return false
+				}
+			}
+		)
+
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
+
+		for !validState() {
+			select {
+			case <-ticker.C:
+			case <-timeout:
+				require.FailNow(
+					t,
+					"server state did not transition as expected: %v",
+					ts.Server().State(),
+				)
+			}
+		}
+
+		closed.Store(true)
 		close(completeCall)
 		<-callDone
 	})

@@ -430,11 +430,11 @@ func TestThriftTimeout(t *testing.T) {
 		handler := make(chan struct{})
 
 		args.s2.On("Echo", ctxArg(), "asd").Return("asd", nil).Run(func(args mock.Arguments) {
-			time.Sleep(testutils.Timeout(15 * time.Millisecond))
+			time.Sleep(testutils.Timeout(150 * time.Millisecond))
 			close(handler)
 		})
 
-		ctx, cancel := NewContext(testutils.Timeout(10 * time.Millisecond))
+		ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
 		defer cancel()
 
 		_, err := args.c2.Echo(ctx, "asd")
