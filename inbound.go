@@ -33,8 +33,6 @@ import (
 
 var errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
 
-var _ (IncomingCallTLSState) = (*InboundCall)(nil)
-
 // handleCallReq handles an incoming call request, registering a message
 // exchange to receive further fragments for that call, and dispatching it in
 // another goroutine

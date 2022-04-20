@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"crypto/tls"
 	"time"
 
 	"golang.org/x/net/context"
@@ -44,13 +43,6 @@ type tchannelCtxParams struct {
 	retryOptions            *RetryOptions
 	connectTimeout          time.Duration
 	connectBaseContext      context.Context
-}
-
-// IncomingCallTlsState exposes properties for incoming calls through TLS connection.
-type IncomingCallTLSState interface {
-	// TLSConnectionState returns the TLS connection state or nil for plaintext
-	// connections.
-	TLSConnectionState() *tls.ConnectionState
 }
 
 // IncomingCall exposes properties for incoming calls through the context.
