@@ -553,7 +553,6 @@ func (ch *Channel) serve() {
 				OnCloseStateChange: ch.connectionCloseStateChange,
 				OnExchangeUpdated:  ch.exchangeUpdated,
 			}
-
 			if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {
 				netConn.Close()
 			}

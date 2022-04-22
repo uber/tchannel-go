@@ -79,5 +79,5 @@ func InboundConnection(call IncomingCall) (*Connection, net.Conn) {
 	}
 
 	conn := inboundCall.conn
-	return conn, conn.conn
+	return conn, inboundCall.Connection()
 }

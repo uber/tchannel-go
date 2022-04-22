@@ -96,14 +96,9 @@ func TestInboundConnection(t *testing.T) {
 		s2 := ts.NewServer(nil)
 
 		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			call := CurrentCall(ctx)
-			c, _ := InboundConnection(call)
+			c, rawConn := InboundConnection(CurrentCall(ctx))
 			assert.Equal(t, s2.PeerInfo().HostPort, c.RemotePeerInfo().HostPort, "Unexpected host port")
-
-			inboundCall, ok := call.(*InboundCall)
-			require.True(t, ok, "unexpected inbound call")
-			assert.NotNil(t, inboundCall.Connection(), "unexpected inbound connection")
-
+			assert.NotNil(t, rawConn, "unexpected connection")
 			return &raw.Res{}, nil
 		})
 
