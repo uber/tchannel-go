@@ -21,9 +21,9 @@
 package tchannel
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
@@ -117,7 +117,6 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.messageForFragment = func(initial bool) message { return new(callReqContinue) }
 	call.contents = newFragmentingReader(call.log, call)
 	call.statsReporter = c.statsReporter
-	call.tlsConnectionState = c.tlsConnectionState
 	call.createStatsTags(c.commonStatsTags)
 
 	response.statsReporter = c.statsReporter
@@ -209,15 +208,14 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 type InboundCall struct {
 	reqResReader
 
-	conn               *Connection
-	response           *InboundCallResponse
-	serviceName        string
-	method             []byte
-	methodString       string
-	headers            transportHeaders
-	statsReporter      StatsReporter
-	commonStatsTags    map[string]string
-	tlsConnectionState *tls.ConnectionState
+	conn            *Connection
+	response        *InboundCallResponse
+	serviceName     string
+	method          []byte
+	methodString    string
+	headers         transportHeaders
+	statsReporter   StatsReporter
+	commonStatsTags map[string]string
 }
 
 // ServiceName returns the name of the service being called
@@ -270,10 +268,9 @@ func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
 }
 
-// TLSConnectionState returns the TLS connection state of the call when the
-// underlying connection is TLS.
-func (call *InboundCall) TLSConnectionState() *tls.ConnectionState {
-	return call.tlsConnectionState
+// Connection returns the underlying raw net connection.
+func (call *InboundCall) Connection() net.Conn {
+	return call.conn.conn
 }
 
 // CallOptions returns a CallOptions struct suitable for forwarding a request.

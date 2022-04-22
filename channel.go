@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -553,13 +552,6 @@ func (ch *Channel) serve() {
 				OnActive:           ch.inboundConnectionActive,
 				OnCloseStateChange: ch.connectionCloseStateChange,
 				OnExchangeUpdated:  ch.exchangeUpdated,
-			}
-
-			if tlsConn, ok := netConn.(*tls.Conn); ok {
-				if err := tlsConn.Handshake(); err != nil {
-					netConn.Close()
-					return
-				}
 			}
 
 			if _, err := ch.inboundHandshake(context.Background(), netConn, events); err != nil {

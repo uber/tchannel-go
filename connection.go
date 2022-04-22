@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -222,8 +221,6 @@ type Connection struct {
 	// idle for the recieve and send connections respectively. (unix time, nano)
 	lastActivityRead  atomic.Int64
 	lastActivityWrite atomic.Int64
-
-	tlsConnectionState *tls.ConnectionState
 }
 
 type peerAddressComponents struct {
@@ -327,11 +324,6 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 	peerInfo := ch.PeerInfo()
 	timeNow := ch.timeNow().UnixNano()
 
-	var tlsConnState tls.ConnectionState
-	if tlsConn, ok := conn.(*tls.Conn); ok {
-		tlsConnState = tlsConn.ConnectionState()
-	}
-
 	c := &Connection{
 		channelConnectionCommon: ch.channelConnectionCommon,
 
@@ -357,7 +349,6 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
 		baseContext:        ch.connContext(baseCtx, conn),
-		tlsConnectionState: &tlsConnState,
 	}
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
