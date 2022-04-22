@@ -32,17 +32,58 @@ import (
 )
 
 // CallEcho calls the "echo" endpoint from the given src to target.
-func CallEcho(src *tchannel.Channel, targetHostPort, targetService string, args *raw.Args) error {
+func CallEcho(
+	src *tchannel.Channel,
+	targetHostPort string,
+	targetService string,
+	args *raw.Args,
+) error {
+	return CallEchoWithContext(
+		nil,
+		src,
+		targetHostPort,
+		targetService,
+		args,
+	)
+}
+
+// CallEchoWithContext calls the "echo" endpoint from the given src to target,
+// using any deadline within the given context.Context.
+func CallEchoWithContext(
+	ctx context.Context,
+	src *tchannel.Channel,
+	targetHostPort string,
+	targetService string,
+	args *raw.Args,
+) error {
 	if args == nil {
 		args = &raw.Args{}
 	}
 
-	ctx, cancel := tchannel.NewContextBuilder(Timeout(300 * time.Millisecond)).
+	timeout := time.Second
+	if ctx != nil {
+		dl, ok := ctx.Deadline()
+		if ok {
+			timeout = time.Until(dl)
+		}
+	}
+
+	ctx, cancel := tchannel.NewContextBuilder(Timeout(timeout)).
+		SetConnectBaseContext(ctx).
 		SetFormat(args.Format).
 		Build()
 	defer cancel()
 
-	_, _, _, err := raw.Call(ctx, src, targetHostPort, targetService, "echo", args.Arg2, args.Arg3)
+	_, _, _, err := raw.Call(
+		ctx,
+		src,
+		targetHostPort,
+		targetService,
+		"echo",
+		args.Arg2,
+		args.Arg3,
+	)
+
 	return err
 }
 

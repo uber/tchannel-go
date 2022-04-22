@@ -350,7 +350,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 
 		// Client 1 will just ping, so we create a connection that should be closed.
 		c1 := ts.NewClient(clientOpts)
-		require.True(t, testutils.WaitFor(5*time.Second, func() bool {
+		require.True(t, testutils.WaitFor(10*time.Second, func() bool {
 			return c1.Ping(ctx, ts.HostPort()) == nil
 		}), "Ping failed")
 
@@ -395,6 +395,8 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 		assert.Equal(t, check.preCloseConns, check.ch.IntrospectNumConnections(), "Expect connection to client 1 and client 2")
 
 		// Let the idle checker close client 1's connection.
+		listener.waitForZeroExchanges(t, c1)
+
 		check.tick()
 		listener.waitForZeroConnections(t, c1)
 
