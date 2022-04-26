@@ -328,7 +328,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 	listener := newPeerStatusListener()
 	// TODO: Log filtering doesn't require the message to be seen.
 	serverOpts := testutils.NewOpts().
-		AddLogFilter("Skip closing idle Connection as it has pending calls.", 2).
+		AddLogFilter("Skip closing idle Connection as it has pending calls.", 3).
 		SetOnPeerStatusChanged(listener.onStatusChange).
 		SetTimeNow(clock.Now).
 		SetTimeTicker(clientTicker.New).

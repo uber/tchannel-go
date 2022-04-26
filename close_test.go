@@ -230,13 +230,15 @@ func TestRaceExchangesWithClose(t *testing.T) {
 		// Now try to close the channel, it should block since there's active exchanges.
 		server.Close()
 		closed.Store(true)
+		close(completeCall)
+		<-callDone
 
 		// n.b. As it's shutting down, server state can be in any of the
 		//      outlined states below. It doesn't matter which specific state
 		//      it's in, as long as we're verifying that it's at least in the
 		//      process of shutting down.
 		var (
-			timeout    = time.After(testutils.Timeout(time.Second))
+			timeout    = time.After(testutils.Timeout(5 * time.Second))
 			validState = func() bool {
 				switch ts.Server().State() {
 				case ChannelStartClose, ChannelInboundClosed, ChannelClosed:
@@ -261,10 +263,6 @@ func TestRaceExchangesWithClose(t *testing.T) {
 				)
 			}
 		}
-
-		closed.Store(true)
-		close(completeCall)
-		<-callDone
 	})
 
 	// Wait for all calls to complete

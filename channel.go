@@ -190,6 +190,10 @@ type Channel struct {
 	dialer              func(ctx context.Context, hostPort string) (net.Conn, error)
 	connContext         func(ctx context.Context, conn net.Conn) context.Context
 	closed              chan struct{}
+	onClosedCalled      atomic.Bool
+
+	// Tracks the lifetime of all channel-level goroutines.
+	wg sync.WaitGroup
 
 	// mutable contains all the members of Channel which are mutable.
 	mutable struct {
@@ -386,7 +390,12 @@ func (ch *Channel) Serve(l net.Listener) error {
 	mutable.peerInfo.IsEphemeral = false
 	ch.log = ch.log.WithFields(LogField{"hostPort", mutable.peerInfo.HostPort})
 	ch.log.Info("Channel is listening.")
-	go ch.serve()
+
+	ch.wg.Add(1)
+	go func() {
+		defer ch.wg.Done()
+		ch.serve()
+	}()
 	return nil
 }
 
@@ -546,7 +555,10 @@ func (ch *Channel) serve() {
 		acceptBackoff = 0
 
 		// Perform the connection handshake in a background goroutine.
+		ch.wg.Add(1)
 		go func() {
+			defer ch.wg.Done()
+
 			// Register the connection in the peer once the channel is set up.
 			events := connectionEvents{
 				OnActive:           ch.inboundConnectionActive,
@@ -817,10 +829,24 @@ func (ch *Channel) connectionCloseStateChange(c *Connection) {
 }
 
 func (ch *Channel) onClosed() {
+	if !ch.onClosedCalled.CAS(false, true) {
+		return
+	}
+
 	removeClosedChannel(ch)
 
-	close(ch.closed)
-	ch.log.Infof("Channel closed.")
+	// Launch this in the background, as onClosed is called synchronously
+	// within Close() and we don't want to block those calls.
+	//
+	// This will ensure that (a) the Channel is eventually closed, and (b)
+	// <-ClosedChan() will only unblock once all Channel and Connection
+	// routines have stopped.
+	go func() {
+		// Wait for all channel-level goroutines to exit.
+		ch.wg.Wait()
+		close(ch.closed)
+		ch.log.Infof("Channel closed.")
+	}()
 }
 
 // Closed returns whether this channel has been closed with .Close()
@@ -862,7 +888,11 @@ func (ch *Channel) Close() {
 		}
 
 		if ch.mutable.l != nil {
-			ch.mutable.l.Close()
+			if err := ch.mutable.l.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				ch.Logger().WithFields(
+					ErrField(err),
+				).Error("failed to close channel net.Listener")
+			}
 		}
 
 		// Stop the idle connections timer.

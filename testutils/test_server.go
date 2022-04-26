@@ -362,7 +362,7 @@ func (ts *TestServer) addChannel(createChannel func(t testing.TB, opts *ChannelO
 func (ts *TestServer) close(ch *tchannel.Channel) {
 	ch.Close()
 
-	timeout := Timeout(time.Second)
+	timeout := Timeout(3 * time.Second)
 	select {
 	case <-time.After(timeout):
 		ts.Errorf("Channel %p did not close after %v, last state: %v", ch, timeout, ch.State())

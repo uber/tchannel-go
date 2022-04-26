@@ -697,10 +697,10 @@ func (r *Relayer) receiverItems(fType frameType) *relayItems {
 	return r.outbound
 }
 
-func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) (shouldRelease bool) {
+func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) (handled bool) {
 	// Check whether this is a service we want to handle locally.
 	if _, ok := r.localHandler[string(cr.Service())]; !ok {
-		return _relayNoRelease
+		return false
 	}
 
 	f := cr.Frame
@@ -716,13 +716,15 @@ func (r *Relayer) handleLocalCallReq(cr *lazyCallReq) (shouldRelease bool) {
 			LogField{"method", string(cr.Method())},
 		).Error("Received fragmented callReq intended for local relay channel, can only handle unfragmented calls.")
 		r.conn.SendSystemError(f.Header.ID, cr.Span(), errRelayMethodFragmented)
-		return _relayShouldRelease
+		r.conn.opts.FramePool.Release(f)
+		return true
 	}
 
 	if release := r.conn.handleFrameNoRelay(f); release {
 		r.conn.opts.FramePool.Release(f)
 	}
-	return _relayShouldRelease
+
+	return true
 }
 
 func (r *Relayer) fragmentingSend(call RelayCall, f *lazyCallReq, relayToDest relayItem, origID uint32) error {

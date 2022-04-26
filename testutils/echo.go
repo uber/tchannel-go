@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	_defaultTimeout = 300 * time.Millisecond
+	_defaultTimeout = time.Second
 )
 
 // CallEcho calls the "echo" endpoint from the given src to target.

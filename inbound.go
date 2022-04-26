@@ -123,7 +123,12 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response.commonStatsTags = call.commonStatsTags
 
 	setResponseHeaders(call.headers, response.headers)
-	go c.dispatchInbound(c.connID, callReq.ID(), call, frame)
+
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.dispatchInbound(c.connID, callReq.ID(), call, frame)
+	}()
 	return false
 }
 
@@ -202,6 +207,18 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 	}
 
 	c.handler.Handle(call.mex.ctx, call)
+
+	// Edge case: handlers that don't respond (e.g. blackholes) don't
+	// finish or cancel the response, so if the context has an error
+	// but the exchange does not, we need to free the resources
+	// ourselves.
+	//
+	// TODO: Awkward hack; find a better place for this.
+	if call.mex.ctx.Err() != nil && call.state != reqResReaderComplete {
+		// n.b. Don't use SendSystemError, as there's no point in
+		//      trying to write a response.
+		call.response.release()
+	}
 }
 
 // An InboundCall is an incoming call from a peer
@@ -346,14 +363,10 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	if response.err != nil {
 		return response.err
 	}
-	// Fail all future attempts to read fragments
-	response.state = reqResWriterComplete
-	response.systemError = true
-	response.doneSending()
-	response.call.releasePreviousFragment()
+
+	response.release()
 
 	span := CurrentSpan(response.mex.ctx)
-
 	return response.conn.SendSystemError(response.mex.msgID, *span, err)
 }
 
@@ -424,4 +437,12 @@ func (response *InboundCallResponse) doneSending() {
 	if response.err == nil {
 		response.mex.shutdown()
 	}
+}
+
+func (response *InboundCallResponse) release() {
+	// Fail all future attempts to read fragments
+	response.state = reqResWriterComplete
+	response.systemError = true
+	response.doneSending()
+	response.call.releasePreviousFragment()
 }

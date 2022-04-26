@@ -1245,7 +1245,7 @@ func TestLastActivityTimePings(t *testing.T) {
 	clock := testutils.NewStubClock(initialTime)
 
 	opts := testutils.NewOpts().SetTimeNow(clock.Now)
-	ctx, cancel := NewContext(testutils.Timeout(100 * time.Millisecond))
+	ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
 	defer cancel()
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {

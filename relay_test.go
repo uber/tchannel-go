@@ -607,8 +607,10 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 }
 
 func TestRelayConnection(t *testing.T) {
-	var errTest = errors.New("test")
-	var gotConn *relay.Conn
+	var (
+		errTest = errors.New("test")
+		gotConn *relay.Conn
+	)
 
 	getHost := func(_ relay.CallFrame, conn *relay.Conn) (string, error) {
 		gotConn = conn
@@ -1187,6 +1189,7 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
 		AddLogFilter("Received a frame without a RelayItem.", numCalls).
 		AddLogFilter("Attempted to create new mex after mexset shutdown.", numCalls).
+		AddLogFilter("Couldn't register exchange.", numCalls).
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)
@@ -1216,7 +1219,7 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 }
 
 func TestRelayArg2OffsetIntegration(t *testing.T) {
-	ctx, cancel := NewContext(testutils.Timeout(time.Second))
+	ctx, cancel := NewContext(testutils.Timeout(2 * time.Second))
 	defer cancel()
 
 	rh := relaytest.NewStubRelayHost()
