@@ -48,8 +48,10 @@ const (
 	DefaultConnectTimeout = 5 * time.Second
 
 	// DefaultConnectionBufferSize is the default size for the connection's read
-	//and write channels.
+	// and write channels.
 	DefaultConnectionBufferSize = 512
+
+	_deferDrainInitialWait = 100 * time.Millisecond
 )
 
 // PeerVersion contains version related information for a specific peer.
@@ -221,6 +223,12 @@ type Connection struct {
 	// idle for the recieve and send connections respectively. (unix time, nano)
 	lastActivityRead  atomic.Int64
 	lastActivityWrite atomic.Int64
+
+	// This is the Channel's waitgroup; we use it for tracking goroutines so
+	// that each Connection can close asynchronously, but Channel won't unblock
+	// <-Channel.ClosedChan() until all Connection routines are done.
+	wg    *sync.WaitGroup
+	ready chan struct{}
 }
 
 type peerAddressComponents struct {
@@ -339,8 +347,8 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		remotePeerInfo:     remotePeer,
 		remotePeerAddress:  remotePeerAddress,
 		outboundHP:         outboundHP,
-		inbound:            newMessageExchangeSet(log, messageExchangeSetInbound),
-		outbound:           newMessageExchangeSet(log, messageExchangeSetOutbound),
+		inbound:            newMessageExchangeSet(log, messageExchangeSetInbound, opts.FramePool),
+		outbound:           newMessageExchangeSet(log, messageExchangeSetOutbound, opts.FramePool),
 		internalHandlers:   ch.internalHandlers,
 		handler:            ch.handler,
 		events:             events,
@@ -349,7 +357,10 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		lastActivityRead:   *atomic.NewInt64(timeNow),
 		lastActivityWrite:  *atomic.NewInt64(timeNow),
 		baseContext:        ch.connContext(baseCtx, conn),
+		ready:              make(chan struct{}),
+		wg:                 &ch.wg,
 	}
+	defer close(c.ready)
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
 		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
@@ -371,8 +382,18 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 	// Connections are activated as soon as they are created.
 	c.callOnActive()
 
-	go c.readFrames(connID)
-	go c.writeFrames(connID)
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.readFrames(connID)
+	}()
+
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.writeFrames(connID)
+	}()
+
 	return c
 }
 
@@ -403,7 +424,11 @@ func (c *Connection) callOnActive() {
 	if c.opts.HealthChecks.enabled() {
 		c.healthCheckCtx, c.healthCheckQuit = context.WithCancel(context.Background())
 		c.healthCheckDone = make(chan struct{})
-		go c.healthCheck(c.connID)
+		c.wg.Add(1)
+		go func() {
+			defer c.wg.Done()
+			c.healthCheck(c.connID)
+		}()
 	}
 }
 
@@ -640,9 +665,8 @@ func (c *Connection) withStateRLock(f func() error) error {
 
 func (c *Connection) readState() connectionState {
 	c.stateMut.RLock()
-	state := c.state
-	c.stateMut.RUnlock()
-	return state
+	defer c.stateMut.RUnlock()
+	return c.state
 }
 
 // readFrames is the loop that reads frames from the network connection and
@@ -651,43 +675,97 @@ func (c *Connection) readState() connectionState {
 // incoming frame to a channel; the init handlers are a notable exception,
 // since we cannot process new frames until the initialization is complete.
 func (c *Connection) readFrames(_ uint32) {
-	headerBuf := make([]byte, FrameHeaderSize)
-
-	handleErr := func(err error) {
-		if !c.closeNetworkCalled.Load() {
-			c.connectionError("read frames", err)
-		} else {
-			c.log.Debugf("Ignoring error after connection was closed: %v", err)
+	var (
+		frames   = make(chan *Frame)
+		errch    = make(chan error)
+		queueErr = func(err error) {
+			select {
+			case errch <- err:
+			case <-c.stopCh:
+			}
 		}
-	}
+	)
 
-	for {
-		// Read the header, avoid allocating the frame till we know the size
-		// we need to allocate.
-		if _, err := io.ReadFull(c.conn, headerBuf); err != nil {
-			handleErr(err)
-			return
+	defer drainAndReleaseFrames(frames, c.opts.FramePool, _deferDrainInitialWait)
+
+	// Do our net.Conn reads in a goroutine so that we can exclusively use
+	// select below. This gives us more lifetime control as well as parity with
+	// writeFrames for handling closures.
+	//
+	// Note that the lifetime of this goroutine is guaranteed not to exceed
+	// readFrames itself due to waiting on netdone to close later.
+	go func() {
+		defer close(errch)
+
+		headerBuf := make([]byte, FrameHeaderSize)
+		for {
+			if _, err := io.ReadFull(c.conn, headerBuf); err != nil {
+				queueErr(err)
+				return
+			}
+
+			// Read the header, avoid allocating the frame till we know the size
+			// we need to allocate.
+			frame := c.opts.FramePool.Get()
+			if err := frame.ReadBody(headerBuf, c.conn); err != nil {
+				c.opts.FramePool.Release(frame)
+				queueErr(err)
+				return
+			}
+
+			select {
+			case frames <- frame:
+			case <-c.stopCh:
+				c.opts.FramePool.Release(frame)
+				return
+			}
+		}
+	}()
+
+	func() {
+		handleError := func(err error) {
+			// This branch should never be executed, but just in case.
+			if err == nil {
+				return
+			}
+
+			if !c.closeNetworkCalled.Load() {
+				c.connectionError("read frames", err)
+			} else {
+				c.log.Debugf("Ignoring error after connection was closed: %v", err)
+			}
 		}
 
-		frame := c.opts.FramePool.Get()
-		if err := frame.ReadBody(headerBuf, c.conn); err != nil {
-			handleErr(err)
-			c.opts.FramePool.Release(frame)
-			return
-		}
+		for {
+			select {
+			case <-c.stopCh:
+				// The net routine above will eventually exit due to the
+				// underlying connection closing as well.
+				return
+			case err := <-errch:
+				// Either we received an error, or the routine exited. Handle
+				// the error if there is one.
+				handleError(err)
+				return
+			case frame := <-frames:
+				c.updateLastActivityRead(frame)
 
-		c.updateLastActivityRead(frame)
+				handleFn := c.handleFrameNoRelay
+				if c.relay != nil {
+					handleFn = c.handleFrameRelay
+				}
 
-		var releaseFrame bool
-		if c.relay == nil {
-			releaseFrame = c.handleFrameNoRelay(frame)
-		} else {
-			releaseFrame = c.handleFrameRelay(frame)
+				if release := handleFn(frame); release {
+					c.opts.FramePool.Release(frame)
+				}
+			}
 		}
-		if releaseFrame {
-			c.opts.FramePool.Release(frame)
-		}
-	}
+	}()
+
+	// Wait on errch since it will be closed when the net routine above exits.
+	// If there's still an error in this channel, it's because we hit the
+	// stopCh case, and it's not useful to us anymore.
+	<-errch
 }
 
 func (c *Connection) handleFrameRelay(frame *Frame) bool {
@@ -742,11 +820,7 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 func (c *Connection) writeFrames(_ uint32) {
 	defer func() {
 		<-c.stopCh
-		// Drain and release any remaining frames in sendCh for best-effort
-		// reduction in leaked frames
-		for len(c.sendCh) > 0 {
-			c.opts.FramePool.Release(<-c.sendCh)
-		}
+		drainAndReleaseFrames(c.sendCh, c.opts.FramePool, _deferDrainInitialWait)
 	}()
 
 	for {
@@ -764,11 +838,7 @@ func (c *Connection) writeFrames(_ uint32) {
 				return
 			}
 		case <-c.stopCh:
-			// If there are frames in sendCh, we want to drain them.
-			if len(c.sendCh) > 0 {
-				continue
-			}
-			// Close the network once we're no longer writing frames.
+			// There may still be frames left; we'll drain them in the defer.
 			c.closeNetwork()
 			return
 		}
@@ -865,6 +935,15 @@ func (c *Connection) checkExchanges() {
 }
 
 func (c *Connection) close(fields ...LogField) error {
+	// Ensure that the connection is ready (i.e., the Connection has been
+	// fully constructed and its goroutines started) before attempting to close.
+	select {
+	case <-c.ready:
+	case <-time.After(time.Second):
+		// Fall back to time-based waiting just in case we close immediately
+		// upon creating the connection.
+	}
+
 	c.log.WithFields(fields...).Debug("Connection closing.")
 
 	// Update the state which will start blocking incoming calls.
@@ -877,7 +956,8 @@ func (c *Connection) close(fields ...LogField) error {
 		}
 		return nil
 	}); err != nil {
-		return err
+		c.log.WithFields(fields...).Debug("ignoring repeated close call post-state transition")
+		return nil
 	}
 
 	// Set a read deadline with any close timeout. This will cause a i/o timeout
@@ -960,4 +1040,33 @@ func isMessageTypeCall(frame *Frame) bool {
 	}
 
 	return false
+}
+
+func drainAndReleaseFrames(
+	src <-chan *Frame,
+	pool FramePool,
+	initialWait time.Duration,
+) {
+	timer := time.NewTimer(initialWait)
+	defer timer.Stop()
+
+	var (
+		refreshWait = initialWait / 4
+		resetTimer  = func() {
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(refreshWait)
+		}
+	)
+
+	for {
+		select {
+		case frame := <-src:
+			pool.Release(frame)
+			resetTimer()
+		case <-timer.C:
+			return
+		}
+	}
 }

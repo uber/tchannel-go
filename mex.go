@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/uber/tchannel-go/typed"
 
@@ -244,6 +245,21 @@ func (mex *messageExchange) shutdown() {
 	}
 
 	mex.mexset.removeExchange(mex.msgID)
+
+	// n.b. Attempt to wait for the exchange to fully shut down before draining
+	//      any frames still in the buffer.
+	//
+	//      We use slightly lower timeouts here. We don't have the ability to
+	//      do a select-style wait on exchange closure, so we have to do drains
+	//      as a best-effort operation once shutdown is called.
+	go func() {
+		select {
+		case <-mex.ctx.Done():
+		case <-time.After(_deferDrainInitialWait):
+		}
+
+		drainAndReleaseFrames(mex.recvCh, mex.framePool, _deferDrainInitialWait)
+	}()
 }
 
 // inboundExpired is called when an exchange is canceled or it times out,
@@ -273,16 +289,18 @@ type messageExchangeSet struct {
 	// maps are mutable, and are protected by the mutex.
 	exchanges        map[uint32]*messageExchange
 	expiredExchanges map[uint32]struct{}
+	framePool        FramePool
 	shutdown         bool
 }
 
 // newMessageExchangeSet creates a new messageExchangeSet with a given name.
-func newMessageExchangeSet(log Logger, name string) *messageExchangeSet {
+func newMessageExchangeSet(log Logger, name string, framePool FramePool) *messageExchangeSet {
 	return &messageExchangeSet{
 		name:             name,
 		log:              log.WithFields(LogField{"exchange", name}),
 		exchanges:        make(map[uint32]*messageExchange),
 		expiredExchanges: make(map[uint32]struct{}),
+		framePool:        framePool,
 	}
 }
 
@@ -301,8 +319,13 @@ func (mexset *messageExchangeSet) addExchange(mex *messageExchange) error {
 }
 
 // newExchange creates and adds a new message exchange to this set
-func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool FramePool,
-	msgType messageType, msgID uint32, bufferSize int) (*messageExchange, error) {
+func (mexset *messageExchangeSet) newExchange(
+	ctx context.Context,
+	framePool FramePool,
+	msgType messageType,
+	msgID uint32,
+	bufferSize int,
+) (*messageExchange, error) {
 	if mexset.log.Enabled(LogLevelDebug) {
 		mexset.log.Debugf("Creating new %s message exchange for [%v:%d]", mexset.name, msgType, msgID)
 	}
@@ -430,6 +453,7 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 			LogField{"frameHeader", frame.Header.String()},
 			LogField{"exchange", mexset.name},
 		).Info("Received frame for unknown message exchange.")
+		mexset.framePool.Release(frame)
 		return nil
 	}
 

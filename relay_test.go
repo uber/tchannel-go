@@ -607,8 +607,10 @@ func TestRelayContextInheritsFromOutboundConnection(t *testing.T) {
 }
 
 func TestRelayConnection(t *testing.T) {
-	var errTest = errors.New("test")
-	var gotConn *relay.Conn
+	var (
+		errTest = errors.New("test")
+		gotConn *relay.Conn
+	)
 
 	getHost := func(_ relay.CallFrame, conn *relay.Conn) (string, error) {
 		gotConn = conn
@@ -1216,7 +1218,7 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 }
 
 func TestRelayArg2OffsetIntegration(t *testing.T) {
-	ctx, cancel := NewContext(testutils.Timeout(time.Second))
+	ctx, cancel := NewContext(testutils.Timeout(2 * time.Second))
 	defer cancel()
 
 	rh := relaytest.NewStubRelayHost()
