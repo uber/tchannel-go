@@ -160,11 +160,11 @@ func (m *MockStats) assertCallEqual(t testing.TB, expected *MockCallStats, actua
 		"Expectation must indicate whether RPC should succeed or fail.",
 	)
 
-	assert.Equal(t, expected.succeeded, actual.succeeded, "Unexpected number of successes.")
-	assert.Equal(t, expected.failedMsgs, actual.failedMsgs, "Unexpected reasons for RPC failure.")
-	assert.Equal(t, expected.ended, actual.ended, "Unexpected number of calls to End.")
+	failed := !assert.Equal(t, expected.succeeded, actual.succeeded, "Unexpected number of successes.")
+	failed = !assert.Equal(t, expected.failedMsgs, actual.failedMsgs, "Unexpected reasons for RPC failure.") || failed
+	failed = !assert.Equal(t, expected.ended, actual.ended, "Unexpected number of calls to End.") || failed
 
-	if t.Failed() {
+	if failed {
 		// The default testify output is often insufficient.
 		t.Logf("\nExpected relayed stats were:\n\t%+v\nActual relayed stats were:\n\t%+v\n", expected, actual)
 	}
