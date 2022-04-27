@@ -1,6 +1,6 @@
 PATH := $(GOPATH)/bin:$(PATH)
 EXAMPLES=./examples/bench/server ./examples/bench/client ./examples/ping ./examples/thrift ./examples/hyperbahn/echo-server
-ALL_PKGS := $(shell go list ./...)
+ALL_PKGS := $(shell go list ./... | grep -v 'thirdparty')
 PROD_PKGS := . ./http ./hyperbahn ./json ./peers ./pprof ./raw ./relay ./stats ./thrift $(EXAMPLES)
 TEST_ARG ?= -race -v -timeout 5m
 COV_PKG ?= ./
