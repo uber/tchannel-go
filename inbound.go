@@ -23,6 +23,7 @@ package tchannel
 import (
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
@@ -265,6 +266,11 @@ func (call *InboundCall) LocalPeer() LocalPeerInfo {
 // RemotePeer returns the remote peer information for this call.
 func (call *InboundCall) RemotePeer() PeerInfo {
 	return call.conn.RemotePeerInfo()
+}
+
+// Connection returns the underlying raw net connection.
+func (call *InboundCall) Connection() net.Conn {
+	return call.conn.conn
 }
 
 // CallOptions returns a CallOptions struct suitable for forwarding a request.
