@@ -96,8 +96,9 @@ func TestInboundConnection(t *testing.T) {
 		s2 := ts.NewServer(nil)
 
 		ts.RegisterFunc("test", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			c, _ := InboundConnection(CurrentCall(ctx))
+			c, rawConn := InboundConnection(CurrentCall(ctx))
 			assert.Equal(t, s2.PeerInfo().HostPort, c.RemotePeerInfo().HostPort, "Unexpected host port")
+			assert.NotNil(t, rawConn, "unexpected connection")
 			return &raw.Res{}, nil
 		})
 
