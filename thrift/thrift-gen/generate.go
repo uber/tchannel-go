@@ -31,7 +31,7 @@ import (
 
 var (
 	thriftBinary       = flag.String("thriftBinary", "thrift", "Command to use for the Apache Thrift binary")
-	apacheThriftImport = flag.String("thriftImport", "github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
+	apacheThriftImport = flag.String("thriftImport", "github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift", "Go package to use for the Thrift import")
 	packagePrefix      = flag.String("packagePrefix", "", "The package prefix (will be used similar to how Apache Thrift uses it)")
 )
 
