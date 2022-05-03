@@ -28,7 +28,7 @@ import (
 	tchannel "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/internal/argreader"
 
-	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 	"golang.org/x/net/context"
 )
 

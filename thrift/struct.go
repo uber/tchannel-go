@@ -23,7 +23,7 @@ package thrift
 import (
 	"io"
 
-	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 )
 
 // WriteStruct writes the given Thrift struct to a writer. It pools TProtocols.

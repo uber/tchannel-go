@@ -23,7 +23,7 @@ package thrift
 import (
 	"fmt"
 
-	athrift "github.com/apache/thrift/lib/go/thrift"
+	athrift "github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/meta"
 )
 
