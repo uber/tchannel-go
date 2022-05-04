@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.30.0] - 2022-05-04
+### Changed
+ * thrift-gen going to use vendored apache-thrift code.
+
 ## [1.22.3] - 2022-03-28
 ### Changed
  * Fix memory leak due to unreturned frames in the relayer.
@@ -343,6 +347,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.30.0]: https://github.com/uber/tchannel-go/compare/v1.22.3...v1.30.0
 [1.22.3]: https://github.com/uber/tchannel-go/compare/v1.22.2...v1.22.3
 [1.22.1]: https://github.com/uber/tchannel-go/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/uber/tchannel-go/compare/v1.21.2...v1.22.0
