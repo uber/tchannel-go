@@ -3,7 +3,7 @@ Changelog
 
 ## [1.30.0] - 2022-05-04
 ### Changed
- * thrift-gen going to use vendored apache-thrift code.
+ * thrift-gen going to use vendored apache-thrift code. Currently vendored apache-thrift pinned to b2a4d4ae21c789b689dd162deb819665567f481c.
 
 ## [1.22.3] - 2022-03-28
 ### Changed
