@@ -69,10 +69,18 @@ else
 endif
 
 test: clean setup check_no_test_deps $(BIN)/thrift
+	$(MAKE) test_vanilla
+	$(MAKE) test_relay_frame_leaks
+
+test_vanilla:
 	@echo Testing packages:
-	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
+	PATH=$(BIN):$$PATH DISABLE_FRAME_POOLING_CHECKS=1 go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
 	@echo Running frame pool tests
 	PATH=$(BIN):$$PATH go test -run TestFramesReleased -stressTest $(TEST_ARG)
+
+test_relay_frame_leaks:
+	@echo Testing relay frame leaks
+	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) relay_test.go
 
 check_no_test_deps:
 	! go list -json $(PROD_PKGS) | jq -r '.Deps | select ((. | length) > 0) | .[]' | grep -e test -e mock | grep -v '^internal/testlog'
