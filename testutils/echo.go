@@ -31,6 +31,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	_defaultTimeout = 300 * time.Millisecond
+)
+
 // CallEcho calls the "echo" endpoint from the given src to target.
 func CallEcho(
 	src *tchannel.Channel,
@@ -39,7 +43,7 @@ func CallEcho(
 	args *raw.Args,
 ) error {
 	return CallEchoWithContext(
-		nil,
+		context.Background(),
 		src,
 		targetHostPort,
 		targetService,
@@ -60,12 +64,10 @@ func CallEchoWithContext(
 		args = &raw.Args{}
 	}
 
-	timeout := time.Second
-	if ctx != nil {
-		dl, ok := ctx.Deadline()
-		if ok {
-			timeout = time.Until(dl)
-		}
+	timeout := _defaultTimeout
+	dl, ok := ctx.Deadline()
+	if ok {
+		timeout = time.Until(dl)
 	}
 
 	ctx, cancel := tchannel.NewContextBuilder(Timeout(timeout)).
@@ -90,7 +92,7 @@ func CallEchoWithContext(
 // AssertEcho calls the "echo" endpoint with random data, and asserts
 // that the returned data matches the arguments "echo" was called with.
 func AssertEcho(tb testing.TB, src *tchannel.Channel, targetHostPort, targetService string) {
-	ctx, cancel := tchannel.NewContext(Timeout(300 * time.Millisecond))
+	ctx, cancel := tchannel.NewContext(Timeout(_defaultTimeout))
 	defer cancel()
 
 	args := &raw.Args{
@@ -120,7 +122,7 @@ func RegisterEcho(src tchannel.Registrar, f func()) {
 
 // Ping sends a ping from src to target.
 func Ping(src, target *tchannel.Channel) error {
-	ctx, cancel := tchannel.NewContext(Timeout(100 * time.Millisecond))
+	ctx, cancel := tchannel.NewContext(Timeout(_defaultTimeout))
 	defer cancel()
 
 	return src.Ping(ctx, target.PeerInfo().HostPort)
