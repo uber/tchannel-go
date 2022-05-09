@@ -72,12 +72,14 @@ test: clean setup check_no_test_deps $(BIN)/thrift
 	$(MAKE) test_vanilla
 	$(MAKE) test_relay_frame_leaks
 
+# test_vanilla runs all unit tests without checking for frame leaks
 test_vanilla:
 	@echo Testing packages:
 	PATH=$(BIN):$$PATH DISABLE_FRAME_POOLING_CHECKS=1 go test -parallel=4 $(TEST_ARG) $(ALL_PKGS)
 	@echo Running frame pool tests
 	PATH=$(BIN):$$PATH go test -run TestFramesReleased -stressTest $(TEST_ARG)
 
+# test_relay_frame_leaks runs unit tests in relay_test.go with frame leak checks enabled
 test_relay_frame_leaks:
 	@echo Testing relay frame leaks
 	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) relay_test.go
