@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -936,6 +937,12 @@ func (c *Connection) getLastActivityWriteTime() time.Time {
 }
 
 func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
+	// tls.Conn doesn't directly implement syscall.Conn.
+	// We need to extract the underlying net.Conn first.
+	if tlsConn, ok := conn.(*tls.Conn); ok {
+		conn = tlsConn.NetConn()
+	}
+
 	connSyscall, ok := conn.(syscall.Conn)
 	if !ok {
 		log.WithFields(LogField{"connectionType", fmt.Sprintf("%T", conn)}).

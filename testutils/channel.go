@@ -21,11 +21,13 @@
 package testutils
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
 
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/internal/testcert"
 	"github.com/uber/tchannel-go/raw"
 
 	"go.uber.org/atomic"
@@ -37,7 +39,7 @@ import (
 func NewServerChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	opts = opts.Copy()
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := getListener(opts.ServeTLS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen: %v", err)
 	}
@@ -107,4 +109,23 @@ func IntrospectJSON(ch *tchannel.Channel, opts *tchannel.IntrospectionOptions) s
 	}
 
 	return string(marshalled)
+}
+
+func getListener(serveTLS bool) (net.Listener, error) {
+	if serveTLS {
+		return getTLSListener()
+	}
+
+	return net.Listen("tcp", "127.0.0.1:0")
+}
+
+func getTLSListener() (net.Listener, error) {
+	cert, err := tls.X509KeyPair(testcert.LocalhostCert, testcert.LocalhostKey)
+	if err != nil {
+		panic(fmt.Sprintf("testutils: getTLSListener: %v", err))
+	}
+
+	return tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	})
 }

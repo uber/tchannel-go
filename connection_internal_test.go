@@ -22,6 +22,9 @@ package tchannel
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
+	"github.com/uber/tchannel-go/internal/testcert"
 	"net"
 	"syscall"
 	"testing"
@@ -63,7 +66,7 @@ func TestGetSysConn(t *testing.T) {
 		assert.Contains(t, loggerBuf.String(), assert.AnError.Error(), "missing error in log")
 	})
 
-	t.Run("SyscallConn is successful", func(t *testing.T) {
+	t.Run("SyscallConn is successful with tcp conn", func(t *testing.T) {
 		loggerBuf := &bytes.Buffer{}
 		logger := NewLogger(loggerBuf)
 
@@ -72,6 +75,47 @@ func TestGetSysConn(t *testing.T) {
 		defer ln.Close()
 
 		conn, err := net.Dial("tcp", ln.Addr().String())
+		require.NoError(t, err, "failed to dial")
+		defer conn.Close()
+
+		sysConn := getSysConn(conn, logger)
+		require.NotNil(t, sysConn)
+		assert.Empty(t, loggerBuf.String(), "expected no logs on success")
+	})
+
+	t.Run("SyscallConn is successful with tls conn", func(t *testing.T) {
+		loggerBuf := &bytes.Buffer{}
+		logger := NewLogger(loggerBuf)
+
+		tlsCert, err := tls.X509KeyPair(testcert.LocalhostCert, testcert.LocalhostKey)
+		require.NoError(t, err, "Failed to load cert")
+
+		x509Cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
+		require.NoError(t, err, "Failed to parse cert")
+
+		certpool := x509.NewCertPool()
+		certpool.AddCert(x509Cert)
+
+		ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{tlsCert}})
+		require.NoError(t, err, "Failed to listen")
+		defer ln.Close()
+
+		closeChan := make(chan struct{})
+		defer close(closeChan)
+
+		go func() {
+			c, err := ln.Accept()
+			require.NoError(t, err, "failed to accept connection")
+			defer c.Close()
+
+			// Perform handshake as crypto/tls doesn't perform Handshake till first read.
+			_ = c.(*tls.Conn).Handshake()
+			require.NoError(t, err, "read shouldn't fail")
+
+			<-closeChan
+		}()
+
+		conn, err := tls.Dial("tcp", ln.Addr().String(), &tls.Config{RootCAs: certpool})
 		require.NoError(t, err, "failed to dial")
 		defer conn.Close()
 

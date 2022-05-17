@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -1469,4 +1470,67 @@ func TestOutboundConnContext(t *testing.T) {
 
 		testutils.AssertEcho(t, bob, ts.HostPort(), ts.ServiceName())
 	})
+}
+
+func TestWithTLSNoRelay(t *testing.T) {
+	sopts := testutils.NewOpts().SetServeTLS(true).NoRelay()
+	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		customDialerCalledCount := 0
+
+		copts := testutils.NewOpts().SetDialer(func(ctx context.Context, network, hostPort string) (net.Conn, error) {
+			customDialerCalledCount++
+			d := tls.Dialer{
+				Config: &tls.Config{InsecureSkipVerify: true},
+			}
+			return d.DialContext(ctx, network, hostPort)
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
+	})
+}
+
+func TestWithTLSRelayOnly(t *testing.T) {
+	serverDialerCalledCount := 0
+	// SetDialer with tls.Dial as relay uses dialer from server opts to make outbound connections.
+	sopts := testutils.NewOpts().SetServeTLS(true).SetRelayOnly().SetDialer(func(ctx context.Context, network, hostPort string) (net.Conn, error) {
+		serverDialerCalledCount++
+		d := tls.Dialer{
+			Config: &tls.Config{InsecureSkipVerify: true},
+		}
+		return d.DialContext(ctx, network, hostPort)
+	})
+
+	testutils.WithTestServer(t, sopts, func(t testing.TB, ts *testutils.TestServer) {
+		server := ts.Server()
+		testutils.RegisterEcho(server, nil)
+		customDialerCalledCount := 0
+
+		copts := testutils.NewOpts().SetDialer(func(ctx context.Context, network, hostPort string) (net.Conn, error) {
+			customDialerCalledCount++
+			d := tls.Dialer{
+				Config: &tls.Config{InsecureSkipVerify: true},
+			}
+			return d.DialContext(ctx, network, hostPort)
+		})
+
+		// Induce the creation of a connection from client to server.
+		client := ts.NewClient(copts)
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
+
+		// Re-use
+		testutils.AssertEcho(t, client, ts.HostPort(), ts.ServiceName())
+		assert.Equal(t, 1, customDialerCalledCount, "custom dialer used for establishing connection")
+	})
+
+	assert.Equal(t, 1, serverDialerCalledCount, "custom server dialer used for relay")
 }
