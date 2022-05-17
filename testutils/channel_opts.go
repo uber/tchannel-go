@@ -75,6 +75,9 @@ type ChannelOpts struct {
 	// postFns is a list of functions that are run after the test.
 	// They are run even if the test fails.
 	postFns []func()
+
+	// ServeTLS enables TLS support on server channel with test certs
+	ServeTLS bool
 }
 
 // LogVerification contains options to control the log verification.
@@ -291,6 +294,12 @@ func (o *ChannelOpts) SetConnContext(f func(context.Context, net.Conn) context.C
 // SetCheckFramePooling sets a flag to enable frame pooling checks such as leaks or bad releases
 func (o *ChannelOpts) SetCheckFramePooling() *ChannelOpts {
 	o.CheckFramePooling = true
+	return o
+}
+
+// SetServeTLS sets the ServeTLS flag to enable/disable TLS for test server
+func (o *ChannelOpts) SetServeTLS(serveTLS bool) *ChannelOpts {
+	o.ServeTLS = serveTLS
 	return o
 }
 
