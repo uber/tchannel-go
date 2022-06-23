@@ -1,6 +1,14 @@
 Changelog
 =========
 
+## [1.31.1] - 2022-06-23
+### Changed
+* Added `ServeTLS` in `testutils.ChannelOpts` to create a test server with TLS. (#882)
+
+## [1.31.0] - 2022-04-12
+### Changed
+*  Upgrade `github.com/streadway/quantile` to fix relative import in `go1.18`. (#866)
+
 ## [1.22.3] - 2022-03-28
 ### Changed
  * Fix memory leak due to unreturned frames in the relayer.
