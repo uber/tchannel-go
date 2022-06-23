@@ -1,6 +1,14 @@
 Changelog
 =========
 
+## [1.31.1] - 2022-06-24
+### Changed
+ * Add TLS option in testutils.NewServerChannel (#882)
+
+## [1.31.0] - 2022-04-12
+### Changed
+ *  Upgrade `github.com/streadway/quantile` to fix relative import in `go1.18`. (#866)
+
 ## [1.22.3] - 2022-03-28
 ### Changed
  * Fix memory leak due to unreturned frames in the relayer.
@@ -343,6 +351,8 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.31.1]: https://github.com/uber/tchannel-go/compare/v1.31.0...v1.31.1
+[1.31.0]: https://github.com/uber/tchannel-go/compare/v1.22.3...v1.31.0
 [1.22.3]: https://github.com/uber/tchannel-go/compare/v1.22.2...v1.22.3
 [1.22.1]: https://github.com/uber/tchannel-go/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/uber/tchannel-go/compare/v1.21.2...v1.22.0
