@@ -1,6 +1,10 @@
 Changelog
 =========
 
+## [1.32.0] - 2022-07-12
+### Changed
+ * Add TLS option in testutils.NewServerChannel (#882)
+
 ## [1.31.0] - 2022-05-04
 ### Changed
  * thrift-gen going to use vendored apache-thrift code. Currently vendored apache-thrift pinned to b2a4d4ae21c789b689dd162deb819665567f481c.
@@ -347,6 +351,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.32.0]: https://github.com/uber/tchannel-go/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/uber/tchannel-go/compare/v1.22.3...v1.31.0
 [1.22.3]: https://github.com/uber/tchannel-go/compare/v1.22.2...v1.22.3
 [1.22.1]: https://github.com/uber/tchannel-go/compare/v1.22.0...v1.22.1
