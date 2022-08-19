@@ -103,15 +103,17 @@ func TestRelayFragmentSender(t *testing.T) {
 			wf, err := rfs.newFragment(true, nullChecksum{})
 			require.NoError(t, err)
 
-			wantPayload := make([]byte, wf.contents.BytesWritten())
-			copy(wantPayload, wf.frame.Payload[:wf.contents.BytesWritten()])
-
 			err = rfs.flushFragment(wf)
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 				return
 			}
 			require.NoError(t, err)
+			var wantPayload []byte
+			if tt.sent {
+				wantPayload = make([]byte, wf.contents.BytesWritten())
+				copy(wantPayload, wf.frame.Payload[:wf.contents.BytesWritten()])
+			}
 			assert.Equal(t, wantPayload, receiver.gotPayload)
 			assert.Equal(t, tt.wantFailureRelayItemFuncCalled, failRelayItemFuncCalled, "unexpected failRelayItemFunc called state")
 		})
