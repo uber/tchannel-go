@@ -2,7 +2,10 @@ package tchannel
 
 import (
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,15 +17,27 @@ import (
 var _ frameReceiver = (*dummyFrameReceiver)(nil)
 
 type dummyFrameReceiver struct {
-	t                *testing.T
 	retSent          bool
 	retFailureReason string
-	wantPayload      []byte
+	pool             FramePool
+
+	// mutable
+	gotPayload []byte
+}
+
+func newDummyFrameReceiver(retSent bool, retFailureReason string, pool FramePool) *dummyFrameReceiver {
+	return &dummyFrameReceiver{
+		retSent:          retSent,
+		retFailureReason: retFailureReason,
+		pool:             pool,
+	}
 }
 
 func (d *dummyFrameReceiver) Receive(f *Frame, fType frameType) (sent bool, failureReason string) {
-	if d.wantPayload != nil {
-		assert.Equal(d.t, d.wantPayload, f.SizedPayload())
+	d.gotPayload = make([]byte, len(f.SizedPayload()))
+	copy(d.gotPayload, f.SizedPayload())
+	if d.retSent {
+		d.pool.Release(f)
 	}
 	return d.retSent, d.retFailureReason
 }
@@ -62,21 +77,29 @@ func TestRelayFragmentSender(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
-			wf := &writableFragment{
-				frame:    tt.frame,
-				contents: wbuf,
-			}
-
 			var failRelayItemFuncCalled bool
 
+			pool := NewCheckedFramePoolForTest()
+			defer func() {
+				stacks := goroutines.GetAll()
+				if result := pool.CheckEmpty(); result.HasIssues() {
+					if len(result.Unreleased) > 0 {
+						t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\nStacks:%v",
+							len(result.Unreleased), strings.Join(result.Unreleased, "\n"), stacks)
+					}
+					if len(result.BadReleases) > 0 {
+						t.Errorf("Frame pool has %v bad releases, errors:\n%v\nStacks:%v",
+							len(result.BadReleases), strings.Join(result.BadReleases, "\n"), stacks)
+					}
+				}
+			}()
+
+			cr := reqHasAll.req(t)
+			receiver := newDummyFrameReceiver(tt.sent, tt.failure, pool)
 			rfs := relayFragmentSender{
-				framePool: DefaultFramePool,
-				frameReceiver: &dummyFrameReceiver{
-					t:                t,
-					retSent:          tt.sent,
-					retFailureReason: tt.failure,
-					wantPayload:      tt.wantPayload,
-				},
+				callReq:       &cr,
+				framePool:     pool,
+				frameReceiver: receiver,
 				failRelayItemFunc: func(items *relayItems, id uint32, failure string, err error) {
 					failRelayItemFuncCalled = true
 					assert.Equal(t, uint32(123), id, "got unexpected id")
@@ -87,12 +110,19 @@ func TestRelayFragmentSender(t *testing.T) {
 				sentReporter: &noopSentReporter{},
 			}
 
-			err := rfs.flushFragment(wf)
+			wf, err := rfs.newFragment(true, nullChecksum{})
+			require.NoError(t, err)
+
+			wantPayload := make([]byte, wf.contents.BytesWritten())
+			copy(wantPayload, wf.frame.Payload[:wf.contents.BytesWritten()])
+
+			err = rfs.flushFragment(wf)
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 				return
 			}
 			require.NoError(t, err)
+			assert.Equal(t, wantPayload, receiver.gotPayload)
 			assert.Equal(t, tt.wantFailureRelayItemFuncCalled, failRelayItemFuncCalled, "unexpected failRelayItemFunc called state")
 		})
 	}

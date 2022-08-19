@@ -933,6 +933,7 @@ func (rfs *relayFragmentSender) flushFragment(wf *writableFragment) error {
 	sent, failure := rfs.frameReceiver.Receive(wf.frame, requestFrame)
 	if !sent {
 		rfs.failRelayItemFunc(rfs.outboundRelayItems, rfs.origID, failure, errFrameNotSent)
+		rfs.framePool.Release(wf.frame)
 		return nil
 	}
 	return nil
