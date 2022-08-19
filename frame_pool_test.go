@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"io"
 	"math/rand"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -36,7 +35,6 @@ import (
 
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
-	"github.com/uber/tchannel-go/testutils/goroutines"
 	"github.com/uber/tchannel-go/testutils/testreader"
 
 	"github.com/stretchr/testify/assert"
@@ -134,19 +132,7 @@ func TestFramesReleased(t *testing.T) {
 		wg.Wait()
 	})
 
-	// TODO: The goroutines.GetAll is to debug test failures in Travis. Remove this once
-	// we confirm that the test is not flaky.
-	stacks := goroutines.GetAll()
-	if result := pool.CheckEmpty(); result.HasIssues() {
-		if len(result.Unreleased) > 0 {
-			t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\nStacks:%v",
-				len(result.Unreleased), strings.Join(result.Unreleased, "\n"), stacks)
-		}
-		if len(result.BadReleases) > 0 {
-			t.Errorf("Frame pool has %v bad releases, errors:\n%v\nStacks:%v",
-				len(result.BadReleases), strings.Join(result.BadReleases, "\n"), stacks)
-		}
-	}
+	CheckFramePoolIsEmpty(t, pool)
 }
 
 type dirtyFramePool struct{}

@@ -2,10 +2,7 @@ package tchannel
 
 import (
 	"errors"
-	"strings"
 	"testing"
-
-	"github.com/uber/tchannel-go/testutils/goroutines"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,9 +31,12 @@ func newDummyFrameReceiver(retSent bool, retFailureReason string, pool FramePool
 }
 
 func (d *dummyFrameReceiver) Receive(f *Frame, fType frameType) (sent bool, failureReason string) {
-	d.gotPayload = make([]byte, len(f.SizedPayload()))
-	copy(d.gotPayload, f.SizedPayload())
 	if d.retSent {
+		// Keep a record of the received payload for verification
+		d.gotPayload = make([]byte, len(f.SizedPayload()))
+		copy(d.gotPayload, f.SizedPayload())
+
+		// Frames should be released after transmission
 		d.pool.Release(f)
 	}
 	return d.retSent, d.retFailureReason
@@ -81,17 +81,7 @@ func TestRelayFragmentSender(t *testing.T) {
 
 			pool := NewCheckedFramePoolForTest()
 			defer func() {
-				stacks := goroutines.GetAll()
-				if result := pool.CheckEmpty(); result.HasIssues() {
-					if len(result.Unreleased) > 0 {
-						t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\nStacks:%v",
-							len(result.Unreleased), strings.Join(result.Unreleased, "\n"), stacks)
-					}
-					if len(result.BadReleases) > 0 {
-						t.Errorf("Frame pool has %v bad releases, errors:\n%v\nStacks:%v",
-							len(result.BadReleases), strings.Join(result.BadReleases, "\n"), stacks)
-					}
-				}
+				CheckFramePoolIsEmpty(t, pool)
 			}()
 
 			cr := reqHasAll.req(t)
