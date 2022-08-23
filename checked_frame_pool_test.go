@@ -1,9 +1,11 @@
 package tchannel
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uber/tchannel-go/testutils/goroutines"
 )
 
 func TestCheckedFramePoolForTest(t *testing.T) {
@@ -61,5 +63,21 @@ func TestCheckedFramePoolForTest(t *testing.T) {
 			assert.Equal(t, tt.wantBadAllocations, len(results.Unreleased), "Unexpected allocs")
 			assert.Equal(t, tt.wantBadReleases, len(results.BadReleases), "Unexpected bad releases")
 		})
+	}
+}
+
+func CheckFramePoolIsEmpty(t testing.TB, pool *CheckedFramePoolForTest) {
+	t.Helper()
+
+	stacks := goroutines.GetAll()
+	if result := pool.CheckEmpty(); result.HasIssues() {
+		if len(result.Unreleased) > 0 {
+			t.Errorf("Frame pool has %v unreleased frames, errors:\n%v\nStacks:%v",
+				len(result.Unreleased), strings.Join(result.Unreleased, "\n"), stacks)
+		}
+		if len(result.BadReleases) > 0 {
+			t.Errorf("Frame pool has %v bad releases, errors:\n%v\nStacks:%v",
+				len(result.BadReleases), strings.Join(result.BadReleases, "\n"), stacks)
+		}
 	}
 }

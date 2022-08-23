@@ -8,22 +8,37 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/testutils/thriftarg2test"
-	"github.com/uber/tchannel-go/typed"
 )
 
 var _ frameReceiver = (*dummyFrameReceiver)(nil)
 
 type dummyFrameReceiver struct {
-	t                *testing.T
 	retSent          bool
 	retFailureReason string
-	wantPayload      []byte
+	pool             FramePool
+
+	// mutable
+	gotPayload []byte
+}
+
+func newDummyFrameReceiver(retSent bool, retFailureReason string, pool FramePool) *dummyFrameReceiver {
+	return &dummyFrameReceiver{
+		retSent:          retSent,
+		retFailureReason: retFailureReason,
+		pool:             pool,
+	}
 }
 
 func (d *dummyFrameReceiver) Receive(f *Frame, fType frameType) (sent bool, failureReason string) {
-	if d.wantPayload != nil {
-		assert.Equal(d.t, d.wantPayload, f.SizedPayload())
+	// Keep a record of the received payload for verification
+	d.gotPayload = make([]byte, len(f.SizedPayload()))
+	copy(d.gotPayload, f.SizedPayload())
+
+	// Frames should be released after transmission
+	if d.retSent {
+		d.pool.Release(f)
 	}
+
 	return d.retSent, d.retFailureReason
 }
 
@@ -32,14 +47,8 @@ type noopSentReporter struct{}
 func (r *noopSentReporter) SentBytes(_ uint16) {}
 
 func TestRelayFragmentSender(t *testing.T) {
-	f := NewFrame(MaxFramePayloadSize)
-	wbuf := typed.NewWriteBuffer(f.Payload)
-	wbuf.WriteBytes([]byte("hello, world"))
-
 	tests := []struct {
 		msg                            string
-		frame                          *Frame
-		wantError                      string
 		sent                           bool
 		failure                        string
 		wantFailureRelayItemFuncCalled bool
@@ -47,13 +56,11 @@ func TestRelayFragmentSender(t *testing.T) {
 	}{
 		{
 			msg:         "successful send",
-			frame:       f,
 			sent:        true,
 			wantPayload: []byte("hello, world"),
 		},
 		{
 			msg:                            "send failure",
-			frame:                          f,
 			sent:                           false,
 			failure:                        "something bad happened",
 			wantFailureRelayItemFuncCalled: true,
@@ -62,21 +69,19 @@ func TestRelayFragmentSender(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
-			wf := &writableFragment{
-				frame:    tt.frame,
-				contents: wbuf,
-			}
-
 			var failRelayItemFuncCalled bool
 
+			pool := NewCheckedFramePoolForTest()
+			defer func() {
+				CheckFramePoolIsEmpty(t, pool)
+			}()
+
+			cr := reqHasAll.req(t)
+			receiver := newDummyFrameReceiver(tt.sent, tt.failure, pool)
 			rfs := relayFragmentSender{
-				framePool: DefaultFramePool,
-				frameReceiver: &dummyFrameReceiver{
-					t:                t,
-					retSent:          tt.sent,
-					retFailureReason: tt.failure,
-					wantPayload:      tt.wantPayload,
-				},
+				callReq:       &cr,
+				framePool:     pool,
+				frameReceiver: receiver,
 				failRelayItemFunc: func(items *relayItems, id uint32, failure string, err error) {
 					failRelayItemFuncCalled = true
 					assert.Equal(t, uint32(123), id, "got unexpected id")
@@ -87,12 +92,16 @@ func TestRelayFragmentSender(t *testing.T) {
 				sentReporter: &noopSentReporter{},
 			}
 
-			err := rfs.flushFragment(wf)
-			if tt.wantError != "" {
-				require.EqualError(t, err, tt.wantError)
-				return
-			}
+			wf, err := rfs.newFragment(true, nullChecksum{})
 			require.NoError(t, err)
+
+			// Get the payload expected by receive before the fragment is released
+			wantPayload := make([]byte, wf.contents.BytesWritten())
+			copy(wantPayload, wf.frame.Payload[:wf.contents.BytesWritten()])
+
+			err = rfs.flushFragment(wf)
+			require.NoError(t, err)
+			assert.Equal(t, wantPayload, receiver.gotPayload)
 			assert.Equal(t, tt.wantFailureRelayItemFuncCalled, failRelayItemFuncCalled, "unexpected failRelayItemFunc called state")
 		})
 	}
