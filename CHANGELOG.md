@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.32.1] - 2022-08-23
+### Fixed
+
+ * Release unsent frames when flushing fragments (#887)
+
 ## [1.32.0] - 2022-07-12
 ### Changed
  * Add TLS option in testutils.NewServerChannel (#882)
@@ -351,6 +356,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.32.1]: https://github.com/uber/tchannel-go/compare/v1.32.0...v1.32.1
 [1.32.0]: https://github.com/uber/tchannel-go/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/uber/tchannel-go/compare/v1.22.3...v1.31.0
 [1.22.3]: https://github.com/uber/tchannel-go/compare/v1.22.2...v1.22.3
