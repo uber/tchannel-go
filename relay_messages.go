@@ -326,7 +326,7 @@ func (f *lazyCallReq) Arg2Append(key, val []byte) {
 // this RPC req-res.
 func finishesCall(f *Frame) bool {
 	switch f.messageType() {
-	case messageTypeError:
+	case messageTypeError, messageTypeCancel:
 		return true
 	case messageTypeCallRes, messageTypeCallResContinue:
 		flags := f.Payload[_flagsIndex]

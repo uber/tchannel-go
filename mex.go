@@ -92,6 +92,7 @@ type messageExchange struct {
 	recvCh    chan *Frame
 	errCh     errNotifier
 	ctx       context.Context
+	ctxCancel context.CancelFunc
 	msgID     uint32
 	msgType   messageType
 	mexset    *messageExchangeSet
@@ -143,6 +144,12 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 	}
 }
 
+func (mex *messageExchange) handleCancel(frame *Frame) {
+	if mex.ctxCancel != nil {
+		mex.ctxCancel()
+	}
+}
+
 func (mex *messageExchange) checkFrame(frame *Frame) error {
 	if frame.Header.ID != mex.msgID {
 		mex.mexset.log.WithFields(
@@ -164,6 +171,7 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 	// Which is why we check the context error only (instead of mex.checkError)e
 	// In the mex.errCh case, we do a non-blocking read from recvCh to prioritize it.
 	if err := mex.ctx.Err(); err != nil {
+		mex.onCtxErr(err)
 		return nil, GetContextError(err)
 	}
 
@@ -174,6 +182,7 @@ func (mex *messageExchange) recvPeerFrame() (*Frame, error) {
 		}
 		return frame, nil
 	case <-mex.ctx.Done():
+		mex.onCtxErr(mex.ctx.Err())
 		return nil, GetContextError(mex.ctx.Err())
 	case <-mex.errCh.c:
 		// Select will randomly choose a case, but we want to prioritize
@@ -228,15 +237,21 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 	}
 }
 
+func (mex *messageExchange) onCtxErr(err error) {
+	if onCancel := mex.mexset.onCancel; onCancel != nil {
+		onCancel(mex.msgID)
+	}
+}
+
 // shutdown shuts down the message exchange, removing it from the message
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown() {
+func (mex *messageExchange) shutdown() bool {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if !mex.shutdownAtomic.CAS(false, true) {
-		return
+		return false
 	}
 
 	if mex.errChNotified.CAS(false, true) {
@@ -244,6 +259,7 @@ func (mex *messageExchange) shutdown() {
 	}
 
 	mex.mexset.removeExchange(mex.msgID)
+	return true
 }
 
 // inboundExpired is called when an exchange is canceled or it times out,
@@ -267,6 +283,7 @@ type messageExchangeSet struct {
 
 	log       Logger
 	name      string
+	onCancel  func(id uint32)
 	onRemoved func()
 	onAdded   func()
 
@@ -301,7 +318,7 @@ func (mexset *messageExchangeSet) addExchange(mex *messageExchange) error {
 }
 
 // newExchange creates and adds a new message exchange to this set
-func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool FramePool,
+func (mexset *messageExchangeSet) newExchange(ctx context.Context, ctxCancel context.CancelFunc, framePool FramePool,
 	msgType messageType, msgID uint32, bufferSize int) (*messageExchange, error) {
 	if mexset.log.Enabled(LogLevelDebug) {
 		mexset.log.Debugf("Creating new %s message exchange for [%v:%d]", mexset.name, msgType, msgID)
@@ -311,6 +328,7 @@ func (mexset *messageExchangeSet) newExchange(ctx context.Context, framePool Fra
 		msgType:   msgType,
 		msgID:     msgID,
 		ctx:       ctx,
+		ctxCancel: ctxCancel,
 		recvCh:    make(chan *Frame, bufferSize),
 		errCh:     newErrNotifier(),
 		mexset:    mexset,
@@ -444,6 +462,31 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	}
 
 	return nil
+}
+
+func (mexset *messageExchangeSet) handleCancel(frame *Frame) {
+	if mexset.shutdown {
+		return
+	}
+
+	if mexset.log.Enabled(LogLevelDebug) {
+		mexset.log.Debugf("handling cancel for %s", mexset.name, frame.Header)
+	}
+
+	mexset.RLock()
+	mex := mexset.exchanges[frame.Header.ID]
+	mexset.RUnlock()
+
+	if mex == nil {
+		// This is ok since the exchange might have expired.
+		mexset.log.WithFields(
+			LogField{"frameHeader", frame.Header.String()},
+			LogField{"exchange", mexset.name},
+		).Info("Received cancel frame for unknown message exchange.")
+		return
+	}
+
+	mex.handleCancel(frame)
 }
 
 // copyExchanges returns a copy of the exchanges if the exchange is active.

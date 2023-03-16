@@ -158,6 +158,10 @@ type ConnectionOptions struct {
 	// MaxCloseTime controls how long we allow a connection to complete pending
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
+
+	// SendCancelOnContextCanceled will enable sending cancel messages
+	// when a request context is canceled before receiving a response.
+	SendCancelOnContextCanceled bool
 }
 
 // connectionEvents are the events that can be triggered by a connection.
@@ -359,6 +363,7 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 
 	c.nextMessageID.Store(initialID)
 	c.log = log
+	c.outbound.onCancel = c.onCancel
 	c.inbound.onRemoved = c.checkExchanges
 	c.outbound.onRemoved = c.checkExchanges
 	c.inbound.onAdded = c.onExchangeAdded
@@ -374,6 +379,20 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 	go c.readFrames(connID)
 	go c.writeFrames(connID)
 	return c
+}
+
+func (c *Connection) onCancel(msgID uint32) {
+	if !c.opts.SendCancelOnContextCanceled {
+		return
+	}
+
+	cancelMsg := &cancelMessage{
+		id:      msgID,
+		message: ErrRequestCancelled.Error(),
+	}
+	if err := c.sendMessage(cancelMsg); err != nil {
+		c.connectionError("send cancel", err)
+	}
 }
 
 func (c *Connection) onExchangeAdded() {
@@ -422,7 +441,7 @@ func (c *Connection) callOnExchangeChange() {
 // ping sends a ping message and waits for a ping response.
 func (c *Connection) ping(ctx context.Context) error {
 	req := &pingReq{id: c.NextMessageID()}
-	mex, err := c.outbound.newExchange(ctx, c.opts.FramePool, req.messageType(), req.ID(), 1)
+	mex, err := c.outbound.newExchange(ctx, c.outboundCtxCancel, c.opts.FramePool, req.messageType(), req.ID(), 1)
 	if err != nil {
 		return c.connectionError("create ping exchange", err)
 	}
@@ -692,7 +711,7 @@ func (c *Connection) readFrames(_ uint32) {
 
 func (c *Connection) handleFrameRelay(frame *Frame) bool {
 	switch frame.Header.messageType {
-	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError:
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypeCancel:
 		shouldRelease, err := c.relay.Relay(frame)
 		if err != nil {
 			c.log.WithFields(
@@ -726,6 +745,8 @@ func (c *Connection) handleFrameNoRelay(frame *Frame) bool {
 		releaseFrame = c.handlePingRes(frame)
 	case messageTypeError:
 		releaseFrame = c.handleError(frame)
+	case messageTypeCancel:
+		releaseFrame = c.handleCancel(frame)
 	default:
 		// TODO(mmihic): Log and close connection with protocol error
 		c.log.WithFields(

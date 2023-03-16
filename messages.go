@@ -36,6 +36,7 @@ const (
 	messageTypeCallRes         messageType = 0x04
 	messageTypeCallReqContinue messageType = 0x13
 	messageTypeCallResContinue messageType = 0x14
+	messageTypeCancel          messageType = 0xC0
 	messageTypePingReq         messageType = 0xd0
 	messageTypePingRes         messageType = 0xd1
 	messageTypeError           messageType = 0xFF
@@ -311,6 +312,33 @@ func (m errorMessage) AsSystemError() error {
 // Error returns the error message from the converted
 func (m errorMessage) Error() string {
 	return m.AsSystemError().Error()
+}
+
+type cancelMessage struct {
+	id      uint32
+	ttl     uint32 // unused.
+	tracing Span
+	message string
+}
+
+func (m *cancelMessage) ID() uint32               { return m.id }
+func (m *cancelMessage) messageType() messageType { return messageTypeCancel }
+func (m *cancelMessage) read(r *typed.ReadBuffer) error {
+	m.ttl = r.ReadUint32()
+	m.tracing.read(r)
+	m.message = r.ReadLen16String()
+	return r.Err()
+}
+
+func (m *cancelMessage) write(w *typed.WriteBuffer) error {
+	w.WriteUint32(m.ttl)
+	m.tracing.write(w)
+	w.WriteLen16String(m.message)
+	return w.Err()
+}
+
+func (m *cancelMessage) AsSystemError() error {
+	return NewSystemError(ErrCodeCancelled, m.message)
 }
 
 type pingReq struct {

@@ -66,7 +66,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	}
 
 	requestID := c.NextMessageID()
-	mex, err := c.outbound.newExchange(ctx, c.opts.FramePool, messageTypeCallReq, requestID, mexChannelBufferSize)
+	mex, err := c.outbound.newExchange(ctx, c.outboundCtxCancel, c.opts.FramePool, messageTypeCallReq, requestID, mexChannelBufferSize)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,15 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	if err := call.writeMethod([]byte(methodName)); err != nil {
 		return nil, err
 	}
+
 	return call, nil
+}
+
+func (c *Connection) outboundCtxCancel() {
+	// outbound contexts are created by callers, can't cancel them.
+	// However, we shouldn't be trying to cancel them, so log.
+	c.log.Warn("unexpected cancel of outbound context")
+
 }
 
 // handleCallRes handles an incoming call req message, forwarding the
