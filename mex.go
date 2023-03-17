@@ -247,11 +247,11 @@ func (mex *messageExchange) onCtxErr(err error) {
 // exchange set so  that it cannot receive more messages from the peer.  The
 // receive channel remains open, however, in case there are concurrent
 // goroutines sending to it.
-func (mex *messageExchange) shutdown() bool {
+func (mex *messageExchange) shutdown() {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
 	if !mex.shutdownAtomic.CAS(false, true) {
-		return false
+		return
 	}
 
 	if mex.errChNotified.CAS(false, true) {
@@ -259,7 +259,7 @@ func (mex *messageExchange) shutdown() bool {
 	}
 
 	mex.mexset.removeExchange(mex.msgID)
-	return true
+	return
 }
 
 // inboundExpired is called when an exchange is canceled or it times out,
@@ -465,10 +465,6 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 }
 
 func (mexset *messageExchangeSet) handleCancel(frame *Frame) {
-	if mexset.shutdown {
-		return
-	}
-
 	if mexset.log.Enabled(LogLevelDebug) {
 		mexset.log.Debugf("handling cancel for %s", mexset.name, frame.Header)
 	}
