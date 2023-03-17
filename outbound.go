@@ -140,7 +140,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 func (c *Connection) outboundCtxCancel() {
 	// outbound contexts are created by callers, can't cancel them.
 	// However, we shouldn't be trying to cancel them, so log.
-	c.log.Warn("unexpected cancel of outbound context")
+	c.log.Debug("unexpected cancel of outbound context")
 }
 
 // handleCallRes handles an incoming call req message, forwarding the

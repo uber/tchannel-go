@@ -316,7 +316,7 @@ func (m errorMessage) Error() string {
 
 type cancelMessage struct {
 	id      uint32
-	ttl     uint32 // unused.
+	ttl     uint32 // unused by tchannel-go, but part of the protocol.
 	tracing Span
 	message string
 }

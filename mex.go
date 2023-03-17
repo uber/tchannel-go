@@ -144,7 +144,7 @@ func (mex *messageExchange) forwardPeerFrame(frame *Frame) error {
 	}
 }
 
-func (mex *messageExchange) handleCancel(frame *Frame) {
+func (mex *messageExchange) handleCancel(_ *Frame) {
 	if mex.ctxCancel != nil {
 		mex.ctxCancel()
 	}
