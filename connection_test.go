@@ -491,9 +491,11 @@ func TestTimeout(t *testing.T) {
 	})
 }
 
-func TestSendCancel(t *testing.T) {
+func TestServerClientCancellation(t *testing.T) {
 	opts := testutils.NewOpts()
 	opts.DefaultConnectionOptions.SendCancelOnContextCanceled = true
+	opts.DefaultConnectionOptions.PropagateCancel = true
+
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		callReceived := make(chan struct{})
 		testutils.RegisterFunc(ts.Server(), "ctxWait", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -524,33 +526,54 @@ func TestSendCancel(t *testing.T) {
 }
 
 func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
-	testutils.WithTestServer(t, nil, func(t testing.TB, ts *testutils.TestServer) {
-		callReceived := make(chan struct{})
-		testutils.RegisterFunc(ts.Server(), "ctxWait", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-			require.NoError(t, ctx.Err(), "context valid before cancellation")
-			close(callReceived)
+	tests := []struct {
+		msg                         string
+		sendCancelOnContextCanceled bool
+	}{
+		{
+			msg:                         "no send or process cancel",
+			sendCancelOnContextCanceled: false,
+		},
+		{
+			msg:                         "only enable cancels on outbounds",
+			sendCancelOnContextCanceled: true,
+		},
+	}
 
-			<-ctx.Done()
-			assert.Equal(t, context.DeadlineExceeded, ctx.Err())
-			return nil, assert.AnError
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			opts := testutils.NewOpts()
+			opts.DefaultConnectionOptions.SendCancelOnContextCanceled = tt.sendCancelOnContextCanceled
+
+			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+				callReceived := make(chan struct{})
+				testutils.RegisterFunc(ts.Server(), "ctxWait", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+					require.NoError(t, ctx.Err(), "context valid before cancellation")
+					close(callReceived)
+
+					<-ctx.Done()
+					assert.Equal(t, context.DeadlineExceeded, ctx.Err())
+					return nil, assert.AnError
+				})
+
+				ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
+				defer cancel()
+
+				// Wait for the call to be recieved by the server before cancelling the context.
+				go func() {
+					<-callReceived
+					cancel()
+				}()
+
+				_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "ctxWait", nil, nil)
+				assert.Equal(t, ErrRequestCancelled, err, "client call result")
+
+				calls := relaytest.NewMockStats()
+				calls.Add(ts.ServiceName(), ts.ServiceName(), "ctxWait").Failed("timeout").End()
+				ts.AssertRelayStats(calls)
+			})
 		})
-
-		ctx, cancel := NewContext(testutils.Timeout(300 * time.Millisecond))
-		defer cancel()
-
-		// Wait for the call to be recieved by the server before cancelling the context.
-		go func() {
-			<-callReceived
-			cancel()
-		}()
-
-		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "ctxWait", nil, nil)
-		assert.Equal(t, ErrRequestCancelled, err, "client call result")
-
-		calls := relaytest.NewMockStats()
-		calls.Add(ts.ServiceName(), ts.ServiceName(), "ctxWait").Failed("timeout").End()
-		ts.AssertRelayStats(calls)
-	})
+	}
 }
 
 func TestLargeMethod(t *testing.T) {

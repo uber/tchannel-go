@@ -159,8 +159,14 @@ type ConnectionOptions struct {
 	// calls before shutting down. Only used if it is non-zero.
 	MaxCloseTime time.Duration
 
-	// SendCancelOnContextCanceled will enable sending cancel messages
+	// PropagateCancel enables cancel messages to cancel contexts.
+	// By default, cancel messages are ignored.
+	// This only affects inbounds (servers handling calls).
+	PropagateCancel bool
+
+	// SendCancelOnContextCanceled enables sending cancel messages
 	// when a request context is canceled before receiving a response.
+	// This only affects outbounds (clients making calls).
 	SendCancelOnContextCanceled bool
 }
 
@@ -710,7 +716,15 @@ func (c *Connection) readFrames(_ uint32) {
 }
 
 func (c *Connection) handleFrameRelay(frame *Frame) bool {
-	switch frame.Header.messageType {
+	if frame.Header.messageType == messageTypeCancel && !c.opts.PropagateCancel {
+		// If cancel propagation is disabled, don't do anything for this frame.
+		if c.log.Enabled(LogLevelDebug) {
+			c.log.Debugf("Ignoring cancel in relay for %v", frame.Header.ID)
+		}
+		return true
+	}
+
+	switch msgType := frame.Header.messageType; msgType {
 	case messageTypeCallReq, messageTypeCallReqContinue, messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypeCancel:
 		shouldRelease, err := c.relay.Relay(frame)
 		if err != nil {

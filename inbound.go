@@ -139,6 +139,13 @@ func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 }
 
 func (c *Connection) handleCancel(frame *Frame) bool {
+	if !c.opts.PropagateCancel {
+		if c.log.Enabled(LogLevelDebug) {
+			c.log.Debugf("Ignoring cancel for %v", frame.Header.ID)
+		}
+		return true
+	}
+
 	c.inbound.handleCancel(frame)
 
 	// Free the frame, as it's consumed immediately.
