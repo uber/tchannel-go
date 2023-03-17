@@ -238,6 +238,11 @@ func (mex *messageExchange) recvPeerFrameOfType(msgType messageType) (*Frame, er
 }
 
 func (mex *messageExchange) onCtxErr(err error) {
+	// On canceled contexts, we may need to send a cancel message.
+	if err != context.Canceled {
+		return
+	}
+
 	if onCancel := mex.mexset.onCancel; onCancel != nil {
 		onCancel(mex.msgID)
 	}
