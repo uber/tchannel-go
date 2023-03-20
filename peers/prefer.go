@@ -52,9 +52,9 @@ func mod2_31(v uint32) uint32 {
 
 // This is based on the standard library's fnv32a implementation.
 // We copy it for a couple of reasons:
-// 1. Avoid allocations to create a hash.Hash32
-// 2. Avoid converting the []byte to a string (another allocation) since
-//    the Hash32 interface only supports writing bytes.
+//  1. Avoid allocations to create a hash.Hash32
+//  2. Avoid converting the []byte to a string (another allocation) since
+//     the Hash32 interface only supports writing bytes.
 func fnv32a(s string) uint32 {
 	const (
 		initial = 2166136261

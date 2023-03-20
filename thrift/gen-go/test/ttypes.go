@@ -17,9 +17,9 @@ var _ = bytes.Equal
 var GoUnusedProtection__ int
 
 // Attributes:
-//  - B1
-//  - S2
-//  - I3
+//   - B1
+//   - S2
+//   - I3
 type Data struct {
 	B1 bool   `thrift:"b1,1,required" db:"b1" json:"b1"`
 	S2 string `thrift:"s2,2,required" db:"s2" json:"s2"`
@@ -194,7 +194,7 @@ func (p *Data) String() string {
 }
 
 // Attributes:
-//  - Message
+//   - Message
 type SimpleErr struct {
 	Message string `thrift:"message,1" db:"message" json:"message"`
 }
@@ -289,7 +289,7 @@ func (p *SimpleErr) Error() string {
 }
 
 // Attributes:
-//  - Message
+//   - Message
 type NewErr_ struct {
 	Message string `thrift:"message,1" db:"message" json:"message"`
 }
@@ -384,8 +384,8 @@ func (p *NewErr_) Error() string {
 }
 
 // Attributes:
-//  - Ok
-//  - Message
+//   - Ok
+//   - Message
 type HealthStatus struct {
 	Ok      bool    `thrift:"ok,1,required" db:"ok" json:"ok"`
 	Message *string `thrift:"message,2" db:"message" json:"message,omitempty"`

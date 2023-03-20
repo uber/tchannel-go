@@ -49,7 +49,7 @@ func NewMetaClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot th
 }
 
 // Parameters:
-//  - Hr
+//   - Hr
 func (p *MetaClient) Health(hr *HealthRequest) (r *HealthStatus, err error) {
 	if err = p.sendHealth(hr); err != nil {
 		return
@@ -464,7 +464,7 @@ func (p *metaProcessorVersionInfo) Process(seqId int32, iprot, oprot thrift.TPro
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
-//  - Hr
+//   - Hr
 type MetaHealthArgs struct {
 	Hr *HealthRequest `thrift:"hr,1" db:"hr" json:"hr"`
 }
@@ -563,7 +563,7 @@ func (p *MetaHealthArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type MetaHealthResult struct {
 	Success *HealthStatus `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
@@ -717,7 +717,7 @@ func (p *MetaThriftIDLArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type MetaThriftIDLResult struct {
 	Success *ThriftIDLs `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
@@ -871,7 +871,7 @@ func (p *MetaVersionInfoArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type MetaVersionInfoResult struct {
 	Success *VersionInfo `thrift:"success,0" db:"success" json:"success,omitempty"`
 }

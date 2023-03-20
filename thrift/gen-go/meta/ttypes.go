@@ -149,7 +149,7 @@ type Filename string
 func FilenamePtr(v Filename) *Filename { return &v }
 
 // Attributes:
-//  - Type
+//   - Type
 type HealthRequest struct {
 	Type *HealthRequestType `thrift:"type,1" db:"type" json:"type,omitempty"`
 }
@@ -252,9 +252,9 @@ func (p *HealthRequest) String() string {
 }
 
 // Attributes:
-//  - Ok
-//  - Message
-//  - State
+//   - Ok
+//   - Message
+//   - State
 type HealthStatus struct {
 	Ok      bool         `thrift:"ok,1,required" db:"ok" json:"ok"`
 	Message *string      `thrift:"message,2" db:"message" json:"message,omitempty"`
@@ -442,8 +442,8 @@ func (p *HealthStatus) String() string {
 }
 
 // Attributes:
-//  - Idls
-//  - EntryPoint
+//   - Idls
+//   - EntryPoint
 type ThriftIDLs struct {
 	Idls       map[Filename]string `thrift:"idls,1,required" db:"idls" json:"idls"`
 	EntryPoint Filename            `thrift:"entryPoint,2,required" db:"entryPoint" json:"entryPoint"`
@@ -611,9 +611,9 @@ func (p *ThriftIDLs) String() string {
 }
 
 // Attributes:
-//  - Language
-//  - LanguageVersion
-//  - Version
+//   - Language
+//   - LanguageVersion
+//   - Version
 type VersionInfo struct {
 	Language        string `thrift:"language,1,required" db:"language" json:"language"`
 	LanguageVersion string `thrift:"language_version,2,required" db:"language_version" json:"language_version"`

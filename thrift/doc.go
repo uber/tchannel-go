@@ -23,18 +23,20 @@ Package thrift adds support to use Thrift services over TChannel.
 
 To start listening to a Thrift service using TChannel, create the channel,
 and register the service using:
-  server := thrift.NewServer(tchan)
-  server.Register(gen.NewTChan[SERVICE]Server(handler)
 
-  // Any number of services can be registered on the same Thrift server.
-  server.Register(gen.NewTChan[SERVICE2]Server(handler)
+	server := thrift.NewServer(tchan)
+	server.Register(gen.NewTChan[SERVICE]Server(handler)
+
+	// Any number of services can be registered on the same Thrift server.
+	server.Register(gen.NewTChan[SERVICE2]Server(handler)
 
 To use a Thrift client use the generated TChan client:
-  thriftClient := thrift.NewClient(ch, "hyperbahnService", nil)
-  client := gen.NewTChan[SERVICE]Client(thriftClient)
 
-  // Any number of service clients can be made using the same Thrift client.
-  client2 := gen.NewTChan[SERVICE2]Client(thriftClient)
+	thriftClient := thrift.NewClient(ch, "hyperbahnService", nil)
+	client := gen.NewTChan[SERVICE]Client(thriftClient)
+
+	// Any number of service clients can be made using the same Thrift client.
+	client2 := gen.NewTChan[SERVICE2]Client(thriftClient)
 
 This client can be used similar to a standard Thrift client, except a Context
 is passed with options (such as timeout).

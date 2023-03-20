@@ -532,8 +532,9 @@ func introspectRuntimeVersion() RuntimeVersion {
 }
 
 // registerInternal registers the following internal handlers which return runtime state:
-//  _gometa_introspect: TChannel internal state.
-//  _gometa_runtime: Golang runtime stats.
+//
+//	_gometa_introspect: TChannel internal state.
+//	_gometa_runtime: Golang runtime stats.
 func (ch *Channel) createInternalHandlers() *handlerMap {
 	internalHandlers := &handlerMap{}
 

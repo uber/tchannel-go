@@ -46,10 +46,10 @@ func (*nullTStruct) Read(p athrift.TProtocol) error {
 // thriftStruction is a TChannel service that implements the following
 // methods:
 //
-//   destruct
-//     Returns a TStruct that fails without writing anything.
-//   partialDestruct
-//     Returns a TStruct that fails after writing partial output.
+//	destruct
+//	  Returns a TStruct that fails without writing anything.
+//	partialDestruct
+//	  Returns a TStruct that fails after writing partial output.
 type thriftStruction struct{}
 
 func (ts *thriftStruction) Handle(

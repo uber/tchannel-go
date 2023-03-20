@@ -17,7 +17,7 @@ var _ = bytes.Equal
 var GoUnusedProtection__ int
 
 // Attributes:
-//  - Key
+//   - Key
 type KeyNotFound struct {
 	Key string `thrift:"key,1" db:"key" json:"key"`
 }

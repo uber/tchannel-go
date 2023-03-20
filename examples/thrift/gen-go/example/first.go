@@ -37,7 +37,7 @@ func NewFirstClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, oprot t
 }
 
 // Parameters:
-//  - Msg
+//   - Msg
 func (p *FirstClient) Echo(msg string) (r string, err error) {
 	if err = p.sendEcho(msg); err != nil {
 		return
@@ -414,7 +414,7 @@ func (p *firstProcessorAppError) Process(seqId int32, iprot, oprot thrift.TProto
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
-//  - Msg
+//   - Msg
 type FirstEchoArgs struct {
 	Msg string `thrift:"msg,1" db:"msg" json:"msg"`
 }
@@ -505,7 +505,7 @@ func (p *FirstEchoArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type FirstEchoResult struct {
 	Success *string `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
@@ -660,7 +660,7 @@ func (p *FirstHealthcheckArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type FirstHealthcheckResult struct {
 	Success *HealthCheckRes `thrift:"success,0" db:"success" json:"success,omitempty"`
 }

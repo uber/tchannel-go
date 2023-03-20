@@ -47,7 +47,7 @@ func NewSecondServiceClientProtocol(t thrift.TTransport, iprot thrift.TProtocol,
 }
 
 // Parameters:
-//  - Arg
+//   - Arg
 func (p *SecondServiceClient) Echo(arg string) (r string, err error) {
 	if err = p.sendEcho(arg); err != nil {
 		return
@@ -218,7 +218,7 @@ func (p *secondServiceProcessorEcho) Process(seqId int32, iprot, oprot thrift.TP
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
-//  - Arg
+//   - Arg
 type SecondServiceEchoArgs struct {
 	Arg string `thrift:"arg,1" db:"arg" json:"arg"`
 }
@@ -309,7 +309,7 @@ func (p *SecondServiceEchoArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type SecondServiceEchoResult struct {
 	Success *string `thrift:"success,0" db:"success" json:"success,omitempty"`
 }

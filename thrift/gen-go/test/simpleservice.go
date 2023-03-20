@@ -49,7 +49,7 @@ func NewSimpleServiceClientProtocol(t thrift.TTransport, iprot thrift.TProtocol,
 }
 
 // Parameters:
-//  - Arg
+//   - Arg
 func (p *SimpleServiceClient) Call(arg *Data) (r *Data, err error) {
 	if err = p.sendCall(arg); err != nil {
 		return
@@ -479,7 +479,7 @@ func (p *simpleServiceProcessorSimpleFuture) Process(seqId int32, iprot, oprot t
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
-//  - Arg
+//   - Arg
 type SimpleServiceCallArgs struct {
 	Arg *Data `thrift:"arg,1" db:"arg" json:"arg"`
 }
@@ -578,7 +578,7 @@ func (p *SimpleServiceCallArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type SimpleServiceCallResult struct {
 	Success *Data `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
@@ -732,7 +732,7 @@ func (p *SimpleServiceSimpleArgs) String() string {
 }
 
 // Attributes:
-//  - SimpleErr
+//   - SimpleErr
 type SimpleServiceSimpleResult struct {
 	SimpleErr *SimpleErr `thrift:"simpleErr,1" db:"simpleErr" json:"simpleErr,omitempty"`
 }
@@ -886,8 +886,8 @@ func (p *SimpleServiceSimpleFutureArgs) String() string {
 }
 
 // Attributes:
-//  - SimpleErr
-//  - NewErr_
+//   - SimpleErr
+//   - NewErr_
 type SimpleServiceSimpleFutureResult struct {
 	SimpleErr *SimpleErr `thrift:"simpleErr,1" db:"simpleErr" json:"simpleErr,omitempty"`
 	NewErr_   *NewErr_   `thrift:"newErr,2" db:"newErr" json:"newErr,omitempty"`
