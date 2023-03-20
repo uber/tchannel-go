@@ -265,7 +265,7 @@ func (p *BaseServiceHealthCheckArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type BaseServiceHealthCheckResult struct {
 	Success *string `thrift:"success,0" db:"success" json:"success,omitempty"`
 }

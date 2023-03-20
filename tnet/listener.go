@@ -41,8 +41,9 @@ func Wrap(l net.Listener) net.Listener {
 // The following can happen:
 // Goroutine 1 is running Accept, and is blocked, waiting for epoll
 // Goroutine 2 calls Close. It sees an extra reference, and so cannot destroy
-//  the socket, but instead decrements a reference, marks the connection as closed
-//  and unblocks epoll.
+// the socket, but instead decrements a reference, marks the connection as closed
+// and unblocks epoll.
+//
 // Goroutine 2 returns to the caller, makes a new connection.
 // The new connection is sent to the socket (since it hasn't been destroyed)
 // Goroutine 1 returns from epoll, and accepts the new connection.

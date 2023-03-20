@@ -265,7 +265,7 @@ func (p *MetaHealthArgs) String() string {
 }
 
 // Attributes:
-//  - Success
+//   - Success
 type MetaHealthResult struct {
 	Success *HealthStatus `thrift:"success,0" db:"success" json:"success,omitempty"`
 }
