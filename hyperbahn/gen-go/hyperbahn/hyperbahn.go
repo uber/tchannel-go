@@ -47,7 +47,7 @@ func NewHyperbahnClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, opr
 }
 
 // Parameters:
-//  - Query
+//   - Query
 func (p *HyperbahnClient) Discover(query *DiscoveryQuery) (r *DiscoveryResult_, err error) {
 	if err = p.sendDiscover(query); err != nil {
 		return
@@ -232,7 +232,7 @@ func (p *hyperbahnProcessorDiscover) Process(seqId int32, iprot, oprot thrift.TP
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
-//  - Query
+//   - Query
 type HyperbahnDiscoverArgs struct {
 	Query *DiscoveryQuery `thrift:"query,1,required" db:"query" json:"query"`
 }
@@ -337,9 +337,9 @@ func (p *HyperbahnDiscoverArgs) String() string {
 }
 
 // Attributes:
-//  - Success
-//  - NoPeersAvailable
-//  - InvalidServiceName
+//   - Success
+//   - NoPeersAvailable
+//   - InvalidServiceName
 type HyperbahnDiscoverResult struct {
 	Success            *DiscoveryResult_   `thrift:"success,0" db:"success" json:"success,omitempty"`
 	NoPeersAvailable   *NoPeersAvailable   `thrift:"noPeersAvailable,1" db:"noPeersAvailable" json:"noPeersAvailable,omitempty"`

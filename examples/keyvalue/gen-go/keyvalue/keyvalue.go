@@ -39,7 +39,7 @@ func NewKeyValueClientProtocol(t thrift.TTransport, iprot thrift.TProtocol, opro
 }
 
 // Parameters:
-//  - Key
+//   - Key
 func (p *KeyValueClient) Get(key string) (r string, err error) {
 	if err = p.sendGet(key); err != nil {
 		return
@@ -123,8 +123,8 @@ func (p *KeyValueClient) recvGet() (value string, err error) {
 }
 
 // Parameters:
-//  - Key
-//  - Value
+//   - Key
+//   - Value
 func (p *KeyValueClient) Set(key string, value string) (err error) {
 	if err = p.sendSet(key, value); err != nil {
 		return
@@ -323,7 +323,7 @@ func (p *keyValueProcessorSet) Process(seqId int32, iprot, oprot thrift.TProtoco
 // HELPER FUNCTIONS AND STRUCTURES
 
 // Attributes:
-//  - Key
+//   - Key
 type KeyValueGetArgs struct {
 	Key string `thrift:"key,1" db:"key" json:"key"`
 }
@@ -414,9 +414,9 @@ func (p *KeyValueGetArgs) String() string {
 }
 
 // Attributes:
-//  - Success
-//  - NotFound
-//  - InvalidKey
+//   - Success
+//   - NotFound
+//   - InvalidKey
 type KeyValueGetResult struct {
 	Success    *string      `thrift:"success,0" db:"success" json:"success,omitempty"`
 	NotFound   *KeyNotFound `thrift:"notFound,1" db:"notFound" json:"notFound,omitempty"`
@@ -606,8 +606,8 @@ func (p *KeyValueGetResult) String() string {
 }
 
 // Attributes:
-//  - Key
-//  - Value
+//   - Key
+//   - Value
 type KeyValueSetArgs struct {
 	Key   string `thrift:"key,1" db:"key" json:"key"`
 	Value string `thrift:"value,2" db:"value" json:"value"`
@@ -732,7 +732,7 @@ func (p *KeyValueSetArgs) String() string {
 }
 
 // Attributes:
-//  - InvalidKey
+//   - InvalidKey
 type KeyValueSetResult struct {
 	InvalidKey *InvalidKey `thrift:"invalidKey,1" db:"invalidKey" json:"invalidKey,omitempty"`
 }

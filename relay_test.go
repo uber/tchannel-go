@@ -985,7 +985,9 @@ func TestRelayStalledClientConnection(t *testing.T) {
 }
 
 // Test that a corrupted callRes frame results in log emission. We set up the following:
-//   client <-> relay <-> man-in-the-middle (MITM) relay <-> server
+//
+//	client <-> relay <-> man-in-the-middle (MITM) relay <-> server
+//
 // The MITM relay is configured to intercept and corrupt response frames (through truncation)
 // sent back from the server, and forward them back to the relay, where it is checked for errors.
 func TestRelayCorruptedCallResFrame(t *testing.T) {

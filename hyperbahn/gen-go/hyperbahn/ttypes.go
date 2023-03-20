@@ -17,8 +17,8 @@ var _ = bytes.Equal
 var GoUnusedProtection__ int
 
 // Attributes:
-//  - Message
-//  - ServiceName
+//   - Message
+//   - ServiceName
 type NoPeersAvailable struct {
 	Message     string `thrift:"message,1,required" db:"message" json:"message"`
 	ServiceName string `thrift:"serviceName,2,required" db:"serviceName" json:"serviceName"`
@@ -158,8 +158,8 @@ func (p *NoPeersAvailable) Error() string {
 }
 
 // Attributes:
-//  - Message
-//  - ServiceName
+//   - Message
+//   - ServiceName
 type InvalidServiceName struct {
 	Message     string `thrift:"message,1,required" db:"message" json:"message"`
 	ServiceName string `thrift:"serviceName,2,required" db:"serviceName" json:"serviceName"`
@@ -299,7 +299,7 @@ func (p *InvalidServiceName) Error() string {
 }
 
 // Attributes:
-//  - ServiceName
+//   - ServiceName
 type DiscoveryQuery struct {
 	ServiceName string `thrift:"serviceName,1,required" db:"serviceName" json:"serviceName"`
 }
@@ -396,7 +396,7 @@ func (p *DiscoveryQuery) String() string {
 }
 
 // Attributes:
-//  - Ipv4
+//   - Ipv4
 type IpAddress struct {
 	Ipv4 *int32 `thrift:"ipv4,1" db:"ipv4" json:"ipv4,omitempty"`
 }
@@ -510,8 +510,8 @@ func (p *IpAddress) String() string {
 }
 
 // Attributes:
-//  - IP
-//  - Port
+//   - IP
+//   - Port
 type ServicePeer struct {
 	IP   *IpAddress `thrift:"ip,1,required" db:"ip" json:"ip"`
 	Port int32      `thrift:"port,2,required" db:"port" json:"port"`
@@ -655,7 +655,7 @@ func (p *ServicePeer) String() string {
 }
 
 // Attributes:
-//  - Peers
+//   - Peers
 type DiscoveryResult_ struct {
 	Peers []*ServicePeer `thrift:"peers,1,required" db:"peers" json:"peers"`
 }

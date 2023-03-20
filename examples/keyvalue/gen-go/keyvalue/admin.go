@@ -224,7 +224,7 @@ func (p *AdminClearAllArgs) String() string {
 }
 
 // Attributes:
-//  - NotAuthorized
+//   - NotAuthorized
 type AdminClearAllResult struct {
 	NotAuthorized *NotAuthorized `thrift:"notAuthorized,1" db:"notAuthorized" json:"notAuthorized,omitempty"`
 }

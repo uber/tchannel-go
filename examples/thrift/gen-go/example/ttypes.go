@@ -17,8 +17,8 @@ var _ = bytes.Equal
 var GoUnusedProtection__ int
 
 // Attributes:
-//  - Healthy
-//  - Msg
+//   - Healthy
+//   - Msg
 type HealthCheckRes struct {
 	Healthy bool   `thrift:"healthy,1" db:"healthy" json:"healthy"`
 	Msg     string `thrift:"msg,2" db:"msg" json:"msg"`
