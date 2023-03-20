@@ -113,7 +113,7 @@ lint: install
 	@echo "Running go vet"
 	-go vet $(ALL_PKGS) 2>&1 | $(FILTER) | fgrep -v -e "possible formatting directiv" -e "exit status" | tee -a lint.log
 	@echo "Verifying files are gofmt'd"
-	-gofmt -l . | $(FILTER) | tee -a fmt.log
+	-gofmt -l . | $(FILTER) | tee -a lint.log
 	@echo "Checking for unresolved FIXMEs"
 	-git grep -i -n fixme | $(FILTER) | grep -v -e Makefile | tee -a lint.log
 	@[ ! -s lint.log ]
