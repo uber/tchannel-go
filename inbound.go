@@ -64,7 +64,7 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	call.conn = c
 	ctx, cancel := newIncomingContext(c.baseContext, call, callReq.TimeToLive)
 
-	mex, err := c.inbound.newExchange(ctx, c.opts.FramePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
+	mex, err := c.inbound.newExchange(ctx, cancel, c.opts.FramePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
 	if err != nil {
 		if err == errDuplicateMex {
 			err = errInboundRequestAlreadyActive
@@ -136,6 +136,20 @@ func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 		return true
 	}
 	return false
+}
+
+func (c *Connection) handleCancel(frame *Frame) bool {
+	if !c.opts.PropagateCancel {
+		if c.log.Enabled(LogLevelDebug) {
+			c.log.Debugf("Ignoring cancel for %v", frame.Header.ID)
+		}
+		return true
+	}
+
+	c.inbound.handleCancel(frame)
+
+	// Free the frame, as it's consumed immediately.
+	return true
 }
 
 // createStatsTags creates the common stats tags, if they are not already created.

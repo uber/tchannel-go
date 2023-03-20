@@ -314,7 +314,7 @@ func (r *Relayer) Receive(f *Frame, fType frameType) (sent bool, failureReason s
 
 	// call res frames don't include the OK bit, so we can't wait until the last
 	// frame of a relayed RPC to determine if the call succeeded.
-	if fType == responseFrame {
+	if fType == responseFrame || f.messageType() == messageTypeCancel {
 		// If we've gotten a response frame, we're the originating relayer and
 		// should handle stats.
 		if succeeded, failMsg := determinesCallSuccess(f); succeeded {
@@ -815,7 +815,7 @@ func frameTypeFor(f *Frame) frameType {
 	switch t := f.Header.messageType; t {
 	case messageTypeCallRes, messageTypeCallResContinue, messageTypeError, messageTypePingRes:
 		return responseFrame
-	case messageTypeCallReq, messageTypeCallReqContinue, messageTypePingReq:
+	case messageTypeCallReq, messageTypeCallReqContinue, messageTypePingReq, messageTypeCancel:
 		return requestFrame
 	default:
 		panic(fmt.Sprintf("unsupported frame type: %v", t))
@@ -827,6 +827,8 @@ func determinesCallSuccess(f *Frame) (succeeded bool, failMsg string) {
 	case messageTypeError:
 		msg := newLazyError(f).Code().MetricsKey()
 		return false, msg
+	case messageTypeCancel:
+		return false, "canceled"
 	case messageTypeCallRes:
 		if isCallResOK(f) {
 			return true, ""
