@@ -1,6 +1,17 @@
 Changelog
 =========
 
+## [1.33.0] - 2023-03-20
+
+### Added
+
+ * Optionally send cancelled frames when context is canceled (#890)
+
+### Changed
+
+ * Update dependencies as per recommendations (#894)
+ * Test against Go 1.19 and 1.20 (#892)
+
 ## [1.32.1] - 2022-08-23
 ### Fixed
 
@@ -356,6 +367,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.33.0]: https://github.com/uber/tchannel-go/compare/v1.32.1...v1.33.0
 [1.32.1]: https://github.com/uber/tchannel-go/compare/v1.32.0...v1.32.1
 [1.32.0]: https://github.com/uber/tchannel-go/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/uber/tchannel-go/compare/v1.22.3...v1.31.0
