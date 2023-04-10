@@ -545,7 +545,7 @@ func (p *Peer) Connect(ctx context.Context) (*Connection, error) {
 // BeginCall starts a new call to this specific peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
 func (p *Peer) BeginCall(ctx context.Context, serviceName, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
-	p.channel.Logger().Warn(fmt.Sprintf("beginning peer call to service : %s and method : %s", serviceName, methodName))
+	p.channel.Logger().WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn(fmt.Sprintf("beginning peer call to service : %s and method : %s", serviceName, methodName))
 	if callOptions == nil {
 		callOptions = defaultCallOptions
 	}

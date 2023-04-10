@@ -35,7 +35,7 @@ const maxMethodSize = 16 * 1024
 
 // beginCall begins an outbound call on the connection
 func (c *Connection) beginCall(ctx context.Context, serviceName, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
-	c.log.Warn(fmt.Sprintf("beginning connection to service : %s and method : %s", serviceName, methodName))
+	c.log.WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn(fmt.Sprintf("beginning connection to service : %s and method : %s", serviceName, methodName))
 	now := c.timeNow()
 
 	switch state := c.readState(); state {
@@ -47,7 +47,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, errConnectionUnknownState{"beginCall", state}
 	}
 
-	c.log.Warn(fmt.Sprintf("formed state for service : %s and method : %s", serviceName, methodName))
+	c.log.WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn(fmt.Sprintf("formed state for service : %s and method : %s", serviceName, methodName))
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		// This case is handled by validateCall, so we should
@@ -66,7 +66,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		return nil, GetContextError(err)
 	}
 
-	c.log.Warn(fmt.Sprintf("deadline okay for service : %s and method : %s", serviceName, methodName))
+	c.log.WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn(fmt.Sprintf("deadline okay for service : %s and method : %s", serviceName, methodName))
 	requestID := c.NextMessageID()
 	mex, err := c.outbound.newExchange(ctx, c.opts.FramePool, messageTypeCallReq, requestID, mexChannelBufferSize)
 	if err != nil {
@@ -78,7 +78,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 		mex.shutdown()
 		return nil, ErrConnectionClosed
 	}
-	c.log.Warn(fmt.Sprintf("state checked for service : %s and method : %s", serviceName, methodName))
+	c.log.WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn(fmt.Sprintf("state checked for service : %s and method : %s", serviceName, methodName))
 
 	// Note: We don't verify number of transport headers as the library doesn't
 	// allow adding arbitrary headers. Ensure we never add >= 256 headers here.
@@ -102,7 +102,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	call.statsReporter = c.statsReporter
 	call.createStatsTags(c.commonStatsTags, callOptions, methodName)
 	call.log = c.log.WithFields(LogField{"Out-Call", requestID})
-	call.log.Warn("Call formed")
+	call.log.WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn("Call formed")
 	// TODO(mmihic): It'd be nice to do this without an fptr
 	call.messageForFragment = func(initial bool) message {
 		if initial {
@@ -120,7 +120,7 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	response.requestState = callOptions.RequestState
 	response.mex = mex
 	response.log = c.log.WithFields(LogField{"Out-Response", requestID})
-	response.log.Warn("response formed")
+	response.log.WithFields(LogField{"requestUUID", ctx.Value("requestUUID")}).Warn("response formed")
 	response.span = c.startOutboundSpan(ctx, serviceName, methodName, call, now)
 	response.messageForFragment = func(initial bool) message {
 		if initial {
