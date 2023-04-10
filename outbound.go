@@ -26,6 +26,7 @@ import (
 
 	"github.com/uber/tchannel-go/typed"
 
+	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"golang.org/x/net/context"
 )
