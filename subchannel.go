@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
