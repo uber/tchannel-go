@@ -23,7 +23,9 @@ package typed
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"runtime/debug"
 )
 
 var (
@@ -269,7 +271,7 @@ func (w *WriteBuffer) WriteString(s string) {
 // WriteLen8String writes an 8-bit length preceded string
 func (w *WriteBuffer) WriteLen8String(s string) {
 	if int(byte(len(s))) != len(s) {
-		w.setErr(errStringTooLong)
+		w.setErr(fmt.Errorf("%w: %s: %s", errStringTooLong, string(debug.Stack()), s[:250]))
 	}
 
 	w.WriteSingleByte(byte(len(s)))
@@ -279,7 +281,7 @@ func (w *WriteBuffer) WriteLen8String(s string) {
 // WriteLen16String writes a 16-bit length preceded string
 func (w *WriteBuffer) WriteLen16String(s string) {
 	if int(uint16(len(s))) != len(s) {
-		w.setErr(errStringTooLong)
+		w.setErr(fmt.Errorf("%w: %s: %s", errStringTooLong, string(debug.Stack()), s[:1000]))
 	}
 
 	w.WriteUint16(uint16(len(s)))
