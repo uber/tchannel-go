@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
@@ -79,6 +78,7 @@ func (c *SubChannel) ServiceName() string {
 // BeginCall starts a new call to a remote peer, returning an OutboundCall that can
 // be used to write the arguments of the call.
 func (c *SubChannel) BeginCall(ctx context.Context, methodName string, callOptions *CallOptions) (*OutboundCall, error) {
+	c.topChannel.log.Warn(fmt.Sprintf("beginning call to method : %s", methodName))
 	if callOptions == nil {
 		callOptions = defaultCallOptions
 	}
