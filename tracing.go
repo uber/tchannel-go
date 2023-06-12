@@ -219,44 +219,53 @@ func (c *Connection) extractInboundSpan(callReq *callReq) opentracing.Span {
 }
 
 // ExtractInboundSpan is a higher level version of extractInboundSpan().
+// A new server-side span is created by deserializing the tracing context
+// from the application headers using the standard OpenTracing API
+// supported by all tracers.
 // If the lower-level attempt to create a span from incoming request was
 // successful (e.g. when then Tracer supports Zipkin-style trace IDs),
-// then the application headers are only used to read the Baggage and add
-// it to the existing span. Otherwise, the standard OpenTracing API supported
-// by all tracers is used to deserialize the tracing context from the
-// application headers and start a new server-side span.
-// Once the span is started, it is wrapped in a new Context, which is returned.
+// then the span created here is just used to capture the Baggage and add
+// it to the existing span, and then terminated. The reason we still want
+// to create a new span and copy over the baggage to the existing one is to
+// allow the support for Span Observers (such as [Jaeger Observer]) that
+// might depend on the span baggage.
+// If the lower-level attempt didn't create a span then it the newly created
+// span is returned as expected.
+// [Jaeger Observer]: https://github.com/jaegertracing/jaeger-client-go/blob/master/observer.go
 func ExtractInboundSpan(ctx context.Context, call *InboundCall, headers map[string]string, tracer opentracing.Tracer) context.Context {
-	var span = call.Response().span
-	if span != nil {
-		if headers != nil {
-			// extract SpanContext from headers, but do not start another span with it,
-			// just get the baggage and copy to the already created span
-			carrier := tracingHeadersCarrier(headers)
-			if sc, err := tracer.Extract(opentracing.TextMap, carrier); err == nil {
-				sc.ForeachBaggageItem(func(k, v string) bool {
-					span.SetBaggageItem(k, v)
-					return true
-				})
-			}
-			carrier.RemoveTracingKeys()
+	var parent opentracing.SpanContext
+	if headers != nil {
+		carrier := tracingHeadersCarrier(headers)
+		if p, err := tracer.Extract(opentracing.TextMap, carrier); err == nil {
+			parent = p
 		}
+		carrier.RemoveTracingKeys()
+	}
+	span := tracer.StartSpan(call.MethodString(), ext.RPCServerOption(parent))
+
+	var existingSpan = call.Response().span
+	if existingSpan != nil {
+		// if we already have an existing span, then we use the newly created span
+		// just to capture the Baggage and add it to the existing span. The creation
+		// of new span ensures that the Span Observers are run with all the data.
+		span.Context().ForeachBaggageItem(func(k, v string) bool {
+			existingSpan.SetBaggageItem(k, v)
+			return true
+		})
+
+		// terminate the newly created span, and ensure that it's not sampled.
+		// This span will live only within the scope of the current function.
+		ext.SamplingPriority.Set(span, 0)
+		span.Finish()
+
+		return opentracing.ContextWithSpan(ctx, existingSpan)
 	} else {
-		var parent opentracing.SpanContext
-		if headers != nil {
-			carrier := tracingHeadersCarrier(headers)
-			if p, err := tracer.Extract(opentracing.TextMap, carrier); err == nil {
-				parent = p
-			}
-			carrier.RemoveTracingKeys()
-		}
-		span = tracer.StartSpan(call.MethodString(), ext.RPCServerOption(parent))
 		ext.PeerService.Set(span, call.CallerName())
 		span.SetTag("as", string(call.Format()))
 		call.conn.setPeerHostPort(span)
 		call.Response().span = span
+		return opentracing.ContextWithSpan(ctx, span)
 	}
-	return opentracing.ContextWithSpan(ctx, span)
 }
 
 func (c *Connection) setPeerHostPort(span opentracing.Span) {
