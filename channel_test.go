@@ -64,6 +64,28 @@ func TestNewChannel(t *testing.T) {
 	}, ch.PeerInfo(), "Wrong local peer info")
 }
 
+func TestNewChannelEnableMPTCP(t *testing.T) {
+	ch, err := NewChannel("svc", &ChannelOptions{
+		ProcessName: "pname",
+		EnableMPTCP: true,
+	})
+	require.NoError(t, err, "NewChannel failed")
+
+	assert.Equal(t, LocalPeerInfo{
+		ServiceName: "svc",
+		PeerInfo: PeerInfo{
+			ProcessName: "pname",
+			HostPort:    ephemeralHostPort,
+			IsEphemeral: true,
+			Version: PeerVersion{
+				Language:        "go",
+				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+				TChannelVersion: VersionInfo,
+			},
+		},
+	}, ch.PeerInfo(), "Wrong local peer info")
+}
+
 func TestLoggers(t *testing.T) {
 	ch, err := NewChannel("svc", &ChannelOptions{
 		Logger: NewLogger(ioutil.Discard),
