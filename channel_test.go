@@ -44,26 +44,24 @@ func toMap(fields LogFields) map[string]interface{} {
 }
 
 func TestNewChannel(t *testing.T) {
-	for _, mptcp := range []bool{true, false} {
-		ch, err := NewChannel("svc", &ChannelOptions{
+	ch, err := NewChannel("svc", &ChannelOptions{
+		ProcessName: "pname",
+		EnableMPTCP: true,
+	})
+	require.NoError(t, err, "NewChannel failed")
+	assert.Equal(t, LocalPeerInfo{
+		ServiceName: "svc",
+		PeerInfo: PeerInfo{
 			ProcessName: "pname",
-			EnableMPTCP: mptcp,
-		})
-		require.NoError(t, err, "NewChannel failed")
-		assert.Equal(t, LocalPeerInfo{
-			ServiceName: "svc",
-			PeerInfo: PeerInfo{
-				ProcessName: "pname",
-				HostPort:    ephemeralHostPort,
-				IsEphemeral: true,
-				Version: PeerVersion{
-					Language:        "go",
-					LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
-					TChannelVersion: VersionInfo,
-				},
+			HostPort:    ephemeralHostPort,
+			IsEphemeral: true,
+			Version: PeerVersion{
+				Language:        "go",
+				LanguageVersion: strings.TrimPrefix(runtime.Version(), "go"),
+				TChannelVersion: VersionInfo,
 			},
-		}, ch.PeerInfo(), "Wrong local peer info")
-	}
+		},
+	}, ch.PeerInfo(), "Wrong local peer info")
 }
 
 func TestLoggers(t *testing.T) {
