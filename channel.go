@@ -415,7 +415,7 @@ func (ch *Channel) ListenAndServe(hostPort string) error {
 		return errAlreadyListening
 	}
 
-	lc := net.ListenConfig{}
+	lc := &net.ListenConfig{}
 	lc.SetMultipathTCP(ch.enableMPTCP)
 	l, err := lc.Listen(context.Background(), "tcp", hostPort)
 	if err != nil {
