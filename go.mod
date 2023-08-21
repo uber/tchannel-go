@@ -1,6 +1,6 @@
 module github.com/uber/tchannel-go
 
-go 1.17
+go 1.21
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v0.9.0 // indirect
@@ -17,8 +17,8 @@ require (
 	github.com/uber/jaeger-client-go v2.22.1+incompatible
 	go.uber.org/atomic v1.6.0
 	go.uber.org/multierr v1.2.0
-	golang.org/x/net v0.7.0
-	golang.org/x/sys v0.5.0
+	golang.org/x/net v0.14.0
+	golang.org/x/sys v0.11.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
