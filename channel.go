@@ -48,6 +48,7 @@ var (
 	ErrNoServiceName = errors.New("no service name provided")
 )
 
+// TO TEST GO1.21
 const ephemeralHostPort = "0.0.0.0:0"
 
 // ChannelOptions are used to control parameters on a create a TChannel
