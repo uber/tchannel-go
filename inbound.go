@@ -424,9 +424,9 @@ func (response *InboundCallResponse) doneSending() {
 			if response.systemError {
 				errorType = systemErrorType
 				// if the error is a system error, set the error code in span log
-				span.LogKV("error-code", GetSystemErrorCode(response.err))
+				span.SetTag("rpc.tchannel.system_error_code", GetSystemErrorCode(response.err))
 			}
-			span.LogKV("error-type", errorType)
+			span.SetTag("rpc.tchannel.app_error_type", errorType)
 		}
 		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
 	}
