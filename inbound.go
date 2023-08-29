@@ -31,6 +31,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	systemErrorType = "system"
+	appErrorType    = "application"
+)
+
 var errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
 
 // handleCallReq handles an incoming call request, registering a message
@@ -415,6 +420,13 @@ func (response *InboundCallResponse) doneSending() {
 	if span := response.span; span != nil {
 		if response.applicationError || response.systemError {
 			ext.Error.Set(span, true)
+			errorType := appErrorType
+			if response.systemError {
+				errorType = systemErrorType
+				// if the error is a system error, set the error code in span log
+				span.SetTag("rpc.tchannel.system_error_code", GetSystemErrorCode(response.err))
+			}
+			span.SetTag("rpc.tchannel.error_type", errorType)
 		}
 		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
 	}
