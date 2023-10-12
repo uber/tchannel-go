@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/opentracing/opentracing-go/mocktracer"
+	"github.com/stretchr/testify/assert"
 )
 
 type statsReporter struct{}
@@ -41,58 +41,77 @@ func (w *statsReporter) UpdateGauge(name string, tags map[string]string, value i
 func (w *statsReporter) RecordTimer(name string, tags map[string]string, d time.Duration) {
 }
 
-func TestTracingSpanApplicationError(t *testing.T) {
-
-	tracer := mocktracer.New()
-
-	_, cancel := context.WithCancel(context.TODO())
-
-	callResp := &InboundCallResponse{
-		span: tracer.StartSpan("test"),
-		statsReporter: &statsReporter{},
-		reqResWriter: reqResWriter{
-			err: fmt.Errorf("application"),
-		},
-		applicationError: true,
-		timeNow: time.Now,
-		cancel: cancel,
-	}
-
-	callResp.doneSending()
-
-	parsedSpan := callResp.span.(*mocktracer.MockSpan)
-
-	assert.True(t, parsedSpan.Tag("error").(bool))
-	assert.Nil(t, parsedSpan.Tag("rpc.tchannel.system_error_code"))
-	assert.Equal(t, "application", parsedSpan.Tag("rpc.tchannel.error_type").(string))
-
+type testCase struct {
+	name                   string
+	injectedError          error
+	systemError            bool
+	applicationError       bool
+	expectedSpanError      bool
+	expectedSpanErrorType  string
+	expectedSystemErrorKey string
 }
 
-func TestTracingSpanSystemError(t *testing.T) {
+func TestTracingSpanError(t *testing.T) {
 
-	tracer := mocktracer.New()
+	var (
+		systemError      = NewSystemError(ErrCodeBusy, "foo")
+		applicationError = fmt.Errorf("application")
+	)
 
-	_, cancel := context.WithCancel(context.TODO())
-
-	injectedErr := NewSystemError(ErrCodeBusy, "foo")
-
-	callResp := &InboundCallResponse{
-		span: tracer.StartSpan("test"),
-		statsReporter: &statsReporter{},
-		reqResWriter: reqResWriter{
-			err: injectedErr,
+	testCases := []testCase{
+		{
+			name:                   "ApplicationError",
+			injectedError:          applicationError,
+			systemError:            false,
+			applicationError:       true,
+			expectedSpanError:      true,
+			expectedSpanErrorType:  "application",
+			expectedSystemErrorKey: "",
 		},
-		systemError: true,
-		timeNow: time.Now,
-		cancel: cancel,
+		{
+			name:                   "SystemError",
+			injectedError:          systemError,
+			systemError:            true,
+			applicationError:       false,
+			expectedSpanError:      true,
+			expectedSpanErrorType:  "system",
+			expectedSystemErrorKey: GetSystemErrorCode(systemError).MetricsKey(),
+		},
 	}
 
-	callResp.doneSending()
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
 
-	parsedSpan := callResp.span.(*mocktracer.MockSpan)
+			_, cancel := context.WithTimeout(context.TODO(), time.Second)
 
-	assert.True(t, parsedSpan.Tag("error").(bool))
-	assert.Equal(t, GetSystemErrorCode(injectedErr).MetricsKey(), parsedSpan.Tag("rpc.tchannel.system_error_code").(string))
-	assert.Equal(t, "system", parsedSpan.Tag("rpc.tchannel.error_type").(string))
+			var (
+				parsedSpan *mocktracer.MockSpan
 
+				tracer   = mocktracer.New()
+				callResp = &InboundCallResponse{
+					span:          tracer.StartSpan("test"),
+					statsReporter: &statsReporter{},
+					reqResWriter: reqResWriter{
+						err: testCase.injectedError,
+					},
+					applicationError: testCase.applicationError,
+					systemError:      testCase.systemError,
+					timeNow:          time.Now,
+					cancel:           cancel,
+				}
+			)
+
+			callResp.doneSending()
+
+			parsedSpan = callResp.span.(*mocktracer.MockSpan)
+
+			assert.Equal(t, testCase.expectedSpanError, parsedSpan.Tag("error").(bool))
+			if testCase.expectedSystemErrorKey == "" {
+				assert.Nil(t, parsedSpan.Tag("rpc.tchannel.system_error_code"))
+			} else {
+				assert.Equal(t, testCase.expectedSystemErrorKey, parsedSpan.Tag("rpc.tchannel.system_error_code").(string))
+			}
+			assert.Equal(t, testCase.expectedSpanErrorType, parsedSpan.Tag("rpc.tchannel.error_type").(string))
+		})
+	}
 }
