@@ -52,7 +52,6 @@ type testCase struct {
 }
 
 func TestTracingSpanError(t *testing.T) {
-
 	var (
 		systemError      = NewSystemError(ErrCodeBusy, "foo")
 		applicationError = fmt.Errorf("application")
@@ -81,8 +80,7 @@ func TestTracingSpanError(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-
-			_, cancel := context.WithTimeout(context.TODO(), time.Second)
+			_, cancel := context.WithTimeout(context.Background(), time.Second)
 
 			var (
 				parsedSpan *mocktracer.MockSpan
