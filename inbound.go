@@ -423,8 +423,8 @@ func (response *InboundCallResponse) doneSending() {
 			errorType := appErrorType
 			if response.systemError {
 				errorType = systemErrorType
-				// if the error is a system error, set the error code in span log
-				span.SetTag("rpc.tchannel.system_error_code", GetSystemErrorCode(response.err))
+				// if the error is a system error, set the error code as a span tag
+				span.SetTag("rpc.tchannel.system_error_code", GetSystemErrorCode(response.err).MetricsKey())
 			}
 			span.SetTag("rpc.tchannel.error_type", errorType)
 		}
