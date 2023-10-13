@@ -21,7 +21,6 @@
 package tchannel
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -78,9 +77,8 @@ func TestTracingSpanError(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			_, cancel := context.WithTimeout(context.Background(), time.Second)
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
 
 			var (
 				parsedSpan *mocktracer.MockSpan
@@ -90,12 +88,12 @@ func TestTracingSpanError(t *testing.T) {
 					span:          tracer.StartSpan("test"),
 					statsReporter: &statsReporter{},
 					reqResWriter: reqResWriter{
-						err: testCase.injectedError,
+						err: tt.injectedError,
 					},
-					applicationError: testCase.applicationError,
-					systemError:      testCase.systemError,
+					applicationError: tt.applicationError,
+					systemError:      tt.systemError,
 					timeNow:          time.Now,
-					cancel:           cancel,
+					cancel:           func() {},
 				}
 			)
 
@@ -103,13 +101,13 @@ func TestTracingSpanError(t *testing.T) {
 
 			parsedSpan = callResp.span.(*mocktracer.MockSpan)
 
-			assert.Equal(t, testCase.expectedSpanError, parsedSpan.Tag("error").(bool))
-			if testCase.expectedSystemErrorKey == "" {
+			assert.Equal(t, tt.expectedSpanError, parsedSpan.Tag("error").(bool))
+			if tt.expectedSystemErrorKey == "" {
 				assert.Nil(t, parsedSpan.Tag("rpc.tchannel.system_error_code"))
 			} else {
-				assert.Equal(t, testCase.expectedSystemErrorKey, parsedSpan.Tag("rpc.tchannel.system_error_code").(string))
+				assert.Equal(t, tt.expectedSystemErrorKey, parsedSpan.Tag("rpc.tchannel.system_error_code").(string))
 			}
-			assert.Equal(t, testCase.expectedSpanErrorType, parsedSpan.Tag("rpc.tchannel.error_type").(string))
+			assert.Equal(t, tt.expectedSpanErrorType, parsedSpan.Tag("rpc.tchannel.error_type").(string))
 		})
 	}
 }
