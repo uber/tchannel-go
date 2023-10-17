@@ -1,6 +1,16 @@
 Changelog
 =========
 
+## [1.34.0] - 2023-10-17
+
+### Added
+
+* Emit the error code and type to the tracing span for inbound calls (#903)
+
+### Changed
+
+ * Update go.mod and github test to go 1.21 (#899)
+
 ## [1.33.0] - 2023-03-20
 
 ### Added
@@ -367,6 +377,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.0]: https://github.com/uber/tchannel-go/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/uber/tchannel-go/compare/v1.32.1...v1.33.0
 [1.32.1]: https://github.com/uber/tchannel-go/compare/v1.32.0...v1.32.1
 [1.32.0]: https://github.com/uber/tchannel-go/compare/v1.31.0...v1.32.0
