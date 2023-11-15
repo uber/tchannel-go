@@ -97,6 +97,7 @@ func TestTracingSpanError(t *testing.T) {
 				}
 			)
 
+			callResp.setSpanErrorDetails(tt.injectedError)
 			callResp.doneSending()
 
 			parsedSpan = callResp.span.(*mocktracer.MockSpan)
