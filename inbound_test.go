@@ -27,6 +27,7 @@ import (
 
 	. "github.com/uber/tchannel-go"
 
+	"github.com/uber/jaeger-client-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
 
@@ -34,6 +35,115 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
+
+func TestSpanReportingForErrors(t *testing.T) {
+	injectedSystemError := ErrTimeout
+	tests := []struct {
+		method         string
+		systemErr      bool
+		applicationErr bool
+	}{
+		{
+			method:         "system-error",
+			systemErr:      true,
+			applicationErr: false,
+		},
+		{
+			method:         "app-error",
+			systemErr:      false,
+			applicationErr: true,
+		},
+		{
+			method:         "no-error",
+			systemErr:      false,
+			applicationErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		// We use a jaeger tracer here and not Mocktracer: because jaeger supports
+		// zipkin format which is essential for inbound span extraction
+		jaegerReporter := jaeger.NewInMemoryReporter()
+		jaegerTracer, jaegerCloser := jaeger.NewTracer(testutils.DefaultServerName,
+			jaeger.NewConstSampler(true),
+			jaegerReporter)
+		defer jaegerCloser.Close()
+
+		opts := &testutils.ChannelOpts{
+			ChannelOptions: ChannelOptions{Tracer: jaegerTracer},
+		}
+
+		testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+			// Register handler that returns app error
+			ts.RegisterFunc("app-error", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				return &raw.Res{
+					IsErr: true,
+				}, nil
+			})
+			// Register handler that returns system error
+			ts.RegisterFunc("system-error", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				return &raw.Res{
+					SystemErr: injectedSystemError,
+				}, nil
+			})
+			// Register handler that returns no error
+			ts.RegisterFunc("no-error", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
+				return &raw.Res{}, nil
+			})
+
+			// Set up a relay that can be used to terminate conns
+			// on both sides i.e. client and server
+			relayFunc := func(outgoing bool, f *Frame) *Frame {
+				return f
+			}
+			relayHostPort, shutdown := testutils.FrameRelay(t, ts.HostPort(), relayFunc)
+			defer shutdown()
+
+			ctx, cancel := NewContext(20 * time.Second)
+			defer cancel()
+
+			clientCh := ts.NewClient(opts)
+			defer clientCh.Close()
+
+			// Make a new call, which should fail
+			_, _, resp, err := raw.Call(ctx, clientCh, relayHostPort, ts.ServiceName(), tt.method, []byte("Arg2"), []byte("Arg3"))
+
+			if tt.systemErr {
+				// Providing 'got: %q' is necessary since SystemErrCode is a type alias of byte; testify's
+				// failed test ouput would otherwise print out hex codes.
+				assert.Equal(t, injectedSystemError, err, "expected cancelled error code, got: %q", err)
+			} else {
+				assert.Nil(t, err, "expected no system error code")
+			}
+
+			if tt.applicationErr {
+				assert.True(t, resp.ApplicationError(), "Call(%v) check application error")
+			} else if !tt.systemErr {
+				assert.False(t, resp.ApplicationError(), "Call(%v) check application error")
+			}
+		})
+
+		// We should have 4 spans, 2 for client and 2 for server
+		assert.Equal(t, len(jaegerReporter.GetSpans()), 4)
+		for _, span := range jaegerReporter.GetSpans() {
+			if span.(*jaeger.Span).Tags()["span.kind"] == "server" {
+				assert.Equal(t, span.(*jaeger.Span).Tags()["error"], true)
+				if tt.applicationErr {
+					assert.Equal(t, span.(*jaeger.Span).Tags()["rpc.tchannel.error_type"], "application")
+					assert.Nil(t, span.(*jaeger.Span).Tags()["rpc.tchannel.system_error_code"])
+				} else if tt.systemErr {
+					assert.Equal(t, span.(*jaeger.Span).Tags()["rpc.tchannel.error_type"], "system")
+					assert.Equal(t, span.(*jaeger.Span).Tags()["rpc.tchannel.system_error_code"], GetSystemErrorCode(injectedSystemError).MetricsKey())
+				} else {
+					assert.Nil(t, span.(*jaeger.Span).Tags()["rpc.tchannel.error_type"])
+					assert.Nil(t, span.(*jaeger.Span).Tags()["rpc.tchannel.system_error_code"])
+				}
+			}
+		}
+		jaegerReporter.Reset()
+	}
+
+}
 
 func TestActiveCallReq(t *testing.T) {
 	t.Skip("Test skipped due to unreliable way to test for protocol errors")
