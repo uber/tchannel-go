@@ -368,6 +368,7 @@ func (response *InboundCallResponse) SendSystemError(err error) error {
 	// Fail all future attempts to read fragments
 	response.state = reqResWriterComplete
 	response.systemError = true
+	response.setSpanErrorDetails(err)
 	response.doneSending()
 	response.call.releasePreviousFragment()
 
@@ -386,6 +387,7 @@ func (response *InboundCallResponse) SetApplicationError() error {
 		})
 	}
 	response.applicationError = true
+	response.setSpanErrorDetails(nil)
 	return nil
 }
 
@@ -411,6 +413,21 @@ func (response *InboundCallResponse) Arg3Writer() (ArgWriter, error) {
 	return response.arg3Writer()
 }
 
+// setSpanErrorDetails sets the span tags for the error type.
+func (response *InboundCallResponse) setSpanErrorDetails(err error) {
+	if span := response.span; span != nil {
+		if response.applicationError || response.systemError {
+			errorType := appErrorType
+			if response.systemError {
+				errorType = systemErrorType
+				// if the error is a system error, set the error code as a span tag
+				span.SetTag("rpc.tchannel.system_error_code", GetSystemErrorCode(err).MetricsKey())
+			}
+			span.SetTag("rpc.tchannel.error_type", errorType)
+		}
+	}
+}
+
 // doneSending shuts down the message exchange for this call.
 // For incoming calls, the last message is sending the call response.
 func (response *InboundCallResponse) doneSending() {
@@ -420,13 +437,6 @@ func (response *InboundCallResponse) doneSending() {
 	if span := response.span; span != nil {
 		if response.applicationError || response.systemError {
 			ext.Error.Set(span, true)
-			errorType := appErrorType
-			if response.systemError {
-				errorType = systemErrorType
-				// if the error is a system error, set the error code as a span tag
-				span.SetTag("rpc.tchannel.system_error_code", GetSystemErrorCode(response.err).MetricsKey())
-			}
-			span.SetTag("rpc.tchannel.error_type", errorType)
 		}
 		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
 	}
