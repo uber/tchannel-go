@@ -382,7 +382,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
-[1.34.1]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.35.0
+[1.34.1]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.34.1
 [1.34.0]: https://github.com/uber/tchannel-go/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/uber/tchannel-go/compare/v1.32.1...v1.33.0
 [1.32.1]: https://github.com/uber/tchannel-go/compare/v1.32.0...v1.32.1
