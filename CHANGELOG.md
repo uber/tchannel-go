@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.34.1] - 2023-12-11
+### Fixed
+
+ * Fix unknown error type in span tag rpc.tchannel.system_error_code (#907)
+
 ## [1.34.0] - 2023-10-17
 
 ### Added
@@ -377,6 +382,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.35.0]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/uber/tchannel-go/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/uber/tchannel-go/compare/v1.32.1...v1.33.0
 [1.32.1]: https://github.com/uber/tchannel-go/compare/v1.32.0...v1.32.1
