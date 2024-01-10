@@ -22,6 +22,7 @@ package thrift_test
 
 import (
 	"flag"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/uber/tchannel-go/testutils"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 const callBatch = 100

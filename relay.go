@@ -28,11 +28,11 @@ import (
 	"io"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/typed"
-	"go.uber.org/atomic"
 )
 
 const (
@@ -378,7 +378,7 @@ func (r *Relayer) canHandleNewCall() (bool, connectionState) {
 		curState = r.conn.state
 		canHandle = curState == connectionActive
 		if canHandle {
-			r.pending.Inc()
+			r.pending.Add(1)
 		}
 		return nil
 	})
@@ -675,7 +675,7 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 }
 
 func (r *Relayer) decrementPending() {
-	r.pending.Dec()
+	r.pending.Add(^uint32(0))
 	r.conn.checkExchanges()
 }
 

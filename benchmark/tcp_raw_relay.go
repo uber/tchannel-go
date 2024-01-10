@@ -24,8 +24,7 @@ import (
 	"io"
 	"log"
 	"net"
-
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
 
 type tcpRelay struct {
@@ -87,7 +86,7 @@ func (r *tcpRelay) handleIncoming(src net.Conn) {
 }
 
 func (r *tcpRelay) nextDestination() string {
-	i := int(r.destI.Inc()-1) % len(r.dests)
+	i := int(r.destI.Add(1)-1) % len(r.dests)
 	return r.dests[i]
 }
 

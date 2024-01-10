@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,7 +37,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -455,7 +455,7 @@ func (ts *TestServer) verifyNoGoroutinesLeaked() {
 		// No leaks, nothing to do.
 		return
 	}
-	if isFirstLeak := _leakedGoroutine.CAS(false, true); !isFirstLeak {
+	if isFirstLeak := _leakedGoroutine.CompareAndSwap(false, true); !isFirstLeak {
 		ts.Log("Skipping check for leaked goroutines because of a previous leak.")
 		return
 	}

@@ -27,12 +27,12 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/uber/tchannel-go/tos"
 
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -315,7 +315,7 @@ func (ch *Channel) setConnectionTosPriority(tosPriority tos.ToS, c net.Conn) err
 func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initialID uint32, outboundHP string, remotePeer PeerInfo, remotePeerAddress peerAddressComponents, events connectionEvents) *Connection {
 	opts := ch.connectionOptions.withDefaults()
 
-	connID := _nextConnID.Inc()
+	connID := _nextConnID.Add(1)
 	connDirection := inbound
 	log := ch.log.WithFields(LogFields{
 		{"connID", connID},
@@ -356,10 +356,12 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
-		lastActivityRead:   *atomic.NewInt64(timeNow),
-		lastActivityWrite:  *atomic.NewInt64(timeNow),
+		lastActivityRead:   atomic.Int64{},
+		lastActivityWrite:  atomic.Int64{},
 		baseContext:        ch.connContext(baseCtx, conn),
 	}
+	c.lastActivityRead.Store(timeNow)
+	c.lastActivityWrite.Store(timeNow)
 
 	if tosPriority := opts.TosPriority; tosPriority > 0 {
 		if err := ch.setConnectionTosPriority(tosPriority, conn); err != nil {
@@ -522,7 +524,7 @@ func (c *Connection) RemotePeerInfo() PeerInfo {
 
 // NextMessageID reserves the next available message id for this connection
 func (c *Connection) NextMessageID() uint32 {
-	return c.nextMessageID.Inc()
+	return c.nextMessageID.Add(1)
 }
 
 // SendSystemError sends an error frame for the given system error.
@@ -617,7 +619,7 @@ func (c *Connection) connectionError(site string, err error) error {
 	c.close(closeLogFields...)
 
 	// On any connection error, notify the exchanges of this error.
-	if c.stoppedExchanges.CAS(false, true) {
+	if c.stoppedExchanges.CompareAndSwap(false, true) {
 		c.outbound.stopExchanges(err)
 		c.inbound.stopExchanges(err)
 	}
@@ -638,7 +640,7 @@ func (c *Connection) protocolError(id uint32, err error) error {
 	)
 
 	// On any connection error, notify the exchanges of this error.
-	if c.stoppedExchanges.CAS(false, true) {
+	if c.stoppedExchanges.CompareAndSwap(false, true) {
 		c.outbound.stopExchanges(sysErr)
 		c.inbound.stopExchanges(sysErr)
 	}

@@ -26,12 +26,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/uber/tchannel-go"
-
-	"go.uber.org/atomic"
 )
 
 // writer is shared between multiple loggers, and serializes acccesses to
@@ -180,7 +179,7 @@ func (l errorLogger) checkFilters(msg string) bool {
 		return false
 	}
 
-	matchCount := l.s.matchCount[match].Inc()
+	matchCount := l.s.matchCount[match].Add(1)
 	return uint(matchCount) <= l.v.Filters[match].Count
 }
 
