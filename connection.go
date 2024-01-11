@@ -356,8 +356,6 @@ func (ch *Channel) newConnection(baseCtx context.Context, conn net.Conn, initial
 		events:             events,
 		commonStatsTags:    ch.commonStatsTags,
 		healthCheckHistory: newHealthHistory(),
-		lastActivityRead:   atomic.Int64{},
-		lastActivityWrite:  atomic.Int64{},
 		baseContext:        ch.connContext(baseCtx, conn),
 	}
 	c.lastActivityRead.Store(timeNow)

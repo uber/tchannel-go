@@ -675,6 +675,8 @@ func (r *Relayer) finishRelayItem(items *relayItems, id uint32) {
 }
 
 func (r *Relayer) decrementPending() {
+	// This is the documented way to decrement atomic unsigned integers
+	// https://pkg.go.dev/sync/atomic#AddUint32
 	r.pending.Add(^uint32(0))
 	r.conn.checkExchanges()
 }

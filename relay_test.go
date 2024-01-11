@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
@@ -2113,7 +2114,7 @@ func decodeThriftHeaders(t testing.TB, bs []byte) map[string]string {
 	require.NoError(t, err, "Failed to read headers")
 
 	// Ensure there are no remaining bytes left.
-	remaining, err := io.ReadAll(r)
+	remaining, err := ioutil.ReadAll(r)
 	require.NoError(t, err, "failed to read from arg2 reader")
 	assert.Empty(t, remaining, "expected no bytes after reading headers")
 
