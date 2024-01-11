@@ -167,7 +167,7 @@ func (r *fragmentingReader) Read(b []byte) (int, error) {
 		// There wasn't enough data in the current chunk to satisfy the
 		// current read.  If there are more chunks in the current
 		// fragment, then we've reach the end of this argument.  Return
-		// an io.EOF so functions like ioutil.ReadFully know to finish
+		// an io.EOF so functions like io.ReadAll know to finish
 		if len(r.remainingChunks) > 0 {
 			return totalRead, io.EOF
 		}

@@ -23,7 +23,6 @@ package testutils
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -33,7 +32,7 @@ func benchmarkRandom(b *testing.B, numBytes int) {
 		randCache = nil
 		bs = RandBytes(numBytes)
 	}
-	io.Copy(ioutil.Discard, bytes.NewReader(bs))
+	io.Copy(io.Discard, bytes.NewReader(bs))
 }
 
 func BenchmarkRandom256(b *testing.B) {

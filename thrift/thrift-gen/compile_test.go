@@ -24,7 +24,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -78,7 +77,7 @@ func getCurrentTChannelPath(t *testing.T) string {
 }
 
 func createGoPath(t *testing.T) {
-	goPath, err := ioutil.TempDir("", "thrift-gen")
+	goPath, err := os.MkdirTemp("", "thrift-gen")
 	require.NoError(t, err, "TempDir failed")
 
 	// Create $GOPATH/src/github.com/uber/tchannel-go and symlink everything.
@@ -88,7 +87,7 @@ func createGoPath(t *testing.T) {
 
 	// Symlink the contents of tchannel-go into the temp directory.
 	realTChannelDir := getCurrentTChannelPath(t)
-	realDirContents, err := ioutil.ReadDir(realTChannelDir)
+	realDirContents, err := os.ReadDir(realTChannelDir)
 	require.NoError(t, err, "Failed to read real tchannel-go dir")
 
 	for _, f := range realDirContents {
@@ -117,7 +116,7 @@ func getOutputDir(t *testing.T) (dir, pkg string) {
 }
 
 func TestAllThrift(t *testing.T) {
-	files, err := ioutil.ReadDir("test_files")
+	files, err := os.ReadDir("test_files")
 	require.NoError(t, err, "Cannot read test_files directory: %v", err)
 
 	for _, f := range files {
@@ -133,7 +132,7 @@ func TestAllThrift(t *testing.T) {
 }
 
 func TestIncludeThrift(t *testing.T) {
-	dirs, err := ioutil.ReadDir("test_files/include_test")
+	dirs, err := os.ReadDir("test_files/include_test")
 	require.NoError(t, err, "Cannot read test_files/include_test directory: %v", err)
 
 	for _, d := range dirs {
@@ -202,16 +201,16 @@ func TestExternalTemplate(t *testing.T) {
 }
 
 func writeTempFile(t *testing.T, contents string) string {
-	tempFile, err := ioutil.TempFile("", "temp")
+	tempFile, err := os.CreateTemp("", "temp")
 	require.NoError(t, err, "Failed to create temp file")
 	tempFile.Close()
-	require.NoError(t, ioutil.WriteFile(tempFile.Name(), []byte(contents), 0666),
+	require.NoError(t, os.WriteFile(tempFile.Name(), []byte(contents), 0666),
 		"Write temp file failed")
 	return tempFile.Name()
 }
 
 func verifyFileContents(filename, expected string) error {
-	bytes, err := ioutil.ReadFile(filename)
+	bytes, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -243,7 +242,7 @@ func copyFile(src, dst string) error {
 
 // setupDirectory creates a temporary directory.
 func setupDirectory(thriftFile string) (string, error) {
-	tempDir, err := ioutil.TempDir("", "thrift-gen")
+	tempDir, err := os.MkdirTemp("", "thrift-gen")
 	if err != nil {
 		return "", err
 	}
@@ -287,7 +286,7 @@ func createAdditionalTestFile(thriftFile, tempDir string) error {
 }
 
 func checkDirectoryFiles(dir string, n int) error {
-	dirContents, err := ioutil.ReadDir(dir)
+	dirContents, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
