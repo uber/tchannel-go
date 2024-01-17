@@ -496,6 +496,9 @@ func TestServerClientCancellation(t *testing.T) {
 	opts.DefaultConnectionOptions.SendCancelOnContextCanceled = true
 	opts.DefaultConnectionOptions.PropagateCancel = true
 
+	serverStats := newRecordingStatsReporter()
+	opts.StatsReporter = serverStats
+
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		callReceived := make(chan struct{})
 		testutils.RegisterFunc(ts.Server(), "ctxWait", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
@@ -519,16 +522,22 @@ func TestServerClientCancellation(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "ctxWait", nil, nil)
 		assert.Equal(t, ErrRequestCancelled, err, "client call result")
 
+		serverStats.Expected.IncCounter("inbound.cancels.requested", ts.Server().StatsTags(), 1)
+		serverStats.Expected.IncCounter("inbound.cancels.honored", ts.Server().StatsTags(), 1)
+
 		calls := relaytest.NewMockStats()
 		calls.Add(ts.ServiceName(), ts.ServiceName(), "ctxWait").Failed("canceled").End()
 		ts.AssertRelayStats(calls)
 	})
+
+	serverStats.ValidateExpected(t)
 }
 
 func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
 	tests := []struct {
 		msg                         string
 		sendCancelOnContextCanceled bool
+		wantCancelRequested         bool
 	}{
 		{
 			msg:                         "no send or process cancel",
@@ -537,6 +546,7 @@ func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
 		{
 			msg:                         "only enable cancels on outbounds",
 			sendCancelOnContextCanceled: true,
+			wantCancelRequested:         true,
 		},
 	}
 
@@ -544,6 +554,9 @@ func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
 		t.Run(tt.msg, func(t *testing.T) {
 			opts := testutils.NewOpts()
 			opts.DefaultConnectionOptions.SendCancelOnContextCanceled = tt.sendCancelOnContextCanceled
+
+			serverStats := newRecordingStatsReporter()
+			opts.StatsReporter = serverStats
 
 			testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 				callReceived := make(chan struct{})
@@ -567,6 +580,13 @@ func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
 
 				_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "ctxWait", nil, nil)
 				assert.Equal(t, ErrRequestCancelled, err, "client call result")
+
+				if tt.wantCancelRequested {
+					serverStats.Expected.IncCounter("inbound.cancels.requested", ts.Server().StatsTags(), 1)
+				} else {
+					serverStats.EnsureNotPresent(t, "inbound.cancels.requested")
+				}
+				serverStats.EnsureNotPresent(t, "inbound.cancels.honored")
 
 				calls := relaytest.NewMockStats()
 				calls.Add(ts.ServiceName(), ts.ServiceName(), "ctxWait").Failed("timeout").End()

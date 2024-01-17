@@ -144,12 +144,16 @@ func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 }
 
 func (c *Connection) handleCancel(frame *Frame) bool {
+	c.statsReporter.IncCounter("inbound.cancels.requested", c.commonStatsTags, 1)
+
 	if !c.opts.PropagateCancel {
 		if c.log.Enabled(LogLevelDebug) {
 			c.log.Debugf("Ignoring cancel for %v", frame.Header.ID)
 		}
 		return true
 	}
+
+	c.statsReporter.IncCounter("inbound.cancels.honored", c.commonStatsTags, 1)
 
 	c.inbound.handleCancel(frame)
 

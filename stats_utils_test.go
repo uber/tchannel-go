@@ -125,9 +125,28 @@ func (r *recordingStatsReporter) Validate(t *testing.T) {
 
 	assert.Equal(t, keysMap(r.Expected.Values), keysMap(r.Values),
 		"Metric keys are different")
-	for counterKey, counter := range r.Values {
-		expectedCounter, ok := r.Expected.Values[counterKey]
-		if !ok {
+	r.validateExpectedLocked(t)
+}
+
+// ValidateExpected only validates metrics added to expected rather than all recorded metrics.
+func (r *recordingStatsReporter) ValidateExpected(t testing.TB) {
+	r.Lock()
+	defer r.Unlock()
+
+	r.validateExpectedLocked(t)
+}
+
+func (r *recordingStatsReporter) EnsureNotPresent(t testing.TB, counter string) {
+	r.Lock()
+	defer r.Unlock()
+
+	assert.NotContains(t, r.Values, counter, "metric should not be present")
+}
+
+func (r *recordingStatsReporter) validateExpectedLocked(t testing.TB) {
+	for counterKey, expectedCounter := range r.Expected.Values {
+		counter, ok := r.Values[counterKey]
+		if !assert.True(t, ok, "expected %v not found", counterKey) {
 			continue
 		}
 
