@@ -522,8 +522,9 @@ func TestServerClientCancellation(t *testing.T) {
 		_, _, _, err := raw.Call(ctx, ts.Server(), ts.HostPort(), ts.ServiceName(), "ctxWait", nil, nil)
 		assert.Equal(t, ErrRequestCancelled, err, "client call result")
 
-		serverStats.Expected.IncCounter("inbound.cancels.requested", ts.Server().StatsTags(), 1)
-		serverStats.Expected.IncCounter("inbound.cancels.honored", ts.Server().StatsTags(), 1)
+		statsTags := ts.Server().StatsTags()
+		serverStats.Expected.IncCounter("inbound.cancels.requested", statsTags, 1)
+		serverStats.Expected.IncCounter("inbound.cancels.honored", statsTags, 1)
 
 		calls := relaytest.NewMockStats()
 		calls.Add(ts.ServiceName(), ts.ServiceName(), "ctxWait").Failed("canceled").End()
