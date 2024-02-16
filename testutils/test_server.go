@@ -400,6 +400,11 @@ func (ts *TestServer) verify(ch *tchannel.Channel) {
 	assert.NoError(ts, errs, "Verification failed. Channel state:\n%v", IntrospectJSON(ch, nil /* opts */))
 }
 
+// AddPostFn registers a function that will be executed after channels are closed.
+func (ts *TestServer) AddPostFn(fn func()) {
+	ts.postFns = append(ts.postFns, fn)
+}
+
 func (ts *TestServer) post() {
 	if !ts.Failed() {
 		for _, ch := range ts.channels {
