@@ -22,7 +22,6 @@ package hyperbahn
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"sort"
 	"testing"
@@ -92,7 +91,7 @@ func TestParseConfiguration(t *testing.T) {
 	for _, tt := range tests {
 		peerFile := ""
 		if tt.peersFile != "" {
-			f, err := ioutil.TempFile("", "hosts")
+			f, err := os.CreateTemp("", "hosts")
 			if !assert.NoError(t, err, "%v: TempFile failed", tt.name) {
 				continue
 			}

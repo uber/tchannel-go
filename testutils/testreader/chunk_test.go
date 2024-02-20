@@ -22,7 +22,6 @@ package testreader
 
 import (
 	"io"
-	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,11 +63,11 @@ func TestChunkReader(t *testing.T) {
 	writer <- []byte{}
 	close(writer)
 
-	buf, err := ioutil.ReadAll(reader)
+	buf, err := io.ReadAll(reader)
 	assert.Equal(t, ErrUser, err, "Expected error after initial bytes")
 	assert.Equal(t, []byte{1, 2, 3}, buf, "Unexpected bytes")
 
-	buf, err = ioutil.ReadAll(reader)
+	buf, err = io.ReadAll(reader)
 	assert.NoError(t, err, "Reader shouldn't fail on second set of bytes")
 	assert.Equal(t, []byte{4, 5, 6}, buf, "Unexpected bytes")
 }

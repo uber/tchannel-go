@@ -20,7 +20,7 @@
 package tchannel_test
 
 import (
-	"io/ioutil"
+	"io"
 	"runtime"
 	"testing"
 	"time"
@@ -70,7 +70,7 @@ func TestPeerConnectionLeaks(t *testing.T) {
 
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		s2Opts := testutils.NewOpts().SetServiceName("s2")
-		s2Opts.Logger = NewLogger(ioutil.Discard)
+		s2Opts.Logger = NewLogger(io.Discard)
 		s2 := ts.NewServer(s2Opts)
 
 		// Set a finalizer to detect when the connection from s1 -> s2 is freed.

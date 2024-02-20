@@ -22,7 +22,7 @@ package tchannel
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"testing"
 )
 
@@ -48,5 +48,5 @@ func BenchmarkCallReqFrame(b *testing.B) {
 	}
 	b.StopTimer()
 
-	fmt.Fprint(ioutil.Discard, service, caller, method)
+	fmt.Fprint(io.Discard, service, caller, method)
 }

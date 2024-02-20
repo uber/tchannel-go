@@ -21,7 +21,7 @@
 package tchannel
 
 import (
-	"io/ioutil"
+	"io"
 	"math"
 	"os"
 	"runtime"
@@ -66,7 +66,7 @@ func TestNewChannel(t *testing.T) {
 
 func TestLoggers(t *testing.T) {
 	ch, err := NewChannel("svc", &ChannelOptions{
-		Logger: NewLogger(ioutil.Discard),
+		Logger: NewLogger(io.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
@@ -83,7 +83,7 @@ func TestLoggers(t *testing.T) {
 
 func TestStats(t *testing.T) {
 	ch, err := NewChannel("svc", &ChannelOptions{
-		Logger: NewLogger(ioutil.Discard),
+		Logger: NewLogger(io.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
@@ -131,7 +131,7 @@ func TestRelayMaxTTL(t *testing.T) {
 
 func TestIsolatedSubChannelsDontSharePeers(t *testing.T) {
 	ch, err := NewChannel("svc", &ChannelOptions{
-		Logger: NewLogger(ioutil.Discard),
+		Logger: NewLogger(io.Discard),
 	})
 	require.NoError(t, err, "NewChannel failed")
 	defer ch.Close()
