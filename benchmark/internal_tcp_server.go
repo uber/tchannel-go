@@ -23,10 +23,9 @@ package benchmark
 import (
 	"log"
 	"net"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go"
-
-	"go.uber.org/atomic"
 )
 
 // internalTCPServer represents a TCP server responds to TChannel
@@ -98,7 +97,7 @@ func (s *internalTCPServer) writeResponses(conn net.Conn, ids chan uint32) {
 			continue
 		}
 
-		s.rawCalls.Inc()
+		s.rawCalls.Add(1)
 		if _, err := frames.writeCallRes(id, conn); err != nil {
 			log.Printf("writeCallRes failed: %v", err)
 			return

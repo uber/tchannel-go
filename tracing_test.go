@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/uber/tchannel-go/json"
 	"github.com/uber/tchannel-go/testutils"
 	"github.com/uber/tchannel-go/testutils/testtracing"
-	"go.uber.org/atomic"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -69,13 +69,14 @@ func TestTracingSpanAttributes(t *testing.T) {
 			customAppHeaderKey           = "futurama"
 			customAppHeaderExpectedValue = "simpsons"
 		)
-		var customAppHeaderValue atomic.String
+		var customAppHeaderValue atomic.Pointer[string]
 		// Register JSON handler
 		jsonHandler := &JSONHandler{
 			TraceHandler: testtracing.TraceHandler{Ch: ch},
 			t:            t,
 			sideEffect: func(ctx json.Context) {
-				customAppHeaderValue.Store(ctx.Headers()[customAppHeaderKey])
+				header := ctx.Headers()[customAppHeaderKey]
+				customAppHeaderValue.Store(&header)
 			},
 		}
 		json.Register(ch, json.Handlers{"call": jsonHandler.callJSON}, jsonHandler.onError)
@@ -104,7 +105,7 @@ func TestTracingSpanAttributes(t *testing.T) {
 		require.NoError(t, json.CallPeer(json.WithHeaders(ctx, requestHeaders), peer, ch.PeerInfo().ServiceName,
 			"call", &testtracing.TracingRequest{}, &response))
 
-		assert.Equal(t, customAppHeaderExpectedValue, customAppHeaderValue.Load(), "custom header was propagated")
+		assert.Equal(t, customAppHeaderExpectedValue, *customAppHeaderValue.Load(), "custom header was propagated")
 
 		// Spans are finished in inbound.doneSending() or outbound.doneReading(),
 		// which are called on different go-routines and may execute *after* the

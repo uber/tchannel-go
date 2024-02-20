@@ -23,6 +23,7 @@ package benchmark
 import (
 	"fmt"
 	"os"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/hyperbahn"
@@ -30,7 +31,6 @@ import (
 	"github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
 
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -118,7 +118,7 @@ func (rawHandler) OnError(ctx context.Context, err error) {
 }
 
 func (h rawHandler) Handle(ctx context.Context, args *raw.Args) (*raw.Res, error) {
-	h.calls.Inc()
+	h.calls.Add(1)
 	return &raw.Res{
 		Arg2: args.Arg2,
 		Arg3: args.Arg3,
@@ -130,6 +130,6 @@ type handler struct {
 }
 
 func (h handler) Echo(ctx thrift.Context, arg1 string) (string, error) {
-	h.calls.Inc()
+	h.calls.Add(1)
 	return arg1, nil
 }

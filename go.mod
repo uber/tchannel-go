@@ -15,7 +15,6 @@ require (
 	github.com/stretchr/testify v1.5.1
 	github.com/uber-go/tally v3.3.15+incompatible
 	github.com/uber/jaeger-client-go v2.22.1+incompatible
-	go.uber.org/atomic v1.6.0
 	go.uber.org/multierr v1.2.0
 	golang.org/x/net v0.14.0
 	golang.org/x/sys v0.11.0
@@ -29,6 +28,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
-	golang.org/x/tools v0.1.12 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 )

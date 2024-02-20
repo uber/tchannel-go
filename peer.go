@@ -25,11 +25,11 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber/tchannel-go/trand"
 
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -210,7 +210,7 @@ func (l *PeerList) choosePeer(prevSelected map[string]struct{}, avoidHost bool) 
 	}
 
 	l.peerHeap.pushPeer(ps)
-	ps.chosenCount.Inc()
+	ps.chosenCount.Add(1)
 	return ps.Peer
 }
 

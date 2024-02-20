@@ -24,13 +24,13 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/uber/tchannel-go"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 type frameRelay struct {
@@ -67,7 +67,7 @@ func (r *frameRelay) listen() (listenHostPort string, cancel func()) {
 	}()
 
 	return conn.Addr().String(), func() {
-		r.closed.Inc()
+		r.closed.Add(1)
 		conn.Close()
 		r.Lock()
 		for _, c := range r.conns {

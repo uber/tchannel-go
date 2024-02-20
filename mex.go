@@ -24,10 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go/typed"
 
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -255,11 +255,11 @@ func (mex *messageExchange) onCtxErr(err error) {
 func (mex *messageExchange) shutdown() {
 	// The reader and writer side can both hit errors and try to shutdown the mex,
 	// so we ensure that it's only shut down once.
-	if !mex.shutdownAtomic.CAS(false, true) {
+	if !mex.shutdownAtomic.CompareAndSwap(false, true) {
 		return
 	}
 
-	if mex.errChNotified.CAS(false, true) {
+	if mex.errChNotified.CompareAndSwap(false, true) {
 		mex.errCh.Notify(errMexShutdown)
 	}
 
@@ -529,7 +529,7 @@ func (mexset *messageExchangeSet) stopExchanges(err error) {
 		// on sendChRefs that there's no references to sendCh is violated since
 		// readers/writers could still have a reference to sendCh even though
 		// we shutdown the exchange and called Done on sendChRefs.
-		if mex.errChNotified.CAS(false, true) {
+		if mex.errChNotified.CompareAndSwap(false, true) {
 			mex.errCh.Notify(err)
 		}
 	}
