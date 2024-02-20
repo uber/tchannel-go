@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.34.2] - 2024-02-16
+### Added
+
+ * Expose `inbound.cancels.{requested,honored}` metrics (#912)
+
 ## [1.34.1] - 2023-12-11
 ### Fixed
 
@@ -382,6 +387,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.2]: https://github.com/uber/tchannel-go/compare/v1.34.1...v1.34.2
 [1.34.1]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.34.1
 [1.34.0]: https://github.com/uber/tchannel-go/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/uber/tchannel-go/compare/v1.32.1...v1.33.0
