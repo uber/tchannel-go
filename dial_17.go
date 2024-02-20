@@ -32,3 +32,9 @@ func dialContext(ctx context.Context, hostPort string) (net.Conn, error) {
 	d := net.Dialer{}
 	return d.DialContext(ctx, "tcp", hostPort)
 }
+
+func dialMPTCPContext(ctx context.Context, hostPort string) (net.Conn, error) {
+	d := net.Dialer{}
+	d.SetMultipathTCP(true)
+	return d.DialContext(ctx, "tcp", hostPort)
+}
