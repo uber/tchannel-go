@@ -21,6 +21,7 @@ package thrift
 
 import (
 	"errors"
+	"fmt"
 )
 
 const (
