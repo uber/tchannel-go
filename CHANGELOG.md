@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.34.3] - 2024-04-23
+### Fixed
+
+ * Fix a DoS vulnerability of the vendored apache-thrift library (#915, #916)
+
 ## [1.34.2] - 2024-02-16
 ### Added
 
@@ -387,6 +392,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.3]: https://github.com/uber/tchannel-go/compare/v1.34.2...v1.34.3
 [1.34.2]: https://github.com/uber/tchannel-go/compare/v1.34.1...v1.34.2
 [1.34.1]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.34.1
 [1.34.0]: https://github.com/uber/tchannel-go/compare/v1.33.0...v1.34.0
