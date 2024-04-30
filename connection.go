@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -971,7 +972,18 @@ func (c *Connection) getLastActivityWriteTime() time.Time {
 }
 
 func getSysConn(conn net.Conn, log Logger) syscall.RawConn {
-	connSyscall, ok := conn.(syscall.Conn)
+	var (
+		connSyscall syscall.Conn
+		ok          bool
+	)
+	switch v := conn.(type) {
+	case syscall.Conn:
+		connSyscall = v
+		ok = true
+	case *tls.Conn:
+		connSyscall, ok = v.NetConn().(syscall.Conn)
+	}
+
 	if !ok {
 		log.WithFields(LogField{"connectionType", fmt.Sprintf("%T", conn)}).
 			Error("Connection does not implement SyscallConn.")

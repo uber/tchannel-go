@@ -22,7 +22,9 @@ package tchannel
 
 import (
 	"bytes"
+	"crypto/tls"
 	"net"
+	"net/http/httptest"
 	"syscall"
 	"testing"
 
@@ -78,5 +80,46 @@ func TestGetSysConn(t *testing.T) {
 		sysConn := getSysConn(conn, logger)
 		require.NotNil(t, sysConn)
 		assert.Empty(t, loggerBuf.String(), "expected no logs on success")
+	})
+
+	t.Run("SyscallConn is successful with TLS", func(t *testing.T) {
+		var (
+			loggerBuf = &bytes.Buffer{}
+			logger    = NewLogger(loggerBuf)
+			server    = httptest.NewTLSServer(nil)
+		)
+		defer server.Close()
+
+		conn, err := tls.Dial("tcp", server.Listener.Addr().String(), &tls.Config{InsecureSkipVerify: true})
+		require.NoError(t, err, "failed to dial")
+		defer conn.Close()
+
+		sysConn := getSysConn(conn, logger)
+		require.NotNil(t, sysConn)
+		assert.Empty(t, loggerBuf.String(), "expected no logs on success")
+	})
+
+	t.Run("no SyscallConn - nil net.Conn", func(t *testing.T) {
+		var (
+			loggerBuf   = &bytes.Buffer{}
+			logger      = NewLogger(loggerBuf)
+			syscallConn = getSysConn(nil /* conn */, logger)
+		)
+
+		require.Nil(t, syscallConn, "expected no syscall.RawConn to be returned")
+		assert.Contains(t, loggerBuf.String(), "Connection does not implement SyscallConn", "missing log")
+		assert.Contains(t, loggerBuf.String(), "{connectionType <nil>}", "missing type in log")
+	})
+
+	t.Run("no SyscallConn - TLS with no net.Conn", func(t *testing.T) {
+		var (
+			loggerBuf   = &bytes.Buffer{}
+			logger      = NewLogger(loggerBuf)
+			syscallConn = getSysConn(&tls.Conn{}, logger)
+		)
+
+		require.Nil(t, syscallConn, "expected no syscall.RawConn to be returned")
+		assert.Contains(t, loggerBuf.String(), "Connection does not implement SyscallConn", "missing log")
+		assert.Contains(t, loggerBuf.String(), "{connectionType *tls.Conn}", "missing type in log")
 	})
 }
