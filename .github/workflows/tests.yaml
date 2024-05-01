@@ -18,11 +18,13 @@ jobs:
         working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
     strategy:
       matrix:
-        go: ["1.21.x"]
+        go: ["1.21.x", "1.22.x"]
         include:
-        - go: 1.21.x
+        - go: 1.22.x
           latest: true
           COVERAGE: "yes"
+          LINT: "yes"
+        - go: 1.21.x
           LINT: "yes"
 
     steps:
