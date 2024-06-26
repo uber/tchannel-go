@@ -1,6 +1,15 @@
 Changelog
 =========
 
+## [1.34.4] - 2024-06-26
+### Fixed
+
+ * fix getSysConn to work with TLS (#918)
+
+### Changed
+
+ * Switch to aliases for Go versions in CI (#919)
+
 ## [1.34.3] - 2024-04-23
 ### Fixed
 
@@ -392,6 +401,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.4]: https://github.com/uber/tchannel-go/compare/v1.34.3...v1.34.4
 [1.34.3]: https://github.com/uber/tchannel-go/compare/v1.34.2...v1.34.3
 [1.34.2]: https://github.com/uber/tchannel-go/compare/v1.34.1...v1.34.2
 [1.34.1]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.34.1
