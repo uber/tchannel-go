@@ -477,3 +477,88 @@ func ReadWriteBinary(t testing.TB, p TProtocol, trans TTransport) {
 		}
 	}
 }
+
+func UnmatchedBeginEndProtocolTest(t *testing.T, protocolFactory TProtocolFactory) {
+	// NOTE: not all protocol implementations do strict state check to
+	// return an error on unmatched Begin/End calls.
+	// This test is only meant to make sure that those unmatched Begin/End
+	// calls won't cause panic. There's no real "test" here.
+	trans := NewTMemoryBuffer()
+	t.Run("Read", func(t *testing.T) {
+		t.Run("Message", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.ReadMessageEnd()
+			p.ReadMessageEnd()
+		})
+		t.Run("Struct", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.ReadStructEnd()
+			p.ReadStructEnd()
+		})
+		t.Run("Field", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.ReadFieldEnd()
+			p.ReadFieldEnd()
+		})
+		t.Run("Map", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.ReadMapEnd()
+			p.ReadMapEnd()
+		})
+		t.Run("List", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.ReadListEnd()
+			p.ReadListEnd()
+		})
+		t.Run("Set", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.ReadSetEnd()
+			p.ReadSetEnd()
+		})
+	})
+	t.Run("Write", func(t *testing.T) {
+		t.Run("Message", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.WriteMessageEnd()
+			p.WriteMessageEnd()
+		})
+		t.Run("Struct", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.WriteStructEnd()
+			p.WriteStructEnd()
+		})
+		t.Run("Field", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.WriteFieldEnd()
+			p.WriteFieldEnd()
+		})
+		t.Run("Map", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.WriteMapEnd()
+			p.WriteMapEnd()
+		})
+		t.Run("List", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.WriteListEnd()
+			p.WriteListEnd()
+		})
+		t.Run("Set", func(t *testing.T) {
+			trans.Reset()
+			p := protocolFactory.GetProtocol(trans)
+			p.WriteSetEnd()
+			p.WriteSetEnd()
+		})
+	})
+	trans.Close()
+}

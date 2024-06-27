@@ -1,6 +1,25 @@
 Changelog
 =========
 
+## [1.34.4] - 2024-06-26
+### Fixed
+
+ * fix getSysConn to work with TLS (#918)
+
+### Changed
+
+ * Switch to aliases for Go versions in CI (#919)
+
+## [1.34.3] - 2024-04-23
+### Fixed
+
+ * Fix a DoS vulnerability of the vendored apache-thrift library (#915, #916)
+
+## [1.34.2] - 2024-02-16
+### Added
+
+ * Expose `inbound.cancels.{requested,honored}` metrics (#912)
+
 ## [1.34.1] - 2023-12-11
 ### Fixed
 
@@ -382,6 +401,9 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.4]: https://github.com/uber/tchannel-go/compare/v1.34.3...v1.34.4
+[1.34.3]: https://github.com/uber/tchannel-go/compare/v1.34.2...v1.34.3
+[1.34.2]: https://github.com/uber/tchannel-go/compare/v1.34.1...v1.34.2
 [1.34.1]: https://github.com/uber/tchannel-go/compare/v1.34.0...v1.34.1
 [1.34.0]: https://github.com/uber/tchannel-go/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/uber/tchannel-go/compare/v1.32.1...v1.33.0
