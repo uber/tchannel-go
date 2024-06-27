@@ -18,16 +18,18 @@ jobs:
         working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
     strategy:
       matrix:
-        go: ["1.21.x"]
+        go: ["stable", "oldstable"]
         include:
-        - go: 1.21.x
+        - go: "stable"
           latest: true
           COVERAGE: "yes"
+          LINT: "yes"
+        - go: "oldstable"
           LINT: "yes"
 
     steps:
     - name: Setup Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.go }}
 

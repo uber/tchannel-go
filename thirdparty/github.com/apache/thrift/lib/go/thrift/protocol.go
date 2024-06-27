@@ -21,6 +21,7 @@ package thrift
 
 import (
 	"errors"
+	"fmt"
 )
 
 const (
@@ -88,7 +89,7 @@ func SkipDefaultDepth(prot TProtocol, typeId TType) (err error) {
 
 // Skips over the next data element from the provided input TProtocol object.
 func Skip(self TProtocol, fieldType TType, maxDepth int) (err error) {
-	
+
     if maxDepth <= 0 {
 		return NewTProtocolExceptionWithType( DEPTH_LIMIT, errors.New("Depth limit exceeded"))
 	}
@@ -143,7 +144,10 @@ func Skip(self TProtocol, fieldType TType, maxDepth int) (err error) {
 			if err != nil {
 				return err
 			}
-			self.Skip(valueType)
+			err = Skip(self, valueType, maxDepth-1)
+			if err != nil {
+				return err
+			}
 		}
 		return self.ReadMapEnd()
 	case SET:
@@ -170,6 +174,8 @@ func Skip(self TProtocol, fieldType TType, maxDepth int) (err error) {
 			}
 		}
 		return self.ReadListEnd()
+	default:
+		return NewTProtocolExceptionWithType(INVALID_DATA, fmt.Errorf("Unknown data type %d", fieldType))
 	}
 	return nil
 }
