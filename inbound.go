@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"golang.org/x/net/context"
 )
 
@@ -173,6 +172,8 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, frame *Frame) {
+	defer call.Response().finishSpanWithOptions(opentracing.FinishOptions{})
+
 	if call.log.Enabled(LogLevelDebug) {
 		call.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
@@ -359,8 +360,10 @@ type InboundCallResponse struct {
 	systemError      bool
 	headers          transportHeaders
 	span             opentracing.Span
-	statsReporter    StatsReporter
-	commonStatsTags  map[string]string
+	// spanFinished is a bool flag for avoiding finishing a span multiple times
+	spanFinished    bool
+	statsReporter   StatsReporter
+	commonStatsTags map[string]string
 }
 
 // SendSystemError returns a system error response to the peer.  The call is considered
@@ -432,18 +435,23 @@ func (response *InboundCallResponse) setSpanErrorDetails(err error) {
 	}
 }
 
+// finishSpanWithOptions finishes the span in InboundCallResponse if it is not nil and hasn't been finished yet
+func (response *InboundCallResponse) finishSpanWithOptions(opts opentracing.FinishOptions) {
+	if response == nil || response.span == nil || response.spanFinished {
+		return
+	}
+	response.spanFinished = true
+	response.span.FinishWithOptions(opts)
+}
+
 // doneSending shuts down the message exchange for this call.
 // For incoming calls, the last message is sending the call response.
 func (response *InboundCallResponse) doneSending() {
 	// TODO(prashant): Move this to when the message is actually being sent.
 	now := response.timeNow()
 
-	if span := response.span; span != nil {
-		if response.applicationError || response.systemError {
-			ext.Error.Set(span, true)
-		}
-		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
-	}
+	UpdateSpanWithError(response.span, response.applicationError || response.systemError, nil)
+	response.finishSpanWithOptions(opentracing.FinishOptions{FinishTime: now})
 
 	latency := now.Sub(response.calledAt)
 	response.statsReporter.RecordTimer("inbound.calls.latency", response.commonStatsTags, latency)

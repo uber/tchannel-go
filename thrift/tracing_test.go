@@ -3,12 +3,18 @@ package thrift_test
 import (
 	json_encoding "encoding/json"
 	"testing"
+	"time"
 
+	"github.com/opentracing/opentracing-go/ext"
+	"github.com/opentracing/opentracing-go/mocktracer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go"
+	"github.com/uber/tchannel-go/testutils"
 	. "github.com/uber/tchannel-go/testutils/testtracing"
 	"github.com/uber/tchannel-go/thrift"
+	. "github.com/uber/tchannel-go/thrift"
 	gen "github.com/uber/tchannel-go/thrift/gen-go/test"
-
 	"golang.org/x/net/context"
 )
 
@@ -107,4 +113,76 @@ func TestThriftTracingPropagation(t *testing.T) {
 		},
 	}
 	suite.Run(t)
+}
+
+func TestClientSpanFinish(t *testing.T) {
+	tracer := mocktracer.New()
+
+	server := testutils.NewTestServer(t, testutils.NewOpts())
+	defer server.CloseAndVerify()
+
+	sCh := server.Server()
+	NewServer(sCh).Register(&thriftStruction{})
+
+	ch := server.NewClient(&testutils.ChannelOpts{
+		ChannelOptions: tchannel.ChannelOptions{
+			Tracer: tracer,
+		},
+	})
+	defer ch.Close()
+	client := NewClient(
+		ch,
+		sCh.ServiceName(),
+		&ClientOptions{HostPort: server.HostPort()},
+	)
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	_, err := client.Call(ctx, "destruct", "partialDestruct", &badTStruct{Err: errIO}, &nullTStruct{})
+	assert.Error(t, err)
+	assert.IsType(t, errIO, err)
+
+	time.Sleep(testutils.Timeout(time.Millisecond))
+	spans := tracer.FinishedSpans()
+	require.Equal(t, 1, len(spans))
+	assert.Equal(t, ext.SpanKindEnum("client"), spans[0].Tag("span.kind"))
+}
+
+func TestServerSpanSpanFinish(t *testing.T) {
+	tracer := mocktracer.New()
+
+	opts := &testutils.ChannelOpts{
+		ChannelOptions: tchannel.ChannelOptions{
+			Tracer: tracer,
+		},
+	}
+	opts.AddLogFilter(
+		"Thrift server error.", 1,
+		"error", "IO Error",
+		"method", "destruct::partialDestruct")
+
+	server := testutils.NewTestServer(t, opts)
+	defer server.CloseAndVerify()
+
+	sCh := server.Server()
+	NewServer(sCh).Register(&thriftStruction{})
+
+	client := NewClient(
+		server.NewClient(nil), // not provide the tracer to check server span only
+		sCh.ServiceName(),
+		&ClientOptions{HostPort: server.HostPort()},
+	)
+
+	ctx, cancel := NewContext(time.Second)
+	defer cancel()
+
+	_, err := client.Call(ctx, "destruct", "partialDestruct", &nullTStruct{}, &nullTStruct{})
+	assert.Error(t, err)
+	assert.IsType(t, tchannel.SystemError{}, err)
+
+	time.Sleep(testutils.Timeout(time.Millisecond))
+	spans := tracer.FinishedSpans()
+	require.Equal(t, 1, len(spans))
+	assert.Equal(t, ext.SpanKindEnum("server"), spans[0].Tag("span.kind"))
 }

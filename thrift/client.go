@@ -143,6 +143,7 @@ func (c *client) Call(ctx Context, thriftService, methodName string, req, resp t
 		if err != nil {
 			return err
 		}
+		defer call.Response().Done()
 
 		if err := writeArgs(call, headers, req); err != nil {
 			return err

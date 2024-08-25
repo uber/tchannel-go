@@ -78,6 +78,7 @@ func Call(ctx context.Context, ch *tchannel.Channel, hostPort string, serviceNam
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	defer call.Response().Done()
 
 	return WriteArgs(call, arg2, arg3)
 }
@@ -90,6 +91,7 @@ func CallSC(ctx context.Context, sc *tchannel.SubChannel, method string, arg2, a
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	defer call.Response().Done()
 
 	return WriteArgs(call, arg2, arg3)
 }
@@ -115,6 +117,7 @@ func CallV2(ctx context.Context, sc *tchannel.SubChannel, cArgs CArgs) (*CRes, e
 	if err != nil {
 		return nil, err
 	}
+	defer call.Response().Done()
 
 	arg2, arg3, res, err := WriteArgs(call, cArgs.Arg2, cArgs.Arg3)
 	if err != nil {
