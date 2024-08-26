@@ -21,6 +21,7 @@
 package tchannel_test
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -162,6 +163,8 @@ func TestTracingSpanAttributes(t *testing.T) {
 		assert.Equal(t, "testService", child.Tag("peer.service"))
 		assert.Equal(t, "json", parent.Tag("as"))
 		assert.Equal(t, "json", child.Tag("as"))
+		assert.Equal(t, "tchannel-go", parent.Tag("component"))
+		assert.Equal(t, "tchannel-go", child.Tag("component"))
 		assert.NotNil(t, parent.Tag("peer.ipv4"))
 		assert.NotNil(t, child.Tag("peer.ipv4"))
 		assert.NotNil(t, parent.Tag("peer.port"))
@@ -207,5 +210,55 @@ func TestReusableHeaders(t *testing.T) {
 		}
 		wg.Wait()
 		assert.Equal(t, map[string]string{"life": "42"}, sharedHeaders, "headers unchanged")
+	})
+}
+
+func TestUpdateSpanWithError(t *testing.T) {
+	var (
+		tracer = mocktracer.New()
+		err    = errors.New("test error")
+	)
+	t.Run("nil span", func(t *testing.T) {
+		UpdateSpanWithError(nil, true, nil)
+	})
+
+	t.Run("error tag and error log", func(t *testing.T) {
+		span := tracer.StartSpan("test")
+		UpdateSpanWithError(span, true, err)
+
+		mSpan, ok := span.(*mocktracer.MockSpan)
+		require.True(t, ok)
+		assert.Equal(t, true, mSpan.Tag("error"))
+		assert.Equal(t, 1, len(mSpan.Logs()))
+	})
+
+	t.Run("error tag and no error log", func(t *testing.T) {
+		span := tracer.StartSpan("test")
+		UpdateSpanWithError(span, true, nil)
+
+		mSpan, ok := span.(*mocktracer.MockSpan)
+		require.True(t, ok)
+		assert.Equal(t, true, mSpan.Tag("error"))
+		assert.Equal(t, 0, len(mSpan.Logs()))
+	})
+
+	t.Run("no error tag and error log", func(t *testing.T) {
+		span := tracer.StartSpan("test")
+		UpdateSpanWithError(span, false, err)
+
+		mSpan, ok := span.(*mocktracer.MockSpan)
+		require.True(t, ok)
+		assert.Equal(t, nil, mSpan.Tag("error"))
+		assert.Equal(t, 1, len(mSpan.Logs()))
+	})
+
+	t.Run("no error tag and no error log", func(t *testing.T) {
+		span := tracer.StartSpan("test")
+		UpdateSpanWithError(span, false, nil)
+
+		mSpan, ok := span.(*mocktracer.MockSpan)
+		require.True(t, ok)
+		assert.Equal(t, nil, mSpan.Tag("error"))
+		assert.Equal(t, 0, len(mSpan.Logs()))
 	})
 }

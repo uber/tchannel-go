@@ -120,6 +120,7 @@ func (c *Client) Call(ctx Context, method string, arg, resp interface{}) error {
 		if err != nil {
 			return err
 		}
+		defer call.Response().Done()
 
 		isOK, errAt, err = makeCall(call, headers, arg, &respHeaders, resp, &respErr)
 		return err
@@ -157,6 +158,7 @@ func CallPeer(ctx Context, peer *tchannel.Peer, serviceName, method string, arg,
 	if err != nil {
 		return err
 	}
+	defer call.Response().Done()
 
 	return wrapCall(ctx, call, method, arg, resp)
 }
@@ -167,6 +169,7 @@ func CallSC(ctx Context, sc *tchannel.SubChannel, method string, arg, resp inter
 	if err != nil {
 		return err
 	}
+	defer call.Response().Done()
 
 	return wrapCall(ctx, call, method, arg, resp)
 }

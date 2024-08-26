@@ -1,4 +1,4 @@
-package thrift
+package thrift_test
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/testutils"
 	athrift "github.com/uber/tchannel-go/thirdparty/github.com/apache/thrift/lib/go/thrift"
+	. "github.com/uber/tchannel-go/thrift"
 )
 
 var errIO = errors.New("IO Error")

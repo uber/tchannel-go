@@ -27,7 +27,6 @@ import (
 	"github.com/uber/tchannel-go/typed"
 
 	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"golang.org/x/net/context"
 )
 
@@ -132,6 +131,8 @@ func (c *Connection) beginCall(ctx context.Context, serviceName, methodName stri
 	call.response = response
 
 	if err := call.writeMethod([]byte(methodName)); err != nil {
+		UpdateSpanWithError(response.span, true, err)
+		response.Done()
 		return nil, err
 	}
 	return call, nil
@@ -231,9 +232,11 @@ type OutboundCallResponse struct {
 
 	requestState *RequestState
 	// startedAt is the time at which the outbound call was started.
-	startedAt       time.Time
-	timeNow         func() time.Time
-	span            opentracing.Span
+	startedAt time.Time
+	timeNow   func() time.Time
+	span      opentracing.Span
+	// spanFinished is a bool flag for avoiding finishing a span multiple times
+	spanFinished    bool
 	statsReporter   StatsReporter
 	commonStatsTags map[string]string
 }
@@ -267,6 +270,20 @@ func (response *OutboundCallResponse) Arg2Reader() (ArgReader, error) {
 // The ReadCloser must be closed once the argument has been read.
 func (response *OutboundCallResponse) Arg3Reader() (ArgReader, error) {
 	return response.arg3Reader()
+}
+
+// Done does the cleanup job for OutboundCallResponse.
+func (response *OutboundCallResponse) Done() {
+	response.finishSpanWithOptions(opentracing.FinishOptions{})
+}
+
+// finishSpanWithOptions finishes the span in OutboundCallResponse if it is not nil and hasn't been finished yet
+func (response *OutboundCallResponse) finishSpanWithOptions(opts opentracing.FinishOptions) {
+	if response == nil || response.span == nil || response.spanFinished {
+		return
+	}
+	response.spanFinished = true
+	response.span.FinishWithOptions(opts)
 }
 
 // handleError handles an error coming back from the peer. If the error is a
@@ -330,15 +347,8 @@ func (response *OutboundCallResponse) doneReading(unexpected error) {
 	lastAttempt := isSuccess || !response.requestState.HasRetries(unexpected)
 
 	// TODO how should this work with retries?
-	if span := response.span; span != nil {
-		if unexpected != nil {
-			span.LogEventWithPayload("error", unexpected)
-		}
-		if !isSuccess && lastAttempt {
-			ext.Error.Set(span, true)
-		}
-		span.FinishWithOptions(opentracing.FinishOptions{FinishTime: now})
-	}
+	UpdateSpanWithError(response.span, !isSuccess && lastAttempt, unexpected)
+	response.finishSpanWithOptions(opentracing.FinishOptions{FinishTime: now})
 
 	latency := now.Sub(response.startedAt)
 	response.statsReporter.RecordTimer("outbound.calls.per-attempt.latency", response.commonStatsTags, latency)

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/uber/tchannel-go/trand"
 	"github.com/uber/tchannel-go/typed"
 
@@ -32,11 +33,14 @@ import (
 	"golang.org/x/net/context"
 )
 
-// zipkinSpanFormat defines a name for OpenTracing carrier format that tracer may support.
-// It is used to extract zipkin-style trace/span IDs from the OpenTracing Span, which are
-// otherwise not exposed explicitly.
-// NB: the string value is what's actually shared between implementations
-const zipkinSpanFormat = "zipkin-span-format"
+const (
+	// zipkinSpanFormat defines a name for OpenTracing carrier format that tracer may support.
+	// It is used to extract zipkin-style trace/span IDs from the OpenTracing Span, which are
+	// otherwise not exposed explicitly.
+	// NB: the string value is what's actually shared between implementations
+	zipkinSpanFormat  = "zipkin-span-format"
+	spanComponentName = "tchannel-go"
+)
 
 // Span is an internal representation of Zipkin-compatible OpenTracing Span.
 // It is used as OpenTracing inject/extract Carrier with ZipkinSpanFormat.
@@ -151,6 +155,7 @@ func (c *Connection) startOutboundSpan(ctx context.Context, serviceName, methodN
 	}
 	ext.SpanKindRPCClient.Set(span)
 	ext.PeerService.Set(span, serviceName)
+	ext.Component.Set(span, spanComponentName)
 	c.setPeerHostPort(span)
 	span.SetTag("as", call.callReq.Headers[ArgScheme])
 	var injectable injectableSpan
@@ -214,6 +219,7 @@ func (c *Connection) extractInboundSpan(callReq *callReq) opentracing.Span {
 	span := c.Tracer().StartSpan(operationName, ext.RPCServerOption(spanCtx))
 	span.SetTag("as", callReq.Headers[ArgScheme])
 	ext.PeerService.Set(span, callReq.Headers[CallerName])
+	ext.Component.Set(span, spanComponentName)
 	c.setPeerHostPort(span)
 	return span
 }
@@ -252,6 +258,7 @@ func ExtractInboundSpan(ctx context.Context, call *InboundCall, headers map[stri
 		}
 		span = tracer.StartSpan(call.MethodString(), ext.RPCServerOption(parent))
 		ext.PeerService.Set(span, call.CallerName())
+		ext.Component.Set(span, spanComponentName)
 		span.SetTag("as", string(call.Format()))
 		call.conn.setPeerHostPort(span)
 		call.Response().span = span
@@ -285,4 +292,20 @@ func TracerFromRegistrar(registrar Registrar) opentracing.Tracer {
 		return tracerProvider.Tracer()
 	}
 	return opentracing.GlobalTracer()
+}
+
+// UpdateSpanWithError set error tag & error log on a span
+func UpdateSpanWithError(span opentracing.Span, hasError bool, err error) {
+	if span == nil {
+		return
+	}
+	if hasError {
+		ext.Error.Set(span, true)
+	}
+	if err != nil {
+		span.LogFields(
+			log.String("event", "error"),
+			log.String("message", err.Error()),
+		)
+	}
 }
