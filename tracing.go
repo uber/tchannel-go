@@ -38,6 +38,8 @@ import (
 // NB: the string value is what's actually shared between implementations
 const zipkinSpanFormat = "zipkin-span-format"
 
+const componentName = "tchannel-go"
+
 // Span is an internal representation of Zipkin-compatible OpenTracing Span.
 // It is used as OpenTracing inject/extract Carrier with ZipkinSpanFormat.
 type Span struct {
@@ -151,6 +153,7 @@ func (c *Connection) startOutboundSpan(ctx context.Context, serviceName, methodN
 	}
 	ext.SpanKindRPCClient.Set(span)
 	ext.PeerService.Set(span, serviceName)
+	ext.Component.Set(span, componentName)
 	c.setPeerHostPort(span)
 	span.SetTag("as", call.callReq.Headers[ArgScheme])
 	var injectable injectableSpan
@@ -214,6 +217,7 @@ func (c *Connection) extractInboundSpan(callReq *callReq) opentracing.Span {
 	span := c.Tracer().StartSpan(operationName, ext.RPCServerOption(spanCtx))
 	span.SetTag("as", callReq.Headers[ArgScheme])
 	ext.PeerService.Set(span, callReq.Headers[CallerName])
+	ext.Component.Set(span, componentName)
 	c.setPeerHostPort(span)
 	return span
 }
@@ -252,6 +256,7 @@ func ExtractInboundSpan(ctx context.Context, call *InboundCall, headers map[stri
 		}
 		span = tracer.StartSpan(call.MethodString(), ext.RPCServerOption(parent))
 		ext.PeerService.Set(span, call.CallerName())
+		ext.Component.Set(span, componentName)
 		span.SetTag("as", string(call.Format()))
 		call.conn.setPeerHostPort(span)
 		call.Response().span = span

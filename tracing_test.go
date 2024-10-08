@@ -166,6 +166,8 @@ func TestTracingSpanAttributes(t *testing.T) {
 		assert.NotNil(t, child.Tag("peer.ipv4"))
 		assert.NotNil(t, parent.Tag("peer.port"))
 		assert.NotNil(t, child.Tag("peer.port"))
+		assert.Equal(t, "tchannel-go", parent.Tag("component"))
+		assert.Equal(t, "tchannel-go", child.Tag("component"))
 	})
 }
 
