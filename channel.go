@@ -94,6 +94,13 @@ type ChannelOptions struct {
 	// This is an unstable API - breaking changes are likely.
 	RelayTimerVerification bool
 
+	// EnableMPTCP enables MPTCP for TCP network connection to increase reliability.
+	// It requires underlying operating system support MPTCP.
+	// If EnableMPTCP is false or no MPTCP support, the connection will use normal TCP.
+	// It's set to false by default.
+	// If a Dialer is passed as option, this value will be ignored.
+	EnableMPTCP bool
+
 	// The reporter to use for reporting stats for this channel.
 	StatsReporter StatsReporter
 
@@ -184,6 +191,7 @@ type Channel struct {
 	relayMaxConnTimeout time.Duration
 	relayMaxTombs       uint64
 	relayTimerVerify    bool
+	enableMPTCP         bool
 	internalHandlers    *handlerMap
 	handler             Handler
 	onPeerStatusChanged func(*Peer)
@@ -275,8 +283,12 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		return nil, err
 	}
 
-	// Default to dialContext if dialer is not passed in as an option
+	// Default to dialContext or dialMPTCPContex
+	// if dialer is not passed in as an option
 	dialCtx := dialContext
+	if opts.EnableMPTCP {
+		dialCtx = dialMPTCPContext
+	}
 	if opts.Dialer != nil {
 		dialCtx = func(ctx context.Context, hostPort string) (net.Conn, error) {
 			return opts.Dialer(ctx, "tcp", hostPort)
@@ -306,6 +318,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		relayMaxConnTimeout: opts.RelayMaxConnectionTimeout,
 		relayMaxTombs:       opts.RelayMaxTombs,
 		relayTimerVerify:    opts.RelayTimerVerification,
+		enableMPTCP:         opts.EnableMPTCP,
 		dialer:              dialCtx,
 		connContext:         opts.ConnContext,
 		closed:              make(chan struct{}),
@@ -402,7 +415,9 @@ func (ch *Channel) ListenAndServe(hostPort string) error {
 		return errAlreadyListening
 	}
 
-	l, err := net.Listen("tcp", hostPort)
+	lc := net.ListenConfig{}
+	lc.SetMultipathTCP(ch.enableMPTCP)
+	l, err := lc.Listen(context.Background(), "tcp", hostPort)
 	if err != nil {
 		mutable.RUnlock()
 		return err
