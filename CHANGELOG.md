@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.34.5] - 2024-10-07
+### Changed
+
+ * Add component tag to tracing spans (#923)
+
 ## [1.34.4] - 2024-06-26
 ### Fixed
 
@@ -401,6 +406,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.5]: https://github.com/uber/tchannel-go/compare/v1.34.4...v1.34.5
 [1.34.4]: https://github.com/uber/tchannel-go/compare/v1.34.3...v1.34.4
 [1.34.3]: https://github.com/uber/tchannel-go/compare/v1.34.2...v1.34.3
 [1.34.2]: https://github.com/uber/tchannel-go/compare/v1.34.1...v1.34.2
