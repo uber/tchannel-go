@@ -22,7 +22,6 @@ package benchmark
 
 import (
 	"io"
-	"io/ioutil"
 	"net"
 	"testing"
 
@@ -56,7 +55,7 @@ func benchmarkClient(b *testing.B, dst string, reqSize int) {
 	readerDone := make(chan struct{})
 	go func() {
 		defer close(readerDone)
-		n, err := io.CopyN(ioutil.Discard, conn, int64(totalExpected))
+		n, err := io.CopyN(io.Discard, conn, int64(totalExpected))
 		assert.NoError(b, err, "Expected %v response bytes, got %v", totalExpected, n)
 	}()
 
