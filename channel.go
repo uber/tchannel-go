@@ -29,12 +29,12 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber/tchannel-go/tnet"
 
 	"github.com/opentracing/opentracing-go"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -264,7 +264,7 @@ func NewChannel(serviceName string, opts *ChannelOptions) (*Channel, error) {
 		timeTicker = time.NewTicker
 	}
 
-	chID := _nextChID.Inc()
+	chID := _nextChID.Add(1)
 	logger = logger.WithFields(
 		LogField{"serviceName", serviceName},
 		LogField{"process", processName},
