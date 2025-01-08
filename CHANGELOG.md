@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [1.34.6] - 2025-01-07
+### Fixed
+
+ * Fix compile issue on FreeBSD 14 (#925)
+
 ## [1.34.5] - 2024-10-07
 ### Changed
 
@@ -406,6 +411,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.34.6]: https://github.com/uber/tchannel-go/compare/v1.34.5...v1.34.6
 [1.34.5]: https://github.com/uber/tchannel-go/compare/v1.34.4...v1.34.5
 [1.34.4]: https://github.com/uber/tchannel-go/compare/v1.34.3...v1.34.4
 [1.34.3]: https://github.com/uber/tchannel-go/compare/v1.34.2...v1.34.3
