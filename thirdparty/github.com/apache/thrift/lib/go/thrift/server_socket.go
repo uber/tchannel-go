@@ -17,124 +17,117 @@
  * under the License.
  */
 
- package thrift
+package thrift
 
- import (
-	 "net"
-	 "sync"
-	 "time"
- )
- 
- type TServerSocket struct {
-	 addr          net.Addr
-	 clientTimeout time.Duration
- 
-	 // Protects the listener and interrupted fields to make them thread safe.
-	 mu          sync.RWMutex
-	 listener    net.Listener
-	 interrupted bool
- }
- 
- func NewTServerSocket(listenAddr string) (*TServerSocket, error) {
-	 return NewTServerSocketTimeout(listenAddr, 0)
- }
- 
- func NewTServerSocketTimeout(listenAddr string, clientTimeout time.Duration) (*TServerSocket, error) {
-	 addr, err := net.ResolveTCPAddr("tcp", listenAddr)
-	 if err != nil {
-		 return nil, err
-	 }
-	 return &TServerSocket{addr: addr, clientTimeout: clientTimeout}, nil
- }
- 
- // Creates a TServerSocket from a net.Addr
- func NewTServerSocketFromAddrTimeout(addr net.Addr, clientTimeout time.Duration) *TServerSocket {
-	 return &TServerSocket{addr: addr, clientTimeout: clientTimeout}
- }
- 
- func (p *TServerSocket) Listen() error {
-	 p.mu.Lock()
-	 defer p.mu.Unlock()
-	 if p.IsListening() {
-		 return nil
-	 }
-	 l, err := net.Listen(p.addr.Network(), p.addr.String())
-	 if err != nil {
-		 return err
-	 }
-	 p.listener = l
-	 return nil
- }
- 
- func (p *TServerSocket) Accept() (TTransport, error) {
-	 p.mu.RLock()
-	 interrupted := p.interrupted
-	 p.mu.RUnlock()
- 
-	 if interrupted {
-		 return nil, errTransportInterrupted
-	 }
- 
-	 p.mu.Lock()
-	 listener := p.listener
-	 p.mu.Unlock()
-	 if listener == nil {
-		 return nil, NewTTransportException(NOT_OPEN, "No underlying server socket")
-	 }
- 
-	 conn, err := listener.Accept()
-	 if err != nil {
-		 return nil, NewTTransportExceptionFromError(err)
-	 }
-	 return NewTSocketFromConnTimeout(conn, p.clientTimeout), nil
- }
- 
- // Checks whether the socket is listening.
- func (p *TServerSocket) IsListening() bool {
-	 return p.listener != nil
- }
- 
- // Connects the socket, creating a new socket object if necessary.
- func (p *TServerSocket) Open() error {
-	 p.mu.Lock()
-	 defer p.mu.Unlock()
-	 if p.IsListening() {
-		 return NewTTransportException(ALREADY_OPEN, "Server socket already open")
-	 }
-	 if l, err := net.Listen(p.addr.Network(), p.addr.String()); err != nil {
-		 return err
-	 } else {
-		 p.listener = l
-	 }
-	 return nil
- }
- 
- func (p *TServerSocket) Addr() net.Addr {
-	 p.mu.RLock()
-	 defer p.mu.RUnlock()
-	 if p.IsListening() {
-		 return p.listener.Addr()
-	 }
-	 return p.addr
- }
- 
- func (p *TServerSocket) Close() error {
-	 var err error
-	 p.mu.Lock()
-	 if p.IsListening() {
-		 err = p.listener.Close()
-		 p.listener = nil
-	 }
-	 p.mu.Unlock()
-	 return err
- }
- 
- func (p *TServerSocket) Interrupt() error {
-	 p.mu.Lock()
-	 p.interrupted = true
-	 p.mu.Unlock()
-	 p.Close()
- 
-	 return nil
- }
- 
+import (
+	"net"
+	"sync"
+	"time"
+)
+
+type TServerSocket struct {
+	addr          net.Addr
+	clientTimeout time.Duration
+
+	// Protects the listener and interrupted fields to make them thread safe.
+	mu          sync.RWMutex
+	listener    net.Listener
+	interrupted bool
+}
+
+func NewTServerSocket(listenAddr string) (*TServerSocket, error) {
+	return NewTServerSocketTimeout(listenAddr, 0)
+}
+
+func NewTServerSocketTimeout(listenAddr string, clientTimeout time.Duration) (*TServerSocket, error) {
+	addr, err := net.ResolveTCPAddr("tcp", listenAddr)
+	if err != nil {
+		return nil, err
+	}
+	return &TServerSocket{addr: addr, clientTimeout: clientTimeout}, nil
+}
+
+func (p *TServerSocket) Listen() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.IsListening() {
+		return nil
+	}
+	l, err := net.Listen(p.addr.Network(), p.addr.String())
+	if err != nil {
+		return err
+	}
+	p.listener = l
+	return nil
+}
+
+func (p *TServerSocket) Accept() (TTransport, error) {
+	p.mu.RLock()
+	interrupted := p.interrupted
+	p.mu.RUnlock()
+
+	if interrupted {
+		return nil, errTransportInterrupted
+	}
+
+	p.mu.Lock()
+	listener := p.listener
+	p.mu.Unlock()
+	if listener == nil {
+		return nil, NewTTransportException(NOT_OPEN, "No underlying server socket")
+	}
+	conn, err := listener.Accept()
+	if err != nil {
+		return nil, NewTTransportExceptionFromError(err)
+	}
+	return NewTSocketFromConnTimeout(conn, p.clientTimeout), nil
+}
+
+// Checks whether the socket is listening.
+func (p *TServerSocket) IsListening() bool {
+	return p.listener != nil
+}
+
+// Connects the socket, creating a new socket object if necessary.
+func (p *TServerSocket) Open() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.IsListening() {
+		return NewTTransportException(ALREADY_OPEN, "Server socket already open")
+	}
+	if l, err := net.Listen(p.addr.Network(), p.addr.String()); err != nil {
+		return err
+	} else {
+		p.listener = l
+	}
+	return nil
+}
+
+func (p *TServerSocket) Addr() net.Addr {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.IsListening() {
+		return p.listener.Addr()
+	}
+	return p.addr
+}
+
+func (p *TServerSocket) Close() error {
+	var err error
+	p.mu.Lock()
+	if p.IsListening() {
+		err = p.listener.Close()
+		p.listener = nil
+	}
+	p.mu.Unlock()
+	return err
+}
+
+func (p *TServerSocket) Interrupt() error {
+	p.mu.Lock()
+	p.interrupted = true
+	p.mu.Unlock()
+	p.Close()
+
+	return nil
+}
