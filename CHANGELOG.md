@@ -3,7 +3,7 @@ Changelog
 ## [1.34.7] - 2026-02-12
 ### Fixed
 
- * Fix compile issue on Darwin (#927)
+ * Fix compile issue on Darwin (#929)
 
 ## [1.34.6] - 2025-01-07
 ### Fixed
