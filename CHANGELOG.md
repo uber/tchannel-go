@@ -1,6 +1,11 @@
 Changelog
 =========
 
+## [Unreleased]
+### Added
+
+ * `SystemError` now implements `Is`, so `errors.Is(err, context.DeadlineExceeded)` and `errors.Is(err, context.Canceled)` match tchannel timeout and cancellation errors respectively. (#934)
+
 ## [1.34.6] - 2025-01-07
 ### Fixed
 
