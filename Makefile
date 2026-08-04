@@ -85,7 +85,7 @@ test_relay_frame_leaks:
 	PATH=$(BIN):$$PATH go test -parallel=4 $(TEST_ARG) relay_test.go
 
 check_no_test_deps:
-	! go list -json $(PROD_PKGS) | jq -r '.Deps | select ((. | length) > 0) | .[]' | grep -e test -e mock | grep -v '^internal/testlog'
+	! go list -json $(PROD_PKGS) | jq -r '.Deps | select ((. | length) > 0) | .[]' | grep -e test -e mock | grep -vE '^internal/(testlog|synctest)'
 
 benchmark: clean setup $(BIN)/thrift
 	echo Running benchmarks:

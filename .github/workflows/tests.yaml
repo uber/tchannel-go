@@ -28,23 +28,18 @@ jobs:
           LINT: "yes"
 
     steps:
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go }}
-
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v7
       with:
         path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
 
-    - name: Load cache
-      uses: actions/cache@v1
+    - name: Setup Go
+      uses: actions/setup-go@v7
       with:
-        path: ~/.glide/cache
-        key: ${{ runner.os }}-go-${{ hashFiles('**/glide.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version: ${{ matrix.go }}
+        # Code is checked out into $GOPATH/src (above), not the workspace root,
+        # so point setup-go's module cache at the real go.sum location.
+        cache-dependency-path: '**/go.sum'
 
     - name: Install CI
       run: make install_ci
