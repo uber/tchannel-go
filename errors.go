@@ -191,6 +191,22 @@ func (se SystemError) Message() string {
 	return se.msg
 }
 
+// Is lets errors.Is match a SystemError against the context sentinel its wire
+// code represents: ErrCodeTimeout matches context.DeadlineExceeded and
+// ErrCodeCancelled matches context.Canceled. Matching is keyed on the code, not
+// the message, so timeouts and cancellations from non-Go peers match too. This
+// also matches remote and relay timeouts, so callers that must tell a local
+// context expiry from a downstream one should still check ctx.Err().
+func (se SystemError) Is(target error) bool {
+	switch se.code {
+	case ErrCodeTimeout:
+		return target == context.DeadlineExceeded
+	case ErrCodeCancelled:
+		return target == context.Canceled
+	}
+	return false
+}
+
 // GetContextError converts the context error to a tchannel error.
 func GetContextError(err error) error {
 	if err == context.DeadlineExceeded {

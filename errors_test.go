@@ -21,6 +21,9 @@
 package tchannel
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"testing"
@@ -72,4 +75,64 @@ func TestRelayMetricsKey(t *testing.T) {
 		code := SystemErrCode(i)
 		assert.Equal(t, "relay-"+code.MetricsKey(), code.relayMetricsKey(), "Unexpected relay metrics key for %v", code)
 	}
+}
+
+func TestSystemErrorIs(t *testing.T) {
+	// These targets come from the standard library's context package on purpose:
+	// callers use errors.Is(err, context.DeadlineExceeded) with the stdlib
+	// sentinels, and this test proves a SystemError matches them.
+	tests := []struct {
+		name   string
+		err    error
+		target error
+		want   bool
+	}{
+		{"timeout sentinel matches DeadlineExceeded", ErrTimeout, context.DeadlineExceeded, true},
+		{"cancelled sentinel matches Canceled", ErrRequestCancelled, context.Canceled, true},
+		{"timeout does not match Canceled", ErrTimeout, context.Canceled, false},
+		{"cancelled does not match DeadlineExceeded", ErrRequestCancelled, context.DeadlineExceeded, false},
+
+		// Matching is keyed on the wire error code, not the message, so timeouts
+		// and cancellations rebuilt from the wire (including from non-Go peers
+		// that send a different message) are still recognized.
+		{"wire timeout with custom message matches DeadlineExceeded", NewSystemError(ErrCodeTimeout, "connection timed out"), context.DeadlineExceeded, true},
+		{"wire cancel with custom message matches Canceled", NewSystemError(ErrCodeCancelled, "peer cancelled"), context.Canceled, true},
+
+		// Other codes never match the context sentinels.
+		{"busy does not match DeadlineExceeded", ErrServerBusy, context.DeadlineExceeded, false},
+		{"busy does not match Canceled", ErrServerBusy, context.Canceled, false},
+		{"bad request does not match DeadlineExceeded", ErrTimeoutRequired, context.DeadlineExceeded, false},
+		{"timeout does not match an unrelated error", ErrTimeout, io.EOF, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, errors.Is(tt.err, tt.target))
+		})
+	}
+}
+
+func TestSystemErrorIsThroughWrap(t *testing.T) {
+	// errors.Is must find the context sentinel when a SystemError is wrapped
+	// further up the chain with %w.
+	err := fmt.Errorf("call to service failed: %w", ErrTimeout)
+	assert.True(t, errors.Is(err, context.DeadlineExceeded),
+		"errors.Is should see context.DeadlineExceeded through a wrapped timeout")
+
+	err = fmt.Errorf("call to service failed: %w", NewSystemError(ErrCodeCancelled, "peer cancelled"))
+	assert.True(t, errors.Is(err, context.Canceled),
+		"errors.Is should see context.Canceled through a wrapped cancellation")
+}
+
+func TestSystemErrorIdentityUnchanged(t *testing.T) {
+	// Is() is purely additive: it changes no SystemError values, so existing
+	// equality-based comparisons and code extraction keep working. A timeout
+	// rebuilt from the wire still equals the ErrTimeout sentinel by value, and
+	// the sentinels still report their codes.
+	assert.Equal(t, ErrTimeout, NewSystemError(ErrCodeTimeout, "timeout"),
+		"a rebuilt wire timeout must still equal the ErrTimeout sentinel by value")
+	assert.Equal(t, ErrRequestCancelled, NewSystemError(ErrCodeCancelled, "request cancelled"),
+		"a rebuilt wire cancellation must still equal the ErrRequestCancelled sentinel by value")
+	assert.Equal(t, ErrCodeTimeout, GetSystemErrorCode(ErrTimeout))
+	assert.Equal(t, ErrCodeCancelled, GetSystemErrorCode(ErrRequestCancelled))
 }
