@@ -23,7 +23,6 @@ package tchannel
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"strings"
 	"testing"
 
@@ -79,7 +78,7 @@ func TestReadNotEmpty(t *testing.T) {
 	r := bytes.NewReader([]byte("{}" + strings.Repeat("{}\n", 10000)))
 
 	var data map[string]interface{}
-	reader := NewArgReader(ioutil.NopCloser(r), nil)
+	reader := NewArgReader(io.NopCloser(r), nil)
 	require.Error(t, reader.ReadJSON(&data), "Read should fail due to extra bytes")
 }
 

@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -165,9 +164,9 @@ func makeTChanCall(t *testing.T, tchanAddr string, req *http.Request) *http.Resp
 }
 
 func compareResponseBasic(t *testing.T, testName string, resp1, resp2 *http.Response) {
-	resp1Body, err := ioutil.ReadAll(resp1.Body)
+	resp1Body, err := io.ReadAll(resp1.Body)
 	require.NoError(t, err, "Read response failed")
-	resp2Body, err := ioutil.ReadAll(resp2.Body)
+	resp2Body, err := io.ReadAll(resp2.Body)
 	require.NoError(t, err, "Read response failed")
 
 	assert.Equal(t, resp1.Status, resp2.Status, "%v: Response status mismatch", testName)

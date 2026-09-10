@@ -22,7 +22,7 @@ package thrift_test
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"sync"
 	"testing"
 
@@ -103,7 +103,7 @@ func TestReadStruct(t *testing.T) {
 		// Even if there's an error, the struct will be partially filled.
 		assert.Equal(t, tt.s, s, "Unexpected struct")
 
-		leftover, err := ioutil.ReadAll(reader)
+		leftover, err := io.ReadAll(reader)
 		if assert.NoError(t, err, "Read leftover bytes failed") {
 			// ReadAll always returns a non-nil byte slice.
 			if tt.leftover == nil {

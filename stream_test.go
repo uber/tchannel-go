@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
@@ -219,7 +218,7 @@ func TestStreamPartialArg(t *testing.T) {
 		require.NoError(t, argWriter.Close(), "arg3 close failed")
 
 		// Once closed, we expect the reader to return EOF
-		n, err := io.Copy(ioutil.Discard, argReader)
+		n, err := io.Copy(io.Discard, argReader)
 		assert.Equal(t, int64(0), n, "arg2 reader expected to EOF after arg3 writer is closed")
 		assert.NoError(t, err, "Copy should not fail")
 		assert.NoError(t, argReader.Close(), "close arg reader failed")
@@ -234,7 +233,7 @@ func TestStreamSendError(t *testing.T) {
 		require.NoError(t, argWriter.Close(), "arg3 close failed")
 
 		// Now we expect an error on our next read.
-		_, err = ioutil.ReadAll(argReader)
+		_, err = io.ReadAll(argReader)
 		assert.Error(t, err, "ReadAll should fail")
 		assert.True(t, strings.Contains(err.Error(), "intentional failure"), "err %v unexpected", err)
 	})
@@ -280,7 +279,7 @@ func TestStreamCancelled(t *testing.T) {
 
 		close(cancelContext)
 
-		n, err := io.Copy(ioutil.Discard, arg3Reader)
+		n, err := io.Copy(io.Discard, arg3Reader)
 		assert.EqualValues(t, 0, n, "Read should not read any bytes after cancel")
 		assert.Error(t, err, "Read should fail after cancel")
 		assert.Error(t, arg3Reader.Close(), "reader.Close should fail after cancel")

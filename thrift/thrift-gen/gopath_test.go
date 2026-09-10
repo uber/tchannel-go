@@ -21,7 +21,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -37,13 +36,13 @@ func getFakeFS(t *testing.T) string {
 		"src/pkg2/sub/ringpop.thriftgen",
 	}
 
-	tempDir, err := ioutil.TempDir("", "thriftgen")
+	tempDir, err := os.MkdirTemp("", "thriftgen")
 	require.NoError(t, err, "TempDir failed")
 
 	for _, f := range files {
 		require.NoError(t, os.MkdirAll(filepath.Join(tempDir, filepath.Dir(f)), 0770),
 			"Failed to create directory structure for %v", f)
-		require.NoError(t, ioutil.WriteFile(filepath.Join(tempDir, f), nil, 0660),
+		require.NoError(t, os.WriteFile(filepath.Join(tempDir, f), nil, 0660),
 			"Failed to create dummy file")
 	}
 	return tempDir

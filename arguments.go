@@ -24,7 +24,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	"github.com/uber/tchannel-go/internal/argreader"
 )
@@ -86,7 +85,7 @@ func (r ArgReadHelper) read(f func() error) error {
 func (r ArgReadHelper) Read(bs *[]byte) error {
 	return r.read(func() error {
 		var err error
-		*bs, err = ioutil.ReadAll(r.reader)
+		*bs, err = io.ReadAll(r.reader)
 		return err
 	})
 }

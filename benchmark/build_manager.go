@@ -21,7 +21,6 @@
 package benchmark
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"sync"
@@ -60,7 +59,7 @@ func (m *buildManager) GoBinary(mainFile string) (string, error) {
 }
 
 func (b *build) Build() {
-	tempFile, err := ioutil.TempFile("", "bench")
+	tempFile, err := os.CreateTemp("", "bench")
 	if err != nil {
 		panic("Failed to create temp file: " + err.Error())
 	}
