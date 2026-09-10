@@ -202,6 +202,9 @@ func (s *Server) handle(origCtx context.Context, handler handler, method string,
 	}
 
 	writer, err = call.Response().Arg3Writer()
+	if err != nil {
+		return err
+	}
 
 	wp = getProtocolWriter(writer)
 	defer thriftProtocolPool.Put(wp)
