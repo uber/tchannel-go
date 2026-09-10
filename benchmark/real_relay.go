@@ -23,11 +23,11 @@ package benchmark
 import (
 	"errors"
 	"os"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/relay"
 	"github.com/uber/tchannel-go/relay/relaytest"
-	"go.uber.org/atomic"
 )
 
 type fixedHosts struct {
@@ -46,7 +46,7 @@ func (fh *fixedHosts) Get(cf relay.CallFrame, _ *relay.Conn) (string, error) {
 		cf.Arg2Append(kv.Key, kv.Val)
 	}
 
-	pickI := int(fh.pickI.Inc()-1) % len(peers)
+	pickI := int(fh.pickI.Add(1)-1) % len(peers)
 	return peers[pickI], nil
 }
 

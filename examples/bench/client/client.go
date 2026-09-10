@@ -26,12 +26,12 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -83,14 +83,14 @@ func worker(ch *tchannel.Channel) {
 			log.Fatalf("set failed: %v", err)
 			continue
 		}
-		counter.Inc()
+		counter.Add(1)
 
 		for i := 0; i < *getToSetRatio; i++ {
 			_, err := getRequest(ch, "key")
 			if err != nil {
 				log.Fatalf("get failed: %v", err)
 			}
-			counter.Inc()
+			counter.Add(1)
 		}
 	}
 }

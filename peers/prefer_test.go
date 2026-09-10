@@ -23,6 +23,7 @@ package peers
 import (
 	"fmt"
 	"hash/fnv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -86,7 +86,7 @@ func TestHRWScorerDistribution(t *testing.T) {
 func countingServer(t *testing.T, opts *testutils.ChannelOpts) (*tchannel.Channel, *atomic.Int32) {
 	var cnt atomic.Int32
 	server := testutils.NewServer(t, opts)
-	testutils.RegisterEcho(server, func() { cnt.Inc() })
+	testutils.RegisterEcho(server, func() { cnt.Add(1) })
 	return server, &cnt
 }
 
@@ -149,7 +149,7 @@ func TestHRWScorerIntegration(t *testing.T) {
 
 	// And if s1 comes back, calls should resume to s1.
 	s1Up := testutils.NewClient(t, sOpts)
-	testutils.RegisterEcho(s1Up, func() { s1Count.Inc() })
+	testutils.RegisterEcho(s1Up, func() { s1Count.Add(1) })
 	err = s1Up.ListenAndServe(s1.PeerInfo().HostPort)
 	require.NoError(t, err, "Failed to bring up a new channel as s1")
 

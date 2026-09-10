@@ -23,11 +23,10 @@ package tchannel_test
 import (
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	. "github.com/uber/tchannel-go"
-
-	"go.uber.org/atomic"
 )
 
 func benchmarkUsing(b *testing.B, pool FramePool) {
