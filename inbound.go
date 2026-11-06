@@ -42,7 +42,18 @@ var errInboundRequestAlreadyActive = errors.New("inbound request is already acti
 
 // InboundAdmission decides, before a goroutine is started for it, whether an inbound call is accepted.
 // See ConnectionOptions.InboundAdmission.
-type InboundAdmission func(service string, method string) (release func(), err error)
+type InboundAdmission func(req InboundAdmissionRequest) (release func(), err error)
+
+// InboundAdmissionRequest describes an inbound call to an InboundAdmission. Fields can be added to it
+// without breaking existing InboundAdmission functions.
+type InboundAdmissionRequest struct {
+	// Service is the name of the called service.
+	Service string
+	// Method is the first argument of the call (arg1), or empty if it does not fit in the first fragment.
+	Method string
+	// Caller is the name of the calling service, from the "cn" transport header, or empty if it is not set.
+	Caller string
+}
 
 // peekMethod returns the method (arg1) of a call from its first fragment without consuming it, or "" if
 // the whole of arg1 is not in the first fragment.
@@ -88,7 +99,11 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	var admissionRelease func()
 	if admission := c.opts.InboundAdmission; admission != nil {
 		var err error
-		admissionRelease, err = admission(callReq.Service, peekMethod(initialFragment.contents))
+		admissionRelease, err = admission(InboundAdmissionRequest{
+			Service: callReq.Service,
+			Method:  peekMethod(initialFragment.contents),
+			Caller:  callReq.Headers[CallerName],
+		})
 		// The admission is released here unless the call is handed over to dispatchInbound below.
 		defer func() {
 			if admissionRelease != nil {

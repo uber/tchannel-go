@@ -174,8 +174,8 @@ type ConnectionOptions struct {
 	// message exchange for it or starts any goroutine for it, so a call that is rejected here costs
 	// almost nothing. It runs in the read loop of the connection, so it must be fast and must not block.
 	//
-	// service is the name of the called service and method the first argument of the call (arg1).
-	// method is empty when it does not fit in the first fragment of the call.
+	// The request has the name of the called service, the first argument of the call (arg1), which is
+	// empty when it does not fit in the first fragment of the call, and the name of the caller.
 	//
 	// If it returns a nil error the call is accepted. If it returns an error the call is rejected and
 	// the error is sent back to the caller as a system error.

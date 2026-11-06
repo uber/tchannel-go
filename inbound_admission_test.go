@@ -1,6 +1,7 @@
 package tchannel_test
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 	"testing"
@@ -18,8 +19,7 @@ import (
 // admissionRecorder is an InboundAdmission that records what it is called with and how often its release is called.
 type admissionRecorder struct {
 	mu       sync.Mutex
-	services []string
-	methods  []string
+	reqs     []InboundAdmissionRequest
 	releases int
 	// doubles counts the releases of a call that was already released.
 	doubles int
@@ -29,11 +29,10 @@ type admissionRecorder struct {
 	decide func(n int) (err error, withRelease bool)
 }
 
-func (r *admissionRecorder) admission(service, method string) (func(), error) {
+func (r *admissionRecorder) admission(req InboundAdmissionRequest) (func(), error) {
 	r.mu.Lock()
-	n := len(r.methods)
-	r.services = append(r.services, service)
-	r.methods = append(r.methods, method)
+	n := len(r.reqs)
+	r.reqs = append(r.reqs, req)
 	r.mu.Unlock()
 
 	err, withRelease := error(nil), true
@@ -79,10 +78,10 @@ func (r *admissionRecorder) released() int {
 	return r.releases
 }
 
-func (r *admissionRecorder) called() ([]string, []string) {
+func (r *admissionRecorder) called() []InboundAdmissionRequest {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]string(nil), r.services...), append([]string(nil), r.methods...)
+	return append([]InboundAdmissionRequest(nil), r.reqs...)
 }
 
 func newAdmissionRecorder(decide func(n int) (error, bool)) *admissionRecorder {
@@ -143,14 +142,17 @@ func TestInboundAdmissionAccept(t *testing.T) {
 		h := newCountingHandler()
 		ts.Register(raw.Wrap(h), "echo")
 
+		client := ts.NewClient(nil)
 		done := make(chan error, 1)
-		go func() { done <- callEcho(t, ts, "echo") }()
+		go func() { done <- callEchoFrom(ts, client, "echo") }()
 		<-h.started
 
-		// The admission is called with the service and the method of the call, and is not released while the handler runs.
-		services, methods := rec.called()
-		assert.Equal(t, []string{ts.ServiceName()}, services)
-		assert.Equal(t, []string{"echo"}, methods)
+		// The admission is called with the service, the method and the caller of the call, and is not released while the handler runs.
+		assert.Equal(t, []InboundAdmissionRequest{{
+			Service: ts.ServiceName(),
+			Method:  "echo",
+			Caller:  client.ServiceName(),
+		}}, rec.called())
 		assert.Equal(t, 0, rec.released(), "an accepted call is not released while its handler runs")
 
 		close(h.proceed)
@@ -276,10 +278,70 @@ func TestInboundAdmissionClosedConnection(t *testing.T) {
 	// A call on a connection that is closing is answered before the admission is asked.
 	rec := newAdmissionRecorder(nil)
 	testutils.WithTestServer(t, admissionOpts(rec), func(t testing.TB, ts *testutils.TestServer) {
-		ts.Register(raw.Wrap(newCountingHandler()), "echo")
+		h := newCountingHandler()
+		ts.Register(raw.Wrap(h), "echo")
+		client := ts.NewClient(nil)
+
+		// Hold a call in flight, so the connection stays open while the server closes.
+		done := make(chan error, 1)
+		go func() { done <- callEchoFrom(ts, client, "echo") }()
+		<-h.started
+
 		ts.Server().Close()
-		require.Error(t, callEcho(t, ts, "echo"))
-		_, methods := rec.called()
-		assert.Empty(t, methods)
+
+		// The call goes over the connection that is closing, as the client still has it.
+		err := callEchoFrom(ts, client, "echo")
+		assert.Equal(t, ErrChannelClosed, err)
+		require.Len(t, rec.called(), 1, "the admission is only asked for the first call")
+
+		close(h.proceed)
+		require.NoError(t, <-done)
+		rec.waitReleased(t, 1)
 	})
+}
+
+func TestInboundAdmissionRejectedMultiFragmentCall(t *testing.T) {
+	// The follow-up fragments of a rejected call have no exchange. They are dropped without a log above debug level.
+	logs := &syncBuffer{}
+	rec := newAdmissionRecorder(func(int) (error, bool) { return ErrServerBusy, true })
+	opts := admissionOpts(rec)
+	opts.Logger = NewLogger(logs)
+	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
+		h := newCountingHandler()
+		ts.Register(raw.Wrap(h), "echo")
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+		arg3 := testutils.RandBytes(10 * MaxFramePayloadSize)
+		_, _, _, err := raw.Call(ctx, ts.NewClient(nil), ts.HostPort(), ts.ServiceName(), "echo", []byte("arg2"), arg3)
+		require.Error(t, err)
+		sysErr, ok := err.(SystemError)
+		require.True(t, ok, "the caller gets a system error: %v", err)
+		assert.Equal(t, ErrCodeBusy, sysErr.Code())
+
+		assert.Zero(t, h.count())
+		assert.Len(t, rec.called(), 1, "the admission is asked once for the call, not for its fragments")
+		rec.waitReleased(t, 1)
+	})
+	// The fragments reached the read loop and were logged at debug level only.
+	assert.Contains(t, logs.String(), "[D] Received frame for unknown message exchange.")
+	assert.NotContains(t, logs.String(), "[I] Received frame for unknown message exchange.")
+}
+
+// syncBuffer is a buffer that is safe for concurrent use, for the logger of a channel.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
