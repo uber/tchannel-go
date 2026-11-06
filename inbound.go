@@ -191,6 +191,20 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 // it to the request channel for that request, where it can be pulled during
 // defragmentation
 func (c *Connection) handleCallReqContinue(frame *Frame) bool {
+	if c.opts.InboundAdmission != nil {
+		c.inbound.RLock()
+		_, ok := c.inbound.exchanges[frame.Header.ID]
+		c.inbound.RUnlock()
+		if !ok {
+			// A call rejected by InboundAdmission has no exchange, and a client can send many fragments of it,
+			// so they are dropped here without the info log that forwardPeerFrame writes for each of them.
+			if c.log.Enabled(LogLevelDebug) {
+				c.log.Debugf("Dropping %s of a call without an exchange", frame.Header)
+			}
+			return true
+		}
+	}
+
 	if err := c.inbound.forwardPeerFrame(frame); err != nil {
 		// If forward fails, it's due to a timeout. We can free this frame.
 		return true

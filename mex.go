@@ -448,18 +448,7 @@ func (mexset *messageExchangeSet) forwardPeerFrame(frame *Frame) error {
 	mexset.RUnlock()
 
 	if mex == nil {
-		// This is ok since the exchange might have expired or been cancelled. The follow-up frames of
-		// an inbound call that was rejected by InboundAdmission have no exchange either, and a client can
-		// send many of them, so inbound frames are only logged at debug level.
-		if mexset.name == messageExchangeSetInbound {
-			if mexset.log.Enabled(LogLevelDebug) {
-				mexset.log.WithFields(
-					LogField{"frameHeader", frame.Header.String()},
-					LogField{"exchange", mexset.name},
-				).Debug("Received frame for unknown message exchange.")
-			}
-			return nil
-		}
+		// This is ok since the exchange might have expired or been cancelled
 		mexset.log.WithFields(
 			LogField{"frameHeader", frame.Header.String()},
 			LogField{"exchange", mexset.name},

@@ -301,7 +301,7 @@ func TestInboundAdmissionClosedConnection(t *testing.T) {
 }
 
 func TestInboundAdmissionRejectedMultiFragmentCall(t *testing.T) {
-	// The follow-up fragments of a rejected call have no exchange. They are dropped without a log above debug level.
+	// The follow-up fragments of a rejected call have no exchange. They are dropped without the info log of an unknown exchange.
 	logs := &syncBuffer{}
 	rec := newAdmissionRecorder(func(int) (error, bool) { return ErrServerBusy, true })
 	opts := admissionOpts(rec)
@@ -323,9 +323,9 @@ func TestInboundAdmissionRejectedMultiFragmentCall(t *testing.T) {
 		assert.Len(t, rec.called(), 1, "the admission is asked once for the call, not for its fragments")
 		rec.waitReleased(t, 1)
 	})
-	// The fragments reached the read loop and were logged at debug level only.
-	assert.Contains(t, logs.String(), "[D] Received frame for unknown message exchange.")
-	assert.NotContains(t, logs.String(), "[I] Received frame for unknown message exchange.")
+	// The fragments reached the read loop and were dropped with a debug log only.
+	assert.Contains(t, logs.String(), "[D] Dropping messageTypeCallReqContinue")
+	assert.NotContains(t, logs.String(), "unknown message exchange")
 }
 
 // syncBuffer is a buffer that is safe for concurrent use, for the logger of a channel.
