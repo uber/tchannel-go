@@ -300,6 +300,27 @@ func TestInboundAdmissionClosedConnection(t *testing.T) {
 	})
 }
 
+func TestInboundAdmissionAcceptedMultiFragmentCall(t *testing.T) {
+	// The fragments of an accepted call are still forwarded to its exchange.
+	rec := newAdmissionRecorder(nil)
+	testutils.WithTestServer(t, admissionOpts(rec), func(t testing.TB, ts *testutils.TestServer) {
+		h := newCountingHandler()
+		close(h.proceed)
+		ts.Register(raw.Wrap(h), "echo")
+
+		ctx, cancel := NewContext(testutils.Timeout(time.Second))
+		defer cancel()
+		arg3 := testutils.RandBytes(10 * MaxFramePayloadSize)
+		_, got, _, err := raw.Call(ctx, ts.NewClient(nil), ts.HostPort(), ts.ServiceName(), "echo", []byte("arg2"), arg3)
+		require.NoError(t, err)
+		assert.Equal(t, arg3, got, "the handler got every fragment of the call")
+
+		assert.Len(t, rec.called(), 1, "the admission is asked once for the call, not for its fragments")
+		rec.waitReleased(t, 1)
+	})
+	assert.Zero(t, rec.doubleReleases())
+}
+
 func TestInboundAdmissionRejectedMultiFragmentCall(t *testing.T) {
 	// The follow-up fragments of a rejected call have no exchange. They are dropped without the info log of an unknown exchange.
 	logs := &syncBuffer{}
