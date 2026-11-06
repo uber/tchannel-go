@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
+	"github.com/uber/tchannel-go/typed"
 	"golang.org/x/net/context"
 )
 
@@ -37,6 +39,24 @@ const (
 )
 
 var errInboundRequestAlreadyActive = errors.New("inbound request is already active; possible duplicate client id")
+
+// InboundAdmission decides, before a goroutine is started for it, whether an inbound call is accepted.
+// See ConnectionOptions.InboundAdmission.
+type InboundAdmission func(service string, method string) (release func(), err error)
+
+// peekMethod returns the method (arg1) of a call from its first fragment without consuming it, or "" if
+// the whole of arg1 is not in the first fragment.
+func peekMethod(contents *typed.ReadBuffer) string {
+	rem := contents.Remaining()
+	if len(rem) < 2 {
+		return ""
+	}
+	n := int(binary.BigEndian.Uint16(rem))
+	if len(rem) < 2+n {
+		return ""
+	}
+	return string(rem[2 : 2+n])
+}
 
 // handleCallReq handles an incoming call request, registering a message
 // exchange to receive further fragments for that call, and dispatching it in
@@ -65,8 +85,26 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 		return true
 	}
 
+	var admissionRelease func()
+	if admission := c.opts.InboundAdmission; admission != nil {
+		var err error
+		admissionRelease, err = admission(callReq.Service, peekMethod(initialFragment.contents))
+		// The admission is released here unless the call is handed over to dispatchInbound below.
+		defer func() {
+			if admissionRelease != nil {
+				admissionRelease()
+			}
+		}()
+		if err != nil {
+			c.SendSystemError(frame.Header.ID, callReqSpan(frame), err)
+			// The frame is released by the read loop.
+			return true
+		}
+	}
+
 	call := new(InboundCall)
 	call.conn = c
+	call.admissionRelease = admissionRelease
 	ctx, cancel := newIncomingContext(c.baseContext, call, callReq.TimeToLive)
 
 	mex, err := c.inbound.newExchange(ctx, cancel, c.opts.FramePool, callReq.messageType(), frame.Header.ID, mexChannelBufferSize)
@@ -128,6 +166,8 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	response.commonStatsTags = call.commonStatsTags
 
 	setResponseHeaders(call.headers, response.headers)
+	// dispatchInbound releases the admission from now on.
+	admissionRelease = nil
 	go c.dispatchInbound(c.connID, callReq.ID(), call, frame)
 	return false
 }
@@ -173,6 +213,8 @@ func (call *InboundCall) createStatsTags(connectionTags map[string]string) {
 
 // dispatchInbound ispatches an inbound call to the appropriate handler
 func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, frame *Frame) {
+	defer call.releaseAdmission()
+
 	if call.log.Enabled(LogLevelDebug) {
 		call.log.Debugf("Received incoming call for %s from %s", call.ServiceName(), c.remotePeerInfo)
 	}
@@ -231,14 +273,23 @@ func (c *Connection) dispatchInbound(_ uint32, _ uint32, call *InboundCall, fram
 type InboundCall struct {
 	reqResReader
 
-	conn            *Connection
-	response        *InboundCallResponse
-	serviceName     string
-	method          []byte
-	methodString    string
-	headers         transportHeaders
-	statsReporter   StatsReporter
-	commonStatsTags map[string]string
+	conn             *Connection
+	response         *InboundCallResponse
+	serviceName      string
+	method           []byte
+	methodString     string
+	admissionRelease func()
+	headers          transportHeaders
+	statsReporter    StatsReporter
+	commonStatsTags  map[string]string
+}
+
+// releaseAdmission calls the release function of the admission of the call once.
+func (call *InboundCall) releaseAdmission() {
+	if release := call.admissionRelease; release != nil {
+		call.admissionRelease = nil
+		release()
+	}
 }
 
 // ServiceName returns the name of the service being called

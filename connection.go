@@ -169,6 +169,20 @@ type ConnectionOptions struct {
 	// when a request context is canceled before receiving a response.
 	// This only affects outbounds (clients making calls).
 	SendCancelOnContextCanceled bool
+
+	// InboundAdmission, if set, is called for every inbound call before TChannel registers a
+	// message exchange for it or starts any goroutine for it, so a call that is rejected here costs
+	// almost nothing. It runs in the read loop of the connection, so it must be fast and must not block.
+	//
+	// service is the name of the called service and method the first argument of the call (arg1).
+	// method is empty when it does not fit in the first fragment of the call.
+	//
+	// If it returns a nil error the call is accepted. If it returns an error the call is rejected and
+	// the error is sent back to the caller as a system error.
+	//
+	// release, if not nil, is called once when TChannel is done with the call: after its handler
+	// has returned, or, for a rejected call, after the rejection has been handled.
+	InboundAdmission InboundAdmission
 }
 
 // connectionEvents are the events that can be triggered by a connection.
