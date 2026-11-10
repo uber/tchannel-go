@@ -553,7 +553,8 @@ func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.msg, func(t *testing.T) {
-			opts := testutils.NewOpts()
+			// The handler returns its error when the test is done, so the connection can be closed by then.
+			opts := testutils.NewOpts().AddLogFilter("simpleHandler OnError.", 1)
 			opts.DefaultConnectionOptions.SendCancelOnContextCanceled = tt.sendCancelOnContextCanceled
 
 			serverStats := newRecordingStatsReporter()
@@ -563,12 +564,18 @@ func TestCancelWithoutSendCancelOnContextCanceled(t *testing.T) {
 				serverStats.Reset()
 
 				callReceived := make(chan struct{})
+				// The handler returns its error only after the stats were checked. Otherwise the error frame of the
+				// handler, which is sent when the context expires, races with the timeout of the relay, and the relay
+				// reports either "unexpected-error" or "timeout".
+				handlerRelease := make(chan struct{})
+				defer close(handlerRelease)
 				testutils.RegisterFunc(ts.Server(), "ctxWait", func(ctx context.Context, args *raw.Args) (*raw.Res, error) {
 					require.NoError(t, ctx.Err(), "context valid before cancellation")
 					close(callReceived)
 
 					<-ctx.Done()
 					assert.Equal(t, context.DeadlineExceeded, ctx.Err())
+					<-handlerRelease
 					return nil, assert.AnError
 				})
 
