@@ -1,5 +1,9 @@
 Changelog
 =========
+## [1.35.0] - 2026-11-10
+### Added
+
+ * Add an opt-in InboundAdmission hook to reject inbound calls early (#937)
 
 ## [1.34.6] - 2025-01-07
 ### Fixed
