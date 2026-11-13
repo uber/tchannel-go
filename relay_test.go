@@ -1189,6 +1189,10 @@ func TestRelayRaceCompletionAndTimeout(t *testing.T) {
 		AddLogFilter("Too many tombstones, deleting relay item immediately.", numCalls).
 		AddLogFilter("Received a frame without a RelayItem.", numCalls).
 		AddLogFilter("Attempted to create new mex after mexset shutdown.", numCalls).
+		// The calls time out on the client, so the test can end, and the server start closing, while call
+		// requests are still queued in the relay, e.g. when the machine is busy.
+		AddLogFilter("Failed to relay frame.", numCalls).
+		AddLogFilter("Failed to connect to relay host.", numCalls).
 		SetRelayOnly()
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		testutils.RegisterEcho(ts.Server(), nil)

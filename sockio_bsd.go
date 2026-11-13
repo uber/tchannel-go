@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-//go:build aix || darwin || dragonfly || freebsd || netbsd || openbsd || solaris
-// +build aix darwin dragonfly freebsd netbsd openbsd solaris
+//go:build aix || dragonfly || freebsd || netbsd || openbsd || solaris
+// +build aix dragonfly freebsd netbsd openbsd solaris
 
 package tchannel
 
