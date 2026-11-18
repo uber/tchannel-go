@@ -5,6 +5,11 @@ Changelog
 
  * Add an opt-in InboundAdmission hook to reject inbound calls early (#937)
 
+## [Unreleased]
+### Added
+
+ * `SystemError` now implements `Is`, so `errors.Is(err, context.DeadlineExceeded)` and `errors.Is(err, context.Canceled)` match tchannel timeout and cancellation errors respectively. (#934)
+
 ## [1.34.6] - 2025-01-07
 ### Fixed
 
