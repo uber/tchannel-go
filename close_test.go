@@ -23,6 +23,7 @@ package tchannel_test
 import (
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,7 +34,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -601,10 +601,10 @@ func TestCloseSendError(t *testing.T) {
 	opts := testutils.NewOpts().DisableLogVerification()
 	serverCh := testutils.NewServer(t, opts)
 	testutils.RegisterEcho(serverCh, func() {
-		if counter.Inc() > 10 {
+		if counter.Add(1) > 10 {
 			// Close the server in a goroutine to possibly trigger more race conditions.
 			go func() {
-				closed.Inc()
+				closed.Add(1)
 				serverCh.Close()
 			}()
 		}
