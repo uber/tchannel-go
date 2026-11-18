@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"strconv"
 	"strings"
 	"testing"
@@ -72,6 +73,10 @@ type testCallReqParams struct {
 	arg3Buf         []byte
 
 	serviceOverride string
+
+	// checksumTypeOverride, if non-zero, is written as the checksum type byte
+	// as-is, with no checksum contents following it.
+	checksumTypeOverride byte
 }
 
 func (cr testCallReq) req(tb testing.TB) lazyCallReq {
@@ -128,10 +133,14 @@ func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame 
 	}
 	writeHeaders(payload, headers)
 
-	if cr&reqHasChecksum == 0 {
+	switch {
+	case p.checksumTypeOverride != 0:
+		payload.WriteSingleByte(p.checksumTypeOverride) // checksum type
+		// no checksum contents for an overridden type
+	case cr&reqHasChecksum == 0:
 		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
 		// no checksum contents for None
-	} else {
+	default:
 		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
 		payload.WriteUint32(0)                            // checksum contents
 	}
@@ -765,4 +774,52 @@ func TestLazyCallReqLargeService(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestInvalidChecksumTypeRejected(t *testing.T) {
+	// Checksum types >= checksumCount would index past the end of checksumPools.
+	for _, csum := range []byte{4, 11, 255} {
+		t.Run(fmt.Sprint(csum), func(t *testing.T) {
+			p := testCallReqParams{checksumTypeOverride: csum}
+
+			_, err := newLazyCallReq(reqHasAll.frameWithParams(t, p))
+			assert.Error(t, err, "relay must reject checksum type %d", csum)
+
+			_, err = parseInboundFragment(DefaultFramePool, reqHasAll.frameWithParams(t, p), new(callReq))
+			assert.Error(t, err, "inbound must reject checksum type %d", csum)
+		})
+	}
+}
+
+// TestInvalidChecksumTypeDoesNotCrashServer sends a call request with an
+// unknown checksum type over a raw connection, and verifies the server drops
+// it without panicking and keeps serving the connection.
+func TestInvalidChecksumTypeDoesNotCrashServer(t *testing.T) {
+	ch, err := NewChannel("test", nil)
+	require.NoError(t, err)
+	defer ch.Close()
+	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
+
+	conn, err := net.Dial("tcp", ch.PeerInfo().HostPort)
+	require.NoError(t, err)
+	defer conn.Close()
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	require.NoError(t, writeMessage(conn, &initReq{initMessage{id: 1, Version: CurrentProtocolVersion, initParams: initParams{
+		InitParamHostPort:    "0.0.0.0:0",
+		InitParamProcessName: "test",
+	}}}))
+	f, err := readFrame(conn)
+	require.NoError(t, err, "read init res")
+	require.Equal(t, messageTypeInitRes, f.Header.messageType)
+
+	badReq := reqHasAll.frameWithParams(t, testCallReqParams{checksumTypeOverride: 11})
+	require.NoError(t, badReq.WriteOut(conn), "write call req")
+
+	// The connection must still be served after the bad frame was dropped.
+	require.NoError(t, writeMessage(conn, &pingReq{id: 2}))
+	f, err = readFrame(conn)
+	require.NoError(t, err, "read ping res")
+	assert.Equal(t, messageTypePingRes, f.Header.messageType)
+	assert.EqualValues(t, 2, f.Header.ID)
 }

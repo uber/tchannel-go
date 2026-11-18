@@ -212,6 +212,9 @@ func newLazyCallReq(f *Frame) (*lazyCallReq, error) {
 	// csumtype:1 (csum:4){0,1} arg1~2 arg2~2 arg3~2
 	cr.checksumTypeOffset = uint16(rbuf.BytesRead())
 	cr.checksumType = ChecksumType(rbuf.ReadSingleByte())
+	if err := cr.checksumType.validate(); err != nil {
+		return nil, err
+	}
 	rbuf.SkipBytes(cr.checksumType.ChecksumSize())
 
 	// arg1~2
