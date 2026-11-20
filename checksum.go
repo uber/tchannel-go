@@ -21,6 +21,7 @@
 package tchannel
 
 import (
+	"fmt"
 	"hash"
 	"hash/crc32"
 	"sync"
@@ -78,6 +79,16 @@ func (t ChecksumType) ChecksumSize() int {
 	default:
 		return 0
 	}
+}
+
+// validate returns an error if t is not a known checksum type.
+// pool() indexes a fixed-size array, so any ChecksumType read off the
+// wire must be validated before calling New, Release or pool.
+func (t ChecksumType) validate() error {
+	if int(t) >= checksumCount {
+		return fmt.Errorf("unknown checksum type %d", t)
+	}
+	return nil
 }
 
 // pool returns the sync.Pool used to pool checksums for this type.

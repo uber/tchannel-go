@@ -268,6 +268,10 @@ func NewRelayer(ch *Channel, conn *Connection) *Relayer {
 // Relay is called for each frame that is read on the connection.
 func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 	if f.messageType() != messageTypeCallReq {
+		if f.messageType() == messageTypeCallReqContinue && r.conn.dropRejectedCallFragment(f) {
+			return _relayShouldRelease, nil
+		}
+
 		shouldRelease, err := r.handleNonCallReq(f)
 		if err == errUnknownID {
 			// This ID may be owned by an outgoing call, so check the outbound
@@ -282,7 +286,11 @@ func (r *Relayer) Relay(f *Frame) (shouldRelease bool, _ error) {
 
 	cr, err := newLazyCallReq(f)
 	if err != nil {
-		return _relayNoRelease, err
+		// Nothing has been registered for this frame yet, so it can be released after the
+		// caller is told about the bad request. The error is not returned, as it would be
+		// logged at error level for every bad request.
+		r.conn.rejectBadCallReq(f, err)
+		return _relayShouldRelease, nil
 	}
 
 	return r.handleCallReq(cr)
