@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"strconv"
 	"strings"
 	"testing"
@@ -791,35 +790,12 @@ func TestInvalidChecksumTypeRejected(t *testing.T) {
 	}
 }
 
-// TestInvalidChecksumTypeDoesNotCrashServer sends a call request with an
-// unknown checksum type over a raw connection, and verifies the server drops
-// it without panicking and keeps serving the connection.
-func TestInvalidChecksumTypeDoesNotCrashServer(t *testing.T) {
-	ch, err := NewChannel("test", nil)
-	require.NoError(t, err)
-	defer ch.Close()
-	require.NoError(t, ch.ListenAndServe("127.0.0.1:0"))
-
-	conn, err := net.Dial("tcp", ch.PeerInfo().HostPort)
-	require.NoError(t, err)
-	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-	require.NoError(t, writeMessage(conn, &initReq{initMessage{id: 1, Version: CurrentProtocolVersion, initParams: initParams{
-		InitParamHostPort:    "0.0.0.0:0",
-		InitParamProcessName: "test",
-	}}}))
-	f, err := readFrame(conn)
-	require.NoError(t, err, "read init res")
-	require.Equal(t, messageTypeInitRes, f.Header.messageType)
-
-	badReq := reqHasAll.frameWithParams(t, testCallReqParams{checksumTypeOverride: 11})
-	require.NoError(t, badReq.WriteOut(conn), "write call req")
-
-	// The connection must still be served after the bad frame was dropped.
-	require.NoError(t, writeMessage(conn, &pingReq{id: 2}))
-	f, err = readFrame(conn)
-	require.NoError(t, err, "read ping res")
-	assert.Equal(t, messageTypePingRes, f.Header.messageType)
-	assert.EqualValues(t, 2, f.Header.ID)
+func TestLazyCallResRejectsInvalidChecksumType(t *testing.T) {
+	// A response with an unknown checksum type can't be parsed, as its size is unknown.
+	for _, csum := range []byte{4, 11, 255} {
+		t.Run(fmt.Sprint(csum), func(t *testing.T) {
+			_, err := newLazyCallRes(newCallResFrame(t, testCallResParams{csumType: csum}))
+			assert.Error(t, err, "relay must reject checksum type %d", csum)
+		})
+	}
 }

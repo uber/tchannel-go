@@ -110,7 +110,10 @@ func newLazyCallRes(f *Frame) (lazyCallRes, error) {
 	}
 
 	csumtype := ChecksumType(rbuf.ReadSingleByte()) // csumtype
-	rbuf.SkipBytes(csumtype.ChecksumSize())         // csum
+	if err := csumtype.validate(); err != nil {
+		return lazyCallRes{}, fmt.Errorf("read response frame: %v", err)
+	}
+	rbuf.SkipBytes(csumtype.ChecksumSize()) // csum
 
 	// arg1: ignored
 	narg1 := int(rbuf.ReadUint16())

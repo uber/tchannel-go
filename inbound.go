@@ -88,11 +88,8 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 	callReq.id = frame.Header.ID
 	initialFragment, err := parseInboundFragment(c.opts.FramePool, frame, callReq)
 	if err != nil {
-		// TODO(mmihic): Probably want to treat this as a protocol error
-		c.log.WithFields(
-			LogField{"header", frame.Header},
-			ErrField(err),
-		).Error("Couldn't decode initial fragment.")
+		// The frame is released by the read loop.
+		c.rejectBadCallReq(frame, err)
 		return true
 	}
 
@@ -191,6 +188,10 @@ func (c *Connection) handleCallReq(frame *Frame) bool {
 // it to the request channel for that request, where it can be pulled during
 // defragmentation
 func (c *Connection) handleCallReqContinue(frame *Frame) bool {
+	if c.dropRejectedCallFragment(frame) {
+		return true
+	}
+
 	if c.opts.InboundAdmission != nil {
 		c.inbound.RLock()
 		_, ok := c.inbound.exchanges[frame.Header.ID]
@@ -207,6 +208,79 @@ func (c *Connection) handleCallReqContinue(frame *Frame) bool {
 
 	if err := c.inbound.forwardPeerFrame(frame); err != nil {
 		// If forward fails, it's due to a timeout. We can free this frame.
+		return true
+	}
+	return false
+}
+
+// rejectBadCallReq replies to the caller of a call request that couldn't be decoded, so the call
+// fails right away instead of waiting for its deadline. A caller can send these at will, so
+// they are counted and logged at debug level only. The caller must release the frame.
+func (c *Connection) rejectBadCallReq(frame *Frame, err error) {
+	c.statsReporter.IncCounter("inbound.calls.bad-request", c.commonStatsTags, 1)
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.WithFields(
+			LogField{"header", frame.Header},
+			ErrField(err),
+		).Debug("Rejecting call request that couldn't be decoded.")
+	}
+
+	if hasMoreFragments(frame) {
+		c.rejectedCalls.add(frame.Header.ID)
+	}
+	c.SendSystemError(frame.Header.ID, callReqSpan(frame), NewWrappedSystemError(ErrCodeBadRequest, err))
+}
+
+// dropRejectedCallFragment returns true if frame is a follow-up fragment of a call that was
+// rejected by rejectBadCallReq, in which case the caller should release it. Such a call has no
+// exchange, and the caller can send many fragments of it, so they are dropped without the info
+// log that forwarding to an unknown exchange writes for each of them.
+func (c *Connection) dropRejectedCallFragment(frame *Frame) bool {
+	if !c.rejectedCalls.isRejected(frame.Header.ID, !hasMoreFragments(frame)) {
+		return false
+	}
+
+	if c.log.Enabled(LogLevelDebug) {
+		c.log.Debugf("Dropping %s of a rejected call", frame.Header)
+	}
+	return true
+}
+
+// maxRejectedCalls bounds how many rejected calls a connection remembers.
+const maxRejectedCalls = 16
+
+// rejectedCalls tracks the IDs of recently rejected calls that expect more fragments, oldest
+// first. It is bounded, so a caller that gets more than maxRejectedCalls calls rejected before
+// finishing them only loses the quiet drop for the oldest ones. It is not safe for concurrent
+// use, as it is only used by the read loop.
+type rejectedCalls struct {
+	ids []uint32
+}
+
+func (r *rejectedCalls) add(id uint32) {
+	for _, existing := range r.ids {
+		if existing == id {
+			return
+		}
+	}
+
+	if len(r.ids) == maxRejectedCalls {
+		r.ids = append(r.ids[:0], r.ids[1:]...)
+	}
+	r.ids = append(r.ids, id)
+}
+
+// isRejected returns whether id is a rejected call. If last is set, this is the final fragment
+// of the call, so id is forgotten.
+func (r *rejectedCalls) isRejected(id uint32, last bool) bool {
+	for i, existing := range r.ids {
+		if existing != id {
+			continue
+		}
+
+		if last {
+			r.ids = append(r.ids[:i], r.ids[i+1:]...)
+		}
 		return true
 	}
 	return false
