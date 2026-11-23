@@ -232,6 +232,9 @@ type Connection struct {
 	closeNetworkCalled atomic.Bool
 	// stoppedExchanges is atomically set when exchanges are stopped due to error.
 	stoppedExchanges atomic.Bool
+	// rejectedCalls remembers calls rejected as malformed that have more fragments coming.
+	// It is only used by the read loop.
+	rejectedCalls rejectedCalls
 	// remotePeerAddress is used as a cache for remote peer address parsed into individual
 	// components that can be used to set peer tags on OpenTracing Span.
 	remotePeerAddress peerAddressComponents

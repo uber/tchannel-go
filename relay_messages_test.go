@@ -72,6 +72,10 @@ type testCallReqParams struct {
 	arg3Buf         []byte
 
 	serviceOverride string
+
+	// checksumTypeOverride, if non-zero, is written as the checksum type byte
+	// as-is, with no checksum contents following it.
+	checksumTypeOverride byte
 }
 
 func (cr testCallReq) req(tb testing.TB) lazyCallReq {
@@ -128,10 +132,14 @@ func (cr testCallReq) frameWithParams(t testing.TB, p testCallReqParams) *Frame 
 	}
 	writeHeaders(payload, headers)
 
-	if cr&reqHasChecksum == 0 {
+	switch {
+	case p.checksumTypeOverride != 0:
+		payload.WriteSingleByte(p.checksumTypeOverride) // checksum type
+		// no checksum contents for an overridden type
+	case cr&reqHasChecksum == 0:
 		payload.WriteSingleByte(byte(ChecksumTypeNone)) // checksum type
 		// no checksum contents for None
-	} else {
+	default:
 		payload.WriteSingleByte(byte(ChecksumTypeCrc32C)) // checksum type
 		payload.WriteUint32(0)                            // checksum contents
 	}
@@ -763,6 +771,31 @@ func TestLazyCallReqLargeService(t *testing.T) {
 
 				assert.Equal(t, largeService, string(callReq.Service()), "service name mismatch")
 			})
+		})
+	}
+}
+
+func TestInvalidChecksumTypeRejected(t *testing.T) {
+	// Checksum types >= checksumCount would index past the end of checksumPools.
+	for _, csum := range []byte{4, 11, 255} {
+		t.Run(fmt.Sprint(csum), func(t *testing.T) {
+			p := testCallReqParams{checksumTypeOverride: csum}
+
+			_, err := newLazyCallReq(reqHasAll.frameWithParams(t, p))
+			assert.Error(t, err, "relay must reject checksum type %d", csum)
+
+			_, err = parseInboundFragment(DefaultFramePool, reqHasAll.frameWithParams(t, p), new(callReq))
+			assert.Error(t, err, "inbound must reject checksum type %d", csum)
+		})
+	}
+}
+
+func TestLazyCallResRejectsInvalidChecksumType(t *testing.T) {
+	// A response with an unknown checksum type can't be parsed, as its size is unknown.
+	for _, csum := range []byte{4, 11, 255} {
+		t.Run(fmt.Sprint(csum), func(t *testing.T) {
+			_, err := newLazyCallRes(newCallResFrame(t, testCallResParams{csumType: csum}))
+			assert.Error(t, err, "relay must reject checksum type %d", csum)
 		})
 	}
 }
