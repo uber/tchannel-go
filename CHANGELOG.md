@@ -3,7 +3,7 @@ Changelog
 ## [1.35.1] - 2026-11-24
 ### Fixed
 
- * Reply to calls with a bad checksum type instead of panix
+ * Reject unknown checksum types read off the wire instead of panicking; calls with a bad checksum type now get a BadRequest error (#939)
 
 ## [1.35.0] - 2026-11-10
 ### Added
