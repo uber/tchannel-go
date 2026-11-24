@@ -1,9 +1,15 @@
 Changelog
 =========
+## [1.35.2] - 2026-11-25
+### Fixed
+
+ * Reject unknown checksum types read off the wire instead of panicking; calls with a bad checksum type now get a BadRequest error (#939, #941)
+ * Fix flaky tests of rejected multi-fragment calls and idle connection sweeps (#943)
+
 ## [1.35.1] - 2026-11-24
 ### Fixed
 
- * Reject unknown checksum types read off the wire instead of panicking; calls with a bad checksum type now get a BadRequest error (#939)
+ * Same fix as 1.35.2 for the checksum type panic (#939, #941). This tag was cut before the version bump, so `VersionInfo` reports `1.35.0-dev`. Use 1.35.2.
 
 ## [1.35.0] - 2026-11-10
 ### Added
@@ -420,6 +426,7 @@ Changelog
 * Thrift support, including includes.
 
 [//]: # (Version Links)
+[1.35.2]: https://github.com/uber/tchannel-go/compare/v1.35.1...v1.35.2
 [1.35.1]: https://github.com/uber/tchannel-go/compare/v1.35.0...v1.35.1
 [1.34.6]: https://github.com/uber/tchannel-go/compare/v1.34.5...v1.34.6
 [1.34.5]: https://github.com/uber/tchannel-go/compare/v1.34.4...v1.34.5
