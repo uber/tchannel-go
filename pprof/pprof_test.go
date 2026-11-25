@@ -21,7 +21,7 @@
 package pprof
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -52,7 +52,7 @@ func TestPProfEndpoint(t *testing.T) {
 	require.NoError(t, err, "ReadResponse failed")
 
 	assert.Equal(t, http.StatusOK, response.StatusCode)
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if assert.NoError(t, err, "Read body failed") {
 		assert.Contains(t, string(body), "contention", "Response does not contain expected string")
 	}

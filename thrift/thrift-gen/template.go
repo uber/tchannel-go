@@ -27,7 +27,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"text/template"
 )
@@ -61,7 +61,7 @@ func parseTemplateFile(file string) (*Template, error) {
 		return nil, err
 	}
 
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %q: %v", file, err)
 	}
@@ -97,7 +97,7 @@ func (t *Template) execute(outputFile string, td TemplateData) error {
 	}
 
 	generated := cleanGeneratedCode(buf.Bytes())
-	if err := ioutil.WriteFile(outputFile, generated, 0660); err != nil {
+	if err := os.WriteFile(outputFile, generated, 0660); err != nil {
 		return fmt.Errorf("cannot write output file %q: %v", outputFile, err)
 	}
 

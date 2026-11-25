@@ -27,7 +27,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -63,13 +62,13 @@ func main() {
 }
 
 func updateVersion(prevVersion string) error {
-	versionBytes, err := ioutil.ReadFile(*_versionFile)
+	versionBytes, err := os.ReadFile(*_versionFile)
 	if err != nil {
 		return err
 	}
 
 	newContents := insertNewVersion(string(versionBytes), prevVersion, *_version)
-	return ioutil.WriteFile(*_versionFile, []byte(newContents), 0666)
+	return os.WriteFile(*_versionFile, []byte(newContents), 0666)
 }
 
 func insertNewVersion(contents, prevVersion, newVersion string) string {
@@ -81,7 +80,7 @@ func insertNewVersion(contents, prevVersion, newVersion string) string {
 }
 
 func updateChangelog() (oldVersion string, _ error) {
-	changelogBytes, err := ioutil.ReadFile(*_changelogFile)
+	changelogBytes, err := os.ReadFile(*_changelogFile)
 	if err != nil {
 		return "", err
 	}
@@ -100,7 +99,7 @@ func updateChangelog() (oldVersion string, _ error) {
 		return oldVersion, nil
 	}
 
-	return oldVersion, ioutil.WriteFile(*_changelogFile, []byte(newLog), 0666)
+	return oldVersion, os.WriteFile(*_changelogFile, []byte(newLog), 0666)
 }
 
 func insertNewChangelog(contents string) (string, string, error) {
