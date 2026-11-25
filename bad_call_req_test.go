@@ -92,6 +92,11 @@ type badCallReqEnv struct {
 // withBadCallReqEnv runs f against a channel with a checked frame pool, and verifies that
 // every frame was released once the channel is closed.
 func withBadCallReqEnv(t *testing.T, relayed bool, f func(env *badCallReqEnv)) {
+	withCallReqEnv(t, relayed, nil /* modifyOpts */, f)
+}
+
+// withCallReqEnv is withBadCallReqEnv, with the option to change the options of the channel.
+func withCallReqEnv(t *testing.T, relayed bool, modifyOpts func(*ChannelOptions), f func(env *badCallReqEnv)) {
 	logs := &rawLogBuffer{}
 	pool := &countingFramePool{CheckedFramePoolForTest: NewCheckedFramePoolForTest()}
 	opts := &ChannelOptions{
@@ -100,6 +105,9 @@ func withBadCallReqEnv(t *testing.T, relayed bool, f func(env *badCallReqEnv)) {
 	}
 	if relayed {
 		opts.RelayHost = noopRelayHost{}
+	}
+	if modifyOpts != nil {
+		modifyOpts(opts)
 	}
 
 	ch, err := NewChannel("test", opts)

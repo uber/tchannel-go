@@ -1,7 +1,6 @@
 package tchannel_test
 
 import (
-	"bytes"
 	"errors"
 	"sync"
 	"testing"
@@ -322,11 +321,10 @@ func TestInboundAdmissionAcceptedMultiFragmentCall(t *testing.T) {
 }
 
 func TestInboundAdmissionRejectedMultiFragmentCall(t *testing.T) {
-	// The follow-up fragments of a rejected call have no exchange. They are dropped without the info log of an unknown exchange.
-	logs := &syncBuffer{}
+	// A client that sends a multi-fragment call gets the error for it, and does not wait for the server to read all
+	// its fragments. TestInboundAdmissionRejectedFragmentsDropped checks that the fragments are dropped quietly.
 	rec := newAdmissionRecorder(func(int) (error, bool) { return ErrServerBusy, true })
 	opts := admissionOpts(rec)
-	opts.Logger = NewLogger(logs)
 	testutils.WithTestServer(t, opts, func(t testing.TB, ts *testutils.TestServer) {
 		h := newCountingHandler()
 		ts.Register(raw.Wrap(h), "echo")
@@ -344,25 +342,4 @@ func TestInboundAdmissionRejectedMultiFragmentCall(t *testing.T) {
 		assert.Len(t, rec.called(), 1, "the admission is asked once for the call, not for its fragments")
 		rec.waitReleased(t, 1)
 	})
-	// The fragments reached the read loop and were dropped with a debug log only.
-	assert.Contains(t, logs.String(), "[D] Dropping messageTypeCallReqContinue")
-	assert.NotContains(t, logs.String(), "unknown message exchange")
-}
-
-// syncBuffer is a buffer that is safe for concurrent use, for the logger of a channel.
-type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
 }
