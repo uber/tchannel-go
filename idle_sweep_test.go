@@ -71,7 +71,7 @@ func (pl *peerStatusListener) waitForZeroExchanges(t testing.TB, channels ...*Ch
 		isEmpty bool
 		status  []string
 	)
-	if !testutils.WaitFor(100*time.Millisecond, func() bool {
+	if !testutils.WaitFor(testutils.Timeout(time.Second), func() bool {
 		isEmpty, status = allExchangesEmpty(channels)
 		return isEmpty
 	}) {
@@ -89,16 +89,18 @@ func allConnectionsClosed(channels []*Channel) bool {
 	return true
 }
 
+// allExchangesEmpty returns whether none of the channels has an open exchange.
+// A sweep skips connections that have pending calls and does not retry until
+// the next tick, so the tests must wait for the exchanges of every channel
+// that sweeps before they tick.
 func allExchangesEmpty(channels []*Channel) (isEmpty bool, status []string) {
 	for _, ch := range channels {
-		n := numExchanges(ch)
-		if n == 0 {
-			return true, nil
+		if n := numExchanges(ch); n != 0 {
+			status = append(status,
+				fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, n))
 		}
-		status = append(status,
-			fmt.Sprintf("%s: %d open", ch.PeerInfo().ProcessName, n))
 	}
-	return false, status
+	return len(status) == 0, status
 }
 
 func numConnections(ch *Channel) int {
@@ -113,16 +115,18 @@ func numConnections(ch *Channel) int {
 	return count
 }
 
+// numExchanges returns the number of open exchanges of the channel, including
+// the items that a relay is forwarding, which the idle sweep also treats as pending calls.
 func numExchanges(ch *Channel) int {
 	var num int
 	rootPeers := ch.RootPeers().Copy()
 	for _, p := range rootPeers {
-		state := p.IntrospectState(nil)
+		state := p.IntrospectState(&IntrospectionOptions{})
 		for _, c := range state.InboundConnections {
-			num += c.InboundExchange.Count + c.OutboundExchange.Count
+			num += c.InboundExchange.Count + c.OutboundExchange.Count + c.Relayer.Count
 		}
 		for _, c := range state.OutboundConnections {
-			num += c.InboundExchange.Count + c.OutboundExchange.Count
+			num += c.InboundExchange.Count + c.OutboundExchange.Count + c.Relayer.Count
 		}
 	}
 	return num
@@ -247,6 +251,8 @@ func TestRelayBasedSweep(t *testing.T) {
 		client := ts.NewClient(opts)
 		testutils.AssertEcho(t, client, ts.HostPort(), server.ServiceName())
 
+		// The relay skips connections with pending calls, so wait for it to finish the call too.
+		listener.waitForZeroExchanges(t, client, ts.Relay(), server)
 		relayTicker.Tick()
 
 		// Relay has 1 inbound + 1 outbound
@@ -256,7 +262,7 @@ func TestRelayBasedSweep(t *testing.T) {
 
 		// The relay will drop both sides of the connection after 3 minutes of inactivity.
 		clock.Elapse(180 * time.Second)
-		listener.waitForZeroExchanges(t, client)
+		listener.waitForZeroExchanges(t, client, ts.Relay(), server)
 
 		relayTicker.Tick()
 		listener.waitForZeroConnections(t, ts.Relay(), server, client)
@@ -412,7 +418,7 @@ func TestIdleSweepIgnoresConnectionsWithCalls(t *testing.T) {
 		// Since the idle sweep loop and message exchange run concurrently, there is
 		// a race between the idle sweep and exchange shutdown. To mitigate this,
 		// wait for the exchanges to shut down before triggering the idle sweep.
-		listener.waitForZeroExchanges(t, ts.Server(), c2)
+		listener.waitForZeroExchanges(t, ts.Server(), c2, check.ch)
 
 		check.tick()
 		listener.waitForZeroConnections(t, ts.Server(), c2)
