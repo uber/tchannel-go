@@ -31,6 +31,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -48,7 +49,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -329,7 +329,7 @@ func TestRaceCloseWithNewCall(t *testing.T) {
 		assert.True(t, closed, "Relay did not close within timeout")
 
 		// Now stop all calls, and wait for the calling goroutine to end.
-		stopCalling.Inc()
+		stopCalling.Add(1)
 		callers.Wait()
 	})
 }

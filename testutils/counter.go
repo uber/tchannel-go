@@ -22,8 +22,7 @@ package testutils
 
 import (
 	"sync"
-
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
 
 // Decrement is the interface returned by Decrementor.
@@ -41,11 +40,11 @@ type decrementor struct {
 }
 
 func (d *decrementor) Single() bool {
-	return d.n.Dec() >= 0
+	return d.n.Add(-1) >= 0
 }
 
 func (d *decrementor) Multiple(n int) int {
-	decBy := -1 * int64(n)
+	decBy := -int64(n)
 	decremented := d.n.Add(decBy)
 	if decremented <= decBy {
 		// Already out of tokens before this decrement.
@@ -61,9 +60,9 @@ func (d *decrementor) Multiple(n int) int {
 // Decrementor returns a function that can be called from multiple goroutines and ensures
 // it will only return true n times.
 func Decrementor(n int) Decrement {
-	return &decrementor{
-		n: *atomic.NewInt64(int64(n)),
-	}
+	d := &decrementor{}
+	d.n.Store(int64(n))
+	return d
 }
 
 // Batch returns a slice with n broken into batches of size batchSize.

@@ -25,12 +25,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sync/atomic"
 
 	"github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/internal/testcert"
 	"github.com/uber/tchannel-go/raw"
 
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -70,7 +70,7 @@ var totalClients atomic.Uint32
 func NewClientChannel(opts *ChannelOpts) (*tchannel.Channel, error) {
 	opts = opts.Copy()
 
-	clientNum := totalClients.Inc()
+	clientNum := totalClients.Add(1)
 	serviceName := defaultString(opts.ServiceName, DefaultClientName)
 	opts.ProcessName = defaultString(opts.ProcessName, serviceName+"-"+fmt.Sprint(clientNum))
 	updateOptsLogger(opts)

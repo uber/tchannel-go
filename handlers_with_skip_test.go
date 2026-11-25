@@ -22,6 +22,7 @@ package tchannel_test
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	. "github.com/uber/tchannel-go"
 	"github.com/uber/tchannel-go/raw"
 	"github.com/uber/tchannel-go/testutils"
-	"go.uber.org/atomic"
 	"golang.org/x/net/context"
 )
 
@@ -90,5 +90,5 @@ func TestUserHandlerWithSkipInvalidInput(t *testing.T) {
 type recordHandler struct{ c atomic.Uint32 }
 
 func (r *recordHandler) Handle(ctx context.Context, call *InboundCall) {
-	r.c.Inc()
+	r.c.Add(1)
 }
